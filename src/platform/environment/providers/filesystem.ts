@@ -6,7 +6,7 @@
  * cleanup notes. Destructive deletes remain irreversible and are never
  * compensated (that would be a false claim).
  */
-import { promises as fsp } from "node:fs";
+import { withFilesystem, FilesystemError } from "../../../security/filesystem.ts";
 import { isAbsolute, relative, resolve } from "node:path";
 import type { Action } from "../../../control/types.ts";
 
@@ -27,19 +27,13 @@ const MAX_PREIMAGE_BYTES = 1024 * 1024;
 export async function capturePreImage(action: Action, workspaceRoot: string): Promise<PreImage | null> {
   if (action.type !== "file") return null;
   if (action.op === "write") {
-    const abs = resolve(workspaceRoot, action.path.startsWith("/") ? action.path : action.path);
     try {
-      const stat = await fsp.stat(abs);
-      if (stat.isFile() && stat.size <= MAX_PREIMAGE_BYTES) {
-        const content = await fsp.readFile(abs, "utf8");
-        return { kind: "file_content", path: action.path, content, note: `pre-image of existing file (${stat.size} bytes)` };
-      }
-      if (stat.isFile()) {
-        return { kind: "file_content", path: action.path, note: `existing file too large for pre-image (${stat.size} bytes) — compensation limited to deletion of the written file` };
-      }
-    } catch {
-      // File does not exist yet: compensation is simply removing what was written.
-      return { kind: "file_content", path: action.path, note: "file did not exist — compensation removes the written file" };
+      const snapshot = withFilesystem(workspaceRoot, "preview", fs => fs.read(action.path, MAX_PREIMAGE_BYTES));
+      return { kind: "file_content", path: action.path, content: snapshot.content, note: `pre-image of existing file (${snapshot.size} bytes)` };
+    } catch (e) {
+      if (e instanceof FilesystemError && e.code === "missing") return { kind: "file_content", path: action.path, note: "file did not exist — compensation removes the written file" };
+      // A rejected read is not evidence of absence and must not turn into destructive compensation.
+      return null;
     }
   }
   if (action.op === "mkdir") {

@@ -89,6 +89,17 @@ export interface FsBinding {
 }
 
 export interface FilesystemPolicy {
+  /** Host-issued content scope. Never populated from model/renderer labels. */
+  readonly contentScope?: {
+    readonly root: string;
+    readonly rootIdentity: string;
+    readonly purpose: import("../../security/filesystem.ts").FilePurpose;
+    readonly operations: readonly ("read" | "write" | "list")[];
+    /** Explicit trusted disclosure consent bound to exact path AND object. */
+    readonly sensitiveReads?: readonly { readonly path: string; readonly objectId: string }[];
+  };
+  /** Serialization seam for A4. Data only, not a blanket sandbox mount grant. */
+  readonly contentAuthority?: import("../../security/filesystem.ts").FilesystemDescriptor;
   /** Read/write roots permitted inside the workspace. */
   readonly writableRoots: readonly string[];
   /** Read-only roots (e.g. shared resources, skill packs). */
@@ -216,6 +227,8 @@ export interface TrustRequest {
   readonly networkTargets: readonly string[];
   /** Filesystem paths the action will read/write. */
   readonly fsPaths: readonly string[];
+  /** Supplied by the host's operation-owning authority, not parsed tool args. */
+  readonly filesystemAuthority?: import("../../security/filesystem.ts").FilesystemDescriptor;
   /** True if any fs path is outside the workspace root. */
   readonly touchesOutsideWorkspace: boolean;
   /** Does the action need credentials/secrets? */

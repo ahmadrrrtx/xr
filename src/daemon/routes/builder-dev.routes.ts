@@ -10,10 +10,9 @@
  *   GET  /api/builder/projects/{id}/events       SSE · dev-server:* + fs:changed
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, sep } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { FilesystemAuthority, FilesystemError } from "../../security/filesystem.ts";
 import { route, type DaemonRoute } from "./router.ts";
-import { insideRoot } from "./files.routes.ts";
 import { checkAction } from "../../security/guard.ts";
 import { getBuilderProjects, nextBackupPath, resolveBackup, type BuilderProject } from "../builder-projects.ts";
 import { applyUnifiedDiff, describeConflicts, normalisePatch } from "../builder-patch.ts";
@@ -31,8 +30,15 @@ function cleanRel(input: unknown): string | null {
   return rel;
 }
 
-function targetOf(project: BuilderProject, rel: string): string | null {
-  return insideRoot(project.root, rel.split("/").join(sep));
+/** Authority failures for builder-dev: fixed, content-free messages. */
+function devFailure(json: (body: unknown, status?: number) => Response, e: unknown, rel: string): Response {
+  if (e instanceof FilesystemError) {
+    if (e.code === "missing") return json({ error: `${rel} does not exist` }, 404);
+    if (e.code === "stale") return json({ error: "file changed on disk since it was loaded", stale: true }, 409);
+    if (e.code === "limit") return json({ error: "file too large to patch here (512 KB cap)" }, 413);
+    if (e.code === "escape") return json({ error: "path escapes the project root" }, 400);
+  }
+  return json({ error: "path not permitted by the filesystem authority" }, 403);
 }
 
 export function builderDevRoutes(): DaemonRoute[] {
@@ -49,28 +55,40 @@ export function builderDevRoutes(): DaemonRoute[] {
         const rel = cleanRel(body.path);
         if (!rel || typeof body.patch !== "string") return json({ error: "expected { path, patch }" }, 400);
         if (body.patch.length > PATCH_LIMIT) return json({ error: "patch exceeds the 512 KB limit" }, 413);
-        const target = targetOf(project, rel);
-        if (!target) return json({ error: "path escapes the project root" }, 400);
         const selected = Array.isArray(body.hunks) ? body.hunks.filter((n) => Number.isInteger(n) && n >= 0) : undefined;
 
-        let current = "";
-        let existed = false;
+        // A1: identity-bound prepare BEFORE the dry run and BEFORE consent. The dry run sees exactly the
+        // bytes the commit will replace (oldContent); protected files are never read to be patched.
+        const fsa = new FilesystemAuthority(project.root, "daemon");
+        let op: ReturnType<FilesystemAuthority["prepare"]>;
         try {
-          const st = statSync(target);
-          if (st.isDirectory()) return json({ error: "path is a directory" }, 400);
-          if (st.size > READ_LIMIT) return json({ error: "file too large to patch here (512 KB cap)" }, 413);
-          if (typeof body.baseMtimeMs === "number" && Math.abs(st.mtimeMs - body.baseMtimeMs) > 2) {
-            return json({ error: "file changed on disk since it was loaded", stale: true, mtimeMs: st.mtimeMs }, 409);
+          try {
+            const meta = fsa.metadata(rel);
+            if (meta.directory) { fsa.close(); return json({ error: "path is a directory" }, 400); }
+            if (meta.size > READ_LIMIT) { fsa.close(); return json({ error: "file too large to patch here (512 KB cap)" }, 413); }
+            if (typeof body.baseMtimeMs === "number" && Math.abs(meta.mtimeMs - body.baseMtimeMs) > 2) {
+              fsa.close();
+              return json({ error: "file changed on disk since it was loaded", stale: true, mtimeMs: meta.mtimeMs }, 409);
+            }
+          } catch (e) {
+            if (!(e instanceof FilesystemError && e.code === "missing")) throw e;
           }
-          current = readFileSync(target, "utf8");
-          existed = true;
-        } catch {
-          /* new file: the patch must be all additions */
+          op = fsa.prepare(rel, "write", READ_LIMIT);
+        } catch (e) {
+          fsa.close();
+          return devFailure(json, e, rel);
         }
+        if (op.existed && op.sensitive) {
+          op.close(); fsa.close();
+          return json({ error: "protected files cannot be patched; write the whole file instead" }, 403);
+        }
+        const existed = op.existed;
+        const current = op.oldContent;
 
         // Dry run BEFORE consent: a human never approves a patch that cannot land.
         const result = applyUnifiedDiff(current, body.patch, selected);
         if (!result.ok) {
+          op.close(); fsa.close();
           state.store.audit("builder.applyDiff.conflict", { project: project.id, path: rel, conflicts: result.conflicts.length });
           return json({ error: `Couldn't apply cleanly — ${describeConflicts(result.conflicts)}`, conflict: true, conflicts: result.conflicts }, 409);
         }
@@ -89,16 +107,17 @@ export function builderDevRoutes(): DaemonRoute[] {
           reason: `Apply ${chosen.length} hunk${chosen.length === 1 ? "" : "s"} to ${rel} (+${added} −${removed}) — Builder`,
           riskTier: "medium",
           audit: "builder.applyDiff",
+          release: () => { op.close(); fsa.close(); },
           perform: () => {
             let backupId: string | null = null;
             if (existed) {
+              // Backups are XR-owned state (trusted), written from the identity-bound bytes.
               const b = nextBackupPath(project.id, rel);
-              copyFileSync(target, b.path);
+              writeFileSync(b.path, current, "utf8");
               backupId = b.backupId;
             }
-            mkdirSync(dirname(target), { recursive: true });
-            writeFileSync(target, next, "utf8");
-            const st = statSync(target);
+            op.commit(next);
+            const st = fsa.metadata(rel);
             return { path: rel, content: next, mtimeMs: st.mtimeMs, backupId, applied: result.applied, skipped: result.skipped, fuzzy: result.fuzzy };
           },
         });
@@ -115,11 +134,19 @@ export function builderDevRoutes(): DaemonRoute[] {
         const body = (await req.json().catch(() => ({}))) as { path?: string; backupId?: string };
         const rel = cleanRel(body.path);
         if (!rel || typeof body.backupId !== "string") return json({ error: "expected { path, backupId }" }, 400);
-        const target = targetOf(project, rel);
-        if (!target) return json({ error: "path escapes the project root" }, 400);
         const backup = resolveBackup(project.id, body.backupId);
         if (!backup) return json({ error: "backup not found (undo is one level deep and does not survive a restart)" }, 404);
+        // Backup content is XR-owned state (trusted); the destination is authorized before consent.
         const content = readFileSync(backup, "utf8");
+        const fsa = new FilesystemAuthority(project.root, "daemon");
+        let op: ReturnType<FilesystemAuthority["prepare"]>;
+        try {
+          op = fsa.prepare(rel, "write");
+          if (op.existed && op.sensitive) { op.close(); fsa.close(); return json({ error: "protected files cannot be restored here" }, 403); }
+        } catch (e) {
+          fsa.close();
+          return devFailure(json, e, rel);
+        }
         return gatedMutation({
           ctx: { state, config },
           project,
@@ -129,10 +156,10 @@ export function builderDevRoutes(): DaemonRoute[] {
           reason: `Undo the last applied diff on ${rel} — Builder`,
           riskTier: "medium",
           audit: "builder.undo",
+          release: () => { op.close(); fsa.close(); },
           perform: () => {
-            mkdirSync(dirname(target), { recursive: true });
-            writeFileSync(target, content, "utf8");
-            const st = statSync(target);
+            op.commit(content);
+            const st = fsa.metadata(rel);
             return { path: rel, content, mtimeMs: st.mtimeMs };
           },
         });
@@ -237,7 +264,7 @@ export function builderDevRoutes(): DaemonRoute[] {
           audit: "builder.devServer.install",
           perform: async () => {
             const code = await getDevServers().install(project.id, project.root, argv);
-            return { code, ok: code === 0, needsInstall: !existsSync(`${project.root}${sep}node_modules`) };
+            return { code, ok: code === 0, needsInstall: !existsSync(`${project.root}/node_modules`) };
           },
         });
       },

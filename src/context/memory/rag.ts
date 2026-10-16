@@ -4,7 +4,8 @@
  * the relevant pieces — 10x larger effective codebase at the same token cost.
  * All local, all private. (Block 4.)
  */
-import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { withFilesystem, readWorkspaceText } from "../../security/filesystem.ts";
+import { isSecretPath } from "../../security/guard.ts";
 import { join, relative, extname } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "../../state/workspace-store.ts";
@@ -22,25 +23,17 @@ const TEXT_EXT = new Set([
 const MAX_FILE_BYTES = 200_000;
 const CHUNK_CHARS = 1200;
 
-function walk(dir: string, root: string, out: string[]): void {
-  let entries: string[];
+function walk(_dir: string, root: string, out: string[]): void {
   try {
-    entries = readdirSync(dir);
-  } catch {
-    return;
-  }
-  for (const name of entries) {
-    if (SKIP_DIRS.has(name)) continue;
-    const full = join(dir, name);
-    let st;
-    try {
-      st = statSync(full);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) walk(full, root, out);
-    else if (TEXT_EXT.has(extname(name)) && st.size <= MAX_FILE_BYTES) out.push(full);
-  }
+    withFilesystem(root, "index", fs => {
+      for (const entry of fs.walk(".", SKIP_DIRS)) {
+        if (TEXT_EXT.has(extname(entry.name)) && entry.size <= MAX_FILE_BYTES) out.push(join(root, entry.path));
+      }
+    });
+  } catch { /* unsupported/unsafe scope does not become embedding input */ }
+}
+function existsAuthorized(root: string, name: string): boolean {
+  try { return withFilesystem(root, "index", fs => !fs.metadata(name).directory); } catch { return false; }
 }
 
 function chunk(text: string): string[] {
@@ -70,19 +63,18 @@ export function fingerprint(root: string): Fingerprint {
     if (/\.(test|spec)\./.test(f) || /(^|\/)tests?(\/|$)/.test(f)) hasTests = true;
   }
   const frameworks: string[] = [];
-  const pkg = join(root, "package.json");
-  if (existsSync(pkg)) {
+  if (existsAuthorized(root, "package.json")) {
     try {
-      const j = JSON.parse(readFileSync(pkg, "utf8"));
+      const j = JSON.parse(readWorkspaceText(root, "package.json", "index", MAX_FILE_BYTES));
       const deps = { ...(j.dependencies ?? {}), ...(j.devDependencies ?? {}) };
       for (const fw of ["react", "next", "vue", "svelte", "express", "bun", "zod"]) {
         if (deps[fw]) frameworks.push(fw);
       }
     } catch {}
   }
-  if (existsSync(join(root, "requirements.txt")) || existsSync(join(root, "pyproject.toml")))
+  if (existsAuthorized(root, "requirements.txt") || existsAuthorized(root, "pyproject.toml"))
     frameworks.push("python");
-  if (existsSync(join(root, "Cargo.toml"))) frameworks.push("rust");
+  if (existsAuthorized(root, "Cargo.toml")) frameworks.push("rust");
   return { files: files.length, languages, frameworks, hasTests };
 }
 
@@ -95,7 +87,7 @@ export async function indexProject(store: Store, root: string, project: string):
   for (const f of files) {
     let text: string;
     try {
-      text = readFileSync(f, "utf8");
+      text = readWorkspaceText(root, f, "index", MAX_FILE_BYTES);
     } catch {
       continue;
     }
@@ -116,14 +108,27 @@ export interface RetrievedChunk {
   score: number;
 }
 
+/**
+ * A1 F03: persisted chunks are candidates, not authority. Each row is re-authorized
+ * against the project root at retrieval time (sensitive policy + current, in-root,
+ * non-escaping metadata), so a chunk indexed before a file became sensitive, moved,
+ * or was deleted is never returned.
+ */
+function reauthorizedChunk(root: string, path: string): boolean {
+  if (typeof path !== "string" || !path) return false;
+  if (isSecretPath(join(root, path))) return false;
+  try { return withFilesystem(root, "index", (fs) => !fs.metadata(path).directory); } catch { return false; }
+}
+
 /** Retrieve the top-k most relevant chunks for a query. */
 export async function retrieve(
   store: Store,
   project: string,
+  root: string,
   query: string,
   k = 5,
 ): Promise<RetrievedChunk[]> {
-  const rows = store.allChunks(project);
+  const rows = store.allChunks(project).filter((r) => reauthorizedChunk(root, r.path));
   if (rows.length === 0) return [];
   const qvec = await embed(query);
   const scored = rows.map((r) => {

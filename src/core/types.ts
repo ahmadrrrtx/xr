@@ -56,6 +56,8 @@ export interface Tool {
 export interface ToolContext {
   /** Working directory the agent is allowed to touch. */
   cwd: string;
+  /** Trusted operation authority; never constructed from model/tool JSON. */
+  filesystem?: import("../security/filesystem.ts").FilesystemAuthority;
   /**
    * Phase 06 — cooperative cancellation for this run, forwarded from the
    * surface's abort handle (Ctrl+C / workflow stop / execution cancel).
@@ -170,6 +172,8 @@ export interface ApprovalRequest {
   args?: Record<string, unknown>;
   /** A human-readable preview (e.g. a diff). */
   preview?: string;
+  /** Trusted terminal editor may change the prepared proposal; no post-tool fs write. */
+  replaceContent?: (content: string) => void;
   /**
    * Phase 2 · F-26 — structured preview. When present, surfaces render THIS
    * instead of raw text; `reason` stays visible but framed as untrusted

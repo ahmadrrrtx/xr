@@ -179,12 +179,12 @@ export async function execute(action: Action): Promise<ActionResult> {
           return cap.ok ? ok(cap.message, { path: cap.path }) : fail(cap.message);
         }
         case "file":
-          if (action.op === "read") return await files.fileRead(action.path);
-          if (action.op === "write") return await files.fileWrite(action.path, action.content || "");
-          if (action.op === "list") return await files.fileList(action.path);
-          if (action.op === "mkdir") return await files.fileMkdir(action.path);
+          if (action.op === "read") return await files.fileRead(action.path, action.grantId);
+          if (action.op === "write") return await files.fileWrite(action.path, action.content || "", action.grantId);
+          if (action.op === "list") return await files.fileList(action.path, action.grantId);
+          if (action.op === "mkdir") return await files.fileMkdir(action.path, action.grantId);
           if (action.op === "move" && action.targetPath) return await files.fileMove(action.path, action.targetPath);
-          if (action.op === "delete") return await files.fileDelete(action.path);
+          if (action.op === "delete") return await files.fileDelete(action.path, action.grantId);
           return fail("file op invalid");
         case "browser": {
           const { executeBrowserAction } = await import("./browser.ts");

@@ -1,22 +1,9 @@
-/**
- * XR — file tools: read_file (safe) and write_file (diff + approval gate).
- * write_file NEVER touches disk without explicit human approval.
- */
-import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
-import { resolve, relative, isAbsolute } from "node:path";
+/** File tools own their bounded read/mutation through the shared authority. */
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { readTrustRequest, workspaceWriteTrustRequest } from "../runtime/trust/tool-support.ts";
 import { classifySensitiveWrite } from "../security/trust-handoff.ts";
-
-/** Keep the agent inside its working directory (no escaping with ../). */
-function safePath(cwd: string, p: string): string {
-  const abs = isAbsolute(p) ? p : resolve(cwd, p);
-  const rel = relative(cwd, abs);
-  if (rel.startsWith("..") || isAbsolute(rel)) {
-    throw new Error(`path escapes working directory: ${p}`);
-  }
-  return abs;
-}
+import { unifiedDiff } from "../util/unified-diff.ts";
+import { FilesystemAuthority, filesystemMessage } from "../security/filesystem.ts";
 
 export const readFileTool: Tool = {
   name: "read_file",
@@ -25,28 +12,18 @@ export const readFileTool: Tool = {
   requiresApproval: false,
   trustRequest: (_args, ctx) => readTrustRequest("read_file", ctx.cwd),
   async run(args, ctx): Promise<ToolResult> {
-    const p = safePath(ctx.cwd, String(args.path ?? ""));
-    if (!existsSync(p)) return { ok: false, output: `file not found: ${args.path}` };
-    const content = readFileSync(p, "utf8");
-    ctx.audit("read_file", { path: String(args.path) });
-    const clipped = content.length > 4000 ? content.slice(0, 4000) + "\n…(truncated)" : content;
-    return { ok: true, output: clipped, data: { length: content.length } };
+    let fs: FilesystemAuthority | undefined;
+    try {
+      if (typeof args.path !== "string" || !args.path.trim()) return { ok: false, output: "read_file requires a non-empty `path`" };
+      fs = ctx.filesystem ?? new FilesystemAuthority(ctx.cwd);
+      const snapshot = fs.read(args.path);
+      ctx.audit("read_file", { path: snapshot.path, authority: fs.descriptor().id });
+      const content = snapshot.content;
+      return { ok: true, output: content.length > 4000 ? content.slice(0, 4000) + "\n…(truncated)" : content, data: { length: content.length } };
+    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    finally { if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };
-
-/** Minimal line-based diff for the approval preview. */
-function makeDiff(oldText: string, newText: string): string {
-  const a = oldText.split("\n");
-  const b = newText.split("\n");
-  const out: string[] = [];
-  const max = Math.max(a.length, b.length);
-  for (let i = 0; i < max; i++) {
-    if (a[i] === b[i]) continue;
-    if (a[i] !== undefined) out.push(`- ${a[i]}`);
-    if (b[i] !== undefined) out.push(`+ ${b[i]}`);
-  }
-  return out.join("\n") || "(no textual change)";
-}
 
 export const writeFileTool: Tool = {
   name: "write_file",
@@ -55,60 +32,32 @@ export const writeFileTool: Tool = {
   requiresApproval: true,
   trustRequest: (args, ctx) => workspaceWriteTrustRequest("write_file", ctx.cwd, [String(args.path ?? "")]),
   async run(args, ctx: ToolContext): Promise<ToolResult> {
-    // Phase 14 — small models often emit `{file, text}` instead of
-    // `{path, content}`; an empty path resolved to the workspace root and the
-    // diff pre-read failed with a bare EISDIR before the approval prompt. Name
-    // the real problem so the model (and the user) can correct it.
-    const rawPath = String(args.path ?? "").trim();
-    if (!rawPath) {
-      return { ok: false, output: "write_file requires a non-empty `path` (and the file body in `content`)" };
-    }
-    const p = safePath(ctx.cwd, rawPath);
-    if (existsSync(p) && statSync(p).isDirectory()) {
-      return { ok: false, output: `write_file: ${rawPath} is a directory` };
-    }
-    const newContent = String(args.content ?? "");
-    const old = existsSync(p) ? readFileSync(p, "utf8") : "";
-    const diff = makeDiff(old, newContent);
-
-    // Phase 07 · Trust Handoff — writes to sensitive/executable config files
-    // (.git/config, .git/hooks/*, .claude/settings.local.json, .vscode/tasks.json,
-    // *.code-workspace, package.json scripts, CI, Dockerfile, shell rc, …) are
-    // consumed and EXECUTED by a trusted external component OUTSIDE XR's sandbox
-    // after the turn ends. Surface an explicit, informed human approval that
-    // shows the trusted consumer and the execution implication. We never
-    // silently block legitimate files, and the model's own "approval" never
-    // counts as the required human approval.
-    const trust = classifySensitiveWrite(String(args.path ?? ""), ctx.cwd);
-    if (trust.requiresApproval) {
-      ctx.audit("write_file.trust_handoff", {
-        path: String(args.path),
-        classification: trust.classification,
-        ruleId: trust.ruleId,
+    if (typeof args.path !== "string" || !args.path.trim() || typeof args.content !== "string") return { ok: false, output: "write_file requires a non-empty `path` (and the file body in `content`)" };
+    let fs: FilesystemAuthority | undefined;
+    let pending: ReturnType<FilesystemAuthority["prepare"]> | undefined;
+    try {
+      fs = ctx.filesystem ?? new FilesystemAuthority(ctx.cwd);
+      pending = fs.prepare(args.path, "write");
+      let content = args.content;
+      const trust = classifySensitiveWrite(pending.path, fs.root);
+      if (trust.requiresApproval) ctx.audit("write_file.trust_handoff", { path: pending.path, classification: trust.classification, ruleId: trust.ruleId });
+      const diff = pending.sensitive ? "(sensitive previous content withheld)" : unifiedDiff(pending.oldContent, content, pending.path);
+      const approved = await ctx.approve({
+        tool: "write_file", args: { path: pending.path, content, filesystem: pending.identity },
+        reason: trust.requiresApproval
+          ? `TRUST-HANDOFF WRITE [${trust.classification}] ${pending.existed ? "overwrite" : "create"} ${pending.path} — consumed by: ${trust.trustedComponent}. ${trust.reason}`
+          : `${pending.existed ? "overwrite" : "create"} ${pending.path}`,
+        preview: trust.requiresApproval ? `${trust.executionImplication ?? ""}\n\n--- diff ---\n${diff}` : diff,
+        // The trusted terminal editor changes the proposal, not the host filesystem.
+        replaceContent: edited => { content = edited; },
       });
-    }
-
-    const approved = await ctx.approve({
-      tool: "write_file",
-      // Phase 2 · F-11/F-26 — pass the RAW args so the consent plane renders a
-      // structured preview (path + unified diff) and the durable store binds
-      // the decision to the argument hash. The preview builder redacts
-      // secret-shaped values itself; the reason string below is the only
-      // model-shaped text and stays explicitly untrusted.
-      args: { path: String(args.path ?? ""), content: newContent },
-      reason: trust.requiresApproval
-        ? `TRUST-HANDOFF WRITE [${trust.classification}] ${existsSync(p) ? "overwrite" : "create"} ${args.path} — consumed by: ${trust.trustedComponent}. ${trust.reason}`
-        : existsSync(p)
-          ? `overwrite ${args.path}`
-          : `create ${args.path}`,
-      preview: trust.requiresApproval ? `${trust.executionImplication ?? ""}\n\n--- diff ---\n${diff}` : diff,
-    });
-    if (!approved) {
-      ctx.audit("write_file.denied", { path: String(args.path) });
-      return { ok: false, output: "write denied by user" };
-    }
-    writeFileSync(p, newContent);
-    ctx.audit("write_file.applied", { path: String(args.path), bytes: newContent.length });
-    return { ok: true, output: `wrote ${args.path} (${newContent.length} bytes)` };
+      if (!approved) { ctx.audit("write_file.denied", { path: pending.path }); return { ok: false, output: "write denied by user" }; }
+      pending.validate();
+      if (ctx.dryRun) { ctx.audit("write_file.dryrun", { path: pending.path, bytes: content.length }); return { ok: true, output: `[dry-run] would write ${pending.path} (${content.length} bytes)` }; }
+      pending.commit(content);
+      ctx.audit("write_file.applied", { path: pending.path, bytes: content.length, authority: fs.descriptor().id });
+      return { ok: true, output: `wrote ${pending.path} (${content.length} bytes)` };
+    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    finally { pending?.close(); if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };

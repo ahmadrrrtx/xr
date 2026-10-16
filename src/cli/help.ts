@@ -119,11 +119,13 @@ export function showHelp(topic?: string, opts?: { all?: boolean }): void {
     ["--no-color", "disable ANSI color (also NO_COLOR=1)"],
     ["--yes, -y", "assume yes for confirmations"],
     ["--workspace <id>", "target workspace"],
-    ["--mode agent|plan|ask", "execution mode"],
+    ["--mode agent|plan|ask", "xr run mode (coding entry: agent only)"],
     ["--model <name>", "model override"],
     ["--provider <id>", "provider override"],
-    ["--budget <usd>", "per-task spend ceiling"],
-    ["--dry-run", "simulate without side effects"],
+    ["--budget <usd>", "positive per-task USD limit (estimated; see xr help budget)"],
+    ["--dry-run", "simulate workspace writes/commands; models may still run"],
+    ["--max-tokens <n>", "positive per-task token ceiling"],
+    ["--resume <id>", "xr run checkpoint only; rejected by the coding entry"],
   ];
   for (const [f, d] of flags) {
     console.log(`  ${xrCyan(padCmd(f, 36))} ${xrDim(d)}`);
@@ -322,7 +324,7 @@ function topicSecurity(): void {
   heading("XR Security & Trust");
   console.log(`  Security features are ${xrGreen("code-enforced")}, not optional.\n`);
   console.log(`  ${xrGreen("•")} ${xrBold("Tamper-evident audit")}   SHA-256 hash chain on every action`);
-  console.log(`  ${xrGreen("•")} ${xrBold("Hard budget ceiling")}    agent cannot exceed the cap`);
+  console.log(`  ${xrGreen("•")} ${xrBold("Budget stop checks")}     estimated USD/token limits; response overshoot is possible`);
   console.log(`  ${xrGreen("•")} ${xrBold("Egress allow-list")}      only configured domains`);
   console.log(`  ${xrGreen("•")} ${xrBold("Injection defense")}      attack lab + signed report`);
   console.log(`  ${xrGreen("•")} ${xrBold("Approval gates")}         consent for risky tools`);
@@ -417,10 +419,10 @@ function topicWorkspace(): void {
 function topicBudget(): void {
   banner();
   heading("Budget");
-  console.log(`  Hard per-task ceilings are code-enforced. Soft daily/monthly caps warn.\n`);
+  console.log(`  Per-task limits are checked by the loop. USD estimates can overshoot by a response; unknown pricing cannot enforce a USD cap.\n`);
   code("xr budget", "status");
   code("xr budget set 10", "monthly cap USD");
-  code('xr "task" --budget 0.25', "per-task hard cap");
+  code('xr "task" --budget 0.25', "estimated per-task USD limit");
   console.log();
 }
 

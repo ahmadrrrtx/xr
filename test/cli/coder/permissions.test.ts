@@ -123,6 +123,14 @@ describe("modes and grants", () => {
     expect(decide(base({ subject: "npm test", mode: "plan" })).action).toBe("deny");
   });
 
+  test("read-only denial cannot become a prompt via ask rules or dangerous commands", () => {
+    for (const subject of ["npm test", "git push --force"]) {
+      const d = decide(base({ subject, mode: "plan", rules: { ask: ["shell:*"], allow: ["shell:*"] }, sessionGrants: new Set(["shell"]) }));
+      expect(d.action).toBe("deny");
+    }
+    expect(decide(base({ kind: "edit", tool: "write_file", subject: "a.ts", mode: "plan", rules: { ask: ["edit:*"] } })).action).toBe("deny");
+  });
+
   test("default mode asks for edits and commands when interactive", () => {
     expect(decide(base({ kind: "edit", tool: "write_file", subject: "a.ts" })).action).toBe("ask");
     expect(decide(base({ subject: "npm test" })).action).toBe("ask");

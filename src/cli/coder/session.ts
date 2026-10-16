@@ -8,15 +8,16 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { extname, join, relative, resolve, isAbsolute } from "node:path";
+import { extname, join } from "node:path";
 import type { AgentResult } from "../../core/agent.ts";
 import type { ApprovalRequest, ChatStreamEvent } from "../../core/types.ts";
 import type { AgentRunOverrides } from "../../services/agent-service.ts";
-import { unifiedDiff } from "./diff.ts";
+import { FilesystemAuthority } from "../../security/filesystem.ts";
+import { unifiedDiff } from "../../util/unified-diff.ts";
 import type { ApproveFn, ConsentWrap } from "./consent.ts";
-import { classifyTool, decide, type ActionKind, type ApprovalMode, type PermissionRules } from "./permissions.ts";
+import { classifyTool, decide, shellCommandOf, type ActionKind, type ApprovalMode, type PermissionRules } from "./permissions.ts";
 import type { ApprovalInfo, CoderUI, TurnSummary } from "./ui.ts";
 
 /** The slice of AgentService the session needs (keeps this module easy to test). */
@@ -36,6 +37,8 @@ export interface SessionOptions {
   diffOnly: boolean;
   maxSteps: number;
   maxTokens?: number;
+  budget?: number;
+  dryRun?: boolean;
   /** Suspend/resume raw terminal mode around an external editor. */
   editorHooks?: { suspend(): void; resume(): void };
   onAbortTurn?: () => void;
@@ -57,7 +60,7 @@ export function subjectOf(req: ApprovalRequest): string {
   const args = (req.args ?? {}) as Record<string, unknown>;
   switch (req.tool) {
     case "shell":
-      return String(args.command ?? "");
+      return shellCommandOf(req.args) ?? "";
     case "write_file":
     case "delete_file":
     case "patch_file":
@@ -74,7 +77,6 @@ export function subjectOf(req: ApprovalRequest): string {
 export class CoderSession {
   private transcript: Array<{ role: "user" | "assistant"; content: string }> = [];
   private grants = new Set<ActionKind>();
-  private pendingEdits = new Map<string, string>();
   private toolCalls = new Map<string, { tool: string; args: Record<string, unknown> }>();
   private files = new Set<string>();
   private commands: string[] = [];
@@ -109,6 +111,7 @@ export class CoderSession {
   async turn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
     this.files = new Set();
     this.commands = [];
+    this.diffs = [];
     this.denied = 0;
     this.autoDenied = 0;
     this.toolCalls.clear();
@@ -123,7 +126,9 @@ export class CoderSession {
       history: this.history(),
       signal,
       maxSteps: this.opts.maxSteps,
-      ...(this.opts.maxTokens ? { maxTokens: this.opts.maxTokens } : {}),
+      ...(this.opts.maxTokens !== undefined ? { maxTokens: this.opts.maxTokens } : {}),
+      ...(this.opts.budget !== undefined ? { budget: this.opts.budget } : {}),
+      dryRun: this.opts.dryRun ?? false,
       say: () => {},
       onStreamEvent: (e) => this.onEvent(e),
       approve: this.gate,
@@ -134,11 +139,6 @@ export class CoderSession {
     this.transcript.push({ role: "assistant", content: result.finalMessage ?? "" });
     this.ui.endTurn();
 
-    for (const path of this.pendingEdits.keys()) {
-      this.ui.notice(`your edit to ${path} was not applied (the write did not run)`, "warn");
-    }
-    this.pendingEdits.clear();
-
     const summary: TurnSummary = {
       stopped: result.stopped,
       steps: result.steps,
@@ -146,6 +146,7 @@ export class CoderSession {
       commands: [...this.commands],
       denied: this.denied,
       autoDenied: this.autoDenied,
+      ...(this.opts.dryRun ? { dryRun: true } : {}),
       ...(result.inputTokens != null ? { inputTokens: result.inputTokens } : {}),
       ...(result.outputTokens != null ? { outputTokens: result.outputTokens } : {}),
       // The engine meter carries pictographs, and says "local" when a model has
@@ -189,12 +190,14 @@ export class CoderSession {
       case "tool_result": {
         const call = this.toolCalls.get(e.id);
         const tool = e.tool;
-        if (tool === "write_file" && e.ok && call) {
+        if (tool === "write_file" && e.ok && call && !this.opts.dryRun) {
           const path = String(call.args.path ?? "");
           this.files.add(path);
-          this.applyPendingEdit(path);
         }
-        if (tool === "shell" && call) this.commands.push(String(call.args.command ?? ""));
+        if (tool === "shell" && call && !this.opts.dryRun) {
+          const cmd = shellCommandOf(call.args);
+          if (cmd !== null) this.commands.push(cmd);
+        }
         if (e.ok) this.ui.toolResult(e.id, tool, true, e.result ?? "");
         else this.ui.toolResult(e.id, tool, false, e.error ?? "failed");
         return;
@@ -204,36 +207,22 @@ export class CoderSession {
     }
   }
 
-  private safeAbs(path: string): string | null {
-    const abs = isAbsolute(path) ? path : resolve(this.opts.cwd, path);
-    const rel = relative(this.opts.cwd, abs);
-    if (rel.startsWith("..") || isAbsolute(rel)) return null;
-    return abs;
-  }
-
-  private editPreview(path: string, proposed: string): string {
-    const abs = this.safeAbs(path);
-    if (!abs) return "";
-    const old = existsSync(abs) && statSync(abs).isFile() ? readFileSync(abs, "utf8") : "";
-    // Labels are project-relative (a/src/x.ts), never absolute (a//tmp/x.ts).
-    return unifiedDiff(old, proposed, relative(this.opts.cwd, abs));
-  }
-
-  private applyPendingEdit(path: string): void {
-    const edited = this.pendingEdits.get(path);
-    if (edited === undefined) return;
-    this.pendingEdits.delete(path);
-    const abs = this.safeAbs(path);
-    if (!abs) return;
-    writeFileSync(abs, edited);
-    this.ui.notice(`applied your edited version of ${path}`);
+  private fallbackPreview(path: string, proposed: string): string {
+    let fs: FilesystemAuthority | undefined, pending: ReturnType<FilesystemAuthority["prepare"]> | undefined;
+    try {
+      fs = new FilesystemAuthority(this.opts.cwd, "preview");
+      pending = fs.prepare(path, "write");
+      return pending.sensitive ? "(sensitive content withheld)" : unifiedDiff(pending.oldContent, proposed, pending.path);
+    } catch { return "(content withheld — filesystem authority)"; }
+    finally { pending?.close(); fs?.close(); }
   }
 
   private async approve(req: ApprovalRequest): Promise<boolean> {
     const kind = classifyTool(req.tool);
     const subject = subjectOf(req);
     const args = (req.args ?? {}) as Record<string, unknown>;
-    const preview = kind === "edit" && req.tool === "write_file" ? this.editPreview(subject, String(args.content ?? "")) : "";
+    const preview = kind === "shell" ? subject
+      : kind === "edit" ? (req.preview ?? this.fallbackPreview(subject, String(args.content ?? ""))) : "";
 
     const decision = decide({
       kind,
@@ -298,7 +287,11 @@ export class CoderSession {
             this.ui.notice("editor exited without a change; approval unchanged");
             continue;
           }
-          this.pendingEdits.set(subject, edited);
+          if (!req.replaceContent) {
+            this.ui.notice("this tool cannot accept an edited proposal safely", "warn");
+            continue;
+          }
+          req.replaceContent(edited);
           this.ui.notice(`using your edited version of ${subject}`);
           return true;
         }

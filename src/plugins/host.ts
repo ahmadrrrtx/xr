@@ -21,7 +21,7 @@
  */
 
 import { join, resolve, relative, isAbsolute, dirname, normalize } from "node:path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { pluginFsList, pluginFsRead, pluginFsWrite } from "./fs-capability.ts";
 import type { Store } from "../state/workspace-store.ts";
 import type { XRConfig } from "../config/config.ts";
 import { hostAllowed } from "../tools/egress.ts";
@@ -199,39 +199,13 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
     fsCap.path = secureFn((rel: string) => safeJoin(dataDir, rel));
 
     if (grantedSet.has("fs:read")) {
-      fsCap.read = secureFn((rel: string) => {
-        const p = safeJoin(dataDir, rel);
-        if (!existsSync(p)) return "";
-        const st = statSync(p);
-        if (!st.isFile()) throw new Error(`not a file: ${rel}`);
-        if (st.size > MAX_FS_FILE) throw new Error(`file too large (max ${MAX_FS_FILE}): ${rel}`);
-        audit("fs.read", { path: rel, size: st.size });
-        return readFileSync(p, "utf8");
-      });
-      fsCap.list = secureFn((rel = ".") => {
-        const p = safeJoin(dataDir, rel);
-        if (!existsSync(p)) return [];
-        const st = statSync(p);
-        if (!st.isDirectory()) throw new Error(`not a directory: ${rel}`);
-        audit("fs.list", { path: rel });
-        return readdirSync(p).filter((n) => !n.startsWith(".") && n !== "node_modules" && n !== "__pycache__");
-      });
+      // A1: reads/lists go through the filesystem authority rooted at the plugin data dir.
+      fsCap.read = secureFn((rel: string) => pluginFsRead(dataDir, rel, audit));
+      fsCap.list = secureFn((rel = ".") => pluginFsList(dataDir, rel, audit));
     }
 
     if (grantedSet.has("fs:write")) {
-      fsCap.write = secureFn((rel: string, content: string) => {
-        if (typeof rel !== "string" || !rel) throw new Error("invalid path");
-        if (typeof content !== "string") content = String(content);
-        if (content.length > MAX_FS_FILE) throw new Error(`content too large (max ${MAX_FS_FILE})`);
-        if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-        const p = safeJoin(dataDir, rel);
-        const parent = dirname(p);
-        if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
-        // defense-in-depth: ensure parent still inside dataDir
-        if (!parent.startsWith(dataDir)) throw new Error(`write escapes data dir: ${rel}`);
-        writeFileSync(p, content);
-        audit("fs.write", { path: rel, size: content.length });
-      });
+      fsCap.write = secureFn((rel: string, content: string) => pluginFsWrite(dataDir, rel, content, audit));
     }
     base.fs = secureCapability(fsCap);
   }

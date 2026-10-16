@@ -8,10 +8,10 @@
  * Never marks a partial/corrupt index `ready`.
  */
 
-import { readFileSync } from "node:fs";
+import { FilesystemAuthority, filesystemMessage, type FileSnapshot } from "../security/filesystem.ts";
 import { loadRepoConfig } from "./config.ts";
 import { resolveDependencies } from "./dependencies.ts";
-import { hashFile } from "./hash.ts";
+import { sha256Bytes } from "./hash.ts";
 import { readGitSnapshot } from "./git.ts";
 import { parseSource } from "./parser/index.ts";
 import { scanRepository } from "./scanner.ts";
@@ -75,7 +75,9 @@ async function runIndex(req: IndexRequest): Promise<IndexStats> {
 
   repo.setMeta({ root: req.root, gitRoot: null, state: "indexing", stats: { state: "indexing", files: 0, symbols: 0, edges: 0, changedFiles: 0, deletedFiles: 0, cacheHits: 0, cacheMisses: 0, errors: 0, durationMs: 0 } });
 
+  let authority: FilesystemAuthority | undefined;
   try {
+    authority = new FilesystemAuthority(req.root, "index");
     const scanned = scanRepository(req.root, { maxFiles: cfg.maxFiles });
     const git = await readGitSnapshot(req.root);
     const known = new Set(scanned.map((f) => f.relativePath));
@@ -96,11 +98,10 @@ async function runIndex(req: IndexRequest): Promise<IndexStats> {
     }
 
     for (const file of scanned) {
-      const hash = hashFile(file.absolute);
-      if (!hash) {
-        errors += 1;
-        continue;
-      }
+      let snapshot: FileSnapshot;
+      try { snapshot = authority.read(file.relativePath, cfg.maxFileBytes); }
+      catch { repo.deleteFile(file.relativePath); errors += 1; continue; }
+      const hash = sha256Bytes(snapshot.bytes);
       const prev = existing.get(file.relativePath);
       const gitStatus: GitFileStatus = git.status.get(file.relativePath) ?? "clean";
       if (prev && prev.contentHash === hash && !req.force) {
@@ -125,14 +126,7 @@ async function runIndex(req: IndexRequest): Promise<IndexStats> {
         }
       }
       if (!parsed) {
-        let source = "";
-        try {
-          source = readFileSync(file.absolute, "utf8");
-        } catch {
-          errors += 1;
-          continue;
-        }
-        parsed = parseSource(file.relativePath, source);
+        parsed = parseSource(file.relativePath, snapshot.content);
         try {
           repo.putParseCache(hash, parsed.language, JSON.stringify(parsed));
         } catch {
@@ -144,7 +138,7 @@ async function runIndex(req: IndexRequest): Promise<IndexStats> {
         path: file.relativePath,
         relativePath: file.relativePath,
         contentHash: hash,
-        size: file.size,
+        size: snapshot.size,
         language: parsed.language,
         gitStatus,
         lastIndexed: Date.now(),
@@ -188,7 +182,7 @@ async function runIndex(req: IndexRequest): Promise<IndexStats> {
       cacheMisses: 0,
       errors: 1,
       durationMs: Date.now() - started,
-      error: err instanceof Error ? err.message : String(err),
+      error: filesystemMessage(err),
     };
     repo.setMeta({
       root: req.root,
@@ -199,7 +193,7 @@ async function runIndex(req: IndexRequest): Promise<IndexStats> {
     });
     recordIndexMetrics(stats);
     return stats;
-  }
+  } finally { authority?.close(); }
 }
 
 function safeJson(raw: string): Record<string, unknown> {

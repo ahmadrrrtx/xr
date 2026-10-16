@@ -6,8 +6,8 @@
  * the context window (Art. XII·3: bounded resources).
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { FilesystemAuthority, FilesystemError } from "../../security/filesystem.ts";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { isSecretPath } from "../../security/guard.ts";
 
 export const MAX_FILE_BYTES = 200_000;
@@ -71,72 +71,38 @@ function safe(cwd: string, p: string): string | null {
 
 /** Resolve mentions to attachment blocks. Unresolvable mentions become notes, never errors. */
 export function resolveMentions(cwd: string, prompt: string): MentionResult {
-  const attachments: Attachment[] = [];
-  const notes: string[] = [];
-  let total = 0;
-
-  const addFile = (display: string, abs: string, range?: [number, number]): void => {
-    // Secret-looking paths (.env, keys, credential stores) never reach the model.
-    if (isSecretPath(abs)) {
-      notes.push(`skipped ${display}: looks like a secret file`);
-      return;
-    }
-    const st = statSync(abs);
-    // A ranged mention reads only the slice, so the whole-file cap is larger.
-    const cap = range ? RANGE_READ_BYTES : MAX_FILE_BYTES;
-    if (st.size > cap) {
-      notes.push(`skipped ${display}: larger than ${MAX_FILE_BYTES} bytes (use @${display}:start-end)`);
-      return;
-    }
-    let text = readFileSync(abs, "utf8");
-    let label = display;
-    if (range) {
-      const lines = text.split("\n");
-      const [s, e] = range;
-      text = lines.slice(Math.max(0, s - 1), e).join("\n");
-      label = `${display}:${s}-${e}`;
-    }
-    total += text.length;
-    if (total > MAX_TOTAL_BYTES) {
-      notes.push(`skipped ${display}: attachment budget exceeded`);
-      total -= text.length;
-      return;
-    }
-    attachments.push({ label, content: text, lang: langFor(display) });
-  };
-
-  for (const mention of parseMentions(prompt)) {
-    const abs = safe(cwd, mention.path);
-    if (!abs) {
-      notes.push(`skipped @${mention.path}: outside the working directory`);
-      continue;
-    }
-    if (!existsSync(abs)) {
-      notes.push(`no such path: @${mention.path}`);
-      continue;
-    }
-    const st = statSync(abs);
-    if (mention.kind === "file") {
-      if (!st.isFile()) {
-        notes.push(`@${mention.path} is not a file (use @${mention.path}/ for a folder)`);
-        continue;
+  const attachments: Attachment[] = [], notes: string[] = [];
+  let total = 0, fs: FilesystemAuthority | undefined;
+  try {
+    fs = new FilesystemAuthority(cwd, "context");
+    const authority = fs;
+    const addFile = (display: string, range?: [number, number]) => {
+      if (isSecretPath(display)) { notes.push(`skipped ${display}: looks like a secret file`); return; }
+      try {
+        let text = authority.read(display, range ? RANGE_READ_BYTES : MAX_FILE_BYTES).content;
+        let label = display;
+        if (range) { const [start, end] = range; text = text.split("\n").slice(Math.max(0, start - 1), end).join("\n"); label = `${display}:${start}-${end}`; }
+        if (total + text.length > MAX_TOTAL_BYTES) { notes.push(`skipped ${display}: attachment budget exceeded`); return; }
+        total += text.length;
+        attachments.push({ label, content: text, lang: langFor(display) });
+      } catch (e) {
+        notes.push(e instanceof FilesystemError && e.code === "limit" ? `skipped ${display}: larger than ${MAX_FILE_BYTES} bytes (use a range)` : `skipped ${display}: unavailable or unsafe path`);
       }
-      addFile(mention.path, abs, mention.range);
-    } else {
-      if (!st.isDirectory()) {
-        notes.push(`@${mention.path}/ is not a folder`);
-        continue;
-      }
-      const entries = readdirSync(abs)
-        .filter((name) => statSync(join(abs, name)).isFile())
-        .sort()
-        .slice(0, MAX_FOLDER_FILES);
-      for (const name of entries) {
-        const display = mention.path === "." ? name : `${mention.path}/${name}`;
-        addFile(display, join(abs, name));
-      }
+    };
+    for (const mention of parseMentions(prompt)) {
+      if (!safe(cwd, mention.path)) { notes.push(`skipped @${mention.path}: outside the working directory`); continue; }
+      try {
+        const meta = authority.metadata(mention.path);
+        if (mention.kind === "file") {
+          if (meta.directory) { notes.push(`@${mention.path} is not a file (use a folder mention)`); continue; }
+          addFile(meta.path, mention.range);
+        } else {
+          for (const entry of authority.list(mention.path, 600).filter(e => !e.directory).slice(0, MAX_FOLDER_FILES)) addFile(entry.path);
+        }
+      } catch { notes.push(`no such path or unsafe path: @${mention.path}`); }
     }
-  }
+  } catch { notes.push("file attachments unavailable: filesystem authority unsupported"); }
+  finally { fs?.close(); }
   return { attachments, notes };
 }
 

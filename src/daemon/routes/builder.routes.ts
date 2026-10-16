@@ -18,8 +18,10 @@
  *   POST /api/builder/projects/{id}/diagnostics  TypeScript syntax diagnostics
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, openSync, readSync, closeSync } from "node:fs";
-import { basename, dirname, join, relative, sep } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, join, relative, sep } from "node:path";
+import { isSecretPath } from "../../security/guard.ts";
+import { FilesystemAuthority, FilesystemError, withFilesystem } from "../../security/filesystem.ts";
 import { route, type DaemonRoute } from "./router.ts";
 import { insideRoot } from "./files.routes.ts";
 import { BUILDER_HEAVY_DIRS, getBuilderProjects, type BuilderProject } from "../builder-projects.ts";
@@ -72,77 +74,76 @@ export function gitBadges(porcelain: string): Record<string, GitBadge> {
   return out;
 }
 
-async function gitInfo(root: string): Promise<{ branch: string | null; dirty: boolean; isRepo: boolean; files: Record<string, GitBadge> }> {
+export async function gitInfo(root: string): Promise<{ branch: string | null; dirty: boolean; isRepo: boolean; files: Record<string, GitBadge> }> {
   try {
     const [branch, status] = await Promise.all([
       runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: root, timeoutMs: 3_000 }),
       runCommand("git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: root, timeoutMs: 5_000 }),
     ]);
     if (!status.ok) return { branch: null, dirty: false, isRepo: false, files: {} };
-    const files = gitBadges(status.stdout);
+    // Decision (A1): sensitive names (for example `.env`, keys) are not shown, even as names.
+    const files = Object.fromEntries(Object.entries(gitBadges(status.stdout)).filter(([rel]) => !isSecretPath(join(root, rel))));
     return { branch: branch.ok && branch.stdout.trim() ? branch.stdout.trim() : null, dirty: status.stdout.trim().length > 0, isRepo: true, files };
   } catch {
     return { branch: null, dirty: false, isRepo: false, files: {} };
   }
 }
 
-/** Breadth-first walk so a truncated tree still has every top-level entry. */
+/** Breadth-first walk so a truncated tree still has every top-level entry. A1: listing goes through the authority. */
 export function walkTree(root: string, cap = TREE_CAP): { entries: BuilderTreeEntry[]; truncated: boolean } {
   const entries: BuilderTreeEntry[] = [];
   const queue: string[] = [""];
   let truncated = false;
-  while (queue.length > 0) {
-    const rel = queue.shift() ?? "";
-    let dirents;
-    try {
-      dirents = readdirSync(rel ? join(root, rel) : root, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    dirents.sort((a, b) => {
-      const ad = a.isDirectory() ? 0 : 1;
-      const bd = b.isDirectory() ? 0 : 1;
-      return ad - bd || a.name.localeCompare(b.name);
+  try {
+    withFilesystem(root, "daemon", (fs) => {
+      while (queue.length > 0) {
+        const rel = queue.shift() ?? "";
+        let listed;
+        try {
+          listed = fs.list(rel || ".", TREE_CAP);
+        } catch {
+          continue;
+        }
+        listed.sort((a, b) => (a.directory ? 0 : 1) - (b.directory ? 0 : 1) || a.name.localeCompare(b.name));
+        for (const d of listed) {
+          if (entries.length >= cap) {
+            truncated = true;
+            return;
+          }
+          const heavy = BUILDER_HEAVY_DIRS.has(d.name);
+          if (d.directory) {
+            entries.push({ rel: d.path, name: d.name, type: "dir", size: 0, mtimeMs: d.mtimeMs, ...(heavy ? { heavy: true as const } : {}) });
+            if (!heavy) queue.push(d.path);
+          } else {
+            entries.push({ rel: d.path, name: d.name, type: "file", size: d.size, mtimeMs: d.mtimeMs });
+          }
+        }
+      }
     });
-    for (const d of dirents) {
-      if (entries.length >= cap) {
-        truncated = true;
-        return { entries, truncated };
-      }
-      const childRel = rel ? `${rel}/${d.name}` : d.name;
-      const abs = join(root, childRel);
-      let st;
-      try {
-        st = statSync(abs);
-      } catch {
-        continue;
-      }
-      if (d.isDirectory() || st.isDirectory()) {
-        const heavy = BUILDER_HEAVY_DIRS.has(d.name);
-        entries.push({ rel: childRel, name: d.name, type: "dir", size: 0, mtimeMs: st.mtimeMs, ...(heavy ? { heavy: true as const } : {}) });
-        if (!heavy && !d.isSymbolicLink()) queue.push(childRel);
-      } else if (st.isFile()) {
-        entries.push({ rel: childRel, name: d.name, type: "file", size: st.size, mtimeMs: st.mtimeMs });
-      }
-    }
+  } catch {
+    /* root unavailable: an empty tree is reported, never a fallback read */
   }
   return { entries, truncated };
 }
 
 const BINARY_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "ico", "pdf", "zip", "gz", "tar", "woff", "woff2", "ttf", "eot", "wasm", "sqlite", "db", "class", "jar", "exe", "dll", "so", "dylib", "pyc", "mp3", "mp4", "mov", "avif", "bmp"]);
 
-function looksBinary(abs: string): boolean {
-  const ext = abs.split(".").pop()?.toLowerCase() ?? "";
-  if (BINARY_EXT.has(ext)) return true;
-  try {
-    const fd = openSync(abs, "r");
-    const buf = Buffer.alloc(4096);
-    const n = readSync(fd, buf, 0, 4096, 0);
-    closeSync(fd);
-    return buf.subarray(0, n).includes(0);
-  } catch {
-    return false;
+/** Binary decision from an already-authorized prefix (no second I/O). */
+function looksBinary(rel: string, head: Buffer): boolean {
+  const ext = rel.split(".").pop()?.toLowerCase() ?? "";
+  return BINARY_EXT.has(ext) || head.includes(0);
+}
+
+/** Authority failures map to fixed, content-free responses (no path echo, no secret text). */
+function fsFailure(json: (body: unknown, status?: number) => Response, e: unknown, rel: string, notFound = `${rel} does not exist`): Response {
+  if (e instanceof FilesystemError) {
+    if (e.code === "missing") return json({ error: notFound }, 404);
+    if (e.code === "stale") return json({ error: `${rel} changed or already exists` }, 409);
+    if (e.code === "limit") return json({ error: "content exceeds the limit" }, 413);
+    if (e.code === "escape") return json({ error: "path escapes the project root" }, 400);
+    return json({ error: "path not permitted by the filesystem authority" }, 403);
   }
+  return json({ error: "file operation failed" }, 500);
 }
 
 function cleanRel(input: unknown): string | null {
@@ -152,32 +153,22 @@ function cleanRel(input: unknown): string | null {
   return rel;
 }
 
-function targetOf(project: BuilderProject, rel: string): string | null {
-  return insideRoot(project.root, rel.split("/").join(sep));
-}
-
-/* ── TypeScript diagnostics via the PROJECT's own compiler ────────────── */
-
-interface TsLike {
-  transpileModule(input: string, opts: { reportDiagnostics: boolean; fileName: string; compilerOptions: Record<string, unknown> }): {
-    diagnostics?: Array<{ start?: number; length?: number; messageText: unknown; code: number; category: number }>;
-  };
-  flattenDiagnosticMessageText(msg: unknown, nl: string): string;
-}
-
-async function loadProjectTypescript(root: string): Promise<TsLike | null> {
-  const candidates = [join(root, "node_modules", "typescript", "lib", "typescript.js")];
-  for (const file of candidates) {
-    if (!existsSync(file)) continue;
-    try {
-      const mod = (await import(file)) as { default?: TsLike } & Partial<TsLike>;
-      const ts = (mod.default ?? mod) as TsLike;
-      if (typeof ts.transpileModule === "function") return ts;
-    } catch {
-      /* unloadable — report honestly below */
-    }
+/* ── Syntax diagnostics via XR's OWN transpiler ───────────────────────────
+ * Decision (A1): the builder never imports the project's node_modules/typescript.
+ * That would execute project-controlled code inside the daemon. Diagnostics are
+ * syntax-level (the same class transpileModule reports with isolatedModules), from
+ * Bun's trusted built-in parser. Semantic/type diagnostics are not offered.
+ */
+export function syntaxDiagnostics(content: string, rel: string): { available: true; diagnostics: Array<{ from: number; to: number; severity: "error"; message: string; code: number }> } | { available: false; reason: string } {
+  const loader = /\.(tsx|jsx)$/.test(rel) ? "tsx" : /\.(ts|mts|cts)$/.test(rel) ? "ts" : "jsx";
+  try {
+    new Bun.Transpiler({ loader: loader as "ts" | "tsx" | "jsx" }).transformSync(content);
+    return { available: true, diagnostics: [] };
+  } catch (e) {
+    const err = e as { message?: string; position?: { offset?: number; length?: number } };
+    const from = Math.max(0, err.position?.offset ?? 0);
+    return { available: true, diagnostics: [{ from, to: from + Math.max(1, err.position?.length ?? 1), severity: "error", message: err.message ?? "syntax error", code: 0 }] };
   }
-  return null;
 }
 
 export function builderRoutes(): DaemonRoute[] {
@@ -227,22 +218,18 @@ export function builderRoutes(): DaemonRoute[] {
         if (!project) return json({ error: "unknown project — open it first" }, 404);
         const rel = cleanRel(url.searchParams.get("path"));
         if (!rel) return json({ error: "expected ?path=" }, 400);
-        const target = targetOf(project, rel);
-        if (!target) return json({ error: "path escapes the project root" }, 400);
         try {
-          const st = statSync(target);
-          if (st.isDirectory()) return json({ error: "path is a directory" }, 400);
-          if (looksBinary(target)) return json({ path: rel, content: "", size: st.size, mtimeMs: st.mtimeMs, isText: false, truncated: false });
-          if (st.size > READ_LIMIT) {
-            const fd = openSync(target, "r");
-            const buf = Buffer.alloc(READ_LIMIT);
-            const n = readSync(fd, buf, 0, READ_LIMIT, 0);
-            closeSync(fd);
-            return json({ path: rel, content: buf.subarray(0, n).toString("utf8"), size: st.size, mtimeMs: st.mtimeMs, isText: true, truncated: true });
-          }
-          return json({ path: rel, content: readFileSync(target, "utf8"), size: st.size, mtimeMs: st.mtimeMs, isText: true, truncated: false });
-        } catch {
-          return json({ error: "file not found" }, 404);
+          return withFilesystem(project.root, "daemon", (fs) => {
+            const meta = fs.metadata(rel);
+            if (meta.directory) return json({ error: "path is a directory" }, 400);
+            const head = fs.readPrefix(rel, READ_LIMIT);
+            if (looksBinary(rel, head.bytes.subarray(0, 4096))) {
+              return json({ path: rel, content: "", size: head.size, mtimeMs: head.mtimeMs, isText: false, truncated: false });
+            }
+            return json({ path: rel, content: head.bytes.toString("utf8"), size: head.size, mtimeMs: head.mtimeMs, isText: true, truncated: head.truncated });
+          });
+        } catch (e) {
+          return fsFailure(json, e, rel, "file not found");
         }
       },
     }),
@@ -258,20 +245,28 @@ export function builderRoutes(): DaemonRoute[] {
         const rel = cleanRel(body.path);
         if (!rel) return json({ error: "expected { path, content }" }, 400);
         if (typeof body.content !== "string") return json({ error: "content must be a string" }, 400);
-        const target = targetOf(project, rel);
-        if (!target) return json({ error: "path escapes the project root" }, 400);
         const bytes = Buffer.byteLength(body.content, "utf8");
         if (bytes > WRITE_LIMIT) return json({ error: "content exceeds the 1 MB write limit" }, 413);
+        // A1: authorize and capture identity BEFORE the approval is requested; commit re-validates it.
+        const fsa = new FilesystemAuthority(project.root, "daemon");
+        let op: ReturnType<FilesystemAuthority["prepare"]>;
         let existed = false;
         try {
-          const st = statSync(target);
-          if (st.isDirectory()) return json({ error: "path is a directory" }, 400);
-          existed = true;
-          if (typeof body.baseMtimeMs === "number" && Math.abs(st.mtimeMs - body.baseMtimeMs) > 2) {
-            return json({ error: "file changed on disk since it was loaded", stale: true, mtimeMs: st.mtimeMs }, 409);
+          try {
+            const meta = fsa.metadata(rel);
+            if (meta.directory) { fsa.close(); return json({ error: "path is a directory" }, 400); }
+            existed = true;
+            if (typeof body.baseMtimeMs === "number" && Math.abs(meta.mtimeMs - body.baseMtimeMs) > 2) {
+              fsa.close();
+              return json({ error: "file changed on disk since it was loaded", stale: true, mtimeMs: meta.mtimeMs }, 409);
+            }
+          } catch (e) {
+            if (!(e instanceof FilesystemError && e.code === "missing")) throw e;
           }
-        } catch {
-          /* new file */
+          op = fsa.prepare(rel, "write");
+        } catch (e) {
+          fsa.close();
+          return fsFailure(json, e, rel);
         }
         const content = body.content;
         return gatedMutation({
@@ -283,10 +278,10 @@ export function builderRoutes(): DaemonRoute[] {
           reason: `${existed ? "Save" : "Create"} ${rel} (${bytes} bytes) — Builder`,
           riskTier: "medium",
           audit: "builder.file.write",
+          release: () => { op.close(); fsa.close(); },
           perform: () => {
-            mkdirSync(dirname(target), { recursive: true });
-            writeFileSync(target, content, "utf8");
-            const st = statSync(target);
+            op.commit(content);
+            const st = fsa.metadata(rel);
             return { path: rel, bytes, mtimeMs: st.mtimeMs };
           },
         });
@@ -304,9 +299,14 @@ export function builderRoutes(): DaemonRoute[] {
         const rel = cleanRel(body.path);
         if (!rel) return json({ error: "expected { path, kind }" }, 400);
         const kind = body.kind === "folder" ? "folder" : "file";
-        const target = targetOf(project, rel);
-        if (!target) return json({ error: "path escapes the project root" }, 400);
-        if (existsSync(target)) return json({ error: `${rel} already exists` }, 409);
+        const fsa = new FilesystemAuthority(project.root, "daemon");
+        let op: ReturnType<FilesystemAuthority["prepareCreate"]>;
+        try {
+          op = fsa.prepareCreate(rel, kind);
+        } catch (e) {
+          fsa.close();
+          return fsFailure(json, e, rel);
+        }
         return gatedMutation({
           ctx: { state, config },
           project,
@@ -316,12 +316,9 @@ export function builderRoutes(): DaemonRoute[] {
           reason: `Create ${kind} ${rel} — Builder`,
           riskTier: "low",
           audit: "builder.file.create",
+          release: () => { op.close(); fsa.close(); },
           perform: () => {
-            if (kind === "folder") mkdirSync(target, { recursive: true });
-            else {
-              mkdirSync(dirname(target), { recursive: true });
-              writeFileSync(target, "", { flag: "wx" });
-            }
+            op.commit();
             return { path: rel, kind };
           },
         });
@@ -339,11 +336,15 @@ export function builderRoutes(): DaemonRoute[] {
         const from = cleanRel(body.from);
         const to = cleanRel(body.to);
         if (!from || !to) return json({ error: "expected { from, to }" }, 400);
-        const src = targetOf(project, from);
-        const dst = targetOf(project, to);
-        if (!src || !dst) return json({ error: "path escapes the project root" }, 400);
-        if (!existsSync(src)) return json({ error: `${from} does not exist` }, 404);
-        if (existsSync(dst)) return json({ error: `${to} already exists` }, 409);
+        const fsa = new FilesystemAuthority(project.root, "daemon");
+        let op: ReturnType<FilesystemAuthority["prepareRename"]>;
+        try {
+          op = fsa.prepareRename(from, to);
+        } catch (e) {
+          fsa.close();
+          if (e instanceof FilesystemError && e.code === "stale") return json({ error: `${to} already exists` }, 409);
+          return fsFailure(json, e, from);
+        }
         return gatedMutation({
           ctx: { state, config },
           project,
@@ -352,9 +353,9 @@ export function builderRoutes(): DaemonRoute[] {
           reason: `Rename ${from} → ${to} — Builder`,
           riskTier: "medium",
           audit: "builder.file.rename",
+          release: () => { op.close(); fsa.close(); },
           perform: () => {
-            mkdirSync(dirname(dst), { recursive: true });
-            renameSync(src, dst);
+            op.commit();
             return { from, to };
           },
         });
@@ -371,16 +372,19 @@ export function builderRoutes(): DaemonRoute[] {
         const body = (await req.json().catch(() => ({}))) as { path?: string };
         const rel = cleanRel(body.path);
         if (!rel) return json({ error: "expected { path }" }, 400);
-        const target = targetOf(project, rel);
-        if (!target || target === project.root) return json({ error: "path escapes the project root" }, 400);
+        // The project root itself is never a deletable target.
+        if (rel === "." || rel === "") return json({ error: "path escapes the project root" }, 400);
+        const fsa = new FilesystemAuthority(project.root, "daemon");
+        let op: ReturnType<FilesystemAuthority["prepareRemove"]>;
         let isDir = false;
         try {
-          isDir = statSync(target).isDirectory();
-        } catch {
-          return json({ error: `${rel} does not exist` }, 404);
+          isDir = fsa.metadata(rel).directory;
+          op = fsa.prepareRemove(rel, isDir);
+        } catch (e) {
+          fsa.close();
+          return fsFailure(json, e, rel, `${rel} does not exist`);
         }
-        let count = 1;
-        if (isDir) count = walkTree(target, 10_000).entries.filter((e) => e.type === "file").length;
+        const count = op.files;
         return gatedMutation({
           ctx: { state, config },
           project,
@@ -389,8 +393,9 @@ export function builderRoutes(): DaemonRoute[] {
           reason: isDir ? `Delete folder ${rel} and ${count} file${count === 1 ? "" : "s"} inside it — Builder` : `Delete ${rel} — Builder`,
           riskTier: isDir ? "high" : "medium",
           audit: "builder.file.delete",
+          release: () => { op.close(); fsa.close(); },
           perform: () => {
-            rmSync(target, { recursive: isDir, force: false });
+            op.commit();
             return { path: rel, recursive: isDir };
           },
         });
@@ -420,26 +425,8 @@ export function builderRoutes(): DaemonRoute[] {
         if (!rel || typeof body.content !== "string") return json({ error: "expected { path, content }" }, 400);
         if (!/\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(rel)) return json({ available: false, reason: "not a TypeScript/JavaScript file", diagnostics: [] });
         if (body.content.length > READ_LIMIT) return json({ available: false, reason: "file too large", diagnostics: [] });
-        const ts = await loadProjectTypescript(project.root);
-        if (!ts) return json({ available: false, reason: "typescript is not installed in this project (node_modules/typescript)", diagnostics: [] });
-        try {
-          const jsx = /\.(tsx|jsx)$/.test(rel) ? 4 /* ReactJSX */ : undefined;
-          const out = ts.transpileModule(body.content, {
-            reportDiagnostics: true,
-            fileName: basename(rel),
-            compilerOptions: { target: 99, module: 99, jsx, allowJs: true, isolatedModules: true },
-          });
-          const diagnostics = (out.diagnostics ?? []).slice(0, 200).map((d) => ({
-            from: d.start ?? 0,
-            to: (d.start ?? 0) + Math.max(1, d.length ?? 1),
-            severity: d.category === 1 ? ("error" as const) : d.category === 0 ? ("warning" as const) : ("info" as const),
-            message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
-            code: d.code,
-          }));
-          return json({ available: true, diagnostics });
-        } catch (e) {
-          return json({ available: false, reason: (e as Error).message, diagnostics: [] });
-        }
+        const result = syntaxDiagnostics(body.content, rel);
+        return json(result.available ? result : { ...result, diagnostics: [] });
       },
     }),
   ];

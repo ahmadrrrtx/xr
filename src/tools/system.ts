@@ -1,74 +1,43 @@
-/**
- * XR — system tools: list_dir (safe), delete_file (approval), shell (sandboxed
- * + approval + dangerous-command block + dry-run aware). Fully async.
- */
-import { promises as fsp } from "node:fs";
-import { resolve, relative, isAbsolute, join } from "node:path";
+/** XR system tools: shared file authority; unchanged governed shell execution. */
 import type { Tool, ToolResult } from "../core/types.ts";
 import { checkAction } from "../security/guard.ts";
+import { FilesystemAuthority, filesystemMessage, withFilesystem } from "../security/filesystem.ts";
 import { runCommand } from "../util/process.ts";
 import { shellTrustSpec } from "../runtime/trust/tool-support.ts";
 import { resolveShellCommandIdentity, decideExecIntegrity } from "../security/exec-integrity.ts";
 
-function safe(cwd: string, p: string): string | null {
-  const abs = isAbsolute(p) ? p : resolve(cwd, p);
-  const rel = relative(cwd, abs);
-  if (rel.startsWith("..") || isAbsolute(rel)) return null;
-  return abs;
-}
-
 export const listDirTool: Tool = {
-  name: "list_dir",
-  description: "List files/folders inside a directory in the working tree.",
-  parameters: { path: "string (relative dir, default '.')" },
-  requiresApproval: false,
+  name: "list_dir", description: "List files/folders inside a directory in the working tree.",
+  parameters: { path: "string (relative dir, default '.')" }, requiresApproval: false,
   async run(args, ctx): Promise<ToolResult> {
-    const p = safe(ctx.cwd, String(args.path ?? "."));
-    if (!p) return { ok: false, output: `not found: ${args.path}` };
+    let fs: FilesystemAuthority | undefined;
     try {
-      await fsp.access(p);
-    } catch {
-      return { ok: false, output: `not found: ${args.path}` };
-    }
-    const names = await fsp.readdir(p);
-    const entries = await Promise.all(names.map(async (n) => {
-      try {
-        const st = await fsp.stat(join(p, n));
-        return st.isDirectory() ? n + "/" : n;
-      } catch {
-        return n;
-      }
-    }));
-    ctx.audit("list_dir", { path: String(args.path ?? ".") });
-    return { ok: true, output: entries.join("\n") || "(empty)", data: { count: entries.length } };
+      fs = ctx.filesystem ?? new FilesystemAuthority(ctx.cwd);
+      const entries = fs.list(typeof args.path === "string" ? args.path : ".");
+      ctx.audit("list_dir", { path: String(args.path ?? "."), authority: fs.descriptor().id });
+      return { ok: true, output: entries.map(e => e.name + (e.directory ? "/" : "")).join("\n") || "(empty)", data: { count: entries.length } };
+    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    finally { if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };
-
 export const deleteFileTool: Tool = {
-  name: "delete_file",
-  description: "Delete a file inside the working tree. Requires approval.",
-  parameters: { path: "string (relative path)" },
-  requiresApproval: true,
+  name: "delete_file", description: "Delete a file inside the working tree. Requires approval.",
+  parameters: { path: "string (relative path)" }, requiresApproval: true,
   async run(args, ctx): Promise<ToolResult> {
-    const p = safe(ctx.cwd, String(args.path ?? ""));
-    if (!p) return { ok: false, output: "unsafe path" };
+    let fs: FilesystemAuthority | undefined, pending: ReturnType<FilesystemAuthority["prepare"]> | undefined;
     try {
-      await fsp.access(p);
-    } catch {
-      return { ok: false, output: `not found: ${args.path}` };
-    }
-    const approved = await ctx.approve({ tool: "delete_file", reason: `delete ${args.path}` });
-    if (!approved) {
-      ctx.audit("delete_file.denied", { path: String(args.path) });
-      return { ok: false, output: "delete denied" };
-    }
-    if (ctx.dryRun) {
-      ctx.audit("delete_file.dryrun", { path: String(args.path) });
-      return { ok: true, output: `[dry-run] would delete ${args.path}` };
-    }
-    await fsp.rm(p);
-    ctx.audit("delete_file.applied", { path: String(args.path) });
-    return { ok: true, output: `deleted ${args.path}` };
+      if (typeof args.path !== "string" || !args.path.trim()) return { ok: false, output: "delete_file requires a non-empty `path`" };
+      fs = ctx.filesystem ?? new FilesystemAuthority(ctx.cwd);
+      pending = fs.prepare(args.path, "delete");
+      const approved = await ctx.approve({ tool: "delete_file", args: { path: pending.path, filesystem: pending.identity }, reason: `delete ${pending.path}`, preview: pending.sensitive ? "(sensitive content withheld)" : pending.oldContent.slice(0, 3000) });
+      if (!approved) { ctx.audit("delete_file.denied", { path: pending.path }); return { ok: false, output: "delete denied" }; }
+      pending.validate();
+      if (ctx.dryRun) { ctx.audit("delete_file.dryrun", { path: pending.path }); return { ok: true, output: `[dry-run] would delete ${pending.path}` }; }
+      pending.commit();
+      ctx.audit("delete_file.applied", { path: pending.path });
+      return { ok: true, output: `deleted ${pending.path}` };
+    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    finally { pending?.close(); if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };
 
@@ -78,7 +47,11 @@ export const shellTool: Tool = {
   parameters: { cmd: "string (command line)" },
   requiresApproval: true,
   async run(args, ctx): Promise<ToolResult> {
-    const cmd = String(args.cmd ?? "");
+    if (typeof args.cmd !== "string" || !args.cmd.trim()) {
+      ctx.audit("shell.denied", { reason: "invalid cmd schema" });
+      return { ok: false, output: "shell requires a non-empty string `cmd`" };
+    }
+    const cmd = args.cmd;
     // Phase 06 — an already-cancelled run must not start new side effects.
     if (ctx.signal?.aborted) {
       ctx.audit("shell.cancelled", { stage: "before_start" });
@@ -143,10 +116,14 @@ export const shellTool: Tool = {
        * We do NOT pretend the environment stopped; it runs to its own
        * timeout. This is an honest capability gap, not a silent success.
        */
+      let filesystemAuthority;
+      try { filesystemAuthority = ctx.filesystem?.descriptor() ?? withFilesystem(ctx.cwd, "model-tool", fs => fs.descriptor()); }
+      catch (e) { return { ok: false, output: filesystemMessage(e) }; }
       const { request, executable } = shellTrustSpec(cmd, ctx.cwd, {
         timeoutMs: 120_000,
         maxOutputBytes: 4 * 1024 * 1024,
         networkTargets: ctx.egressAllowlist ?? [],
+        filesystemAuthority,
       });
       const r = await ctx.runIsolated(request, executable);
       if (r.blocked) {

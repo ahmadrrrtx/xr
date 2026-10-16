@@ -60,7 +60,7 @@ const opts = (over: Partial<SessionOptions>): SessionOptions => ({
   ...over,
 });
 
-const shell = (command: string): ApprovalRequest => ({ tool: "shell", reason: "run", args: { command } });
+const shell = (cmd: string): ApprovalRequest => ({ tool: "shell", reason: "run", args: { cmd } });
 
 async function run(
   requests: ApprovalRequest[],
@@ -168,6 +168,19 @@ describe("--diff proposes but never writes", () => {
     expect(readFileSync(file, "utf8")).toBe("old\n");
     expect(session.proposedDiffs).toHaveLength(1);
     expect(session.proposedDiffs[0]!.patch).toContain("+new");
+  });
+
+  test("diff proposals belong to the current turn, not earlier REPL turns", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "xr-diff-turn-"));
+    const probe: Probe = { approvals: [], notices: [], summaries: [] };
+    const session = new CoderSession(
+      agentAsking([{ tool: "write_file", reason: "w", args: { path: "a.txt", content: "proposed" } }], []),
+      fakeUI(true, probe), opts({ cwd: dir, diffOnly: true, mode: "yolo" }),
+    );
+    await session.turn("first", new AbortController().signal);
+    expect(session.proposedDiffs).toHaveLength(1);
+    await session.turn("second", new AbortController().signal);
+    expect(session.proposedDiffs).toHaveLength(1);
   });
 });
 

@@ -10,7 +10,7 @@
  * Secrets are never indexed "because they exist".
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { withFilesystem } from "../security/filesystem.ts";
 import { join, sep } from "node:path";
 import { isSecretPath } from "../security/guard.ts";
 
@@ -78,10 +78,8 @@ interface GitIgnoreRule {
 export function loadIgnore(root: string): IgnoreMatcher {
   const rules: GitIgnoreRule[] = [];
   for (const name of [".gitignore", ".xrignore"]) {
-    const p = join(root, name);
-    if (!existsSync(p)) continue;
     try {
-      parseGitignore(readFileSync(p, "utf8"), rules);
+      parseGitignore(withFilesystem(root, "index", fs => fs.read(name, 128_000).content), rules);
     } catch {
       /* corrupt ignore file → skip, defaults still apply */
     }

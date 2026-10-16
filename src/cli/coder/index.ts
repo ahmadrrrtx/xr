@@ -60,6 +60,14 @@ export interface CoderRequest {
   print: boolean;
   json: boolean;
   diffOnly: boolean;
+  /** Simulate workspace writes and shell execution; provider/read requests may still run. */
+  dryRun?: boolean;
+  /** Per-task USD override; accounting/overshoot limitations remain engine-owned. */
+  budget?: number;
+  /** Rejected until durable coding-session restoration is implemented. */
+  resume?: string;
+  /** Only agent is currently supported by this coding surface. */
+  mode?: "agent" | "plan" | "ask";
   approveAll: boolean;
   tools?: string;
   noHistory: boolean;
@@ -145,7 +153,32 @@ export function describeStop(result: AgentResult): string {
   }
 }
 
+/** Shared by the router preflight and programmatic entry: never ignore unsafe options. */
+export function coderRequestError(req: Pick<CoderRequest, "budget" | "maxTokens" | "resume"> & { mode?: string }): string | undefined {
+  if (req.resume !== undefined) {
+    return "--resume is not yet supported by the coding CLI. Use xr run --resume <session/task-id> for the engine checkpoint path.";
+  }
+  if (req.mode !== undefined && !["agent", "plan", "ask"].includes(req.mode)) {
+    return "--mode requires agent, plan, or ask; the coding CLI currently supports agent only.";
+  }
+  if (req.mode !== undefined && req.mode !== "agent") {
+    return `--mode ${req.mode} is not yet supported by the coding CLI. Use -p for read-only answers, --diff for edit proposals, or xr run --mode ${req.mode}.`;
+  }
+  if (req.budget !== undefined && (!Number.isFinite(req.budget) || req.budget <= 0)) {
+    return "--budget requires a finite USD amount greater than zero";
+  }
+  if (req.maxTokens !== undefined && (!Number.isSafeInteger(req.maxTokens) || req.maxTokens <= 0)) {
+    return "--max-tokens requires a positive safe integer";
+  }
+  return undefined;
+}
+
 export async function runCoder(req: CoderRequest, deps: CoderDeps): Promise<number> {
+  const contractError = coderRequestError(req);
+  if (contractError) {
+    err(contractError);
+    return EXIT.USAGE;
+  }
   const interactiveTty = deps.term.isTTY && Boolean(process.stdout.isTTY) && !req.json;
   const isRepl = !req.prompt && !req.printPrompt && !req.print && !req.stdinText && interactiveTty;
   initStyle({ isTTY: Boolean(process.stdout.isTTY), noColor: req.noColor });
@@ -233,6 +266,7 @@ export async function runCoder(req: CoderRequest, deps: CoderDeps): Promise<numb
   }
 
   if (req.json) ui.banner([`xr ${settings.provider ?? ""}/${settings.model ?? ""}`, `cwd ${cwd}`]);
+  if (req.dryRun) ui.notice("Dry run: workspace writes and shell execution are simulated; model, read and network requests may still run.");
   if (rules) ui.notice(`Loaded ${rules.source} as project rules`);
 
   const mentions = resolveMentions(cwd, prompt);
@@ -250,8 +284,10 @@ export async function runCoder(req: CoderRequest, deps: CoderDeps): Promise<numb
     rules: cfg.permissions ?? {},
     interactive: deps.term.isTTY && !req.json,
     diffOnly: req.diffOnly,
+    dryRun: req.dryRun ?? false,
+    ...(req.budget !== undefined ? { budget: req.budget } : {}),
     maxSteps: req.maxSteps ?? 16,
-    ...(req.maxTokens ? { maxTokens: req.maxTokens } : {}),
+    ...(req.maxTokens !== undefined ? { maxTokens: req.maxTokens } : {}),
     editorHooks: { suspend: () => deps.term.stop(), resume: () => deps.term.start() },
   });
 
@@ -343,9 +379,11 @@ async function runRepl(c: ReplContext): Promise<number> {
     mode: c.mode,
     rules: c.permissions,
     interactive: true,
-    diffOnly: false,
+    diffOnly: c.req.diffOnly,
+    dryRun: c.req.dryRun ?? false,
+    ...(c.req.budget !== undefined ? { budget: c.req.budget } : {}),
     maxSteps: c.req.maxSteps ?? 16,
-    ...(c.req.maxTokens ? { maxTokens: c.req.maxTokens } : {}),
+    ...(c.req.maxTokens !== undefined ? { maxTokens: c.req.maxTokens } : {}),
     editorHooks: { suspend: () => term.stop(), resume: () => term.start() },
   });
 
@@ -357,6 +395,7 @@ async function runRepl(c: ReplContext): Promise<number> {
   ];
   if (c.mode === "yolo") ui.notice("Auto-approval ON (--approve-all).", "warn");
   ui.banner(banner);
+  if (c.req.dryRun) ui.notice("Dry run: workspace writes and shell execution are simulated; model, read and network requests may still run.");
   if (c.rules) ui.notice(`Loaded ${c.rules.source} as project rules`);
   if (c.git.isRepo) ui.notice(`git: ${c.git.branch ?? "detached"}${c.git.status.length ? ` · ${c.git.status.length} changed` : ""}`);
 
@@ -396,6 +435,10 @@ async function runRepl(c: ReplContext): Promise<number> {
       });
       try {
         const result = await session.turn(fullPrompt, controller.signal);
+        if (c.req.diffOnly) {
+          if (session.proposedDiffs.length === 0) ui.notice("no edits proposed");
+          for (const d of session.proposedDiffs) ui.diff(d.path, d.patch);
+        }
         if (result.stopped === "cancelled") ui.notice("(cancelled)");
         else if (result.stopped !== "done") ui.notice(describeStop(result), "warn");
       } catch (e) {

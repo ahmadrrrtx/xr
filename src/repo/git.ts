@@ -3,6 +3,8 @@
  */
 
 import { runCommand } from "../util/process.ts";
+import { withFilesystem } from "../security/filesystem.ts";
+import { fileGit, snapshotDiff } from "../util/git-snapshots.ts";
 import type { GitFileStatus, RepoDiffHunk } from "./types.ts";
 
 export interface GitSnapshot {
@@ -35,26 +37,24 @@ export async function readGitSnapshot(root: string): Promise<GitSnapshot> {
 }
 
 export async function readDiff(root: string, file?: string): Promise<RepoDiffHunk[]> {
-  const args = file ? ["diff", "--numstat", "--", file] : ["diff", "--numstat"];
-  const num = await runCommand("git", args, { cwd: root, timeoutMs: 15_000, maxBuffer: 2 * 1024 * 1024 });
-  const patchArgs = file ? ["diff", "--", file] : ["diff"];
-  const patch = await runCommand("git", patchArgs, { cwd: root, timeoutMs: 15_000, maxBuffer: 2 * 1024 * 1024 });
-  const patches = splitPatches(patch.ok ? patch.stdout : "");
   const out: RepoDiffHunk[] = [];
-  if (num.ok) {
-    for (const line of num.stdout.split("\n")) {
-      const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line);
-      if (!m) continue;
-      const rel = m[3]!.replace(/\\/g, "/");
-      out.push({
-        relativePath: rel,
-        status: "modified",
-        additions: m[1] === "-" ? 0 : Number(m[1]),
-        deletions: m[2] === "-" ? 0 : Number(m[2]),
-        patch: (patches.get(rel) ?? "").slice(0, 8_000),
-      });
-    }
-  }
+  try {
+    withFilesystem(root, "index", fs => {
+      const paths = file ? [file] : fileGit(fs.root, ["ls-files", "--cached", "-z"]).stdout.split("\0").filter(Boolean).slice(0, 2000);
+      for (const path of paths) {
+        let pending: ReturnType<typeof fs.prepare> | undefined;
+        try {
+          pending = fs.prepare(path, "write"); // also represents a deleted (missing) worktree file
+          if (pending.sensitive) continue;
+          const result = snapshotDiff(fs.root, pending.path, pending.oldContent);
+          if (!result.tracked || !result.diff) continue;
+          const stat = countDiffStat(result.diff);
+          out.push({ relativePath: pending.path, status: pending.existed ? "modified" : "deleted", ...stat, patch: result.diff.slice(0, 8000) });
+        } catch { /* denied/unsafe entries never become diff inputs */ }
+        finally { pending?.close(); }
+      }
+    });
+  } catch { /* fixed empty refusal; no raw subprocess/filesystem errors */ }
   return out;
 }
 

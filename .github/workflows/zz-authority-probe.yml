@@ -1,0 +1,19 @@
+name: Authority probe (temporary)
+on:
+  push:
+    branches: [Stage-1]
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Authority, control and builder suites
+        run: bun test test/security test/control test/daemon/builder-ts-git.test.ts test/daemon/builder-routes.test.ts test/daemon/builder-authority.test.ts

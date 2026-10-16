@@ -149,13 +149,20 @@ function SidebarRow({
 function SavedIndicator() {
   const lastChangedAt = useSettingsStore((s) => s.lastChangedAt);
   const [visible, setVisible] = useState(false);
+  const [seenChangeAt, setSeenChangeAt] = useState(lastChangedAt);
+
+  // Adjust state during render when a new change arrives (React-recommended
+  // pattern; avoids a synchronous setState inside an effect).
+  if (lastChangedAt !== seenChangeAt) {
+    setSeenChangeAt(lastChangedAt);
+    setVisible(lastChangedAt !== null);
+  }
 
   useEffect(() => {
-    if (lastChangedAt === null) return;
-    setVisible(true);
+    if (!visible) return;
     const t = setTimeout(() => setVisible(false), 1800);
     return () => clearTimeout(t);
-  }, [lastChangedAt]);
+  }, [visible, lastChangedAt]);
 
   return (
     <AnimatePresence>

@@ -21,6 +21,8 @@ export interface ShellTrustSpecOptions {
   needsCredentials?: boolean;
   /** Actor kind for the authority grant (default "user"). */
   actorKind?: string;
+  /** Host content policy identity for A4; not blanket workspace-mount consent. */
+  filesystemAuthority?: import("../../security/filesystem.ts").FilesystemDescriptor;
 }
 
 /**
@@ -41,6 +43,7 @@ export function shellTrustSpec(
     runsArbitraryCode: true,
     networkTargets: opts.networkTargets ?? [],
     fsPaths: [cwd],
+    ...(opts.filesystemAuthority ? { filesystemAuthority: opts.filesystemAuthority } : {}),
     touchesOutsideWorkspace: false,
     needsCredentials: opts.needsCredentials ?? false,
     reversible: false,
