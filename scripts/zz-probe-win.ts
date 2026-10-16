@@ -29,3 +29,12 @@ try { out("metadata allowed", JSON.stringify(fs.metadata("allowed.txt")).slice(0
 try { out("read alias", fs.read("alias.txt").content); } catch (e) { out("read alias THREW", (e as Error).message); }
 try { out("prepare alias write", typeof fs.prepare("alias.txt", "write")); } catch (e) { out("prepare alias write THREW", (e as Error).message); }
 fs.close();
+{
+  const { isSecretPath } = await import("../src/security/guard.ts");
+  const fs3 = filesystemFromGrant(registry, { grantId: grant.grantId, actor: grant.actor, executionId: grant.executionId, workspaceId: root, purpose: "desktop" });
+  const absA = resolve(fs3.root, "allowed.txt");
+  out("absA", absA, "permits read", (fs3 as any).lease.permits(absA, "read", "x"), "secret", isSecretPath("allowed.txt"), isSecretPath(absA));
+  try { out("fs3 metadata allowed", JSON.stringify(fs3.metadata("allowed.txt")).slice(0, 60)); } catch (e) { out("fs3 metadata allowed THREW", (e as Error).message); }
+  try { out("fs3 read allowed", fs3.read("allowed.txt").content); } catch (e) { out("fs3 read allowed THREW", (e as Error).message); }
+  fs3.close();
+}
