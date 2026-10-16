@@ -1,10 +1,10 @@
 {
-  "pass": 4406,
+  "pass": 4427,
   "skip": 19,
   "fail": 0,
-  "files": 407,
+  "files": 408,
   "bunVersion": "1.4.3",
   "lane": "linux",
-  "commit": "b40edf1a",
+  "commit": "a6f7f67",
   "measuredAt": "2026-10-17"
 }

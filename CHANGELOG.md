@@ -2,8 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- **website:** `/accessibility` — an honest accessibility statement scoped to the Control Center surfaces the CI record covers (WCAG 2.2 AA target; status `automated-verified · manual-pass-pending-human`; verified vs pending split; `support@xr.rrrtx.ai` reporting route). Closes half of P2-10.
+- **website:** `/imprint` — the legal-notice page, built verbatim from the identity Phase 1.1 published (publisher, entity, registered office, contacts, DPDP grievance officer); no new legal facts. Both routes are static and linked from the site footer. Closes P2-10.
+
 ### Fixed
 
+- **website:** `DashboardPreview` — the marketing dashboard mock now labels itself: a `Sample data` chip in the header, a caption under the card, and an aria-label that states the truth; the green "Live" pill now reads "Preview". The illustrative numbers stay — the fix is the label, not a redesign. Closes P2-9.
+- **test:** `test/ux/website-surface.test.ts` — Phase-1.4 regression guard: the two new routes exist with metadata, imprint values are asserted cross-file against the Phase-1.1 identity sources, over-claiming patterns fail, the demo label is pinned, and the footer links resolve to real route dirs.
 - **website,cloud:** deletion copy now describes the request-based erasure path (P0-2) — no automation promised that isn't shipped: console-delete, automatic-purge, purge-date and soft-delete claims replaced across privacy, terms, security, pricing and the dashboard, and in the customer-visible cancellation message. Export claims (backed by `memory.ts:381` / `audit.ts:114`) kept verbatim.
 - **test:** `test/website/legal-capability-alignment.test.ts` — P0-2 regression guard: forbidden automation claims fail the suite, the real request path must be stated, and console-deletion claims need a matching route.
 - **website:** filled the legal identity on the privacy policy and every page footer — entity RRRTX Labs, registered office Remote-first · Chiniot, Punjab, Pakistan, and a named India (DPDP) grievance officer (Muhammad Ahmad, ahmadrrrtx333@gmail.com, available 24 hr). Closes audit finding P0-1 (GDPR Art. 13 controller identity; DPDP named grievance officer).

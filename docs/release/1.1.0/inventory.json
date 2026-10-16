@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-16T23:10:14.340Z",
+  "generatedAt": "2026-10-16T23:59:12.237Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -55,7 +55,7 @@
   },
   "counts": {
     "sourceFiles": 748,
-    "testFiles": 407,
+    "testFiles": 408,
     "cliCommands": 43,
     "daemonRoutes": 294,
     "providers": 26,
@@ -90,7 +90,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 125841
+      "bytes": 127038
     },
     {
       "path": "CODEOWNERS",
@@ -122,7 +122,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 53531
+      "bytes": 53530
     },
     {
       "path": "SECURITY.md",
@@ -130,7 +130,7 @@
     },
     {
       "path": "XR_FIX_TRACKER.md",
-      "bytes": 11346
+      "bytes": 16339
     },
     {
       "path": "bun.lock",
@@ -1311,6 +1311,7 @@
     "test/ux/shell-parity.test.ts",
     "test/ux/sus.test.ts",
     "test/ux/undo.test.ts",
+    "test/ux/website-surface.test.ts",
     "test/voice.test.ts",
     "test/voice/endpointing.test.ts",
     "test/voice/models.test.ts",
