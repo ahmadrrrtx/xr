@@ -15,7 +15,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile --ignore-scripts
-      - name: Native diagnostics
-        run: bun scripts/zz-probe-win.ts
       - name: Authority, control and builder suites
         run: bun test test/security test/control test/daemon/builder-ts-git.test.ts test/daemon/builder-routes.test.ts test/daemon/builder-authority.test.ts
