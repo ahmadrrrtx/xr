@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-17T11:24:09.445Z",
+  "generatedAt": "2026-10-17T13:47:55.693Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -54,8 +54,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 748,
-    "testFiles": 409,
+    "sourceFiles": 749,
+    "testFiles": 411,
     "cliCommands": 43,
     "daemonRoutes": 294,
     "providers": 26,
@@ -90,7 +90,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 127038
+      "bytes": 130365
     },
     {
       "path": "CODEOWNERS",
@@ -130,7 +130,7 @@
     },
     {
       "path": "XR_FIX_TRACKER.md",
-      "bytes": 16339
+      "bytes": 21286
     },
     {
       "path": "bun.lock",
@@ -412,6 +412,7 @@
     "src/daemon/routes/agents-view.ts",
     "src/daemon/routes/agents.routes.ts",
     "src/daemon/routes/approvals.routes.ts",
+    "src/daemon/routes/body-strictness.ts",
     "src/daemon/routes/budget.routes.ts",
     "src/daemon/routes/builder-dev.routes.ts",
     "src/daemon/routes/builder-shared.ts",
@@ -1012,6 +1013,8 @@
     "test/core/service-registry.test.ts",
     "test/cost.test.ts",
     "test/daemon.test.ts",
+    "test/daemon/body-strictness.test.ts",
+    "test/daemon/budget-audit-null-regression.test.ts",
     "test/daemon/builder-authority.test.ts",
     "test/daemon/builder-routes.test.ts",
     "test/daemon/builder-ts-git.test.ts",

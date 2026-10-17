@@ -939,6 +939,10 @@
                       },
                       "shareData": {
                         "type": "boolean"
+                      },
+                      "destructiveApproval": {
+                        "type": "boolean",
+                        "const": true
                       }
                     },
                     "additionalProperties": {}
@@ -953,6 +957,25 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "schemaVersion": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "id": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "createdAt": {
+                    "type": "number"
+                  },
+                  "updatedAt": {
+                    "type": "number"
                   }
                 },
                 "required": [
@@ -3171,6 +3194,9 @@
                     ]
                   },
                   "warningsEnabled": {
+                    "type": "boolean"
+                  },
+                  "autoFallback": {
                     "type": "boolean"
                   }
                 },
@@ -7628,6 +7654,29 @@
                       ],
                       "additionalProperties": {}
                     }
+                  },
+                  "mode": {
+                    "description": "Execution mode (default ask).",
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "agent",
+                      "plan"
+                    ]
+                  },
+                  "sessionId": {
+                    "description": "Lane key: serializes concurrent runs per session.",
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "context": {
+                    "description": "Extra system-prompt context (capped).",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -18736,6 +18785,10 @@
                   },
                   "probe": {
                     "description": "Run a live health probe after saving (default true; the save itself never fails on probe outcome).",
+                    "type": "boolean"
+                  },
+                  "setDefault": {
+                    "description": "Switch the default provider to this key (default true).",
                     "type": "boolean"
                   }
                 },

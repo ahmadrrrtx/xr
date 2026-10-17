@@ -31,6 +31,23 @@ export const CustomAgentInputRequest = z.looseObject({
 
 export const CustomAgentPatchRequest = CustomAgentInputRequest.partial();
 
+/**
+ * Import ≠ create: round-trips the exported document, incl. its server-owned
+ * echo fields — the store reads `id` (a free, well-formed id is kept; imports
+ * never overwrite). Declared so the strictness gate stays sound on real imports.
+ */
+export const CustomAgentImportRequest = CustomAgentInputRequest.extend({
+  schemaVersion: z.string().max(64).optional(),
+  id: z.string().max(80).optional(),
+  version: z.number().int().optional(),
+  createdAt: z.number().optional(),
+  updatedAt: z.number().optional(),
+  // exported-doc echo of a server-owned invariant (see CustomAgentDoc)
+  constitution: CustomAgentConstitutionPatch.extend({
+    destructiveApproval: z.literal(true).optional(),
+  }).optional(),
+});
+
 export const CustomAgentDoc = z.looseObject({
   schemaVersion: z.literal("xr-5.0.0/agent-v1"),
   id: z.string(),

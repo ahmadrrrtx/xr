@@ -89,9 +89,33 @@ Validation failures are `400` with `code: "invalid_request"` and a `details`
 array of `{ path, message }` entries. Error *codes* are part of the contract;
 error *messages* are not (they may be reworded without notice).
 
+### 4.1 Unknown request fields (policy changed in Phase 34)
+
+A mutating request may only contain fields the operation's request schema
+declares; unknown fields are **never silently trusted and never silently
+discarded**.
+
+| Mount | Behaviour on unknown fields |
+|---|---|
+| `/api/v1/…` | **400 `Bad Request`** — one `errors[]` entry per unknown field (`{ path: "<dotted.json.path>", message: "Unknown field. <op> accepts: <fields>." }`); nested objects and array elements are reported as `a.b` / `items[0].c`. |
+| `/api/…` (legacy) | **unchanged semantics until sunset 2027-08-01** (the handler keeps ignoring them), but the response carries `x-xr-ignored-fields: a,b.c` (sorted, deduped, ≤10) **and** one `api.ignored_fields` audit entry. |
+| Response payloads | schemas remain `looseObject`s — clients MUST keep tolerating unknown response fields (forward compatibility, unchanged). |
+
+This replaces the earlier convention "a schema NEVER narrows what the handler
+already accepts". The reversal is deliberate: silently dropping a typo'd
+write field tells the client it succeeded at something it never did (the
+phantom-success class). Introducing the strict rule only on the versioned
+surface keeps the promise already made to legacy-mount clients for the rest
+of the deprecation window. Note: the checker `bun run api:compat` does not
+classify this as breaking (request-side unknown-field rejection is exempt by
+design of loose-object diffing) — the deprecation duty is met by the mount
+split above, not by the checker. After 2027-08-01 the legacy mount is removed
+whole, making strict behaviour the only behaviour; no second flip is planned.
+
 ## 5. History
 
 | Date | Change |
 |---|---|
+| 2026-10 (Phase 34) | Unknown request fields: `/api/v1` mutating routes now reject them (400, per-field paths); the legacy mount keeps accepting but returns `x-xr-ignored-fields` until 2027-08-01 (§4.1). `BudgetSetRequest` now declares `autoFallback`, which the handler always read. |
 | 2026-08 (Phase 8) | `/api/v1` mount introduced; legacy `/api/*` deprecated, sunset 2027-08-01; first generated contract (99 operations) + typed client; breaking-change detection added to CI |
 | 2026-08 (Phase 2) | Additive, non-breaking: `GET /api/approvals` (`approvals.list`, stable) lists durable pending approval records across surfaces; `POST /api/approvals/{approvalId}/decision` (`approvals.decide`, stable) approves/denies a pending approval (400 missing `approved`, 404 unknown id, 409 already decided/timed out). Both are served from the same durable consent store as the legacy `/api/control/pending` + `/api/control/approve` pair, which remain for compatibility. TTL default-deny applies: an unanswered approval is denied, never stuck. |

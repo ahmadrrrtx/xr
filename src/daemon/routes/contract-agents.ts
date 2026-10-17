@@ -9,6 +9,7 @@ import type { ApiOperationMeta } from "./contract.ts";
 import {
   OkResponse,
   CustomAgentInputRequest,
+  CustomAgentImportRequest,
   CustomAgentPatchRequest,
   CustomAgentResponse,
   CustomAgentListResponse,
@@ -49,7 +50,8 @@ export const AGENTS_WORKFLOWS_CONTRACT: Record<string, ApiOperationMeta> = {
   "agents.custom.import": {
     ...agents,
     summary: "Import an exported agent document; a free, well-formed id is kept, otherwise a new one is minted (imports never overwrite).",
-    request: CustomAgentInputRequest,
+    // Import ≠ create: the exported doc's echo fields are declared and honoured. (Phase 34 · R2)
+    request: CustomAgentImportRequest,
     response: CustomAgentResponse,
   },
   "agents.custom.get": {

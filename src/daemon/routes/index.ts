@@ -3,6 +3,7 @@
 import { metaRoutes } from "./meta.routes.ts";
 import { listBaseRoutes, apiRegistry, type ApiOperation } from "./registry.ts";
 import { createDaemonRouter, problem, type DaemonRoute, type DaemonRouteHandler } from "./router.ts";
+import { declaredKeys, unknownFieldPaths } from "./body-strictness.ts";
 import {
   API_CONTRACT,
   LEGACY_SUNSET_HTTP_DATE,
@@ -61,14 +62,18 @@ interface ZodLike {
  * Contract validation (fail-closed 400 problem+json; each handler keeps its
  * own semantic checks underneath — validation never relaxes behavior).
  * Reads a CLONE so the original body stream stays intact for the route.
+ * Phase 34 · R2 (P1-6): after safeParse succeeds, unknown write fields are
+ * gated per mount (v1 rejects; legacy names them — body-strictness.ts).
  */
 async function validateBody(
   ctx: Parameters<DaemonRouteHandler>[0],
   meta: ApiOperationMeta,
-): Promise<Response | null> {
-  if (!meta.request) return null;
+  mount: "v1" | "legacy",
+  opId: string,
+): Promise<{ bad: Response | null; ignored: string[] }> {
+  const none = { bad: null, ignored: [] as string[] };
   const method = ctx.method.toUpperCase();
-  if (method === "GET" || method === "HEAD") return null;
+  if (!meta.request || method === "GET" || method === "HEAD") return none;
   let raw: unknown = {};
   try {
     const clone = ctx.req.clone();
@@ -76,15 +81,21 @@ async function validateBody(
     raw = text.trim() === "" ? {} : JSON.parse(text);
   } catch {
     // Unparseable bodies keep the historical handler-level 400 behavior.
-    return null;
+    return none;
   }
   const parsed = (meta.request as unknown as ZodLike).safeParse(raw);
-  if (parsed.success) return null;
-  const issues = (parsed.error?.issues ?? []).slice(0, 10).map((i) => ({
-    path: i.path.map(String).join("."),
-    message: i.message,
-  }));
-  return problem(400, "Bad Request", "Request body does not match the published schema", issues);
+  if (!parsed.success) {
+    const issues = (parsed.error?.issues ?? []).slice(0, 10).map((i) => ({
+      path: i.path.map(String).join("."), message: i.message,
+    }));
+    return { bad: problem(400, "Bad Request", "Request body does not match the published schema", issues), ignored: [] };
+  }
+  const unknown = [...new Set(unknownFieldPaths(meta.request, raw))].sort();
+  if (unknown.length === 0) return none;
+  if (mount === "legacy") return { bad: null, ignored: unknown.slice(0, 10) };
+  const accepted = declaredKeys(meta.request).join(", ");
+  const errors = unknown.map((path) => ({ path, message: `Unknown field. ${opId} accepts: ${accepted}.` }));
+  return { bad: problem(400, "Bad Request", "Request body contains fields the operation does not accept", errors), ignored: [] };
 }
 
 /**
@@ -119,11 +130,13 @@ export function unmatchedCategory(canonicalPath: string, routes: DaemonRoute[] =
   return "other";
 }
 
-/** Find the contract metadata of the FIRST route that would serve this request. */
-function contractFor(path: string, method: string, routes: DaemonRoute[]): ApiOperationMeta | null {
+/** Find the contract metadata + op id of the FIRST route that would serve this request. */
+function contractFor(path: string, method: string, routes: DaemonRoute[]): { id: string; meta: ApiOperationMeta } | null {
   for (const r of routes) {
     if (!r.matchesPath(path, method)) continue;
-    return API_CONTRACT[r.id] ?? null;
+    const meta = API_CONTRACT[r.id];
+    if (!meta) return null;
+    return { id: r.id, meta };
   }
   return null;
 }
@@ -138,21 +151,30 @@ export function createRouteHandler(): DaemonRouteHandler {
 
     const effectiveCtx = mount.kind === "v1" ? { ...ctx, path: mount.canonical } : ctx;
 
-    const meta = contractFor(effectiveCtx.path, effectiveCtx.method, routes);
-    if (meta) {
-      const bad = await validateBody(effectiveCtx, meta);
+    let ignoredFields: { op: string; fields: string[] } | null = null;
+    const hit = contractFor(effectiveCtx.path, effectiveCtx.method, routes);
+    if (hit) {
+      const { bad, ignored } = await validateBody(effectiveCtx, hit.meta, mount.kind, hit.id);
       if (bad) {
         return mount.kind === "legacy"
           ? withHeaders(bad, legacyDeprecationHeaders(mount.canonical))
           : withHeaders(bad, { "x-xr-api-version": "v1" });
       }
+      if (ignored.length > 0) ignoredFields = { op: hit.id, fields: ignored };
     }
 
     const response = await router(effectiveCtx);
     const finalResponse = response ?? problem(404, "Not Found");
-    return mount.kind === "legacy"
-      ? withHeaders(finalResponse, legacyDeprecationHeaders(mount.canonical))
-      : withHeaders(finalResponse, { "x-xr-api-version": "v1" });
+    if (mount.kind === "legacy") {
+      const headers = legacyDeprecationHeaders(mount.canonical);
+      if (ignoredFields) { // names unknowns so legacy clients can migrate before the sunset
+        headers["x-xr-ignored-fields"] = ignoredFields.fields.join(",");
+        try { ctx.state?.store.audit("api.ignored_fields", { op: ignoredFields.op, fields: ignoredFields.fields }); }
+        catch { /* audit must never break the request path */ }
+      }
+      return withHeaders(finalResponse, headers);
+    }
+    return withHeaders(finalResponse, { "x-xr-api-version": "v1" });
   };
 }
 

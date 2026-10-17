@@ -502,7 +502,7 @@ export class XRDaemonClient {
   }
 
   /** Import an exported agent document; a free, well-formed id is kept, otherwise a new one is minted (imports never overwrite). */
-  async agentsCustomImport(body: z.infer<typeof S.CustomAgentInputRequest>): Promise<z.infer<typeof S.CustomAgentResponse>> {
+  async agentsCustomImport(body: z.infer<typeof S.CustomAgentImportRequest>): Promise<z.infer<typeof S.CustomAgentResponse>> {
     return await this.call("POST", "/api/v1/agents/custom/import", body);
   }
 

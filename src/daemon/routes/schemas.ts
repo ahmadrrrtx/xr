@@ -8,11 +8,12 @@
  *   2. OpenAPI 3.1 / JSON-Schema generation (z.toJSONSchema),
  *   3. typed-client inference (`z.infer`).
  *
- * Compatibility rule (docs/api/COMPATIBILITY.md): a schema NEVER narrows what
- * the handler already accepts — `looseObject` so historically-tolerated
- * unknown keys keep working. Field-level optional/required mirrors the
- * handler's own semantic checks (those handlers still run: schema validation
- * is an additional, contract-stating envelope, not a behavior change).
+ * Unknown-field rule (docs/api/COMPATIBILITY.md; Phase 34 · R2 — reverses
+ * the old "never narrows" convention): `looseObject` stays for response
+ * forward-compat, but mutating REQUESTS get unknown-key detection
+ * (body-strictness.ts): 400 on /api/v1, `x-xr-ignored-fields` header on the
+ * legacy mount until 2027-08-01. Schemas MUST declare every field their
+ * handler reads (an envelope; it never defines behavior).
  */
 
 import { z } from "zod/v4";
@@ -100,6 +101,8 @@ export const OnboardingProviderRequest = z.looseObject({
   apiKey: z.string().min(1).max(2048).describe("Provider API key — stored in the OS keychain or sealed file, never returned."),
   model: z.string().max(200).optional().describe("Optional default model for this provider."),
   probe: z.boolean().optional().describe("Run a live health probe after saving (default true; the save itself never fails on probe outcome)."),
+  // R2 · handler-read; desktop key save sends setDefault:false (keeps default).
+  setDefault: z.boolean().optional().describe("Switch the default provider to this key (default true)."),
 });
 
 export const OnboardingProviderResponse = z.looseObject({
@@ -340,6 +343,12 @@ export const ChatStreamRequest = z.looseObject({
   message: z.string().min(1),
   history: z.array(z.looseObject({ role: chatRole, content: z.string() })).optional()
     .describe("Trailing conversation history (last ≤10 turns are used)."),
+  // R2 · handler-read (chat.routes.ts) — declared so strictness does not reject real clients.
+  mode: z.enum(["ask", "agent", "plan"]).optional().describe("Execution mode (default ask)."),
+  sessionId: z.string().optional().describe("Lane key: serializes concurrent runs per session."),
+  model: z.string().optional(),
+  provider: z.string().optional(),
+  context: z.string().optional().describe("Extra system-prompt context (capped)."),
 });
 
 export const TriggerCreateRequest = z.looseObject({
@@ -364,6 +373,7 @@ export const BudgetSetRequest = z.looseObject({
   monthlyCap: z.number().nonnegative().optional(),
   dailyCap: z.number().nonnegative().nullable().optional(),
   warningsEnabled: z.boolean().optional(),
+  autoFallback: z.boolean().optional(), // R2 · handler-read, must be declared
 });
 
 export const ProviderSetRequest = z.looseObject({
