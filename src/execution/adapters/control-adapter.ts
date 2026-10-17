@@ -1,10 +1,4 @@
-/**
- * XR 4.1 — Control/Computer Action Adapter
- *
- * Wraps the existing classify→preview→approve→execute→audit flow so each
- * control Action produces a canonical execution record. Does not replace
- * any control logic (risk classification remains authoritative).
- */
+/** XR 4.1 — Control Action Adapter: classify→preview→approve→execute→audit flow, canonical record per action. */
 import type { Action, ActionResult, ControlOptions, Plan, RiskAssessment } from "../../control/types.ts";
 import type { ExecutionService } from "../service.ts";
 import type { ActorIdentity, ExecutionObservation } from "../types.ts";
@@ -66,7 +60,7 @@ export async function executeControlAction(
       risk: risk.level,
       preview: prev,
     },
-    capability: { kind: "control_action", name: action.type },
+    capability: { kind: "control_action", name: action.type, requiresApproval: risk.level !== "safe" },
     placement: IN_PROCESS_PLACEMENT,
     // XR 4.2 — record the control risk tier/placement. Destructive (GUI/browser)
     // actions are host-authority: admitted with an elevated gate, not blocked.
