@@ -59,6 +59,11 @@ function opts(overrides: Partial<ExecuteOptions> = {}): ExecuteOptions {
     placement: { kind: "in_process" },
     idempotency: "naturally_idempotent",
     inputSummary: "{}",
+    // Phase 2.3 · P1-2 — default approver for lifecycle-checkpoint/retry tests
+    // that build on this factory: they pin checkpoint ORDER/cancellation/retry
+    // key stability, never the gate (the gate's own matrix lives in
+    // approval-default.test.ts). Any test may still override via `overrides`.
+    approve: async () => true,
     ...overrides,
   } as ExecuteOptions;
 }

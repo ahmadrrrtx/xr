@@ -56,6 +56,10 @@ function opts(overrides: Partial<ExecuteOptions> = {}): ExecuteOptions {
     placement: { kind: "in_process" },
     idempotency: "naturally_idempotent",
     inputSummary: "{}",
+    // Phase 2.3 · P1-2 — default approver: these scenarios pin golden
+    // lifecycles/cancellation, not the approval gate (gate matrix lives in
+    // test/execution/approval-default.test.ts).
+    approve: async () => true,
     ...overrides,
   } as ExecuteOptions;
 }

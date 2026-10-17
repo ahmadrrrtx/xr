@@ -249,6 +249,8 @@ describe("Phase 06 · real process crash recovery (spec steps 20/21/26/52)", () 
           idempotency: "idempotent_with_key",
           idempotencyKey: "ck_crash_C",
           inputSummary: "retry",
+          // Phase 2.3 · P1-2 — pins crash-recovery side-effect safety, not the gate.
+          approve: async () => true,
           run: async () => {
             // Same logical operation, same key: re-writing converges.
             const { writeFileSync } = await import("node:fs");

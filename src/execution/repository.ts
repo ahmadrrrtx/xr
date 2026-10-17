@@ -140,6 +140,13 @@ export class ExecutionRepo {
           ON CONFLICT(run_id) DO UPDATE SET
             state = excluded.state,
             outcome_kind = excluded.outcome_kind,
+            -- Phase 2.3 · P1-2 — refresh capability columns on upsert: mid-flight
+            -- persists (e.g. the approval gate's awaiting_approval snapshot) insert
+            -- the row BEFORE action assembly, with defaulted capability columns
+            -- (model_call/summary); the final save must repair them or
+            -- capability-keyed queries and idempotency dedupe miss the row forever.
+            capability_kind = excluded.capability_kind,
+            capability_name = excluded.capability_name,
             duration_ms = excluded.duration_ms,
             cost_usd = excluded.cost_usd,
             message = excluded.message,
@@ -225,6 +232,9 @@ export class ExecutionRepo {
       .prepare(
         `SELECT record_json FROM ${TABLE}
          WHERE workspace_id = ? AND capability_kind = ? AND capability_name = ?
+           -- Phase 2.3 · P1-2: 'awaiting_approval' deliberately absent — a prior
+           -- still-pending public approval slot is UNKNOWN at claim time (like every
+           -- other non-terminal class); replaying it would duplicate the side effect.
            AND state IN ('succeeded','partially_completed','failed','cancelled','timed_out','denied','budget_blocked')
          ORDER BY created_at DESC LIMIT 50`,
       )
