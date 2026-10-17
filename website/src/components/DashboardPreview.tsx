@@ -5,10 +5,11 @@ import { Activity, Bot, Cpu, Play, Shield, Sparkles, Terminal as TermIcon } from
 
 export function DashboardPreview() {
   return (
+    <>
     <div
       className="relative rounded-2xl overflow-hidden glass shadow-[0_40px_100px_-20px_rgba(124,92,255,0.35)]"
       role="img"
-      aria-label="XR Dashboard preview"
+      aria-label="XR dashboard preview — sample data, not a live system"
     >
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 bg-white/[0.02]">
         <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
@@ -17,9 +18,12 @@ export function DashboardPreview() {
         <div className="ml-4 flex items-center gap-1 text-[11px] text-zinc-400 font-mono">
           <TermIcon className="h-3 w-3" /> dashboard.xr.dev / runtime
         </div>
-        <div className="ml-auto flex items-center gap-1.5 text-[11px] text-emerald-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Live
+        <span className="ml-3 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+          Sample data
+        </span>
+        <div className="ml-auto flex items-center gap-1.5 text-[11px] text-zinc-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-zinc-500" />
+          Preview
         </div>
       </div>
       <div className="grid grid-cols-12 gap-0 min-h-[360px]">
@@ -89,6 +93,10 @@ export function DashboardPreview() {
         </main>
       </div>
     </div>
+    <p className="mt-2 text-center text-[11px] text-zinc-500">
+      Design preview — every run, count and rate on this card is a sample value, not a reading from a live deployment.
+    </p>
+    </>
   );
 }
 

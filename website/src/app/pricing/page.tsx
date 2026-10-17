@@ -177,7 +177,7 @@ export default function PricingPage() {
               },
               {
                 q: "What happens to my team's data if we stop paying?",
-                a: "It stops being synchronised and starts a 30-day retention window. You can export team memory and the audit log at any point in that window. After it closes, the data is purged — we do not keep a copy to win you back.",
+                a: "It stops being synchronised. Team memory and the audit log stay exportable — plaintext JSON and CSV, self-serve — and nothing happens on a schedule: erasure is by request (privacy@xr.rrrtx.ai, subject “Data Rights Request”), confirmed by email once done. We do not keep a copy to win you back.",
               },
               {
                 q: "Do you use my data to train anything?",

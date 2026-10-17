@@ -91,7 +91,7 @@ export default function PoliciesPage() {
         <Panel title="Data handling">
           <div className="divide-y divide-native-border">
             {[
-              ["Team memory retention", `${p.dataRetentionDays} days after cancellation`, "Then purged. Exportable throughout."],
+              ["Team memory retention", `${p.dataRetentionDays} days after cancellation`, "Exportable throughout. Erasure by verified request, confirmed by email."],
               ["Audit retention", `${p.auditRetentionDays} days`, "Minimum 30. Exports are signed and immutable."],
               ["Sensitive-fact blocking", p.blockSensitiveMemory ? "On" : "Off", "Facts matching the credential scanner are refused before they leave the machine."],
               ["Cloud relay", p.relayEnabled ? "Enabled for this org" : "Disabled", "Frames are opaque; the relay holds no keys."],

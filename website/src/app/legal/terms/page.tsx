@@ -202,18 +202,21 @@ export default function TermsPage() {
 
         <Section title="7. Ending it">
           <p>
-            You can cancel and delete your account at any time from the console. We may suspend an account for
+            You can cancel your subscription at any time from the console. To delete your account, email
+            privacy@xr.rrrtx.ai with the subject &ldquo;Data Rights Request&rdquo; — we verify, erase, and
+            confirm by email. We may suspend an account for
             a material breach of section 4, and we will tell you which clause and give you a chance to fix it
             unless the breach is actively harming someone. If we terminate your account for our own
             convenience, you get a pro-rata refund of the unused period, automatically.
           </p>
           <p>
-            On termination, the retention and purge schedule in the{" "}
+            On termination, the erasure practice in the{" "}
             <Link href="/legal/privacy" className="text-native-cyan hover:underline">
               privacy policy
             </Link>{" "}
-            applies: 30 days of exportable data, then deletion. The software on your machine is unaffected —
-            it was never contingent on the subscription.
+            applies: your data stays exportable, and deletion is by verified request — confirmed by email
+            within 30 days. The software on your machine is unaffected — it was never contingent on the
+            subscription.
           </p>
         </Section>
 

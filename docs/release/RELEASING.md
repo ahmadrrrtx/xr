@@ -26,7 +26,26 @@ bun run changelog:generate
 # 1e. Regenerate the known-limitations register + support matrix for the new version dir
 #     (docs/release/<version>/known-limitations.md — review; entries may only disappear
 #      when the limitation is genuinely closed AND a test proves it)
+# 1f. Re-stamp the published tree ceiling into the README gates table + canonical register
+#     (single source: TREE_CEILING in scripts/size-gate.ts)
+bun run size-gate --stamp-docs
+# 1g. Refresh the published test baseline: run root `bun test` on the Linux lane, then write
+#     docs/release/TEST-BASELINE.json ({pass, skip, fail, files, bunVersion, lane, commit,
+#     measuredAt}) and the README gates-table line from its output — claim-lint fails when
+#     the two disagree
 ```
+
+
+## Independent version surfaces
+
+The release-identity stamp (`release.manifest.json` → `bun run release:check`) owns the CLI surfaces. The surfaces below version **independently by evidence**: each was introduced with its own number and has never been a stamp target, and repo history shows no release-time bump commit for any of them. Policy: they must not silently claim the release identity; if one is ever meant to track the release, that is a deliberate decision recorded here first.
+
+| Surface | Version (2026-10-17) | Stamped from the release identity? | Status & evidence |
+|---|---|---|---|
+| `cloud/package.json` | 1.0.0 | no | **Independent** — introduced at 1.0.0 as a separate Bun/Hono deployable (2026-10-13, `c1ad0e0f`) and never re-stamped; anything newer would be coincidence. |
+| `mobile/package.json` | 28.0.0 | no | **Independent** — born at 28.0.0 at introduction (2026-10-13, `7d2338d6`); its number follows its own lineage, not the release. |
+| `desktop/src-tauri/Cargo.toml` | 0.2.0 | no | **Independent** — the desktop inner crate carries its own 0.2.x infancy series; its version field has never been changed since introduction. |
+| `extensions/vscode/package.json` | 0.2.0 | no | **Independent** — added 2026-06-04 (`af733159`) at 0.2.0 and only lockfile-maintained since. (4th surface: not covered by the original audit's release-manifest review — see XR_FIX_TRACKER deviation log.) |
 
 ## 2. Verify locally (the same gates CI runs)
 

@@ -36,8 +36,8 @@ export default function PrivacyPage() {
           Effective {EFFECTIVE} · applies to {site.url}
         </p>
         <p className="console-mono mt-2 text-[11.5px] text-native-text-dim">
-          Published by Muhammad Ahmad · XR [TO FILL: registered entity name, registered address, city,
-          country] · privacy contact: privacy@xr.rrrtx.ai
+          Published by Muhammad Ahmad · XR RRRTX Labs, Remote-first · Chiniot, Punjab, Pakistan ·
+          privacy contact: privacy@xr.rrrtx.ai
         </p>
 
         <div className="mt-10 rounded-xl border border-native-cyan/25 bg-native-bg-elevated/60 p-6">
@@ -111,9 +111,9 @@ export default function PrivacyPage() {
         <Section title="4. How long we keep things">
           <Table
             rows={[
-              ["Active accounts", "Until you delete them", "You can delete from the console. Deletion schedules a purge and emails you the date."],
-              ["Deleted accounts and teams", "30 days, then purged", "The window exists so that a mistaken deletion is recoverable. After it closes, the data is gone — not archived, not retained."],
-              ["Team memory and audit logs, after cancellation", "30 days, exportable", "Every day of the window you can export both in full. The purge date is shown in the console rather than buried in a policy."],
+              ["Active accounts", "Until you ask us to erase them", "Deletion is by request: email privacy@xr.rrrtx.ai with the subject “Data Rights Request”. We verify, erase, and confirm by email — within 30 days."],
+              ["Deleted accounts and teams", "Erased on verified request", "Erasure runs on request, and verification catches a mistaken one before anything happens. Once done, the data is gone — not archived, not retained."],
+              ["Team memory and audit logs, after cancellation", "Request-based; exportable", "Export both in full at any time — plaintext JSON and CSV, self-serve. Erasure after cancellation works the same way as everything else here: email privacy@xr.rrrtx.ai, subject “Data Rights Request”, confirmed by email once done."],
               ["Usage counters", "Current day and current month only", "Older counters are aggregated and the detail is discarded; there is no per-request history to subpoena."],
               ["Sign-in attempts", "90 days", "For abuse detection. Masked IP only."],
               ["Server and access logs", "14 days", "Standard request logs at the edge. No third-party analytics processor is involved."],
@@ -154,8 +154,9 @@ export default function PrivacyPage() {
               from the console. Self-service, no support ticket.
             </li>
             <li>
-              <strong>Delete.</strong> Account deletion from the console, with a 30-day recovery window and a
-              confirmation email stating the purge date.
+              <strong>Delete.</strong> Account deletion by request: email privacy@xr.rrrtx.ai with the
+              subject &ldquo;Data Rights Request&rdquo;. We verify, erase, and confirm by email &mdash; within 30
+              days, and sooner where the law asks for sooner.
             </li>
             <li>
               <strong>Revoke.</strong> Every session and every device is visible under Settings and can be
@@ -179,8 +180,8 @@ export default function PrivacyPage() {
             Under the GDPR, the UK GDPR, India&rsquo;s DPDP Act and the CCPA/CPRA (whichever applies to
             you), you can ask us to: show you what we hold, correct it, delete it, give it to you in a
             portable format (JSON export), restrict or object to a use, and withdraw consent where consent
-            is the basis. Most of these are self-service in the console — export and delete need no ticket
-            at all.
+            is the basis. Most of these are self-service — export needs no ticket at all; deletion goes
+            through the request path right below.
           </p>
           <p>
             For anything else, email{" "}
@@ -192,9 +193,9 @@ export default function PrivacyPage() {
             authority; we would rather you emailed us first, but that is a preference, not a condition.
           </p>
           <p>
-            <strong>India (DPDP).</strong> Grievance officer: [TO FILL: name], [TO FILL: email], [TO FILL:
-            physical address], available [TO FILL: hours]. Grievances are acknowledged within 48 hours and
-            answered within 30 days.
+            <strong>India (DPDP).</strong> Grievance officer: Muhammad Ahmad, ahmadrrrtx333@gmail.com,
+            Remote-first · Chiniot, Punjab, Pakistan, available 24 hr. Grievances are acknowledged within 48
+            hours and answered within 30 days.
           </p>
         </Section>
 

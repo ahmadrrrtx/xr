@@ -87,7 +87,7 @@ export function viewOf(row: SubscriptionRow | null, now = new Date()): Subscript
     businessActive = false;
     reason =
       "Your team's Business subscription was cancelled. Team features are off. " +
-      "Your local data and workspaces are untouched, and you can export team memory and audit logs before they are purged.";
+      "Your local data and workspaces are untouched, and you can export team memory and audit logs before requesting erasure (privacy@xr.rrrtx.ai, subject \"Data Rights Request\").";
   } else if (row.status === "unpaid") {
     businessActive = false;
     reason =

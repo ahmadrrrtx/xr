@@ -23,7 +23,7 @@ const CONTROLS = [
   { id: "CC8.1", name: "Change management", state: "ok", note: "Every change is a reviewed pull request; migrations are additive and reversible." },
   { id: "A1.2", name: "Availability — backups", state: "ok", note: "Daily database snapshots with a tested restore. Recovery objectives are stated in the self-host guide." },
   { id: "P4.1", name: "Privacy — data minimisation", state: "ok", note: "Prompts are not stored. Usage counters hold counts, not content." },
-  { id: "P6.1", name: "Privacy — retention", state: "ok", note: "30-day soft delete then purge, visible to the customer in the console." },
+  { id: "P6.1", name: "Privacy — retention", state: "warn", note: "Erasure is request-based: the Data Rights Request path, verified and confirmed by email. Self-serve deletion controls are not shipped." },
   { id: "P8.1", name: "Privacy — consent", state: "ok", note: "Not applicable in the usual sense: there is no analytics, no advertising and no third-party cookie to consent to." },
 ];
 

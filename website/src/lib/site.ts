@@ -74,6 +74,8 @@ export const site = {
       { label: "Notices", href: "/legal/notices" },
       { label: "Security & trust", href: "/security" },
       { label: "Download XR", href: "/download" },
+      { label: "Accessibility", href: "/accessibility" },
+      { label: "Imprint", href: "/imprint" },
     ],
   },
 } as const;

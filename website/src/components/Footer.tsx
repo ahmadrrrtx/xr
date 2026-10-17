@@ -36,7 +36,7 @@ export function Footer() {
               </a>
             </div>
             <div className="mt-6 text-xs text-zinc-500">
-              © {new Date().getFullYear()} XR [TO FILL: Registered Entity Name]. All rights reserved.
+              © {new Date().getFullYear()} XR RRRTX Labs. All rights reserved.
             </div>
             <div className="mt-2 text-xs text-zinc-500">
               <a href="mailto:support@xr.rrrtx.ai" className="hover:text-zinc-200 transition-colors">
@@ -44,7 +44,7 @@ export function Footer() {
               </a>
             </div>
             <div className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-              [TO FILL: Registered office — street address, city, India]
+              Remote-first · Chiniot, Punjab, Pakistan
             </div>
           </div>
 

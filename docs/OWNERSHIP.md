@@ -145,6 +145,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/ux/` | @ahmadrrrtx | explicit entry |
 | `test/voice.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/voice/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/website/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/whatsapp/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
@@ -194,6 +195,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/phase00/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/phase2-move-module.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/phase26-mockups.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/placeholder-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/platform-parity.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

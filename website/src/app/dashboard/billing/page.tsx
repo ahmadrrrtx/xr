@@ -157,9 +157,9 @@ export default function BillingPage() {
             <p>Cancelling takes effect at the end of the paid period. There is no fee and no retention call.</p>
             <ul className="space-y-1.5">
               <li>Team features stay available until the period ends.</li>
-              <li>Team memory and the audit log stay exportable for 30 days after that.</li>
+              <li>Team memory and the audit log stay exportable after that — self-serve, no ticket.</li>
               <li>Local XR — every feature on every member&rsquo;s machine — is unchanged, permanently.</li>
-              <li>No data is held back to win you back. After 30 days it is deleted.</li>
+              <li>No data is held back to win you back. Erasure is by request — privacy@xr.rrrtx.ai, subject &ldquo;Data Rights Request&rdquo; — confirmed by email within 30 days.</li>
             </ul>
             <ConsoleButton variant="danger" disabled={demo || !active} title={active ? "Cancel subscription" : "Nothing to cancel"}>
               Cancel subscription

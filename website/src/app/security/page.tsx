@@ -103,8 +103,8 @@ const CONTROLS = [
   {
     area: "Data lifecycle",
     state: "done" as const,
-    control: "30-day soft-delete retention, then purge — documented and enforced",
-    evidence: "Cancellation sets a purge date; the retention window is visible to the customer, not just to us.",
+    control: "Erasure by verified request — the email path is documented; no self-serve delete is shipped",
+    evidence: "Deletion runs through the Data Rights Request path (privacy@xr.rrrtx.ai); the privacy policy describes the same path the product implements.",
   },
   {
     area: "Governance",
@@ -312,9 +312,9 @@ export default function SecurityPage() {
                 exportable. Team memory in plaintext JSON, audit log as CSV.
               </li>
               <li>
-                <span className="console-mono text-native-cyan">day 30</span> — purged. Not archived, not
-                &ldquo;retained for legal reasons&rdquo;. Deleted, with the deletion itself appended to the audit chain
-                before that chain is destroyed.
+                <span className="console-mono text-native-cyan">when you ask</span> — erasure by verified
+                request (privacy@xr.rrrtx.ai, subject &ldquo;Data Rights Request&rdquo;), confirmed by email.
+                Not archived, not &ldquo;retained for legal reasons&rdquo; once erased.
               </li>
             </ol>
           </div>
