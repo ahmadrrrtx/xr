@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-16T23:59:12.237Z",
+  "generatedAt": "2026-10-17T11:24:09.445Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -55,7 +55,7 @@
   },
   "counts": {
     "sourceFiles": 748,
-    "testFiles": 408,
+    "testFiles": 409,
     "cliCommands": 43,
     "daemonRoutes": 294,
     "providers": 26,
@@ -1021,6 +1021,7 @@
     "test/daemon/filesystem-http.test.ts",
     "test/daemon/honesty.test.ts",
     "test/daemon/onboarding-routes.test.ts",
+    "test/daemon/origin-host-guard.test.ts",
     "test/daemon/parent-watch-mechanism.test.ts",
     "test/daemon/parent-watch.test.ts",
     "test/daemon/phase-b.test.ts",

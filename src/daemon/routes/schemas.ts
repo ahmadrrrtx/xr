@@ -481,12 +481,10 @@ export const VersionInfo = z.looseObject({
 });
 
 export const HealthResponse = z.looseObject({
+  // Phase 34 · R1 (audit P2-21) — unauthenticated liveness probe: minimal
+  // payload only. Name/version/host/binding fingerprints are authed-surface
+  // data, not loopback health output.
   ok: z.literal(true),
-  name: z.string(),
-  version: VersionInfo,
-  host: z.string(),
-  binding: z.string(),
-  auth: z.string(),
   ts: z.number(),
 });
 

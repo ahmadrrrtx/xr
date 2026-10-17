@@ -110,6 +110,28 @@ export function resolveBindHost(env: NodeJS.ProcessEnv = process.env): string {
   return isContainerRuntime(env) ? CONTAINER_BIND : DEFAULT_LOOPBACK;
 }
 
+/**
+ * Phase 34 · R1 — request-trust boundary: the SINGLE allowed-host set the
+ * Host gate and CSRF/Origin gate both compare against. `localhost`, loopback
+ * IPv4/IPv6 (bracketed per RFC 3986) and the resolved bind host; LAN addresses
+ * are deliberately NOT in the set — daemon exposure beyond loopback is a
+ * separate, opt-in surface (Phase 2.4).
+ */
+export function allowedDaemonHosts(env: NodeJS.ProcessEnv = process.env): string[] {
+  return Array.from(new Set([resolveBindHost(env), "localhost", "127.0.0.1", "::1", "[::1]"]));
+}
+
+function hostNameOnly(host: string): string {
+  if (host.startsWith("[")) return host.slice(0, host.indexOf("]") + 1);
+  return host.split(":").length === 2 ? host.split(":")[0]! : host; // one colon → host:port; bare IPv6 stays whole
+}
+
+/** Phase 34 · R1 — Host-gate predicate: fail closed on a missing/absent Host. */
+export function hostAllowed(hostHeader: string | null, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (!hostHeader) return false;
+  return allowedDaemonHosts(env).includes(hostNameOnly(hostHeader.trim()));
+}
+
 const responseHelpers: DaemonResponseHelpers = {
   json: safeJson,
   html: htmlResponse,
@@ -170,8 +192,8 @@ export function authorizeRequest(
 export function originAllowed(
   req: Request,
   auth: { kind: "bearer" } | { kind: "session" } | { kind: "bootstrap" } | { kind: "denied" },
-  host: string,
   port: number,
+  env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   if (auth.kind !== "session") return true;
   const method = req.method.toUpperCase();
@@ -180,10 +202,33 @@ export function originAllowed(
   if (!origin) return false; // non-browser without bearer → refuse (fail closed)
   try {
     const o = new URL(origin);
-    return o.hostname === host && (o.port === String(port) || (o.port === "" && port === 80));
+    // Phase 34 · R1 — same allowed set as the Host gate: any loopback spelling
+    // (`localhost` ≡ `127.0.0.1` ≡ `[::1]`) is the daemon's own origin;
+    // listener-port semantics unchanged.
+    return allowedDaemonHosts(env).includes(o.hostname) && (o.port === String(port) || (o.port === "" && port === 80));
   } catch {
     return false;
   }
+}
+
+/** Structural slice of Bun.Server used here (keeps tests type-free). */
+export type PeerLookup = { requestIP(req: Request): { address: string } | null };
+
+/**
+ * Phase 34 · R1 (audit §15#27) — rate-limit client key. `x-forwarded-for` is
+ * spoofable on a loopback-daemon without a real reverse proxy, so it is only
+ * honoured when the operator explicitly opts in (`XR_TRUST_PROXY=1`); by
+ * default the socket peer (Bun's `requestIP`, probes/tests → "local") wins.
+ */
+export function clientIpFor(
+  req: Request,
+  peer: { address: string } | null = null,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (env.XR_TRUST_PROXY === "1") {
+    return (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "local";
+  }
+  return peer?.address ?? "local";
 }
 
 /** Phase 4 · T5 — fixed-window per-IP rate limiter (memory-only). */
@@ -345,10 +390,18 @@ export function makeHandler(
   const pairingLimiter = new RateLimiter(10, 60_000);
   const pairingBackoff = new PairingFailureBackoff();
 
-  async function dispatch(req: Request): Promise<Response> {
+  async function dispatch(req: Request, server?: PeerLookup): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
     const method = req.method.toUpperCase();
+
+    // Phase 34 · R1 — Host gate FIRST, before auth/open-path/rate-limit: any
+    // authority outside the loopback set is refused (DNS-rebinding defence).
+    // 421 Misdirected Request (RFC 9110 §15.5.21) = correct code for an
+    // authority this server does not answer for; a missing Host fails closed.
+    if (!hostAllowed(req.headers.get("host") ?? (url.host || null))) {
+      return safeJson({ error: "misdirected request — unknown Host authority" }, 421);
+    }
     // Canonical (mount-free) path for policy checks: /api/v1/* ≡ /api/*.
     const canonicalPath = path.startsWith("/api/v1/") ? `/api${path.slice(7)}` : path;
 
@@ -414,9 +467,8 @@ export function makeHandler(
 
       // Phase 4 · T5 — CSRF/Origin: cookie-authenticated mutating requests
       // must come from the daemon's own origin.
-      const host = resolveBindHost();
       const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
-      if (!originAllowed(req, auth, host, port)) {
+      if (!originAllowed(req, auth, port)) {
         return safeJson({ error: "forbidden — cross-origin request refused (CSRF guard)" }, 403);
       }
     }
@@ -425,7 +477,7 @@ export function makeHandler(
     // Phase 31 · A10 — signature-verified webhooks are exempt: their
     // authenticator is the signature, and a chatty Telegram/Discord
     // delivery burst must not 429 legitimate updates.
-    const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim() || "local";
+    const ip = clientIpFor(req, server?.requestIP(req) ?? null);
     if (!isSignatureWebhook(canonicalPath) && !limiter.allow(`${ip}:${path}`)) {
       return new Response(JSON.stringify({ error: "rate limit exceeded" }), {
         status: 429,
@@ -509,7 +561,7 @@ export function makeHandler(
    * trace-correlated log line per request. No prompts, bodies, or content
    * are ever captured here (structural-only, Art. XXI).
    */
-  return async function handle(req: Request): Promise<Response> {
+  return async function handle(req: Request, server?: PeerLookup): Promise<Response> {
     const url = new URL(req.url);
     const method = req.method.toUpperCase();
     const mount = resolveMount(url.pathname);
@@ -525,6 +577,7 @@ export function makeHandler(
       // match. Bun.serve strips the body of HEAD responses itself.
       const response = await dispatch(
         method === "HEAD" ? new Request(req.url, { headers: req.headers }) : req,
+        server,
       );
       status = response.status;
       // Phase 31 · A1/A6 — security headers + strict CORS on EVERY response.
@@ -663,7 +716,9 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // Phase 14 — SSE streams send a keepalive comment every 5 s (chat.routes),
   // so a 120 s idle ceiling only ever closes a connection whose peer is gone;
   // the Bun default (10 s) cut cold local-model streams before the first token.
-  const server = Bun.serve({ hostname: bindHost, port, fetch: handler, idleTimeout: 120 });
+  // Phase 34 · R1 — thread the server through so the rate limiter can key on
+  // the real socket peer (requestIP) instead of spoofable forwarding headers.
+  const server = Bun.serve({ hostname: bindHost, port, fetch: (req: Request, srv) => handler(req, srv), idleTimeout: 120 });
   // Phase 4 · T4 fix — report the ACTUAL bound port: `port: 0` asks the OS to
   // assign an ephemeral port (used by the perf dashboard-bench, which spawns
   // many bench processes; a fixed/random port can collide with the previous

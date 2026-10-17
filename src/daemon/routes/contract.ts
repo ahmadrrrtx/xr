@@ -123,7 +123,7 @@ export const COMPATIBILITY_DOC = "docs/api/COMPATIBILITY.md";
 export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   // ── system ────────────────────────────────────────────────────────────────
   "health.get": {
-    summary: "Liveness/version health probe (unauthenticated).",
+    summary: "Liveness health probe (unauthenticated, minimal payload).",
     tag: "system",
     stability: "stable",
     response: HealthResponse,

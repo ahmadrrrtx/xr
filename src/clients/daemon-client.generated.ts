@@ -151,7 +151,7 @@ export class XRDaemonClient {
     return await this.raw("GET", `/api/v1/research/stream/${encodeURIComponent(id)}`);
   }
 
-  /** Liveness/version health probe (unauthenticated). */
+  /** Liveness health probe (unauthenticated, minimal payload). */
   async healthGet(): Promise<z.infer<typeof S.HealthResponse>> {
     return await this.call("GET", "/api/v1/health");
   }

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+
+- **daemon:** request-trust boundary — a Host gate now runs before auth and open paths and refuses any authority outside the loopback set (`resolveBindHost()` ∪ {`localhost`, `127.0.0.1`, `::1`, `[::1]}`) with **421 Misdirected Request** (RFC 9110 §15.5.21); a missing Host fails closed. Bearer tokens no longer defeat a spoofed Host. Closes audit finding P1-5 (DNS-rebinding posture).
+- **daemon:** `originAllowed` now compares the Origin hostname against the same allowed-host set as the Host gate, so a session POST with `Origin: http://localhost:PORT` is accepted identically to `127.0.0.1` — port semantics, GET/HEAD/OPTIONS and bearer/bootstrap exemptions unchanged; missing or foreign Origin still fails closed (403). Closes audit finding P1-3.
+- **daemon:** the per-IP rate-limiter keys on the real socket peer (`server.requestIP`, `"local"` in-process) — `x-forwarded-for` is only honoured when the operator opts in with `XR_TRUST_PROXY=1`. Closes audit §15 #27 (rate-limit bypass via spoofed forwarding header).
+- **daemon (contract change):** the unauthenticated health probe (`/api/health` + `/api/v1/health`) now returns `{ok, ts}` only — `name`, `version`/`versionInfo`, `host`, `binding`, `auth` and `configCache` fingerprints are removed from the unauthed surface (`HealthResponse` schema, OpenAPI and the generated client regenerated; `bun run api:compat` passes). Closes audit finding P2-21. Guarded by the new `test/daemon/origin-host-guard.test.ts` (Host matrix ×3 auth kinds, Origin matrix 200/200/403/403, open-path latch, §15#27 both modes; 12 tests with a `git stash push -- src/` fail-before proof).
+
 ### Added
 
 - **website:** `/accessibility` — an honest accessibility statement scoped to the Control Center surfaces the CI record covers (WCAG 2.2 AA target; status `automated-verified · manual-pass-pending-human`; verified vs pending split; `support@xr.rrrtx.ai` reporting route). Closes half of P2-10.

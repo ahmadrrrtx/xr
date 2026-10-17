@@ -3,7 +3,7 @@
 import { buildAuditReport } from "../../export/report.ts";
 import { basename } from "node:path";
 import { CORE_VERSION, DISPLAY_VERSION, PKG, versionInfo } from "../../core/version.ts";
-import { configCacheStats, isMemoryEnabled } from "../../config/config.ts";
+import { isMemoryEnabled } from "../../config/config.ts";
 import { isLocal } from "../../cost/pricing.ts";
 import { runLab } from "../../security/lab.ts";
 import { fingerprint } from "../../context/memory/rag.ts";
@@ -25,16 +25,10 @@ export function systemRoutes(): DaemonRoute[] {
       id: "health.get",
       path: "/api/health",
       method: "GET",
-      handle: ({ json, host }) => json({
-        ok: true,
-        name: "xr",
-        version: versionInfo(),
-        host,
-        binding: "localhost-only",
-        auth: "required-except-health",
-        ts: Date.now(),
-        configCache: configCacheStats(),
-      }),
+      // Phase 34 · R1 (audit P2-21) — the unauthenticated probe returns a
+      // minimal liveness payload only; name/version/host/binding/config-traces
+      // are service fingerprints attackers could harvest from a loopback bind.
+      handle: ({ json }) => json({ ok: true, ts: Date.now() }),
     }),
     route({
       id: "dashboard.get",

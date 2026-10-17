@@ -14675,7 +14675,7 @@
     "/api/v1/health": {
       "get": {
         "operationId": "health.get",
-        "summary": "Liveness/version health probe (unauthenticated).",
+        "summary": "Liveness health probe (unauthenticated, minimal payload).",
         "tags": [
           "system"
         ],
@@ -14692,53 +14692,12 @@
                       "type": "boolean",
                       "const": true
                     },
-                    "name": {
-                      "type": "string"
-                    },
-                    "version": {
-                      "type": "object",
-                      "properties": {
-                        "name": {
-                          "type": "string"
-                        },
-                        "version": {
-                          "type": "string"
-                        },
-                        "codename": {
-                          "type": "string"
-                        },
-                        "schema": {
-                          "type": "integer",
-                          "minimum": -9007199254740991,
-                          "maximum": 9007199254740991
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "version"
-                      ],
-                      "additionalProperties": {}
-                    },
-                    "host": {
-                      "type": "string"
-                    },
-                    "binding": {
-                      "type": "string"
-                    },
-                    "auth": {
-                      "type": "string"
-                    },
                     "ts": {
                       "type": "number"
                     }
                   },
                   "required": [
                     "ok",
-                    "name",
-                    "version",
-                    "host",
-                    "binding",
-                    "auth",
                     "ts"
                   ],
                   "additionalProperties": {}
