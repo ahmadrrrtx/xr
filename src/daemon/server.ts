@@ -77,6 +77,8 @@ export interface DaemonOptions {
   store?: Store;
   /** Phase 2.4 · P1-1 — explicit LAN opt-in input; absent = loopback HTTP, unchanged. */
   lan?: LanInput;
+  /** P2-17 — reveal the private token lines (sidecar `--parent-pid` / `XR_PRINT_TOKEN=1`). */
+  revealToken?: boolean;
 }
 
 export interface DaemonHandle {
@@ -812,16 +814,19 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const boundPort = server.port ?? port;
   // Always show a reachable URL: 0.0.0.0 is a bind address, not a destination.
   const displayHost = bindHost === CONTAINER_BIND ? DEFAULT_LOOPBACK : bindHost;
-  const url = `http://${displayHost}:${boundPort}/?token=${token}`;
+  const url = `http://${displayHost}:${boundPort}/`;
+  // P2-17 — two channels: PRIVATE (sidecar/operator opt-in) prints the legacy
+  // token lines the Rust parser consumes; HUMAN prints no bearer material.
+  const reveal = opts.revealToken === true || process.env.XR_PRINT_TOKEN === "1";
 
   const { xrCyan, xrGreen, xrDim, xrBold } = await import("../ui/theme.ts");
   // Phase 2.4 · P1-1 — LAN mode: printLanBanner (CLI) is the instrument.
   if (!lanRuntime) console.log(`
   ${xrBold(xrCyan("XR"))} ${xrDim("—")} Local Server
   ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${boundPort}`)}
-  ${xrGreen("✓")} Dashboard     ${xrCyan(url)}
-  ${xrGreen("✓")} Chat          ${xrCyan(`http://${displayHost}:${boundPort}/chat?token=${token}`)}
-  ${xrDim("Token:")} ${xrDim(token)}
+  ${xrGreen("✓")} Dashboard     ${xrCyan(reveal ? `${url}?token=${token}` : url)}
+  ${xrGreen("✓")} Chat          ${xrCyan(reveal ? `http://${displayHost}:${boundPort}/chat?token=${token}` : `http://${displayHost}:${boundPort}/chat`)}
+  ${reveal ? `${xrDim("Token:")} ${xrDim(token)}` : `${xrDim("Token:")} ${xrDim("(hidden — sign in on the dashboard; to print it, run `XR_PRINT_TOKEN=1 xr serve` on a private terminal)")}`}
   ${xrDim(
     bindHost === CONTAINER_BIND
       ? `Binding: ${bindHost} inside the container — publish it loopback-only on the host (127.0.0.1:${boundPort}:${boundPort})`

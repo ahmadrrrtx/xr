@@ -117,9 +117,6 @@ export function isCategory(v: string): v is MemoryCategory {
   return (MEMORY_CATEGORIES as readonly string[]).includes(v);
 }
 
-export function isSource(v: string): v is MemorySource {
-  return (MEMORY_SOURCES as readonly string[]).includes(v);
-}
 
 /** Clamp an importance value into the 1..5 range. */
 export function clampImportance(n: unknown): number {
@@ -232,12 +229,3 @@ export interface MemoryContextMeta {
 /** A memory entry with its XR 4.5 context metadata. */
 export interface MemoryEntryWithContext extends MemoryEntry, MemoryContextMeta {}
 
-/**
- * Memory categories that are actually POLICY INSTRUCTIONS, not memories.
- * `exclusion` is a do-not-remember rule: the audit flagged storing it in the
- * memory table as a taxonomy error. It keeps its storage location for
- * compatibility, but the context layer types it as `instruction`.
- */
-export function categoryIsInstruction(c: MemoryCategory): boolean {
-  return c === "exclusion";
-}

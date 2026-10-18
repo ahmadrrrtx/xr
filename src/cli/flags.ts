@@ -49,6 +49,9 @@ export interface GlobalFlags {
   configPath?: string;
   /** Invalid safety-critical options; rendered as usage errors before execution. */
   errors?: string[];
+  /** Phase 2.5 · P1-4 — unknown pre-head dashed tokens wait here; the router
+   * either matches a catalog-declared local or errors (exit 2) pre-boot. */
+  pendingDashes?: string[];
   /** Raw original argv (for debugging). */
   raw: string[];
 }
@@ -130,6 +133,7 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
     raw,
   };
 
+  let seenPositional = false;
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i]!;
 
@@ -144,7 +148,9 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
       const eq = token.indexOf("=");
       const name = token.slice(2, eq);
       const value = token.slice(eq + 1);
-      applyValue(out, name, value);
+      if (!applyValue(out, name, value) && !seenPositional) {
+        (out.pendingDashes ??= []).push(token);
+      }
       continue;
     }
 
@@ -193,12 +199,15 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
         continue;
       }
 
-      // Unknown flag — pass through to command
-      args.push(token);
+      // Unknown flag — before any positional it can only be a global slot;
+      // after a head it stays command/task-owned (unchanged semantics).
+      if (seenPositional) args.push(token);
+      else (out.pendingDashes ??= []).push(token);
       continue;
     }
 
     // Positional
+    seenPositional = true;
     args.push(token);
   }
 
@@ -227,7 +236,8 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
   return out;
 }
 
-function applyValue(out: GlobalFlags, name: string, value: string): void {
+/** Returns false for unrecognised names so the caller can route them by position. */
+function applyValue(out: GlobalFlags, name: string, value: string): boolean {
   switch (name) {
     case "dry-run":
     case "dryRun":
@@ -240,23 +250,23 @@ function applyValue(out: GlobalFlags, name: string, value: string): void {
       } else {
         out.dryRun = value === "true";
       }
-      return;
+      return true;
     case "print":
     case "p":
       out.print = value;
-      return;
+      return true;
     case "tools":
       out.tools = value;
-      return;
+      return true;
     case "cwd":
       out.cwd = value;
-      return;
+      return true;
     case "config":
       out.configPath = value;
-      return;
+      return true;
     case "m":
       out.model = value;
-      return;
+      return true;
     case "format":
     case "output":
     case "o": {
@@ -315,8 +325,9 @@ function applyValue(out: GlobalFlags, name: string, value: string): void {
       out.args.push("--port", value);
       break;
     default:
-      break;
+      return false;
   }
+  return true;
 }
 
 /** Detect whether stdout is an interactive TTY (for color/spinners). */

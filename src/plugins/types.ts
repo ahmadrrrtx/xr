@@ -83,9 +83,6 @@ export const PLUGIN_TYPES = [
 
 export type PluginType = (typeof PLUGIN_TYPES)[number];
 
-export function isPluginType(v: string): v is PluginType {
-  return (PLUGIN_TYPES as readonly string[]).includes(v);
-}
 
 export const TRUST_LEVELS = ["unknown", "community", "reviewed", "verified", "official", "local-dev"] as const;
 export type PluginTrustLevel = (typeof TRUST_LEVELS)[number];

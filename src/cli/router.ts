@@ -40,7 +40,21 @@ function parseServePort(args: string[]): number | undefined {
   return undefined;
 }
 
+function assertServeArgs(args: string[]): void {
+  // Phase 2.5 · P1-4 — the ONE command whose local options this phase owns:
+  // --lan is catalog-declared; --port/--parent-pid are value options parsed
+  // below. Any other dashed token is a usage error, never silently ignored.
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--lan") continue;
+    if (a === "--port" || a === "--parent-pid") { i++; continue; }
+    if (a.startsWith("--port=") || a.startsWith("--parent-pid=")) continue;
+    if (a.startsWith("-")) throw usageError(`unknown option for serve: ${a.split("=")[0]}`, "Usage: xr serve [--port <n>] [--parent-pid <pid>] [--lan]");
+  }
+}
+
 async function runServeCommand(args: string[]): Promise<void> {
+  assertServeArgs(args);
   // SEC-12 — `--parent-pid <pid>`: the desktop shell passes its own pid so the
   // engine stops itself when the shell is gone. Parsed BEFORE the daemon
   // boots: a malformed value is a usage error, never a watch that silently
@@ -66,7 +80,13 @@ async function runServeCommand(args: string[]): Promise<void> {
     process.exitCode = 1;
     throw err;
   }
-  const handle = await serve({ port: Number.isFinite(port) ? port : undefined, ...(lanStartup ? { lan: { cert: lanStartup.cert } } : {}) });
+  // P2-17 — revealToken is reserved for the sidecar handshake (--parent-pid, the
+  // desktop engine's private capture) and the operator's explicit XR_PRINT_TOKEN=1.
+  const handle = await serve({
+    port: Number.isFinite(port) ? port : undefined,
+    ...(lanStartup ? { lan: { cert: lanStartup.cert } } : {}),
+    revealToken: parentPid !== undefined,
+  });
   if (lanStartup) printLanBanner({ ...lanStartup, port: handle.port, url: handle.lanUrl ?? lanStartup.url });
   await new Promise<void>((resolve) => {
     const stop = () => {
@@ -246,6 +266,25 @@ export async function runCli(argv: string[]): Promise<number> {
       flagsHelp: flags.help,
       wantsCommandHelp: !!head && (rest.includes("--help") || rest.includes("-h")),
     });
+
+    // Phase 2.5 · P1-4 — fail CLOSED on unknown GLOBAL options: a dashed token
+    // before any positional may only relocate to a command whose catalog entry
+    // declares exactly that spelling; anything else is a usage error (exit 2)
+    // before help/version/task/kernel work. Documented policy: docs land via
+    // the equivalence between catalog `flags` and this loop.
+    if (flags.pendingDashes?.length) {
+      const declared = route.catalog?.flags ?? (route.kind === "serve" ? getCatalogEntry("serve")?.flags : undefined) ?? [];
+      for (const tok of flags.pendingDashes) {
+        const name = tok.split("=")[0]!;
+        if (declared.includes(name)) rest.push(tok);
+        else throw usageError(`unknown option: ${name}`, "Run xr help for the supported options, or use -- to keep dashed task text.");
+      }
+    }
+
+    // §15#16 — `xr daemon` is not a task: precise relocation, never a boot.
+    if (route.kind === "daemon") {
+      throw usageError("`daemon` is not a command — start the local server with `xr serve`.", "Usage: xr serve [--port <n>] [--parent-pid <pid>] [--lan]");
+    }
 
     // ── Version (fast) ────────────────────────────────────────────────────
     if (route.kind === "version") {

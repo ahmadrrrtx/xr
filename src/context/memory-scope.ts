@@ -31,9 +31,6 @@ const SESSION_PREFIX = "session:";
 const AGENT_PREFIX = "agent:";
 const WORKSPACE_PREFIX = "workspace:";
 
-export function isMemoryScopeKind(v: string): v is MemoryScopeKind {
-  return (MEMORY_SCOPE_KINDS as readonly string[]).includes(v);
-}
 
 /**
  * Parse a stored scope string. Unknown shapes are treated as workspace-scoped

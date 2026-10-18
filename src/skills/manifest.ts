@@ -151,7 +151,3 @@ export function skillDirName(id: string): string {
   return id.replace(/^@/, "").replace(/[\\/:]/g, "__");
 }
 
-export function nearestSkillDir(path: string): string {
-  const st = statSync(path);
-  return st.isDirectory() ? path : dirname(path);
-}

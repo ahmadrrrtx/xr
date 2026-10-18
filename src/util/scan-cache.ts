@@ -147,7 +147,3 @@ export function cachedScan<T>(opts: {
   return { value, hit: false, cachePath };
 }
 
-/** Number of entries a directory tree would stat (diagnostics). */
-export function countTree(root: string): number {
-  return fingerprintDir(root).length;
-}

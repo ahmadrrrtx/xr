@@ -161,9 +161,9 @@
     },
     {
       "path": "src/daemon/server.ts",
-      "lines": 874,
+      "lines": 879,
       "owner": "daemon",
-      "reason": "Phase 2.4 · P1-1 (784→874, pre-phase body was 784): the LAN/TLS listener branch (unified Bun.serve with conditional spread-tls), the mobile auth seam (anonymous-yet-paired fall-through + desktopPrivileged tagging at the EXISTING gate), the canonical-mobileGate 403 wall, the §15#10 Secure-cookie rule, XR_DAEMON_TOKEN as the operator's token channel in LAN mode, and the mobile dispatch context. A10 budget honoured: net-zero elsewhere this phase.",
+      "reason": "Phase 2.5 · P2-17 (874→879): the two-channel startup banner — the PRIVATE sidecar/operator channel keeps the legacy `Token:`/`?token=` lines the desktop Rust banner parser consumes (byte-stable cross-language contract), while the ordinary human banner carries no bearer material and one honest recovery line (XR_PRINT_TOKEN=1). +5 lines = the reveal condition, the revealToken option and the conditional tail; base lines are shared, so no duplication. Previous: Phase 2.4 · P1-1 (784→874) LAN/TLS listener, mobile auth seam, 403 wall, Secure-cookie rule.",
       "plan": "Phase 3: extract src/daemon/server-lan.ts (LAN bind/banner path) so server.ts returns under 800.",
       "review": "2027-01-15"
     }

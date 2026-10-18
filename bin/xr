@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * XR — universal launcher (plain ESM JavaScript: runs under Node 18+ AND Bun).
+ * XR — universal launcher (plain ESM JavaScript: runs under Node 20+ AND Bun).
  *
  * Distribution paths, in order:
  *

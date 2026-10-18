@@ -157,23 +157,3 @@ function deduplicateChain(steps: FallbackStep[]): FallbackStep[] {
   return out;
 }
 
-/**
- * Execute a fallback chain with bounded health checks.
- * Returns the first healthy provider from the chain, or null if all fail.
- */
-export async function executeFallbackChain(
-  chain: FallbackChain,
-  healthCheck: (providerId: string, modelId: string) => Promise<{ ok: boolean }>,
-  opts: { boundedTimeoutMs?: number } = {},
-): Promise<FallbackStep | null> {
-  for (const step of chain.steps) {
-    try {
-      const health = await healthCheck(step.providerId, step.modelId);
-      if (health.ok) return step;
-    } catch {
-      // Continue to next fallback
-      continue;
-    }
-  }
-  return null;
-}

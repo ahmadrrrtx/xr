@@ -348,9 +348,6 @@ export function freshnessBlocksRetrieval(label: FreshnessLabel): boolean {
 export const CONFIDENCE_LEVELS = ["high", "medium", "low", "unknown"] as const;
 export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number];
 
-export function isConfidenceLevel(v: string): v is ConfidenceLevel {
-  return (CONFIDENCE_LEVELS as readonly string[]).includes(v);
-}
 
 export interface UncertaintyState {
   /** Confidence in the item's own content. */

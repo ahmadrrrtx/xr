@@ -1057,7 +1057,7 @@ xr --budget 0.10 # set per-run budget
 - **Approval needed:** interactive prompt (if TTY); if non-interactive, blocks until approved via desktop app/another device, with stderr message "Approval required: open XR desktop or run `xr approve <id>`".
 
 ## Implementation
-- **Node.js 18+** (Bun compatible), published as `@rrrtx/xr` on npm, installs as global CLI.
+- **Node.js 20+** (Bun compatible), published as `@rrrtx/xr` on npm, installs as global CLI.
 - **No Electron/Tauri** — pure terminal.
 - **Shares backend via local daemon?** v1: standalone (connects to XR desktop daemon if running on `localhost:xr-port`, else runs stateless with its own config in `~/.xr/`).
 - **Config:** `~/.xr/config.toml`; keys in OS keychain (keytar).

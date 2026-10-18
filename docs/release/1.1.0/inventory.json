@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-17T13:47:55.693Z",
+  "generatedAt": "2026-10-18T13:01:27.117Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -20,7 +20,8 @@
     "version": "1.1.0",
     "packageManager": "bun@1.3.14",
     "engines": {
-      "bun": ">=1.3.0"
+      "bun": ">=1.3.0",
+      "node": ">=20"
     },
     "bin": {
       "xr": "./bin/xr"
@@ -54,10 +55,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 749,
-    "testFiles": 411,
+    "sourceFiles": 752,
+    "testFiles": 419,
     "cliCommands": 43,
-    "daemonRoutes": 294,
+    "daemonRoutes": 305,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -70,7 +71,7 @@
     },
     {
       "path": ".dependency-cruiser.cjs",
-      "bytes": 15955
+      "bytes": 16189
     },
     {
       "path": ".env.example",
@@ -90,7 +91,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 130365
+      "bytes": 135577
     },
     {
       "path": "CODEOWNERS",
@@ -107,6 +108,26 @@
     {
       "path": "Dockerfile",
       "bytes": 1747
+    },
+    {
+      "path": "HANDOFF_PHASE_2.1.md",
+      "bytes": 3196
+    },
+    {
+      "path": "HANDOFF_PHASE_2.2.md",
+      "bytes": 6071
+    },
+    {
+      "path": "HANDOFF_PHASE_2.3.md",
+      "bytes": 3438
+    },
+    {
+      "path": "HANDOFF_PHASE_2.4.md",
+      "bytes": 6052
+    },
+    {
+      "path": "HANDOFF_PHASE_2.4_DESIGN.md",
+      "bytes": 6065
     },
     {
       "path": "LICENSE",
@@ -130,7 +151,7 @@
     },
     {
       "path": "XR_FIX_TRACKER.md",
-      "bytes": 21286
+      "bytes": 33417
     },
     {
       "path": "bun.lock",
@@ -154,7 +175,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 6416
+      "bytes": 6478
     },
     {
       "path": "release.manifest.json",
@@ -428,6 +449,7 @@
     "src/daemon/routes/contract-discord.ts",
     "src/daemon/routes/contract-integrations.ts",
     "src/daemon/routes/contract-memory.ts",
+    "src/daemon/routes/contract-mobile.ts",
     "src/daemon/routes/contract-research.ts",
     "src/daemon/routes/contract-telegram.ts",
     "src/daemon/routes/contract-whatsapp.ts",
@@ -444,6 +466,7 @@
     "src/daemon/routes/mcp.routes.ts",
     "src/daemon/routes/memory.routes.ts",
     "src/daemon/routes/meta.routes.ts",
+    "src/daemon/routes/mobile.routes.ts",
     "src/daemon/routes/onboarding.routes.ts",
     "src/daemon/routes/providers.routes.ts",
     "src/daemon/routes/registry.ts",
@@ -454,6 +477,7 @@
     "src/daemon/routes/schemas-discord.ts",
     "src/daemon/routes/schemas-integrations.ts",
     "src/daemon/routes/schemas-memory.ts",
+    "src/daemon/routes/schemas-mobile.ts",
     "src/daemon/routes/schemas-research.ts",
     "src/daemon/routes/schemas-telegram.ts",
     "src/daemon/routes/schemas-whatsapp.ts",
@@ -935,6 +959,7 @@
     "test/api/recovery-status.test.ts",
     "test/api/unmatched-observability.test.ts",
     "test/api/v1-versioning.test.ts",
+    "test/architecture/bot-types-contract.test.ts",
     "test/architecture/boundaries.test.ts",
     "test/architecture/one-store.test.ts",
     "test/architecture/ownership.test.ts",
@@ -965,6 +990,7 @@
     "test/cli/coder/session-guard.test.ts",
     "test/cli/coder/tool-contract.test.ts",
     "test/cli/coder/workspace.test.ts",
+    "test/cli/unknown-flags.test.ts",
     "test/cloud/license.test.ts",
     "test/cloud/routes.test.ts",
     "test/cloud/team-memory.test.ts",
@@ -1013,6 +1039,7 @@
     "test/core/service-registry.test.ts",
     "test/cost.test.ts",
     "test/daemon.test.ts",
+    "test/daemon/banner.test.ts",
     "test/daemon/body-strictness.test.ts",
     "test/daemon/budget-audit-null-regression.test.ts",
     "test/daemon/builder-authority.test.ts",
@@ -1023,6 +1050,7 @@
     "test/daemon/files-hunks.test.ts",
     "test/daemon/filesystem-http.test.ts",
     "test/daemon/honesty.test.ts",
+    "test/daemon/mobile-lan-integration.test.ts",
     "test/daemon/onboarding-routes.test.ts",
     "test/daemon/origin-host-guard.test.ts",
     "test/daemon/parent-watch-mechanism.test.ts",
@@ -1080,6 +1108,7 @@
     "test/environment/types.test.ts",
     "test/environment/workflow-binding.test.ts",
     "test/execution/adapters.test.ts",
+    "test/execution/approval-default.test.ts",
     "test/execution/cancellation.test.ts",
     "test/execution/checkpoint.test.ts",
     "test/execution/child-channel.test.ts",
@@ -1115,6 +1144,7 @@
     "test/memory-summarize.test.ts",
     "test/memory-v09.test.ts",
     "test/memory.test.ts",
+    "test/metadata.test.ts",
     "test/multi-agent-e2e.test.ts",
     "test/multi-agent.test.ts",
     "test/observability/envelope-trace.test.ts",
@@ -1190,12 +1220,14 @@
     "test/providers/malformed-response.test.ts",
     "test/providers/request-guard.test.ts",
     "test/release/beta-survey.test.ts",
+    "test/release/capability-census.test.ts",
     "test/release/changelog.test.ts",
     "test/release/channels.test.ts",
     "test/release/consumer-smoke.test.ts",
     "test/release/installer-powershell.test.ts",
     "test/release/installer-verify.test.ts",
     "test/release/numeric-claims.test.ts",
+    "test/release/onboarding.test.ts",
     "test/release/platform-parity.test.ts",
     "test/release/release-workflow.test.ts",
     "test/release/tag-npm-invariant.test.ts",
@@ -1346,7 +1378,7 @@
       "name": "serve",
       "aliases": [],
       "group": "start",
-      "usage": "xr serve [--port <n>] [--parent-pid <pid>]",
+      "usage": "xr serve [--port <n>] [--parent-pid <pid>] [--lan]",
       "needsKernel": false,
       "fastPath": true,
       "classification": "stable"
@@ -3674,6 +3706,72 @@
     {
       "file": "src/daemon/routes/integrations.routes.ts",
       "id": "integrations.disconnect",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.certFingerprint.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.pair.post",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.session.delete",
+      "method": "DELETE",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.devices.list.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.devices.revoke.post",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.devices.pushTest.post",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.pairQr.post",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.push.vapidPubkey.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.push.subscribe.post",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.push.subscribe.delete",
+      "method": "DELETE",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mobile.routes.ts",
+      "id": "mobile.push.test.post",
       "method": "POST",
       "auth": "local bearer token or dashboard query token"
     },

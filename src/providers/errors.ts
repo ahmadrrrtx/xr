@@ -237,10 +237,3 @@ export function isRetryableProviderError(err: unknown): boolean {
   return false;
 }
 
-/** Helper: is this a non-retryable error that should never be auto-retried? */
-export function isNonRetryableProviderError(err: unknown): boolean {
-  if (err instanceof ProviderError) return !err.retryable;
-  const kind = (err as any)?.kind;
-  if (kind === "authentication_failure" || kind === "invalid_request" || kind === "unsupported_capability") return true;
-  return false;
-}

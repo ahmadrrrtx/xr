@@ -28,7 +28,9 @@ pub enum Banner {
 
 /// Parse one line of daemon stdout.
 ///
-/// The strictness is the point: the dashboard/chat lines carry a `?token=…`
+/// The strictness is the point: the PRIVATE banner (sidecar / reveal mode)
+/// carries the `Token:` line and `?token=…` URLs; the public human banner
+/// shows neither.
 /// query string, so a lenient "find a port anywhere" parse would read those
 /// too. Returning `None` for them is what keeps the port honest.
 pub fn parse_banner_line(line: &str) -> Option<Banner> {

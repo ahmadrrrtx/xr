@@ -176,8 +176,6 @@ export const ACTIVATE_TIMEOUT_MS = 30_000;
 /** Timeout for tool/command invocations. */
 export const INVOKE_TIMEOUT_MS = 15_000;
 
-/** Timeout for capability requests (memory, provider). */
-export const CAPABILITY_TIMEOUT_MS = 30_000;
 
 /** Timeout for worker initialization (loading + VM setup). */
 export const INIT_TIMEOUT_MS = 10_000;

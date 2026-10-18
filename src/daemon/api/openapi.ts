@@ -124,7 +124,7 @@ export function buildOpenApi(ops: ApiOperation[]): Record<string, unknown> {
     paths: sortedPaths,
     components: {
       securitySchemes: {
-        bearerAuth: { type: "http", scheme: "bearer", description: "Local daemon token (printed once at `xr serve` startup)." },
+        bearerAuth: { type: "http", scheme: "bearer", description: "Local daemon token (private sidecar handshake; operator reveal via XR_PRINT_TOKEN=1)." },
         cookieAuth: { type: "apiKey", in: "cookie", name: "xr_session", description: "HttpOnly SameSite=Strict session cookie (browser bootstrap)." },
       },
       schemas: { ApiError: toSchema(API_ERROR_SCHEMA) },
