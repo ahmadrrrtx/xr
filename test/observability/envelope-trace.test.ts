@@ -128,6 +128,8 @@ test("failed execution closes the span with error status", async () => {
       placement: IN_PROCESS_PLACEMENT,
       idempotency: "naturally_idempotent",
       inputSummary: "{}",
+      // Phase 2.3 · P1-2 — pins span error-status on failure, not the gate.
+      approve: async () => true,
       run: async () => failObservation("provider refused"),
     });
     expect(rec.state).toBe("failed");

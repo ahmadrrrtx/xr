@@ -278,7 +278,10 @@ module.exports = {
           "\\.d\\.ts$",
           // Type-only modules have no runtime edges, so with
           // tsPreCompilationDeps:false they appear orphaned by construction.
-          "^src/(core/types|agents/types|interfaces/shell/types|skills/marketplace-backend-types)\\.ts$",
+          // bots/types (Phase 2.5 · P2-16) — shared bot type contract with 11
+          // type-only importers (telegram/whatsapp/discord) + 1 test import;
+          // see test/architecture/bot-types-contract.test.ts.
+          "^src/(core/types|agents/types|interfaces/shell/types|skills/marketplace-backend-types|bots/types)\\.ts$",
           // Reached only through dynamic/CLI dispatch.
           "^src/(automation/cron|cost/estimate|i18n/strings)\\.ts$",
           // Generated typed API client — published for external integrators

@@ -25,9 +25,6 @@ export interface ProviderCapabilities {
   contextWindow?: number;
 }
 
-export function defaultCapabilities(): ProviderCapabilities {
-  return { chat: true };
-}
 
 export function supportsTask(
   caps: ProviderCapabilities,
@@ -65,10 +62,3 @@ export function capabilityLabels(caps: ProviderCapabilities): string[] {
   return labels;
 }
 
-/**
- * XR 4.4 — map a boolean capability bag to a safe list of *known-supported*
- * labels only. Absent/undefined fields are treated as unknown (omitted), not as false labels.
- */
-export function knownSupportedLabels(caps: ProviderCapabilities): string[] {
-  return capabilityLabels(caps);
-}

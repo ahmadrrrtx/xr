@@ -98,6 +98,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/memory-summarize.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-v09.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/metadata.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/multi-agent-e2e.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/multi-agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/observability/` | @ahmadrrrtx | explicit entry |
@@ -211,6 +212,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sus.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/tag-npm-invariant.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/typecheck-preflight.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/unit-tier.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/ux/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/v2-app-icon-ids.txt` | @ahmadrrrtx | default (@ahmadrrrtx) |

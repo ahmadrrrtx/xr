@@ -23,7 +23,9 @@ beforeEach(() => {
 function client(): XRDaemonClient {
   const handle = makeHandler(store, TOKEN);
   return createDaemonClient({
-    baseUrl: "http://daemon.in-process",
+    // Phase 34 · R1 — loopback authority: the Host gate (421 on unknown
+    // authorities) refuses fictional hosts even for in-process clients.
+    baseUrl: "http://127.0.0.1:3141",
     token: TOKEN,
     fetchImpl: async (input, init) =>
       await handle(new Request(String(input), init as RequestInit)),
@@ -41,8 +43,10 @@ test("generated client instantiates with the expected typed methods", () => {
 test("healthGet round-trips the real health contract", async () => {
   const c = client();
   const health = await c.healthGet();
+  // Phase 34 · R1 (audit P2-21): unauth health is {ok, ts} only.
   expect(health.ok).toBe(true);
-  expect(typeof health.version.version).toBe("string");
+  expect(typeof health.ts).toBe("number");
+  expect((health as Record<string, unknown>).version).toBeUndefined();
 });
 
 test("overviewGet returns the mission-control aggregate", async () => {

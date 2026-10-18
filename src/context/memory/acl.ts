@@ -71,14 +71,7 @@ export function isSequestered(visibility: readonly string[]): boolean {
   return !visibility.includes(VISIBILITY_ALL);
 }
 
-export function principalRole(p: MemoryPrincipal): string {
-  return p === "user" ? "user" : p.role;
-}
 
-/** Stable label for audit rows (never the identity's grant reference). */
-export function principalLabel(p: MemoryPrincipal): string {
-  return p === "user" ? "user" : `agent:${p.role}/${p.agentId}`;
-}
 
 export interface AclDecision {
   visible: boolean;

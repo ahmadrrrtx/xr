@@ -51,6 +51,11 @@ export interface CatalogEntry {
   hidden?: boolean;
   /** Subcommands summary (for nested help). */
   subcommands?: Array<{ name: string; description: string }>;
+  /** Phase 2.5 · P1-4 — declared command-LOCAL dashed options (spelling as on
+   * argv, e.g. "--lan"). This set, not prose, is what the global parser consults
+   * for order-independent allowance and what command-side validation tightens
+   * against; a regression test keeps `usage` mentioning every declared flag. */
+  flags?: string[];
 }
 
 export const GROUP_LABELS: Record<CommandGroup, string> = {
@@ -96,8 +101,9 @@ export const CATALOG: CatalogEntry[] = [
   },
   {
     name: "serve",
-    description: "start Control Center (local web dashboard + chat)",
-    usage: "xr serve [--port <n>] [--parent-pid <pid>]",
+    description: "start Control Center (local web dashboard + chat; --lan = opt-in TLS for phones)",
+    usage: "xr serve [--port <n>] [--parent-pid <pid>] [--lan]",
+    flags: ["--lan"],
     group: "start",
     glyph: "dashboard",
     needsKernel: false,

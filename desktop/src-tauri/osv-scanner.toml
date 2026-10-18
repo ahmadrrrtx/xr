@@ -32,3 +32,46 @@ reason = "bincode 1.3.3 unmaintained notice (no fixed release; bincode 2 is a di
 id = "RUSTSEC-2024-0436"
 ignoreUntil = 2026-12-31
 reason = "paste 1.0.15 unmaintained notice (compile-time macro only, no runtime code). Pulled by stronghold_engine <- iota_stronghold <- tauri-plugin-stronghold 2.4."
+
+# ── PR #188 CI gate findings (published 2026-10-09/10/16) ─────────────────────
+# zip: extraction-side advisories with a fix upstream (9.0.0), but the locked
+# copies cannot move independently of Tauri — tauri-plugin-updater declares
+# `zip ^4` through the CURRENT latest stable (2.14.0), and libsodium-sys-stable
+# (the updater's signer dep) pulls zip 8.6.0 for its Windows VCPKG build flow.
+# XR's single direct extract() face is settings.rs import_all_data (the
+# user-picked export zip) — tracked for the zip 9 migration when the updater
+# chain moves; the updater's own extraction sits behind its signature gate.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0367"
+ignoreUntil = 2027-02-15
+reason = "zip 4.6.1 & 8.6.0 — extraction preserves SUID/SGID bits (fixed in zip 9.0.0). Locked copies: tauri-plugin-updater declares zip ^4 through latest stable 2.14.0 (extraction behind the updater's signature-verification gate); libsodium-sys-stable's zip 8.6.0 is Windows VCPKG build tooling, never in the shipped app. XR's only in-app extract() face (settings.rs import_all_data) runs as the unprivileged user over a user-picked archive — no SUID-capable execution context; zip 9 migration tracked with the updater chain. Re-argue at expiry."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0368"
+ignoreUntil = 2027-02-15
+reason = "zip 4.6.1 & 8.6.0 — extract() creates symlinks whose targets escape the destination (fixed in zip 9.0.0). Same owners as RUSTSEC-2026-0367: updater-side extraction is signature-gated; 8.6.0 is dev-time build tooling; XR's import path (settings.rs) is the sole in-app extract surface — tracked for zip 9 when tauri-plugin-updater moves off ^4. Re-argue at expiry."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0369"
+ignoreUntil = 2027-02-15
+reason = "zip 4.6.1 & 8.6.0 (CVSS 9.1) — permissions applied through extracted symlinks without confinement (fixed in zip 9.0.0). Same owners/tracking as RUSTSEC-2026-0367; the signature gate covers the updater path, the VCPKG copy is build-time, and the settings import path is the tracked in-app face. Re-argue at expiry."
+
+# zbus family: unmaintained-notice class (merged upstream into zbus 6.0.0's
+# names/wire modules; no vulnerability statement in the advisories). Migration
+# is a zbus 6 rework owned by upstream tauri/tauri-plugin deps (Linux side).
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0370"
+ignoreUntil = 2027-02-15
+reason = "zvariant 5.15.0 unmaintained (merged into zbus as its wire module in zbus 6.0.0 — an unmaintained-notice, no vulnerability statement). Pulled by zbus 5.19 <- tauri 2 on Linux; migration requires the zbus 6 line via upstream Tauri. Re-argue at expiry."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0371"
+ignoreUntil = 2027-02-15
+reason = "zbus_names 4.3.4 unmaintained (merged into zbus as its names module in zbus 6.0.0 — notice, no vulnerability statement). Pulled by zbus 5.19 <- tauri 2 on Linux. Re-argue at expiry."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0372"
+ignoreUntil = 2027-02-15
+reason = "zvariant_derive 5.15.0 unmaintained (derive macros provided by zbus 6.0.0 — notice, no vulnerability statement; compile-time derive macro only, no runtime code). Pulled by zbus 5.19 <- tauri 2 on Linux. Re-argue at expiry."

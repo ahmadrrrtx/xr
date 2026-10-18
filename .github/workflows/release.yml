@@ -50,6 +50,12 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
+      # desktop/ is an independent installation (own lockfile, by design);
+      # `bun run typecheck` (P1-16 preflight) fails without it — ci.yml's
+      # typecheck lane has always installed this step first.
+      - name: Install desktop dependencies (frozen lockfile)
+        working-directory: desktop
+        run: bun install --frozen-lockfile
       - name: Identity + claim + channel gates
         run: |
           bun run release:check

@@ -1,24 +1,14 @@
 /**
- * Mobile pairing, session tagging and endpoint gating.
- *
- * Security posture (all fail-closed):
- *  - Pairing codes are 6 digits, 10-minute TTL, single use, rate-limited to
- *    10 attempts/minute per peer address. A wrong code returns a generic 401
- *    that leaks nothing about whether LAN mode is even on.
- *  - Session tokens live in an HttpOnly, Secure, SameSite cookie. Nothing is
- *    ever handed to JS, so there is no bearer token in localStorage to steal.
- *  - Every session is tagged `kind: 'mobile' | 'desktop'`. Mobile sessions get
- *    403 on files/terminal/git/MCP — mobile is a companion, not a coding
- *    surface.
- *
- * Deviation note: the brief specified `SameSite=None`. This implementation uses
- * `SameSite=Strict`, which is strictly stronger and still correct here: the PWA
- * is served from the same origin as the API (https://<lan-ip>:3141/mobile/ →
- * /api/...), every fetch — including from the service worker — is same-site.
- * None would only be needed for a cross-site context, which v1 never has.
+ * Mobile pairing, session tagging and endpoint gating — all fail-closed:
+ * 6-digit single-use codes (10-min TTL, 10 attempts/min/peer, generic 401s),
+ * session tokens in an HttpOnly+Secure+SameSite=Strict cookie (never JS), and
+ * every session tagged mobile/desktop with mobile 403-gated off files,
+ * terminal, git and MCP. SameSite=Strict (not None) is deliberate: the PWA is
+ * same-origin with the API, so service-worker fetches are same-site; None is
+ * only for cross-site contexts v1 never has.
  */
 
-import { randomInt, randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import {
   addDevice,
   findById,
@@ -30,35 +20,24 @@ import {
   type WireSubscription,
 } from './mobile-devices.js';
 
+/** Cookie name carrying the paired-device session token (HttpOnly+Secure). */
 export const SESSION_COOKIE = 'xr_session';
 
-/** Endpoint prefixes a mobile session may never touch. */
-export const DANGEROUS_PREFIXES: readonly string[] = [
-  '/api/v1/files',
-  '/api/v1/terminal',
-  '/api/v1/shell',
-  '/api/v1/git',
-  '/api/v1/mcp',
-  '/files',
-  '/terminal',
-  '/shell',
-  '/git',
-  '/mcp',
-];
+/** Endpoint prefixes a mobile session may never touch. Phase 2.4: the gate
+ * runs against the CANONICAL daemon path (/api/v1/x ≡ /api/x), so the legacy
+ * unversioned mount cannot slip a mobile session past the 403 wall. */
+export const DANGEROUS_PREFIXES: readonly string[] = ['/api/files', '/api/terminal', '/api/shell', '/api/git', '/api/mcp'];
 
 export interface MobileContext {
-  /** True only when the daemon was started with `xr serve --lan`. */
-  lan: boolean;
-  /** Hex SHA-256 of the certificate currently being served. */
-  fingerprint: string;
-  /** https://<lan-ip>:<port> */
-  lanUrl: string;
+  lan: boolean;        // true only under `xr serve --lan`
+  fingerprint: string; // hex SHA-256 of the served certificate
+  lanUrl: string;      // https://<lan-ip>:<port>
   version: string;
   daemonToken: string;
 }
 
-/* --------------------------------------------------------- pairing codes --- */
 
+/** The one active on-demand code: minted for the QR, single use, 10-minute TTL. */
 interface PairingCode {
   code: string;
   createdAt: number;
@@ -103,35 +82,23 @@ const PAIR_ATTEMPTS_PER_MINUTE = 10;
 
 const attempts = new Map<string, number[]>();
 
+/** Sliding-window throttle for the pairing endpoint (default 10 attempts/min/peer). */
 export function rateLimit(key: string, limit = PAIR_ATTEMPTS_PER_MINUTE, windowMs = 60_000): boolean {
   const now = Date.now();
   const hits = (attempts.get(key) ?? []).filter((at) => now - at < windowMs);
-  if (hits.length >= limit) {
-    attempts.set(key, hits);
-    return false;
-  }
+  if (hits.length >= limit) { attempts.set(key, hits); return false; }
   hits.push(now);
   attempts.set(key, hits);
-  // Opportunistic cleanup so the map can't grow forever.
-  if (attempts.size > 500) {
-    for (const [k, v] of attempts) {
-      if (v.every((at) => now - at >= windowMs)) attempts.delete(k);
-    }
+  if (attempts.size > 500) { // opportunistic cleanup so the map can't grow forever
+    for (const [k, v] of attempts) if (v.every((at) => now - at >= windowMs)) attempts.delete(k);
   }
   return true;
 }
 
-/* ---------------------------------------------------------------- cookies --- */
 
+/** 30-day default — pairing is TOFU-pinned; revocation rotates the hash server-side. */
 export function sessionCookie(token: string, maxAgeSeconds = 60 * 60 * 24 * 30): string {
-  return [
-    `${SESSION_COOKIE}=${token}`,
-    'Path=/',
-    `Max-Age=${maxAgeSeconds}`,
-    'HttpOnly',
-    'Secure',
-    'SameSite=Strict',
-  ].join('; ');
+  return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; Secure; SameSite=Strict`;
 }
 
 export function clearSessionCookie(): string {
@@ -140,23 +107,17 @@ export function clearSessionCookie(): string {
 
 function parseCookies(header: string | null): Record<string, string> {
   const out: Record<string, string> = {};
-  if (!header) return out;
-  for (const part of header.split(';')) {
-    const index = part.indexOf('=');
-    if (index === -1) continue;
-    const key = part.slice(0, index).trim();
-    const value = part.slice(index + 1).trim();
-    if (key) out[key] = value;
+  for (const part of (header ?? '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim();
   }
   return out;
 }
 
-/* -------------------------------------------------------------- sessions --- */
 
 export interface Session {
   device?: PairedDevice | undefined;
-  /** True for the desktop webview / CLI using the daemon bearer token. */
-  privileged: boolean;
+  privileged: boolean; // desktop webview / CLI using the daemon bearer token
 }
 
 /**
@@ -181,6 +142,7 @@ export async function resolveSession(request: {
   return { device, privileged: false };
 }
 
+/** Constant-time string compare (bearer check); lengths are public, bytes are not. */
 function timingSafe(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -188,8 +150,8 @@ function timingSafe(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/* --------------------------------------------------------- endpoint gating --- */
 
+/** Exact-or-descendant match against DANGEROUS_PREFIXES. */
 export function isDangerousPath(pathname: string): boolean {
   return DANGEROUS_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
@@ -202,12 +164,8 @@ export function mobileGate(pathname: string, session: Session): string | null {
   return 'Not available on mobile. Code editing, terminal, git and MCP stay on your desktop or CLI.';
 }
 
-/**
- * Origin check for browser-initiated, non-GET requests.
- *
- * `Origin: null` is what a standalone PWA sends for some fetches. We allow it
- * only when a valid paired session cookie is present — never on its own.
- */
+/** Origin check (browser non-GETs). A standalone PWA sends `Origin: null` —
+ * honored ONLY with a valid paired cookie; otherwise hosts must match. */
 export function originAllowed(request: {
   headers: { get(name: string): string | null };
   url: string;
@@ -216,34 +174,26 @@ export function originAllowed(request: {
   if (!origin) return true; // same-origin GETs and native clients send none
   if (origin === 'null') return Boolean(session.device);
   try {
-    const originHost = new URL(origin).host;
-    const requestHost = new URL(request.url).host;
-    return originHost === requestHost;
+    return new URL(origin).host === new URL(request.url).host;
   } catch {
     return false;
   }
 }
 
-/* ----------------------------------------------------------- QR rendering --- */
 
 export type QrRenderer = (text: string) => Promise<string> | string;
 
 let qrRenderer: QrRenderer | null = null;
 
-/**
- * The daemon installs a QR encoder (e.g. `qrcode`'s toDataURL). Kept pluggable
- * so the daemon doesn't inherit a rendering dependency it may already have.
- */
+/** The CLI installs the QR encoder (qrcode.toDataURL) so the daemon inherits no rendering dependency. */
 export function setQrRenderer(renderer: QrRenderer): void {
   qrRenderer = renderer;
 }
 
-/* -------------------------------------------------------------- route hook --- */
 
 export interface MobileRouteDeps {
   ctx: MobileContext;
-  /** Push: send to one device (used by the test button). */
-  sendTestPush?: ((device: PairedDevice) => Promise<boolean>) | undefined;
+  sendTestPush?: ((device: PairedDevice) => Promise<boolean>) | undefined; // the test button
   vapidPublicKey?: (() => Promise<string>) | undefined;
 }
 
@@ -270,29 +220,23 @@ export async function handleMobileRoutes(
   if (!pathname.startsWith('/api/mobile/')) return null;
   const ctx = deps.ctx;
 
-  /* ---- public: cert fingerprint (needed before pairing, for TOFU) ---------- */
-  if (pathname === '/api/mobile/cert-fingerprint' && request.method === 'GET') {
+    if (pathname === '/api/mobile/cert-fingerprint' && request.method === 'GET') {
     if (!ctx.lan) return json({ error: 'LAN mode is off' }, { status: 404 });
     return json({ fingerprint: ctx.fingerprint });
   }
 
-  /* ---- pairing -------------------------------------------------------------- */
-  if (pathname === '/api/mobile/pair' && request.method === 'POST') {
+    if (pathname === '/api/mobile/pair' && request.method === 'POST') {
     if (!ctx.lan) return unauthorised();
 
     // Rate limit before doing any work at all.
     const peer = peerKey(request);
     if (!rateLimit(`pair:${peer}`)) {
       // A10: 429s carry Retry-After so well-behaved clients back off.
+
       return json({ error: 'Too many attempts. Wait a minute.' }, { status: 429, headers: { 'retry-after': '60' } });
     }
 
-    let body: {
-      code?: unknown;
-      deviceName?: unknown;
-      pushKey?: unknown;
-      pushSubscription?: unknown;
-    };
+    let body: { code?: unknown; deviceName?: unknown; pushKey?: unknown; pushSubscription?: unknown };
     try {
       body = (await request.json()) as typeof body;
     } catch {
@@ -321,8 +265,7 @@ export async function handleMobileRoutes(
     );
   }
 
-  /* ---- everything below needs a paired session ------------------------------ */
-  if (!session.device && !session.privileged) return unauthorised();
+    if (!session.device && !session.privileged) return unauthorised();
 
   if (pathname === '/api/mobile/session' && request.method === 'DELETE') {
     if (session.device) await revokeDevice(session.device.id);
@@ -333,13 +276,9 @@ export async function handleMobileRoutes(
     if (!session.privileged) return json({ error: 'Desktop only' }, { status: 403 });
     const devices = await listDevices();
     return json({
-      devices: devices.map((device) => ({
-        id: device.id,
-        name: device.name,
-        kind: device.kind,
-        pairedAt: device.pairedAt,
-        lastSeenAt: device.lastSeenAt,
-        push: Boolean(device.pushSubscription),
+      devices: devices.map((d) => ({
+        id: d.id, name: d.name, kind: d.kind, pairedAt: d.pairedAt, lastSeenAt: d.lastSeenAt,
+        push: Boolean(d.pushSubscription),
       })),
     });
   }
@@ -365,8 +304,7 @@ export async function handleMobileRoutes(
     return json({ ok });
   }
 
-  /* ---- pairing QR (desktop asks for one on demand) -------------------------- */
-  if (pathname === '/api/mobile/pair-qr' && request.method === 'POST') {
+    if (pathname === '/api/mobile/pair-qr' && request.method === 'POST') {
     if (!session.privileged) return unauthorised();
     if (!ctx.lan) return json({ error: 'LAN mode is off' }, { status: 409 });
 
@@ -391,8 +329,7 @@ export async function handleMobileRoutes(
     });
   }
 
-  /* ---- push ----------------------------------------------------------------- */
-  if (pathname === '/api/mobile/push/vapid-pubkey' && request.method === 'GET') {
+    if (pathname === '/api/mobile/push/vapid-pubkey' && request.method === 'GET') {
     if (!ctx.lan) return json({ error: 'LAN mode is off' }, { status: 404 });
     if (!deps.vapidPublicKey) return json({ error: 'Push not configured' }, { status: 501 });
     return json({ publicKey: await deps.vapidPublicKey() });
@@ -401,6 +338,7 @@ export async function handleMobileRoutes(
   if (pathname === '/api/mobile/push/subscribe') {
     if (!session.device) return unauthorised();
     if (request.method === 'POST') {
+        // Only the four known-good push-service origins pass normaliseSubscription.
       let body: { subscription?: unknown; pushKey?: unknown };
       try {
         body = (await request.json()) as typeof body;
@@ -429,8 +367,8 @@ export async function handleMobileRoutes(
   return json({ error: 'Not found' }, { status: 404 });
 }
 
-/* ------------------------------------------------------------------ helpers --- */
 
+/** Rate-limit key: XFF peer if any; the server additionally keys on the socket IP. */
 function peerKey(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0]?.trim() ?? 'unknown';
@@ -454,7 +392,3 @@ function normaliseSubscription(value: unknown): WireSubscription | undefined {
   return { endpoint: candidate.endpoint, keys: { p256dh, auth } };
 }
 
-/** Random device id helper (used by tests and the reference daemon). */
-export function randomId(): string {
-  return randomBytes(9).toString('base64url');
-}

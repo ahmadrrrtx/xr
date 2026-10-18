@@ -125,7 +125,7 @@ export function registryNameFor(input: string): string | undefined {
 }
 
 /** Fast-path classification of a command token (route decision, pure). */
-export type RouteKind = "version" | "help" | "command-help" | "shell" | "serve" | "command" | "task" | "coder" | "unknown";
+export type RouteKind = "version" | "help" | "command-help" | "shell" | "serve" | "command" | "task" | "coder" | "daemon" | "unknown";
 
 export interface RouteDecision {
   kind: RouteKind;
@@ -157,6 +157,8 @@ export interface RouteInput {
  */
 export function decideRoute(input: RouteInput): RouteDecision {
   const { head, flagsVersion, flagsHelp, wantsCommandHelp } = input;
+  // §15#16 — `xr daemon` (any variant incl. --help): never a task; it relocates to `xr serve`.
+  if (head === "daemon") return { kind: "daemon" };
   if (flagsVersion || head === "version" || head === "--version" || head === "-v") {
     return { kind: "version" };
   }
@@ -177,7 +179,9 @@ export function decideRoute(input: RouteInput): RouteDecision {
   if (regName && regName !== "shell" && regName !== "serve" && regName !== "help" && regName !== "version") {
     return { kind: "command", command: regName, catalog: getCatalogEntry(head) };
   }
-  if (head && !head.startsWith("-") && !resolveCommandName(head)) {
+  if (head && !resolveCommandName(head)) {
+    // P1-4/A1 — a dashed head can only arrive via `--` (unknown pre-head globals
+    // error in flags.ts): escaped text is task input, never unknown-command.
     return { kind: "task" };
   }
   return { kind: "unknown" };

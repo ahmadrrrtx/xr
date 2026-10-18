@@ -23,6 +23,17 @@ import { NamespaceSandboxBackend } from "../runtime/trust/environment/namespace.
 import { ContainerBackend } from "../runtime/trust/environment/container.ts";
 import { GVisorBackend } from "../runtime/trust/environment/gvisor.ts";
 import { FirecrackerBackend } from "../runtime/trust/environment/firecracker.ts";
+// Phase 2.4 · P1-1 — opt-in mobile LAN companion surface (TLS, pairing, 403 wall).
+import { lanAddresses, lanUrl as lanUrlFor, type LanCert } from "./lan-tls.ts";
+import {
+  mobileGate,
+  originAllowed as mobileOriginAllowed,
+  resolveSession as resolveMobileSession,
+  type MobileContext,
+  type MobileRouteDeps,
+  type Session as MobileSession,
+} from "./mobile-pairing.ts";
+import { vapidPublicKey as loadVapidPublicKey, sendPush, DEFAULT_TTL_SECONDS } from "./web-push.ts";
 import { createAgentExecutor } from "./agent-executor.ts";
 import {
   createRouteHandler,
@@ -53,10 +64,21 @@ import { TelegramManager } from "../telegram/manager.ts";
 import { DiscordManager } from "../discord/manager.ts";
 import { WhatsAppManager } from "../whatsapp/manager.ts";
 
+/** Phase 2.4 · P1-1 — LAN opt-in DTO from the CLI; presence IS the §15#10
+ * TLS marker. lanUrl lands after bind; until then "" (honest: unknown). */
+export interface LanInput {
+  cert: LanCert;
+  lanUrl?: string;
+}
+
 export interface DaemonOptions {
   port?: number;
   token?: string;
   store?: Store;
+  /** Phase 2.4 · P1-1 — explicit LAN opt-in input; absent = loopback HTTP, unchanged. */
+  lan?: LanInput;
+  /** P2-17 — reveal the private token lines (sidecar `--parent-pid` / `XR_PRINT_TOKEN=1`). */
+  revealToken?: boolean;
 }
 
 export interface DaemonHandle {
@@ -64,6 +86,7 @@ export interface DaemonHandle {
   token: string;
   stop: () => void;
   handle: (req: Request) => Response | Promise<Response>;
+  lanUrl?: string; // Phase 2.4 · P1-1 — https://<lan-ip>:<port> in LAN mode
 }
 
 /**
@@ -108,6 +131,28 @@ export function resolveBindHost(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.XR_DAEMON_HOST?.trim();
   if (explicit) return explicit;
   return isContainerRuntime(env) ? CONTAINER_BIND : DEFAULT_LOOPBACK;
+}
+
+/**
+ * Phase 34 · R1 — request-trust boundary: the SINGLE allowed-host set the
+ * Host gate and CSRF/Origin gate both compare against. `localhost`, loopback
+ * IPv4/IPv6 (bracketed per RFC 3986) and the resolved bind host; LAN addresses
+ * are deliberately NOT in the set — daemon exposure beyond loopback is a
+ * separate, opt-in surface (Phase 2.4).
+ */
+export function allowedDaemonHosts(env: NodeJS.ProcessEnv = process.env, extra: readonly string[] = []): string[] {
+  return Array.from(new Set([resolveBindHost(env), "localhost", "127.0.0.1", "::1", "[::1]", ...extra]));
+}
+
+function hostNameOnly(host: string): string {
+  if (host.startsWith("[")) return host.slice(0, host.indexOf("]") + 1);
+  return host.split(":").length === 2 ? host.split(":")[0]! : host; // one colon → host:port; bare IPv6 stays whole
+}
+
+/** Phase 34 · R1 — Host-gate predicate: fail closed on a missing/absent Host. */
+export function hostAllowed(hostHeader: string | null, env: NodeJS.ProcessEnv = process.env, extra: readonly string[] = []): boolean {
+  if (!hostHeader) return false;
+  return allowedDaemonHosts(env, extra).includes(hostNameOnly(hostHeader.trim()));
 }
 
 const responseHelpers: DaemonResponseHelpers = {
@@ -170,8 +215,9 @@ export function authorizeRequest(
 export function originAllowed(
   req: Request,
   auth: { kind: "bearer" } | { kind: "session" } | { kind: "bootstrap" } | { kind: "denied" },
-  host: string,
   port: number,
+  env: NodeJS.ProcessEnv = process.env,
+  extraHosts: readonly string[] = [],
 ): boolean {
   if (auth.kind !== "session") return true;
   const method = req.method.toUpperCase();
@@ -180,10 +226,33 @@ export function originAllowed(
   if (!origin) return false; // non-browser without bearer → refuse (fail closed)
   try {
     const o = new URL(origin);
-    return o.hostname === host && (o.port === String(port) || (o.port === "" && port === 80));
+    // Phase 34 · R1 — same allowed set as the Host gate: any loopback spelling
+    // (`localhost` ≡ `127.0.0.1` ≡ `[::1]`) is the daemon's own origin;
+    // listener-port semantics unchanged.
+    return allowedDaemonHosts(env, extraHosts).includes(o.hostname) && (o.port === String(port) || (o.port === "" && (port === 443 || port === 80)));
   } catch {
     return false;
   }
+}
+
+/** Structural slice of Bun.Server used here (keeps tests type-free). */
+export type PeerLookup = { requestIP(req: Request): { address: string } | null };
+
+/**
+ * Phase 34 · R1 (audit §15#27) — rate-limit client key. `x-forwarded-for` is
+ * spoofable on a loopback-daemon without a real reverse proxy, so it is only
+ * honoured when the operator explicitly opts in (`XR_TRUST_PROXY=1`); by
+ * default the socket peer (Bun's `requestIP`, probes/tests → "local") wins.
+ */
+export function clientIpFor(
+  req: Request,
+  peer: { address: string } | null = null,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (env.XR_TRUST_PROXY === "1") {
+    return (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "local";
+  }
+  return peer?.address ?? "local";
 }
 
 /** Phase 4 · T5 — fixed-window per-IP rate limiter (memory-only). */
@@ -317,7 +386,14 @@ function makeDaemonTrust(): TrustService {
 export function makeHandler(
   initialStore: Store,
   token: string,
-  opts: { rateLimit?: number; telegram?: TelegramManager; discord?: DiscordManager; whatsapp?: WhatsAppManager } = {},
+  opts: {
+    rateLimit?: number;
+    telegram?: TelegramManager;
+    discord?: DiscordManager;
+    whatsapp?: WhatsAppManager;
+    /** Phase 2.4 · P1-1 — present only when the CLI certified a LAN/TLS start. */
+    lan?: LanInput;
+  } = {},
 ) {
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
@@ -338,6 +414,19 @@ export function makeHandler(
     // the user pairs (QR) or auto-start finds sealed credentials.
     whatsapp: opts.whatsapp ?? new WhatsAppManager({ store: initialStore }),
   };
+  const lanRuntime = opts.lan; // extra hosts only under LAN; loopback posture untouched (2.1)
+  const lanExtraHosts: readonly string[] = lanRuntime ? lanAddresses() : [];
+  const mobileCtx: MobileContext | null = lanRuntime
+    ? { lan: true, fingerprint: lanRuntime.cert.fingerprint, lanUrl: "", version: CORE_VERSION, daemonToken: token }
+    : null;
+  const mobileDeps: MobileRouteDeps | null = lanRuntime
+    ? {
+        ctx: mobileCtx!,
+        vapidPublicKey: loadVapidPublicKey,
+        sendTestPush: async (device) =>
+          (await sendPush(device, { title: "XR test push", body: "Push works — your phone is paired.", ts: Date.now() }, DEFAULT_TTL_SECONDS)).ok,
+      }
+    : null;
   const routes = createRouteHandler();
   // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
   const limiter = new RateLimiter(opts.rateLimit ?? 600, 60_000);
@@ -345,12 +434,22 @@ export function makeHandler(
   const pairingLimiter = new RateLimiter(10, 60_000);
   const pairingBackoff = new PairingFailureBackoff();
 
-  async function dispatch(req: Request): Promise<Response> {
+  async function dispatch(req: Request, server?: PeerLookup): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
     const method = req.method.toUpperCase();
+
+    // Phase 34 · R1 — Host gate FIRST, before auth/open-path/rate-limit: any
+    // authority outside the loopback set is refused (DNS-rebinding defence).
+    // 421 Misdirected Request (RFC 9110 §15.5.21) = correct code for an
+    // authority this server does not answer for; a missing Host fails closed.
+    if (!hostAllowed(req.headers.get("host") ?? (url.host || null), process.env, lanExtraHosts)) {
+      return safeJson({ error: "misdirected request — unknown Host authority" }, 421);
+    }
     // Canonical (mount-free) path for policy checks: /api/v1/* ≡ /api/*.
     const canonicalPath = path.startsWith("/api/v1/") ? `/api${path.slice(7)}` : path;
+    let mobileSession: MobileSession | null = null;
+    let desktopPrivileged = false;
 
     // Phase 31 · A13 — security.txt lives on the website; the daemon just
     // redirects there. Open path: no bearer token needed for a redirect.
@@ -374,12 +473,22 @@ export function makeHandler(
       path !== "/api/telegram/webhook" &&
       path !== "/api/discord/webhook"
     ) {
-      const auth = authorizeRequest(req, token);
+      let auth: ReturnType<typeof authorizeRequest> | { kind: "mobile" } = authorizeRequest(req, token);
+      // Phase 2.4 · P1-1 — a paired-device cookie becomes a narrowly recognised
+      // "mobile" session at the EXISTING seam (never a bearer bypass).
+      if (auth.kind === "denied" && mobileCtx) {
+        mobileSession = await resolveMobileSession(req, mobileCtx);
+        if (mobileSession.device) auth = { kind: "mobile" };
+      } else if (auth.kind === "bearer" || auth.kind === "session") {
+        desktopPrivileged = true;
+      }
 
       // Phase 4 · T5 — one-time bootstrap: set the session cookie and
       // redirect to the token-free URL (the token never lingers).
       if (auth.kind === "bootstrap") {
-        const cookie = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`;
+        // §15#10 — Secure when, and only when, the listener is LAN TLS.
+        const secureBit = lanRuntime ? "; Secure" : "";
+        const cookie = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${secureBit}`;
         return new Response(null, {
           status: 302,
           headers: { location: auth.url, "set-cookie": cookie },
@@ -387,6 +496,10 @@ export function makeHandler(
       }
 
       if (auth.kind === "denied") {
+        // Phase 2.4 · P1-1 — anonymous /api/mobile/* reaches the mobile routes;
+        // each operation enforces its own role (documented 401/403). All other
+        // paths keep the unchanged 401/403 behaviour.
+        if (!mobileCtx || !canonicalPath.startsWith("/api/mobile/")) {
         // Phase 8 · T3 (WCAG 2.2 · 3.3.8): browser page navigations get an
         // ACCESSIBLE sign-in page instead of raw JSON — labelled field,
         // paste-friendly token entry, announced error. API clients (no
@@ -410,22 +523,33 @@ export function makeHandler(
           });
         }
         return safeJson({ error: "unauthorized — local bearer token or session cookie required" }, 401);
+        }
       }
 
       // Phase 4 · T5 — CSRF/Origin: cookie-authenticated mutating requests
       // must come from the daemon's own origin.
-      const host = resolveBindHost();
       const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
-      if (!originAllowed(req, auth, host, port)) {
+      if (auth.kind === "mobile" && mobileSession) {
+        // Phase 2.4 · P1-1 — standalone-PWA "Origin: null" only with a valid
+        // paired cookie; otherwise the request host must match (CSRF wall).
+        if (!mobileOriginAllowed({ headers: req.headers, url: req.url }, mobileSession)) {
+          return safeJson({ error: "forbidden — cross-origin request refused (CSRF guard)" }, 403);
+        }
+      } else if (auth.kind !== "mobile" && !originAllowed(req, auth, port, process.env, lanExtraHosts)) {
         return safeJson({ error: "forbidden — cross-origin request refused (CSRF guard)" }, 403);
       }
+    }
+    // Phase 2.4 · P1-1 — 403 wall before handler effects, canonical path, either mount.
+    if (mobileSession?.device) {
+      const gate = mobileGate(canonicalPath, mobileSession);
+      if (gate) return safeJson({ error: gate }, 403);
     }
 
     // Phase 4 · T5 — per-IP rate limit (fail closed with 429).
     // Phase 31 · A10 — signature-verified webhooks are exempt: their
     // authenticator is the signature, and a chatty Telegram/Discord
     // delivery burst must not 429 legitimate updates.
-    const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim() || "local";
+    const ip = clientIpFor(req, server?.requestIP(req) ?? null);
     if (!isSignatureWebhook(canonicalPath) && !limiter.allow(`${ip}:${path}`)) {
       return new Response(JSON.stringify({ error: "rate limit exceeded" }), {
         status: 429,
@@ -493,6 +617,9 @@ export function makeHandler(
         host: resolveBindHost(),
         state,
         config,
+        mobile: mobileCtx && mobileDeps
+          ? (mobileCtx.lanUrl = lanRuntime?.lanUrl ?? "", { session: mobileSession ?? { privileged: desktopPrivileged }, deps: mobileDeps })
+          : undefined,
       })) ?? safeJson({ error: "not found" }, 404);
 
     // Phase 31 · A10 — pairing outcomes feed the failure backoff.
@@ -509,7 +636,7 @@ export function makeHandler(
    * trace-correlated log line per request. No prompts, bodies, or content
    * are ever captured here (structural-only, Art. XXI).
    */
-  return async function handle(req: Request): Promise<Response> {
+  return async function handle(req: Request, server?: PeerLookup): Promise<Response> {
     const url = new URL(req.url);
     const method = req.method.toUpperCase();
     const mount = resolveMount(url.pathname);
@@ -525,6 +652,7 @@ export function makeHandler(
       // match. Bun.serve strips the body of HEAD responses itself.
       const response = await dispatch(
         method === "HEAD" ? new Request(req.url, { headers: req.headers }) : req,
+        server,
       );
       status = response.status;
       // Phase 31 · A1/A6 — security headers + strict CORS on EVERY response.
@@ -605,7 +733,10 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     });
   });
   const port = opts.port ?? 3141;
-  const token = opts.token ?? randomBytes(24).toString("hex");
+  // Phase 2.4 · P1-1 — operator-set token wins over the generated one. In LAN
+  // mode nothing ever prints token material, so XR_DAEMON_TOKEN is the only
+  // truthful channel for scripts/harnesses driving the shipping daemon.
+  const token = opts.token ?? (process.env.XR_DAEMON_TOKEN || undefined) ?? randomBytes(24).toString("hex");
   const workspaceManager = new WorkspaceManager();
   const store = opts.store ?? workspaceManager.getStore(workspaceManager.getActiveId());
 
@@ -631,7 +762,8 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // Phase 26 — WhatsApp. Pairing is the QR dialog; auto-start only reconnects a
   // device that is already linked.
   const whatsapp = new WhatsAppManager({ store, dashboardBaseUrl: `http://127.0.0.1:${port}/` });
-  const handler = makeHandler(store, token, { telegram, discord, whatsapp });
+  const lanRuntime: LanInput | undefined = opts.lan;
+  const handler = makeHandler(store, token, { telegram, discord, whatsapp, lan: opts.lan });
   void telegram.autoStartOnBoot().catch((err) => {
     structuredLog("warn", "telegram.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
   });
@@ -659,11 +791,20 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     });
   }
 
-  const bindHost = resolveBindHost();
+  const lanBind = lanRuntime ? "0.0.0.0" : undefined; // LAN mode binds the LAN (runtime hoisted beside makeHandler)
+  const bindHost = lanBind ?? resolveBindHost();
   // Phase 14 — SSE streams send a keepalive comment every 5 s (chat.routes),
   // so a 120 s idle ceiling only ever closes a connection whose peer is gone;
   // the Bun default (10 s) cut cold local-model streams before the first token.
-  const server = Bun.serve({ hostname: bindHost, port, fetch: handler, idleTimeout: 120 });
+  // Phase 34 · R1 — thread the server through so the rate limiter can key on
+  // the real socket peer (requestIP) instead of spoofable forwarding headers.
+  const server = Bun.serve({
+    hostname: bindHost,
+    port,
+    fetch: (req: Request, srv) => handler(req, srv),
+    idleTimeout: 120,
+    ...(lanRuntime ? { tls: { key: lanRuntime.cert.key, cert: lanRuntime.cert.cert } } : {}),
+  });
   // Phase 4 · T4 fix — report the ACTUAL bound port: `port: 0` asks the OS to
   // assign an ephemeral port (used by the perf dashboard-bench, which spawns
   // many bench processes; a fixed/random port can collide with the previous
@@ -673,15 +814,19 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const boundPort = server.port ?? port;
   // Always show a reachable URL: 0.0.0.0 is a bind address, not a destination.
   const displayHost = bindHost === CONTAINER_BIND ? DEFAULT_LOOPBACK : bindHost;
-  const url = `http://${displayHost}:${boundPort}/?token=${token}`;
+  const url = `http://${displayHost}:${boundPort}/`;
+  // P2-17 — two channels: PRIVATE (sidecar/operator opt-in) prints the legacy
+  // token lines the Rust parser consumes; HUMAN prints no bearer material.
+  const reveal = opts.revealToken === true || process.env.XR_PRINT_TOKEN === "1";
 
   const { xrCyan, xrGreen, xrDim, xrBold } = await import("../ui/theme.ts");
-  console.log(`
+  // Phase 2.4 · P1-1 — LAN mode: printLanBanner (CLI) is the instrument.
+  if (!lanRuntime) console.log(`
   ${xrBold(xrCyan("XR"))} ${xrDim("—")} Local Server
   ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${boundPort}`)}
-  ${xrGreen("✓")} Dashboard     ${xrCyan(url)}
-  ${xrGreen("✓")} Chat          ${xrCyan(`http://${displayHost}:${boundPort}/chat?token=${token}`)}
-  ${xrDim("Token:")} ${xrDim(token)}
+  ${xrGreen("✓")} Dashboard     ${xrCyan(reveal ? `${url}?token=${token}` : url)}
+  ${xrGreen("✓")} Chat          ${xrCyan(reveal ? `http://${displayHost}:${boundPort}/chat?token=${token}` : `http://${displayHost}:${boundPort}/chat`)}
+  ${reveal ? `${xrDim("Token:")} ${xrDim(token)}` : `${xrDim("Token:")} ${xrDim("(hidden — sign in on the dashboard; to print it, run `XR_PRINT_TOKEN=1 xr serve` on a private terminal)")}`}
   ${xrDim(
     bindHost === CONTAINER_BIND
       ? `Binding: ${bindHost} inside the container — publish it loopback-only on the host (127.0.0.1:${boundPort}:${boundPort})`
@@ -701,6 +846,11 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   return {
     port: boundPort,
     token,
+    // Phase 2.4 · P1-1 — LAN pairing URL on the ACTUAL bound port (never ":0"),
+    // used by the CLI banner/Q3 output.
+    // Phase 2.4 · P1-1 — LAN pairing URL on the ACTUAL bound port (never
+    // ":0"); the runtime is finalised in place for the mobile context.
+    ...(lanRuntime ? { lanUrl: (lanRuntime.lanUrl = lanUrlFor(boundPort)) } : {}),
     stop: () => {
       stopTriggers();
       void telegram.shutdown();

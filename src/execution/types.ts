@@ -69,6 +69,8 @@ export interface CapabilityIdentity {
   name: string;
   /** Optional version/variant. */
   version?: string;
+  /** Tool-declared approval need (Phase 2.3 · P1-2); when present it wins over kind rules. */
+  requiresApproval?: boolean;
   /** For MCP/plugin/skill: owner id (server/plugin/skill). */
   owner?: string;
 }

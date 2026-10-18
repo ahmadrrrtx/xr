@@ -51,9 +51,14 @@ export interface DaemonRouteContext extends DaemonResponseHelpers {
   host: string;
   state: DaemonState;
   config: XRConfig;
+  /** Phase 2.4 · P1-1 — LAN-only mobile plumbing (dispatcher-resolved session
+   * + route deps); absent whenever the LAN runtime is off. */
+  mobile?: { session: Session; deps: MobileRouteDeps };
 }
 
 export type DaemonRouteHandler = (ctx: DaemonRouteContext) => Response | null | undefined | Promise<Response | null | undefined>;
+
+import type { MobileRouteDeps, Session } from "../mobile-pairing.ts";
 
 export interface DaemonRoute {
   id: string;

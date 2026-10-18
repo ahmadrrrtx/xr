@@ -110,15 +110,18 @@ if (!TOKEN) {
   check('pairing code is single-use', replay.status === 401, `got ${replay.status}`);
 
   /* 7. paired device can read --------------------------------------------------- */
+  // Shipping truth (2.4): the daemon holds no server-side chat list (desktop keeps
+  // history client-side), so the paired-device read proof is the real companion
+  // read path — models/approvals/budget — not reference-demo chat fixtures.
   const authed = { cookie };
-  const chats = await call('/api/v1/chats?limit=50', { headers: authed });
-  check('paired device reads the chat list', chats.status === 200 && (chats.body?.chats?.length ?? 0) > 0);
+  const models = await call('/api/v1/models', { headers: authed });
+  check('paired device reads models (companion API)', models.status === 200 && typeof models.body?.selected?.model === 'string');
 
   const approvals = await call('/api/v1/approvals?status=pending', { headers: authed });
   check('paired device reads approvals', approvals.status === 200);
 
   const budget = await call('/api/v1/budget', { headers: authed });
-  check('paired device reads budget', budget.status === 200 && typeof budget.body?.spentTodayCents === 'number');
+  check('paired device reads budget', budget.status === 200 && typeof budget.body?.config?.perTaskUsd === 'number');
 
   /* 8. mobile is blocked from coding surfaces ------------------------------------ */
   for (const [label, path] of [
@@ -156,7 +159,7 @@ if (!TOKEN) {
     const revoked = await call(`/api/mobile/devices/${id}/revoke`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}` } });
     check('revoke succeeds', revoked.status === 200);
 
-    const after = await call('/api/v1/chats', { headers: authed });
+    const after = await call('/api/v1/models', { headers: authed });
     check('revoked device gets 401 on next request', after.status === 401, `got ${after.status}`);
 
     const listed = await call('/api/mobile/devices', { headers: { authorization: `Bearer ${TOKEN}` } });

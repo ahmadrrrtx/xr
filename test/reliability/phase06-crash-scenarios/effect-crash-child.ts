@@ -54,6 +54,10 @@ const opts: ExecuteOptions = {
   idempotency,
   idempotencyKey: key,
   inputSummary: "crash test",
+  // Phase 2.3 · P1-2 — crash-injection harness deterministically authorizes
+  // its own synthetic tool run (it pins crash/settlement semantics, not the
+  // approval gate; the gate matrix lives in approval-default.test.ts).
+  approve: async () => true,
   run: async () => {
     if (crashPoint === "before_effect") {
       console.log("[crash-point]");

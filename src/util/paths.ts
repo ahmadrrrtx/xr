@@ -106,13 +106,6 @@ export function canonicalDbKey(dbPath: string): string {
   return canonicalPathKey(dbPath);
 }
 
-/**
- * Absolute path to the lockfile for a database identity.
- * Takes the CANONICAL key so lock naming cannot drift from registry naming.
- */
-export function migrationLockPath(canonicalDbPath: string): string {
-  return `${canonicalDbPath}.migrate.lock`;
-}
 
 /** True when two spellings refer to the same file identity on this platform. */
 export function sameFileIdentity(a: string, b: string): boolean {

@@ -52,7 +52,6 @@ import { bounded } from "../util/concurrency.ts";
 import { xrMetrics } from "../observability/metrics.ts";
 import { setConfiguredRequestTimeout } from "./request-guard.ts";
 
-export const GATEWAY_VERSION = 1;
 
 export function gatewayEnabled(): boolean {
   const raw = process.env.XR_PROVIDER_GATEWAY;

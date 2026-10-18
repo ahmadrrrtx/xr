@@ -109,9 +109,9 @@ button.submit:hover { filter: brightness(1.1); }
   <div class="logo" aria-hidden="true">▀▄▀ <span>XR</span></div>
   <h1>Sign in to Control Center</h1>
   <p class="desc">
-    This dashboard is local-only and protected by the access token XR printed
-    when the daemon started (run <code>xr serve</code> to see it again, or
-    copy it from the terminal). Paste it below — you can paste from the
+    This dashboard is local-only and protected by the daemon's access
+    token (shown on a private terminal with <code>XR_PRINT_TOKEN=1 xr serve</code>;
+    packaged desktop opens its own session). Paste it below — from the
     clipboard (Ctrl+V / ⌘V); paste is never blocked.
   </p>
   <div class="error" role="alert">

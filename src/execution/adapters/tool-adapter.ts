@@ -75,7 +75,7 @@ export async function executeTool(
   const service = opts.service;
   const actor = opts.actor ?? { kind: "system", component: "tool-adapter" };
   const inputSummary = redact(safeJson({ tool: tool.name, args }));
-  const capability = { kind: "core_tool" as const, name: tool.name };
+  const capability = { kind: "core_tool" as const, name: tool.name, requiresApproval: tool.requiresApproval };
   const idempotency: IdempotencyClass = defaultIdempotency(capability);
   const idempotencyKey =
     idempotency === "idempotent_with_key"

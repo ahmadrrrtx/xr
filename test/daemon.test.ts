@@ -9,7 +9,6 @@ import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
 import { makeHandler } from "../src/daemon/server.ts";
 import { dashboardHtml } from "../src/daemon/dashboard.ts";
-import { CORE_VERSION } from "../src/core/version.ts";
 
 let tmp: string;
 let store: Store;
@@ -26,18 +25,18 @@ function req(path: string, withAuth = true): Request {
   });
 }
 
-test("health endpoint is open (no auth) and reports localhost", async () => {
+test("health endpoint is open (no auth) and discloses nothing beyond liveness", async () => {
   const h = makeHandler(store, TOKEN);
   const res = await h(req("/api/health", false));
   expect(res.status).toBe(200);
   const j: any = await res.json();
+  // Phase 34 · R1 (audit P2-21): the unauth probe carries {ok, ts} only — no
+  // name/version/host/binding/configCache fingerprints on a loopback bind.
   expect(j.ok).toBe(true);
-  expect(j.host).toBe("127.0.0.1");
-  // Derived from the single source of truth (src/core/version.ts) so a release
-  // bump never breaks this test.
-  expect(j.version.version).toBe(CORE_VERSION);
-  expect(j.binding).toBe("localhost-only");
-  expect(j.auth).toBe("required-except-health");
+  expect(typeof j.ts).toBe("number");
+  for (const k of ["name", "version", "host", "binding", "auth", "configCache"]) {
+    expect(j[k]).toBeUndefined();
+  }
 });
 
 test("API requires the local token (401 without it)", async () => {

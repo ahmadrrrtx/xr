@@ -1,15 +1,15 @@
 # XR 1.1.0 Repository Inventory
 
-Generated: 2026-10-16T23:59:12.237Z
+Generated: 2026-10-18T13:01:27.117Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 748 |
-| Test files | 408 |
+| Source files | 752 |
+| Test files | 419 |
 | CLI commands | 43 |
-| Daemon routes | 294 |
+| Daemon routes | 305 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -25,7 +25,7 @@ Generated: 2026-10-16T23:59:12.237Z
 ## CLI commands
 
 - `shell` (start, stable) — xr [shell|--tui|tui]
-- `serve` (start, stable) — xr serve [--port <n>] [--parent-pid <pid>]
+- `serve` (start, stable) — xr serve [--port <n>] [--parent-pid <pid>] [--lan]
 - `onboarding` (start, supported) — xr onboarding
 - `help` (start, stable) — xr help [topic|command]
 - `version` (start, stable) — xr version | xr --version | xr -v
@@ -341,6 +341,17 @@ Generated: 2026-10-16T23:59:12.237Z
 - POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
 - POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
 - POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- DELETE `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- DELETE `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/mobile.routes.ts)
 - GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
 - GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
 - POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)

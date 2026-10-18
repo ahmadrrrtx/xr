@@ -156,6 +156,7 @@ describe("XR 4.1 ExecutionService", () => {
       idempotency: "non_idempotent",
       inputSummary: "{}",
       timeoutMs: 50,
+      approve: async () => true, // timeout path, not the gate (Phase 2.3 · P1-2 wiring)
       run: async () => {
         await new Promise((r) => setTimeout(r, 500));
         return okObservation("too late");
@@ -181,6 +182,7 @@ describe("XR 4.1 ExecutionService", () => {
       idempotency: "non_idempotent",
       inputSummary: "{}",
       timeoutMs: 2000,
+      approve: async () => true, // cancellation path, not the gate (Phase 2.3 · P1-2 wiring)
       run: async (ctx) => {
         entered = true;
         while (!ctx.isCancelled()) {
@@ -227,6 +229,7 @@ describe("XR 4.1 ExecutionService", () => {
       idempotency: "idempotent_with_key" as const,
       idempotencyKey: "dup-key-1",
       inputSummary: "{}",
+      approve: async () => true, // idempotence path, not the gate (Phase 2.3 · P1-2 wiring)
       run: async () => { runs++; return okObservation("done"); },
     };
     const first = await h.service.execute(opts);

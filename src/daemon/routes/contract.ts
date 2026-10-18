@@ -76,6 +76,7 @@ import {
   ResearchJobResponse,
   ResearchJobsListResponse,
 } from "./schemas.ts";
+import { MOBILE_CONTRACT } from "./contract-mobile.ts"; // Phase 2.4 · P1-1
 import { BUILDER_CONTRACT } from "./contract-builder.ts";
 import { RESEARCH_RUN_CONTRACT } from "./contract-research.ts"; import { AGENTS_WORKFLOWS_CONTRACT } from "./contract-agents.ts"; // Phase 19
 import { MEMORY_EXPLORER_CONTRACT } from "./contract-memory.ts"; import { INTEGRATIONS_CONTRACT } from "./contract-integrations.ts"; import { TELEGRAM_CONTRACT } from "./contract-telegram.ts"; import { DISCORD_CONTRACT } from "./contract-discord.ts"; import { WHATSAPP_CONTRACT } from "./contract-whatsapp.ts"; // Phase 21 · Phase 22 · Phase 24 · Phase 26
@@ -94,6 +95,8 @@ export interface ApiOperationMeta {
   response?: z.ZodType;
   /** Server-Sent Events stream instead of a single JSON response. */
   sse?: boolean;
+  /** Reachable anonymously (mobile TOFU fingerprint): OpenAPI marks security: []; the daemon's publicPath check honours it. */
+  public?: true;
   /**
    * Explicit OpenAPI path template for prefix-matched routes
    * (e.g. "/api/context/item/{id}"). Required where the route matches by
@@ -123,7 +126,7 @@ export const COMPATIBILITY_DOC = "docs/api/COMPATIBILITY.md";
 export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   // ── system ────────────────────────────────────────────────────────────────
   "health.get": {
-    summary: "Liveness/version health probe (unauthenticated).",
+    summary: "Liveness health probe (unauthenticated, minimal payload).",
     tag: "system",
     stability: "stable",
     response: HealthResponse,
@@ -794,6 +797,7 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     tag: "system",
     stability: "experimental",
   },
+  ...MOBILE_CONTRACT,
 };
 
 /** Uniform not-found body (kept compatible: `error` preserved). */

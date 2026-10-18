@@ -9,7 +9,7 @@
  * Fails with a non-zero exit code on any reject-level finding so a
  * permissive or hijackable manifest cannot land on main.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
@@ -27,21 +27,36 @@ async function main(): Promise<number> {
   const { allTools } = await import(join(ROOT, "src/tools/registry.ts"));
   const knownTools = allTools().map((t) => t.name);
 
-  // ── Skills ────────────────────────────────────────────────────────────────
+  // ── Skills (Phase 2.5 · P2-15 — the full bundled population) ─────────────
+  // Every skills/<name> DIRECTORY is a skill: `xr-skill.json` is the manifest
+  // format, plain `SKILL.md` is the legacy markdown format, and both load
+  // through readSkillManifest (its frontmatter fallback is the established
+  // path). A directory with NEITHER is an honest gate failure, not a skipped
+  // count. Categories are measured and labelled with src/skills/counts.ts
+  // vocabulary: officialManifests / legacyMarkdown (never a bare "N skills").
   const skillsRoot = join(ROOT, "skills");
+  const category = { manifest: 0, legacy: 0, plugins: 0 };
   if (existsSync(skillsRoot)) {
     for (const name of readdirSync(skillsRoot)) {
       const dir = join(skillsRoot, name);
-      if (!existsSync(join(dir, "xr-skill.json"))) continue;
-      const loaded = readSkillManifest(dir);
-      if (!loaded.ok || !loaded.manifest) {
-        failures.push(`skill ${name}: invalid manifest — ${loaded.errors.join("; ")}`);
+      const hasManifest = existsSync(join(dir, "xr-skill.json"));
+      let isDir = false;
+      try { isDir = statSync(dir).isDirectory(); } catch { continue; }
+      if (!isDir) continue;
+      if (!hasManifest && !existsSync(join(dir, "SKILL.md"))) {
+        failures.push(`skill ${name}: directory has neither xr-skill.json nor SKILL.md (unclassifiable bundled skill)`);
         continue;
       }
+      const loaded = readSkillManifest(dir);
+      if (!loaded.ok || !loaded.manifest) {
+        failures.push(`skill ${name} (${hasManifest ? "manifest" : "legacy Markdown"}): invalid — ${loaded.errors.join("; ")}`);
+        continue;
+      }
+      if (hasManifest) category.manifest++; else category.legacy++;
       checked.push(`skill:${name}`);
       const allowlist = validateToolAllowlist(loaded.manifest, knownTools);
       if (!allowlist.ok) failures.push(`skill ${name}: ${allowlist.errors.join("; ")}`);
-      const descriptor = descriptorFromSkill({ manifest: loaded.manifest, dir, kind: "xr-manifest", source: "bundled", enabled: false, installed: true, health: "healthy", skillType: "executable", errors: [], warnings: [] });
+      const descriptor = descriptorFromSkill({ manifest: loaded.manifest, dir, kind: hasManifest ? "xr-manifest" : "legacy-markdown", source: "bundled", enabled: false, installed: true, health: "healthy", skillType: "executable", errors: [], warnings: [] });
       const security = scanManifestSecurity(descriptor);
       if (security.verdict === "reject") {
         failures.push(`skill ${name}: manifest security REJECT — ${security.rejects.join("; ")}`);
@@ -63,6 +78,7 @@ async function main(): Promise<number> {
         failures.push(`plugin ${name}: invalid manifest — ${loaded.errors.join("; ")}`);
         continue;
       }
+      category.plugins++;
       checked.push(`plugin:${name}`);
       const descriptor = descriptorFromPlugin(loaded.manifest);
       const security = scanManifestSecurity(descriptor);
@@ -74,7 +90,9 @@ async function main(): Promise<number> {
     }
   }
 
-  console.log(`[capability-gate] scanned ${checked.length} bundled capabilities: ${checked.join(", ") || "(none)"}`);
+  console.log(
+    `[capability-gate] scanned ${checked.length} bundled capabilities (${category.manifest} manifest skills, ${category.legacy} legacy Markdown skills, ${category.plugins} plugins): ${checked.join(", ") || "(none)"}`,
+  );
   if (failures.length) {
     console.error(`[capability-gate] FAILED (${failures.length}):`);
     for (const f of failures) console.error(`  ✗ ${f}`);

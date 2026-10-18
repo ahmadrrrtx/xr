@@ -22,7 +22,7 @@
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit && tsc -p desktop/tsconfig.json",
+    "typecheck": "bun run scripts/typecheck-preflight.ts && tsc --noEmit && tsc -p desktop/tsconfig.json",
     "ci": "bun run typecheck && bun test && bun run release:check && bun run channel:check && bun run claim-lint && bun run placeholder-lint && bun run desktop:sink-lint && bun run platform:parity:check && bun run changelog:check && bun run baseline:inventory && bun run ci-capability-gate && bun run api:schema:check && bun run client:check && bun run api:compat && bun run boundaries && bun run size-gate && bun run hot-path-lint && bun run ownership:check && bun run website:marketplace:check",
     "website:marketplace:generate": "bun run website/scripts/generate-marketplace.ts",
     "website:marketplace:check": "bun run website/scripts/generate-marketplace.ts --check",
@@ -130,7 +130,8 @@
     "typescript": "^5.5.0"
   },
   "engines": {
-    "bun": ">=1.3.0"
+    "bun": ">=1.3.0",
+    "node": ">=20"
   },
   "packageManager": "bun@1.3.14"
 }

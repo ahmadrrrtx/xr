@@ -140,6 +140,3 @@ export class OnlineSkillRegistryClient {
   }
 }
 
-export function registryFileExists(path: string): boolean {
-  return existsSync(path.startsWith("file://") ? new URL(path) : path);
-}

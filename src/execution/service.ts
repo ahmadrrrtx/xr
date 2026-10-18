@@ -1,19 +1,7 @@
 /**
- * XR 4.3 — Execution Service (the "Fabric" with Durable Agency)
- *
- * Owns the canonical orchestration of every execution:
- *   - create execution
- *   - register intent/plan
- *   - enforce policy/approval/budget (bridging to existing gates)
- *   - prepare action
- *   - invoke adapter callback in current placement
- *   - normalize observation/outcome
- *   - record cost/audit/history without double-charging
- *   - apply timeout/cancellation/retry rules
- *   - XR 4.3: checkpoints, leases, durable cancellation, and recovery
- *
- * Does NOT own model routing, isolation, memory redesign, or business
- * workflow planning — that is for later phases.
+ * XR 4.3 — Execution Service ("Fabric" with Durable Agency): create → intent/plan →
+ * policy/approval/budget gate → prepare → adapter invoke → observation → outcome/cost/audit.
+ * Does NOT own model routing, isolation, memory, or business planning.
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -364,15 +352,11 @@ export class ExecutionService {
   }
 
   /**
-   * The canonical execute() entry point. Runs a single action through the
-   * full fabric lifecycle. Returns the completed ExecutionRecord.
-   */
-  /**
-   * Phase 8 · T2 — canonical-envelope observability. Every execution is an
-   * OTel-GenAI span (`chat <model>` / `execute_tool <tool>` /
-   * `invoke_agent <agent>` per capability kind), so nested placements,
-   * routing decisions and child work line up under one trace. Structural
-   * only: kind/name/ids/outcome — never payloads (Art. XXI).
+   * The canonical execute() entry point — a single action through the full
+   * fabric lifecycle; returns the completed ExecutionRecord.
+   * Phase 8 · T2 — canonical-envelope observability: every execution is an
+   * OTel-GenAI span (chat/execute_tool/invoke_agent per capability kind);
+   * structural only (kind/name/ids/outcome), never payloads (Art. XXI).
    */
   async execute(opts: ExecuteOptions): Promise<ExecutionRecord> {
     const span = envelopeSpan({
@@ -1059,9 +1043,23 @@ export class ExecutionService {
       }
     }
 
-    // Approval gate — if the caller supplies an approve() hook AND the
-    // capability class requires approval, we surface the request.
+    // Approval gate — when the capability requires approval we refuse unless
+    // an approve() hook is wired (Phase 2.3 · P1-2: no silent allow).
     const needsApproval = capabilityRequiresApproval(opts.capability);
+    if (needsApproval && !opts.approve) {
+      const at = Date.now();
+      const requestId = `apr_${randomUUID().slice(0, 8)}`;
+      const reason = `Action "${opts.capability.name}" requires approval and no approver is wired.`;
+      rec.policy.push(
+        { kind: "requires_approval", requestId, reason, at },
+        { kind: "denied", reason, code: "approval_unavailable", by: "system:approval-gate", at },
+      );
+      rec.outcome = { kind: "denied", message: reason, stoppedReason: "approval", at };
+      this.applyTransition(runId, rec, "deny", "no approver available");
+      this.deps.audit?.("execution.approval_unavailable", { runId, capability: opts.capability.name });
+      this.persist(runId);
+      return;
+    }
     if (needsApproval && opts.approve) {
       const requestId = `apr_${randomUUID().slice(0, 8)}`;
       const pd: PolicyDecision = {
@@ -1122,10 +1120,9 @@ export class ExecutionService {
   }
 
   /**
-   * XR 4.2 — Trust & Isolation gate. Returns "finalize" when the action was
-   * fully handled here (blocked, or executed inside an environment) and the
-   * caller should finalize+return; or "continue" to use the fast in-process
-   * path. Never runs high-risk work in-process: missing isolation → denied.
+   * XR 4.2 — Trust & Isolation gate: "finalize" = handled here (blocked, or
+   * executed in an environment); "continue" = caller runs the fast in-process
+   * path. High-risk work never runs in-process: missing isolation → denied.
    */
   private async runTrustGate(
     runId: string,
@@ -1425,14 +1422,12 @@ function safeMessage(e: unknown): string {
 }
 
 /**
- * Determine if a capability requires approval. Phase 2 preserves the existing
- * tool.requiresApproval semantics for core tools; control actions already
- * classify risk and require approval for sensitive/destructive operations.
- * Adapters pass this information via capability meta or by wrapping opts.
+ * Determine if a capability requires approval. Precedence (Phase 2.3 · P1-2):
+ * the capability's declared `requiresApproval` > kind rules > the legacy
+ * hardcoded tool-name list (fallback for identities built without the field).
  */
-function capabilityRequiresApproval(cap: { kind: string; name: string }): boolean {
-  // By default, let the caller decide via opts.approve presence. We always
-  // require approval for destructive control actions and shell operations.
+function capabilityRequiresApproval(cap: { kind: string; name: string; requiresApproval?: boolean }): boolean {
+  if (cap.requiresApproval !== undefined) return cap.requiresApproval;
   if (cap.kind === "control_action") return true;
   if (cap.kind === "core_tool") {
     return ["shell", "delete_file", "write_file", "git"].includes(cap.name);
