@@ -14,7 +14,9 @@
  *   node tools/test-web-push.mjs
  */
 import webpush from 'web-push';
-import { encryptOuter, encryptInner, hmacSha256 } from '/tmp/xr-build/web-push.mjs';
+// Phase 2.4 · P2-3 — the builder writes tools/.daemon-build (see tools/build-daemon.mjs);
+// the stale /tmp/xr-build path broke on every fresh machine.
+import { encryptOuter, encryptInner, hmacSha256 } from './.daemon-build/web-push.mjs';
 
 const { webcrypto } = await import('node:crypto');
 const subtle = webcrypto.subtle;

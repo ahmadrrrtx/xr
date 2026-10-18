@@ -55,7 +55,19 @@ async function runServeCommand(args: string[]): Promise<void> {
 
   const { serve } = await import("../daemon/server.ts"); // static literal — compile-safe
   const port = parseServePort(args);
-  const handle = await serve({ port: Number.isFinite(port) ? port : undefined });
+  // Phase 2.4 · P1-1 — `--lan` opt-in: the CLI prepares cert/VAPID, hands a typed DTO to serve(),
+  // banners only after a real bind; a TLS/cert failure exits non-zero (never an insecure fallback).
+  const { prepareLan, printLanBanner } = await import("./serve-lan.ts");
+  let lanStartup: Awaited<ReturnType<typeof prepareLan>> | undefined;
+  try {
+    if (args.includes("--lan")) lanStartup = await prepareLan(Number.isFinite(port) ? port : undefined);
+  } catch (err) {
+    console.error(`LAN startup failed (certificate/VAPID preparation): ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    throw err;
+  }
+  const handle = await serve({ port: Number.isFinite(port) ? port : undefined, ...(lanStartup ? { lan: { cert: lanStartup.cert } } : {}) });
+  if (lanStartup) printLanBanner({ ...lanStartup, port: handle.port, url: handle.lanUrl ?? lanStartup.url });
   await new Promise<void>((resolve) => {
     const stop = () => {
       try {

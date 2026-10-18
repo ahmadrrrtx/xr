@@ -1396,6 +1396,61 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/cloud/usage");
   }
 
+  /** SHA-256 fingerprint of the served LAN certificate (public TOFU anchor; no key material). */
+  async mobileCertFingerprintGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/cert-fingerprint");
+  }
+
+  /** Redeem the 6-digit pairing code; issues the HttpOnly Secure paired-device cookie. */
+  async mobilePairPost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/pair");
+  }
+
+  /** Close the caller's session (rejects anonymous; clears the cookie; device self-revokes). */
+  async mobileSessionDelete(): Promise<Record<string, unknown>> {
+    return await this.call("DELETE", "/api/v1/mobile/session");
+  }
+
+  /** List paired devices (desktop/privileged sessions only). */
+  async mobileDevicesListGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/devices");
+  }
+
+  /** Revoke a paired device by id (desktop/privileged sessions only). */
+  async mobileDevicesRevokePost(id: string): Promise<Record<string, unknown>> {
+    return await this.call("POST", `/api/v1/mobile/devices/${encodeURIComponent(id)}/revoke`);
+  }
+
+  /** Send a test Web Push to a paired device (desktop/privileged sessions only; truthful ok:false when delivery fails). */
+  async mobileDevicesPushTestPost(id: string): Promise<Record<string, unknown>> {
+    return await this.call("POST", `/api/v1/mobile/devices/${encodeURIComponent(id)}/push-test`);
+  }
+
+  /** Mint an on-demand 6-digit pairing code and pairing URL (desktop/privileged sessions only). */
+  async mobilePairQrPost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/pair-qr");
+  }
+
+  /** VAPID public key for Web Push subscription (LAN mode only). */
+  async mobilePushVapidPubkeyGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/push/vapid-pubkey");
+  }
+
+  /** Attach or replace the paired device's Web Push subscription. */
+  async mobilePushSubscribePost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/push/subscribe");
+  }
+
+  /** Remove the paired device's Web Push subscription. */
+  async mobilePushSubscribeDelete(): Promise<Record<string, unknown>> {
+    return await this.call("DELETE", "/api/v1/mobile/push/subscribe");
+  }
+
+  /** Send a test Web Push to the paired device (truthful ok:false when delivery fails). */
+  async mobilePushTestPost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/push/test");
+  }
+
   /** API index: version, operation catalogue link, OpenAPI location. */
   async metaApiRootGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1");

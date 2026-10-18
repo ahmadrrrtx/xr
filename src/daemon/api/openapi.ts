@@ -75,7 +75,7 @@ function operationFor(op: ApiOperation): Record<string, unknown> {
         }
       : {}),
     responses,
-    security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+    security: op.meta.public ? [] : [{ bearerAuth: [] }, { cookieAuth: [] }], // Phase 2.4 · P1-1 — public ops (TOFU fingerprint)
   };
   return entry;
 }

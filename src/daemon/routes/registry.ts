@@ -41,6 +41,7 @@ import { mcpRoutes } from "./mcp.routes.ts";
 import { telegramRoutes } from "./telegram.routes.ts";
 import { discordRoutes } from "./discord.routes.ts";
 import { whatsappRoutes } from "./whatsapp.routes.ts";
+import { mobileRoutes } from "./mobile.routes.ts"; // Phase 2.4 · P1-1
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 
@@ -104,6 +105,10 @@ export function listBaseRoutes(): DaemonRoute[] {
     // unconfigured client short-circuits), so there is nothing to gate behind a
     // flag. A machine with no team simply gets `{ configured: false }`.
     ...cloudRoutes(),
+    // Phase 2.4 · P1-1 — mobile companion ops. ALWAYS registered through the
+    // one router; they self-answer 404 ("LAN mode is off") off-LAN, so the
+    // default loopback daemon keeps exposing nothing.
+    ...mobileRoutes(),
   ];
 }
 
