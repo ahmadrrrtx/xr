@@ -60,3 +60,8 @@ c1ad0e0f9590ba1e053ec4a032558ca06b6af774:cloud/scripts/smoke.ts:generic-api-key:
 c1ad0e0f9590ba1e053ec4a032558ca06b6af774:cloud/test/helpers.ts:generic-api-key:75
 c1ad0e0f9590ba1e053ec4a032558ca06b6af774:cloud/test/helpers.ts:generic-api-key:76
 1d7c8f48a8611bb48927637d5285db7878aa5004:docs/implementation/stage-a/a1/DESIGN.md:generic-api-key:106
+# Stage-2 (PR #188) — default-rule false positives in docs prose: the pattern
+# "auth.js, telegram/discord webhooks" satisfies generic-api-key's keyword+
+# shape heuristics; no credential exists on these lines (prose route list).
+b801543e27ca7a7740cf1393f051a98f665c8974:HANDOFF_PHASE_2.1.md:generic-api-key:33
+19af69dbe24ad236cf796f082fed3c75d4321816:XR_FIX_TRACKER.md:generic-api-key:31

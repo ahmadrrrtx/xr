@@ -33,7 +33,20 @@ beforeEach(() => {
   store = new Store(join(tmp, "d.db"));
 });
 afterEach(() => {
-  rmSync(tmp, { recursive: true, force: true });
+  // Windows: the SQLite handle must close before the temp dir can disappear,
+  // and even then the OS releases the lock asynchronously — bounded-retry the
+  // removal instead of racing it (EBUSY flakes on the CI lane otherwise).
+  (store as unknown as { close?: () => void }).close?.();
+  let last: unknown;
+  for (let i = 0; i < 30; i++) {
+    try { rmSync(tmp, { recursive: true, force: true }); return; }
+    catch (e) {
+      last = e;
+      if ((e as { code?: string }).code !== "EBUSY" && (e as { code?: string }).code !== "ENOTEMPTY") break;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+  throw last;
 });
 
 function req(

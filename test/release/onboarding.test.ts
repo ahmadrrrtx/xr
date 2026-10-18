@@ -15,7 +15,7 @@
  * package.json changes beyond the single documented script + script deps.
  */
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -53,10 +53,11 @@ describe("typecheck preflight — remediation, not noise", () => {
     }
   });
 
-  test("the live repository checkout actually satisfies the preflight (dev machine sanity)", () => {
-    expect(existsSync(join(REPO, "desktop", "node_modules", "typescript", "package.json"))).toBe(true);
-    expect(desktopDepsReady(REPO)).toBe(true);
-  });
+  // NOTE: a "live checkout satisfies the preflight" assertion was REMOVED —
+  // it is environment-dependent by design: CI lanes install the root deps
+  // only, so the independent desktop installation is legitimately absent
+  // there while a developer machine has it. The staged-temp-root test above
+  // is the hermetic contract for BOTH states.
 
   test("remediation names the exact command a contributor must run", () => {
     expect(REMEDIATION).toContain("cd desktop && bun install");
