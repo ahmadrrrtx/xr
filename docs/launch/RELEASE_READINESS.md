@@ -35,7 +35,7 @@ _Sandbox truth: Linux x86_64 headless, 2 GB RAM, no GUI, no mic, no provider key
 | Research / multi-agent / memory | ✅ | Suites + 283-op daemon battery green. |
 | Themes / updater / CLI update channels | 🟡 | winget+scoop now arm64-aware, fail-closed on unsigned sums; desktop updater unprovisioned — honest fail-closed UI (L-011 owner action). |
 | Error paths / uninstall / budget cap / cancellation | ✅ | RFC-7807 + field fixes; `xr uninstall`/`reset` suites green; supervision suites green on Linux. |
-| Daemon security posture | ✅ | Host 421 · CSRF matrix · 400s · traversal battery re-probed at HEAD; gitleaks/osv green in CI. |
+| Daemon security posture | ✅ | Host 421 · CSRF matrix · 400s · traversal battery re-probed at HEAD; gitleaks green, osv = **0 unfiltered findings** after the advisory-driven upgrades (FIX_LOG wave 5). |
 | npm package | 🟡→✅ after publish | Verified end-to-end from packed tarball; **registry still serves 1.0.0 until owner publishes 1.1.x** (L-001). |
 | Version/identity gates | ✅ | 8/8 stamped surfaces incl. NEW tauri.conf.json + Cargo.toml (F-05). |
 | Cloud/Business tier | ✅ untouched | Zero edits; cloud suite green in the chunks above. |
@@ -43,7 +43,8 @@ _Sandbox truth: Linux x86_64 headless, 2 GB RAM, no GUI, no mic, no provider key
 ## 2. Release dry-run (proven end-to-end this audit)
 
 `npm pack` → global install → `xr --version` ✅ → `xr doctor` (honest exit 1 + repair text) ✅ → help/exit-code contracts ✅ → daemon boot + auth/Host/CSRF/traversal batteries ✅ → uninstall suites ✅ → release-gates battery ✅.
-**Deltas no sandbox can prove:** first-boot OS warnings for unsigned installers, GUI launch, ARM/Intel hardware runs, provider-key flows, updater cycle. Proof paths in §3/§4.
+**Proven in real CI on `19bc129f` (2026-10-21):** all five desktop bundle legs (Windows x64 + Windows arm64 + macOS arm64 + macOS x64 + Linux), Flatpak, cargo check/clippy + Windows shell tests, winget/scoop/brew stamped-vs-canonical structural validation, full unit/typecheck parity on 3 OSs, and the supply-chain battery (6/7; the only open job is the designed-red L-001 tag⇔npm alarm).
+**Deltas no sandbox or CI lane can prove:** first-boot OS warnings for unsigned installers, GUI launch, ARM/Intel hardware runs, provider-key flows, updater cycle. Proof paths in §3/§4.
 
 ## 3. Owner npm-publish checklist (do in order)
 
