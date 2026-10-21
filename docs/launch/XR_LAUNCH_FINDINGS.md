@@ -31,11 +31,11 @@ Still-standing prior items relevant to launch: voice bundling (P1-12, P2-log), A
 ### L-002 · P0 · packaging · no Windows ARM desktop installer leg exists
 - **Evidence:** `.github/workflows/desktop-app.yml` bundle matrix = only `x86_64-pc-windows-msvc`; `scripts/compile-sidecar.ts` TRIPLES has no `windows-arm64` mapping (emits "unsupported host" on an arm64 runner).
 - **Comparison:** `windows-11-arm`/`windows-11-vs2026-arm` native runners are GA (Aug 2026); Tauri ARM64 bundling = NSIS; native legs are the current best practice (sidecars match arch). Verified in sandbox: `bun build --target=bun-windows-arm64` produces a valid ARM64 PE32+ engine today — the gap is purely wiring.
-- **Fix:** Wave-1 — add TRIPLES entry + real `--target` cross-compile, native `windows-11-arm` bundle leg with ARM-scoped assertions. **Status: FIXED (this pass, F-04 in FIX_LOG) — runtime smoke on real ARM hardware remains documented-unverified (CI proof-path).**
+- **Fix:** Wave-1 — add TRIPLES entry + real `--target` cross-compile, native `windows-11-arm` bundle leg with ARM-scoped assertions. **Status: FIXED (F-04) — and as of `19bc129f` the Windows x64 **and** Windows arm64 (native `windows-11-arm` leg) Tauri bundles build **green in real CI**; runtime smoke on real ARM hardware remains documented-unverified (CI proof-path).**
 
 ### L-003 · P0 · packaging · no Intel macOS desktop build
 - **Evidence:** bundle matrix = `aarch64-apple-darwin` only; v1.1.0 dmg is aarch64-only. CLI binaries do cover darwin-x64 (asymmetry).
-- **Fix:** Wave-1 — cross-compile leg `x86_64-apple-darwin` on `macos-latest` (Apple toolchain cross + real bun `--target=bun-darwin-x64` sidecar — compile-sidecar previously did rename-only cross, silent-mismatch hazard); assertion step already exists. **Status: FIXED (this pass); x64 sidecar runtime smoke skipped-on-cross, documented (Rosetta optional follow-up).**
+- **Fix:** Wave-1 — cross-compile leg `x86_64-apple-darwin` on `macos-latest` (Apple toolchain cross + real bun `--target=bun-darwin-x64` sidecar — compile-sidecar previously did rename-only cross, silent-mismatch hazard); assertion step already exists. **Status: FIXED; macOS x64 bundle leg green in real CI on `19bc129f` (cross `targetDir` assertion path); x64 sidecar runtime smoke remains skipped-on-cross, documented.**
 
 ### L-004 · P0 · packaging · no windows-arm64 CLI binary
 - **Evidence:** `scripts/build-matrix.ts` TARGETS lacks it; `release.yml` windows leg builds only `windows-x64`; verified bun 1.3.14 builds `bun-windows-arm64` fine in sandbox (102 MB ARM64 PE).
@@ -91,7 +91,7 @@ Still-standing prior items relevant to launch: voice bundling (P1-12, P2-log), A
 | Traversal / encoded / absolute / symlink | 400 ✓ (Linux; A1 mac/win fail-closed-unsupported by declaration) |
 | Approval fail-closed under no approver | suite-pinned (green) ✓ |
 | Prompt-injection battery `xr attacks` | re-verified green in suite ✓ |
-| Secrets (gitleaks) + vulns (osv + bun audit) in CI | green on HEAD run `39444949724` ✓ |
+| Secrets (gitleaks) + vulns (osv + bun audit) in CI | green on HEAD `39444949724` ✓, **re-green after 10 overnight advisories (2026-10-19/21) fixed by real upgrades — vite 8.3.3, markdown-it 14.3.3, esbuild ≥0.25 (frac override), ureq 3 + webpki-roots 1.0.10; 0 unfiltered osv findings on `19bc129f`** ✓ |
 | SmartScreen/Gatekeeper unsigned UX | L-005 (owner) |
 | Supply-chain posture | `--ignore-scripts` CI, SBOM, cosign, SLSA wiring present; v1.1.0 never used it (L-001) |
 
