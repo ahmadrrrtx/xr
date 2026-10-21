@@ -80,7 +80,7 @@ jobs:
         include:
           - { name: linux-x64, os: ubuntu-latest, targets: "linux-x64,linux-arm64", smoke: "linux-x64" }
           - { name: darwin, os: macos-latest, targets: "darwin-arm64,darwin-x64", smoke: "darwin-arm64" }
-          - { name: windows, os: windows-latest, targets: "windows-x64", smoke: "windows-x64" }
+          - { name: windows, os: windows-latest, targets: "windows-x64,windows-arm64", smoke: "windows-x64" }
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
@@ -97,6 +97,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/zip | Out-Null
           Copy-Item dist/xr-windows-x64.exe dist/zip/xr.exe
           Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-x64.zip -Force
+          Remove-Item dist/zip/xr.exe
+          Copy-Item dist/xr-windows-arm64.exe dist/zip/xr.exe
+          Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-arm64.zip -Force
       - name: Upload canonical binaries
         uses: actions/upload-artifact@v4
         with:
@@ -148,7 +151,7 @@ jobs:
           merge-multiple: true
       - name: Assert the full target set is present (one canonical build)
         run: |
-          for f in xr-linux-x64 xr-linux-arm64 xr-darwin-arm64 xr-darwin-x64 xr-windows-x64.exe xr-windows-x64.zip; do
+          for f in xr-linux-x64 xr-linux-arm64 xr-darwin-arm64 xr-darwin-x64 xr-windows-x64.exe xr-windows-arm64.exe xr-windows-x64.zip xr-windows-arm64.zip; do
             test -f "dist/$f" || { echo "MISSING dist/$f"; exit 1; }
           done
       - name: Stamp release version across all Truth surfaces (tag-derived, CI-only)
@@ -332,6 +335,19 @@ jobs:
           overwrite: true
           files: |
             dist/*
+      # L-010: an incomplete release must be RED, not silently shipped. The
+      # gate queries the live tag's assets against the canonical set (CLI
+      # binaries + zips incl. windows-arm64, source, .deb, npm tarball +
+      # cosign bundles, SHA256SUMS + bundle, SBOM + bundle, SLSA intoto) and
+      # fails this run loudly instead of letting a partial release stand.
+      - name: Checkout (for the asset-completeness gate script)
+        uses: actions/checkout@v4
+      - name: Setup Bun (asset-completeness gate)
+        uses: oven-sh/setup-bun@v2
+      - name: Assert live release asset completeness (L-010)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run scripts/release-assets-check.ts --tag "$GITHUB_REF_NAME"
 
   # ── 5. SLSA3 provenance over the REAL digests (the Phase-4 fix) ───────────
   provenance:

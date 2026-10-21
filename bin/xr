@@ -34,6 +34,7 @@ function binaryFileName() {
     "darwin-arm64": "xr-darwin-arm64",
     "darwin-x64": "xr-darwin-x64",
     "win32-x64": "xr-windows-x64.exe",
+    "win32-arm64": "xr-windows-arm64.exe",
   };
   const key = `${process.platform}-${process.arch}`;
   return map[key] ?? `xr-${process.platform}-${process.arch}`;

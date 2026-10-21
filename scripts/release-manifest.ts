@@ -61,7 +61,7 @@ export interface ProhibitedClaim {
 export interface StampTarget {
   id: string;
   path: string;
-  kind: "json-version" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
+  kind: "json-version" | "json-version-only" | "toml-version" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
 }
 
 export interface ReleaseManifest {
@@ -326,6 +326,38 @@ export function stampPackageJson(content: string, id: ReleaseIdentity): string {
   return JSON.stringify(pkg, null, 2) + "\n";
 }
 
+/**
+ * Launch-audit L-008 — version-ONLY sync for JSON surfaces that must not be
+ * rewritten wholesale (tauri.conf.json): stamp just the top-level `version`,
+ * leaving every other key byte-identical. This is what users actually see on
+ * the produced installers (Tauri v2 reads conf version over Cargo version).
+ */
+export function stampJsonVersionOnly(content: string, version: string): string {
+  const doc = JSON.parse(content);
+  doc.version = version;
+  return JSON.stringify(doc, null, 2) + "\n";
+}
+
+/**
+ * Launch-audit L-008 — stamp `version` inside the `[package]` section of a
+ * Cargo.toml without touching anything else (comments, key order, spacing).
+ * Fails loudly if the file has no package-version line — silent no-op
+ * stamping is exactly the drift class this gate exists to kill.
+ */
+export function stampTomlPackageVersion(content: string, version: string): string {
+  const lines = content.split("\n");
+  let inPackage = false;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    if (/^\[.*\]$/.test(t)) inPackage = t === "[package]";
+    if (inPackage && /^version\s*=\s*"[^"]*"\s*$/.test(lines[i])) {
+      lines[i] = lines[i].replace(/^(version\s*=\s*")[^"]*(".*)$/u, `$1${version}$2`);
+      return lines.join("\n");
+    }
+  }
+  throw new Error("no [package] version line found to stamp");
+}
+
 // ── Drift detection ──────────────────────────────────────────────────────────
 
 export interface SurfaceResult {
@@ -388,6 +420,10 @@ export function renderTarget(
   switch (target.kind) {
     case "json-version":
       return stampPackageJson(current, id);
+    case "json-version-only":
+      return stampJsonVersionOnly(current, id.version);
+    case "toml-version":
+      return stampTomlPackageVersion(current, id.version);
     case "generated-module":
       return buildVersionTs(id);
     case "site-identity":

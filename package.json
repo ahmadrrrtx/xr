@@ -12,7 +12,6 @@
     "plugins",
     "skills",
     "assets",
-    "docs",
     "README.md",
     "LICENSE",
     "install.sh",
@@ -116,7 +115,7 @@
   "license": "MIT",
   "dependencies": {
     "qrcode": "^1.5.4",
-    "unpdf": "^1.8.1",
+    "unpdf": "1.7.0",
     "zod": "^3.23.8"
   },
   "optionalDependencies": {

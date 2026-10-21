@@ -170,16 +170,23 @@ export const SESSION_COOKIE = "xr_session";
 const SESSION_COOKIE_SET = `${SESSION_COOKIE}=`;
 
 /**
- * One-time bootstrap → secure cookie.
+ * One-SHOT-PER-GET bootstrap → secure cookie (launch-audit L-012 honesty pass).
  *
  *   · Authorization: Bearer <token>  — API clients (always allowed).
  *   · Cookie: xr_session=<token>      — browser sessions (always allowed).
- *   · ?token=<token>                  — accepted ONLY to bootstrap a browser
- *     session on a page GET; the handler then redirects to the same path
+ *   · ?token=<token>                  — accepted ONLY on a page GET to
+ *     bootstrap a browser session; the handler redirects to the same path
  *     WITHOUT the token in the URL and sets the HttpOnly/SameSite cookie.
- *     After that the query token is dead (the redirect strips it), so the
- *     secret never lingers in browser history or referrers.
  *
+ * Honest semantics (previously overstated as "one-time use"): the daemon
+ * token does NOT rotate on bootstrap — the link can mint a session cookie
+ * on any GET until the daemon restarts and the cookie's value IS the token.
+ * The "one-time" property is only that the redirect strips the token from
+ * the URL so it never lingers in that browser's history/referrers after
+ * first use. Why this is accepted: loopback-only bind by default, the Host
+ * gate (421) and CSRF origin wall bound who can even reach the daemon, the
+ * token is hidden from the terminal banner by default (XR_PRINT_TOKEN=1
+ * opts back in), and the model is "single user on their own machine".
  * The query token NEVER authorizes a mutating request — CSRF-safe.
  */
 export function authorizeRequest(
@@ -195,8 +202,10 @@ export function authorizeRequest(
   const url = new URL(req.url);
   const queryToken = url.searchParams.get("token");
   if (queryToken === token) {
-    // Bootstrap is page-navigation only (GET). Once the cookie is set the
-    // query token is stripped by the redirect — one-time use.
+    // Bootstrap is page-navigation only (GET); the redirect strips the
+    // token from the URL. See the honesty note on authorizeRequest above —
+    // the link stays valid for the daemon's lifetime, so treat it like
+    // the token it contains.
     if (req.method.toUpperCase() === "GET") {
       url.searchParams.delete("token");
       return { kind: "bootstrap", url: url.toString() };

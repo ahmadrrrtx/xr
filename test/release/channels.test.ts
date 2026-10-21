@@ -85,17 +85,34 @@ describe("Phase 9 · T3 — one canonical build, many channels", () => {
     expect(() => renderHomebrewFormula(manifest, bad)).toThrow(/failed closed/);
   });
 
-  test("WinGet + Scoop manifests bind the canonical windows zip sha256", () => {
+  test("WinGet + Scoop manifests bind the canonical windows zip sha256 (x64 AND arm64 — L-004)", () => {
     const sha = "f".repeat(64);
-    const sums = new Map([["xr-windows-x64.zip", sha]]);
+    const armSha = "9".repeat(64);
+    const sums = new Map([
+      ["xr-windows-x64.zip", sha],
+      ["xr-windows-arm64.zip", armSha],
+    ]);
     const winget = renderWinget(manifest, sums);
     const installer = winget.find((f) => f.relpath.endsWith("installer.yaml"))!;
     expect(installer.content).toContain(`InstallerSha256: ${sha}`);
+    expect(installer.content).toContain("Architecture: arm64");
+    expect(installer.content).toContain(`InstallerSha256: ${armSha}`);
     expect(installer.relpath).toContain(`/${VERSION}/`);
-    const scoop = JSON.parse(renderScoop(manifest, sums)) as { version: string; architecture: { "64bit": { hash: string; url: string } } };
+    const scoop = JSON.parse(renderScoop(manifest, sums)) as {
+      version: string;
+      architecture: { "64bit": { hash: string; url: string }; arm64: { hash: string; url: string } };
+    };
     expect(scoop.version).toBe(VERSION);
     expect(scoop.architecture["64bit"].hash).toBe(sha);
     expect(scoop.architecture["64bit"].url).toBe(downloadUrl(manifest, "xr-windows-x64.zip"));
+    expect(scoop.architecture.arm64.hash).toBe(armSha);
+    expect(scoop.architecture.arm64.url).toBe(downloadUrl(manifest, "xr-windows-arm64.zip"));
+  });
+
+  test("launch-audit L-004 — winget/scoop fail closed when the arm64 zip is missing from the sums", () => {
+    const onlyX64 = new Map([["xr-windows-x64.zip", "f".repeat(64)]]);
+    expect(() => renderWinget(manifest, onlyX64)).toThrow(/failed closed/);
+    expect(() => renderScoop(manifest, onlyX64)).toThrow(/failed closed/);
   });
 
   test(".deb round-trips: ar structure, control fields, payload identical to the canonical binary", () => {

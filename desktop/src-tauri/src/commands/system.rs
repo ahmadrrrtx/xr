@@ -73,13 +73,15 @@ pub struct OllamaInfo {
 /// running, not installed) maps to `installed: false` — never an error.
 #[tauri::command]
 pub fn detect_ollama() -> OllamaInfo {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(std::time::Duration::from_secs(1))
-        .build();
+    let agent = ureq::Agent::new_with_config(
+        ureq::config::Config::builder()
+            .timeout_global(Some(std::time::Duration::from_secs(1)))
+            .build(),
+    );
 
     let tags_url = format!("{OLLAMA_BASE}/api/tags");
     let tags = match agent.get(&tags_url).call() {
-        Ok(resp) => match resp.into_json::<serde_json::Value>() {
+        Ok(resp) => match resp.into_body().read_json::<serde_json::Value>() {
             Ok(v) => v,
             Err(_) => return OllamaInfo { installed: false, version: None, models: vec![] },
         },
@@ -91,7 +93,7 @@ pub fn detect_ollama() -> OllamaInfo {
         .get(&version_url)
         .call()
         .ok()
-        .and_then(|r| r.into_json::<serde_json::Value>().ok())
+        .and_then(|r| r.into_body().read_json::<serde_json::Value>().ok())
         .and_then(|v| v.get("version").and_then(|s| s.as_str()).map(String::from));
 
     let mut models = vec![];

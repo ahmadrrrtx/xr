@@ -10,16 +10,63 @@
 #   3. the daemon is killed cleanly (best effort; runners are ephemeral).
 #
 # Usage: bash scripts/smoke-sidecar.sh <target-triple>
+#
+# Cross-target builds (launch-audit L-003): when <target-triple> is not this
+# machine's own triple, the binary provably cannot run here — the smoke is
+# reported honestly as SKIPPED (not faked green, not failed). The arch-
+# assertion step in the bundling workflow still verifies the produced binary
+# is genuinely the target architecture via `file`, and scripts/build-matrix.ts
+# smokes the same engine natively per platform in the CLI matrix.
 # =============================================================================
 set -euo pipefail
 
 TRIPLE="${1:?usage: smoke-sidecar.sh <target-triple>}"
 PORT="${SIDECAR_SMOKE_PORT:-39417}"
 EXT=""
-case "$(uname -s 2>/dev/null || echo unknown)" in
-  MINGW*|MSYS*|CYGWIN*|Windows_NT) EXT=".exe" ;;
+
+# Host triple in Rust form (mirrors scripts/compile-sidecar.ts TRIPLES).
+_host_key() {
+  local kernel arch
+  kernel="$(uname -s 2>/dev/null || echo unknown)"
+  arch="$(uname -m 2>/dev/null || echo unknown)"
+  case "$kernel" in
+    MINGW*|MSYS*|CYGWIN*|Windows_NT) kernel=windows ;;
+    Darwin) kernel=darwin ;;
+    Linux) kernel=linux ;;
+  esac
+  case "$arch" in
+    x86_64|amd64|AMD64) arch=x64 ;;
+    arm64|aarch64) arch=arm64 ;;
+  esac
+  echo "${kernel}-${arch}"
+}
+HOST_KEY="$(_host_key)"
+case "$HOST_KEY" in
+  linux-x64) HOST_TRIPLE="x86_64-unknown-linux-gnu" ;;
+  linux-arm64) HOST_TRIPLE="aarch64-unknown-linux-gnu" ;;
+  darwin-x64) HOST_TRIPLE="x86_64-apple-darwin" ;;
+  darwin-arm64) HOST_TRIPLE="aarch64-apple-darwin" ;;
+  windows-x64) HOST_TRIPLE="x86_64-pc-windows-msvc" ;;
+  windows-arm64) HOST_TRIPLE="aarch64-pc-windows-msvc" ;;
+  *) HOST_TRIPLE="unknown" ;;
 esac
-BIN="desktop/src-tauri/binaries/xr-engine-${TRIPLE}${EXT}"
+
+case "$HOST_KEY" in
+  windows-*) EXT=".exe" ;;
+esac
+# Windows targets always carry .exe regardless of the compiling host.
+case "$TRIPLE" in
+  *windows*) TARGET_EXT=".exe" ;;
+  *) TARGET_EXT="" ;;
+esac
+BIN="desktop/src-tauri/binaries/xr-engine-${TRIPLE}${TARGET_EXT}"
+if [ ! -f "$BIN" ] && [ -n "$EXT" ]; then BIN="desktop/src-tauri/binaries/xr-engine-${TRIPLE}${EXT}"; fi
+
+if [ "$TRIPLE" != "$HOST_TRIPLE" ]; then
+  echo "[smoke] SKIPPED (cross-target): this host runs ${HOST_TRIPLE}, the binary targets ${TRIPLE}."
+  echo "[smoke] The bundling workflow's 'file' arch assertion proves the target arch; runtime proof comes from the native leg of the matrix."
+  exit 0
+fi
 
 [ -f "$BIN" ] || { echo "[smoke] FAIL: $BIN not found"; exit 1; }
 

@@ -7,7 +7,7 @@
  *
  * Builds the XR standalone binary per target with `bun build --compile`:
  *
- *   linux-x64, linux-arm64, darwin-arm64, darwin-x64, windows-x64
+ *   linux-x64, linux-arm64, darwin-arm64, darwin-x64, windows-x64, windows-arm64
  *
  * Constraints honored:
  *   - Static-import tracing: `bun --compile` statically traces imports, so
@@ -30,7 +30,7 @@ import { mkdirSync, existsSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const ROOT = join(import.meta.dir, "..");
-const TARGETS = ["bun-linux-x64", "bun-linux-arm64", "bun-darwin-arm64", "bun-darwin-x64", "bun-windows-x64"];
+const TARGETS = ["bun-linux-x64", "bun-linux-arm64", "bun-darwin-arm64", "bun-darwin-x64", "bun-windows-x64", "bun-windows-arm64"];
 
 export const TARGET_FILE: Record<string, string> = {
   "bun-linux-x64": "xr-linux-x64",
@@ -38,6 +38,7 @@ export const TARGET_FILE: Record<string, string> = {
   "bun-darwin-arm64": "xr-darwin-arm64",
   "bun-darwin-x64": "xr-darwin-x64",
   "bun-windows-x64": "xr-windows-x64.exe",
+  "bun-windows-arm64": "xr-windows-arm64.exe",
 };
 
 export function parseArgs(): { targets: string[]; out: string; minify: boolean; skipSmoke: boolean } {

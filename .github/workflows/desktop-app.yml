@@ -170,10 +170,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Launch-audit L-002/L-003: the matrix now ships leg for EVERY launch
+        # triple. Per-leg `slug` (not `runsOn`) names artifacts: two legs
+        # share macos-latest, so runsOn-named artifacts would silently collide.
         include:
-          - { osName: "Linux", runsOn: ubuntu-22.04, triple: x86_64-unknown-linux-gnu }
-          - { osName: "macOS (arm64)", runsOn: macos-latest, triple: aarch64-apple-darwin }
-          - { osName: "Windows", runsOn: windows-latest, triple: x86_64-pc-windows-msvc }
+          - { osName: "Linux", runsOn: ubuntu-22.04, triple: x86_64-unknown-linux-gnu, slug: linux-x64, targetDir: target/release }
+          - { osName: "macOS (arm64)", runsOn: macos-latest, triple: aarch64-apple-darwin, slug: darwin-arm64, targetDir: target/release }
+          # Intel mac: cross-compiled on the arm runner. The engine sidecar is
+          # a REAL bun --target build (never a rename), the Rust cross target is
+          # added below, and cross builds land under target/<triple>/release —
+          # a 'target/release' bundle path is the exact "green but nothing
+          # built there" trap the first cut of this leg hit. Runtime smoke is
+          # honestly skipped (cross binary can't run on an arm host).
+          - { osName: "macOS (x64)", runsOn: macos-latest, triple: x86_64-apple-darwin, slug: darwin-x64, tauriArgs: "--target x86_64-apple-darwin", targetDir: target/x86_64-apple-darwin/release }
+          - { osName: "Windows", runsOn: windows-latest, triple: x86_64-pc-windows-msvc, slug: windows-x64, targetDir: target/release }
+          # Windows ARM: native ARM runner so the sidecar RUNS on-target, and
+          # NSIS only — only NSIS supports ARM64 bundling in Tauri v2.
+          - { osName: "Windows (arm64)", runsOn: windows-11-arm, triple: aarch64-pc-windows-msvc, slug: windows-arm64, tauriArgs: "--bundles nsis", targetDir: target/release }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -191,6 +204,9 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Add the x86_64 cross target (Intel-mac leg only)
+        if: matrix.slug == 'darwin-x64'
+        run: rustup target add x86_64-apple-darwin
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -216,18 +232,18 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_KEY }}
         with:
           projectPath: desktop
-          args: --verbose
+          args: --verbose ${{ matrix.tauriArgs }}
       - name: List produced bundles
         shell: bash
-        run: find desktop/src-tauri/target/release/bundle -maxdepth 3 -type f | sort
+        run: find desktop/src-tauri/${{ matrix.targetDir }}/bundle -maxdepth 3 -type f | sort
       - name: Assert Linux bundles (deb + rpm + AppImage)
         if: matrix.runsOn == 'ubuntu-22.04'
         shell: bash
         run: |
           set -e
-          deb=$(find desktop/src-tauri/target/release/bundle/deb -name '*.deb' | wc -l)
-          rpm=$(find desktop/src-tauri/target/release/bundle/rpm -name '*.rpm' | wc -l)
-          appimage=$(find desktop/src-tauri/target/release/bundle/appimage -name '*.AppImage' | wc -l)
+          deb=$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/deb -name '*.deb' | wc -l)
+          rpm=$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/rpm -name '*.rpm' | wc -l)
+          appimage=$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage -name '*.AppImage' | wc -l)
           echo "deb=${deb} rpm=${rpm} appimage=${appimage}"
           test "$deb"      -ge 1 || { echo "::error::no .deb produced";      exit 1; }
           test "$rpm"      -ge 1 || { echo "::error::no .rpm produced";      exit 1; }
@@ -237,11 +253,11 @@ jobs:
         shell: bash
         run: |
           set -e
-          dmg=$(find desktop/src-tauri/target/release/bundle/dmg -name '*.dmg' | wc -l)
+          dmg=$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg -name '*.dmg' | wc -l)
           # Tauri leaves ONLY the tarball here (XR.app.tar.gz) — the unpacked
           # .app is not written to disk. Assert what actually ships, or this
           # check fails on a healthy build.
-          app=$(find desktop/src-tauri/target/release/bundle/macos -maxdepth 2 \( -name '*.app' -type d -o -name '*.app.tar.gz' -type f \) | wc -l)
+          app=$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos -maxdepth 2 \( -name '*.app' -type d -o -name '*.app.tar.gz' -type f \) | wc -l)
           echo "dmg=${dmg} app=${app}"
           test "$dmg" -ge 1 || { echo "::error::no .dmg produced"; exit 1; }
           test "$app" -ge 1 || { echo "::error::no .app produced"; exit 1; }
@@ -281,11 +297,22 @@ jobs:
         shell: bash
         run: |
           set -e
-          msi=$(find desktop/src-tauri/target/release/bundle/msi -name '*.msi' | wc -l)
-          nsis=$(find desktop/src-tauri/target/release/bundle/nsis -name '*-setup.exe' | wc -l)
+          msi=$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi -name '*.msi' | wc -l)
+          nsis=$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis -name '*-setup.exe' | wc -l)
           echo "msi=${msi} nsis=${nsis}"
           test "$msi" -ge 1 || { echo "::error::no .msi produced"; exit 1; }
           test "$nsis" -ge 1 || { echo "::error::no NSIS *-setup.exe produced"; exit 1; }
+      # Windows ARM leg (L-002): only NSIS supports ARM64 bundling, so this
+      # leg passes --bundles nsis and asserts EXACTLY that flavour (msi would
+      # be a cross-arch silence hazard, not a deliverable).
+      - name: Assert Windows ARM installer exists (nsis only)
+        if: matrix.slug == 'windows-arm64'
+        shell: bash
+        run: |
+          set -e
+          nsis=$(find desktop/src-tauri/target -path '*/bundle/nsis/*-setup.exe' | wc -l)
+          echo "nsis=${nsis}"
+          test "$nsis" -ge 1 || { echo "::error::no NSIS *-setup.exe produced for windows-arm64"; exit 1; }
       # Phase 27 — MSIX. Tauri 2.12 has no `msix` bundle target, so the built
       # app directory is wrapped by packaging/windows/msix/build-msix.ps1. The
       # script fails loudly when the engine sidecar is missing (an installable
@@ -326,9 +353,9 @@ jobs:
           & ./packaging/windows/msix/build-msix.ps1 `
             -AppDir desktop/src-tauri/target/release `
             -Version $version `
-            -OutDir desktop/src-tauri/target/release/bundle/msix `
+            -OutDir desktop/src-tauri/${{ matrix.targetDir }}/bundle/msix `
             -Sign -CertPath $pfx -CertPassword $certPassword
-          $out = 'desktop/src-tauri/target/release/bundle/msix'
+          $out = 'desktop/src-tauri/${{ matrix.targetDir }}/bundle/msix'
           New-Item -ItemType Directory -Path $out -Force | Out-Null
           Copy-Item (Join-Path $env:RUNNER_TEMP 'xr-test.cer') $out -Force
           Get-ChildItem $out | Format-Table Name,Length
@@ -336,9 +363,9 @@ jobs:
         if: matrix.runsOn == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: xr-msix-windows-latest
+          name: xr-msix-${{ matrix.slug }}
           if-no-files-found: error
-          path: desktop/src-tauri/target/release/bundle/msix/*
+          path: desktop/src-tauri/${{ matrix.targetDir }}/bundle/msix/*
 
       # Portable, no-install flavour: exe + engine sidecar side by side
       # (sidecar_path() resolves the triple-suffixed name next to the exe).
@@ -349,31 +376,31 @@ jobs:
         shell: bash
         run: |
           set -e
-          mkdir -p desktop/src-tauri/target/release/bundle/portable/xr-portable
-          cp "desktop/src-tauri/target/release/xr-desktop.exe" desktop/src-tauri/target/release/bundle/portable/xr-portable/
-          cp desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe desktop/src-tauri/target/release/bundle/portable/xr-portable/
-          (cd desktop/src-tauri/target/release/bundle/portable && tar -a -c -f ../xr-portable-win.zip xr-portable)
-          ls -la desktop/src-tauri/target/release/bundle/xr-portable-win.zip
+          mkdir -p desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable/xr-portable
+          cp "desktop/src-tauri/target/release/xr-desktop.exe" desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable/xr-portable/
+          cp desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable/xr-portable/
+          (cd desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable && tar -a -c -f ../xr-portable-win.zip xr-portable)
+          ls -la desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip
       - name: Upload portable artifact
         if: matrix.runsOn == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: xr-portable-windows-latest
+          name: xr-portable-${{ matrix.slug }}
           if-no-files-found: error
-          path: desktop/src-tauri/target/release/bundle/xr-portable-win.zip
+          path: desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: xr-desktop-${{ matrix.runsOn }}
+          name: xr-desktop-${{ matrix.slug }}
           if-no-files-found: error
           path: |
-            desktop/src-tauri/target/release/bundle/deb/*.deb
-            desktop/src-tauri/target/release/bundle/rpm/*.rpm
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-            desktop/src-tauri/target/release/bundle/dmg/*.dmg
-            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
-            desktop/src-tauri/target/release/bundle/msi/*.msi
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/deb/*.deb
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/rpm/*.rpm
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage/*.AppImage
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg/*.dmg
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe
       # Tauri v2 updater artifacts (`createUpdaterArtifacts: true`): the
       # installer IS the payload, with a detached .sig next to it. The payloads
       # travel with the sigs so the manifest job can refuse an orphan .sig.
@@ -381,17 +408,17 @@ jobs:
         if: github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: xr-updater-sigs-${{ matrix.runsOn }}
+          name: xr-updater-sigs-${{ matrix.slug }}
           if-no-files-found: ignore
           path: |
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage.sig
-            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
-            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
-            desktop/src-tauri/target/release/bundle/msi/*.msi
-            desktop/src-tauri/target/release/bundle/msi/*.msi.sig
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage/*.AppImage
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage/*.AppImage.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos/*.app.tar.gz.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe.sig
       # Until this step existed the installers were WORKFLOW artifacts only —
       # nothing ever attached them to the GitHub release, so every URL
       # latest.json pointed at was a 404 by construction. GitHub renames the
@@ -403,17 +430,17 @@ jobs:
           tag_name: ${{ github.ref_name }}
           fail_on_unmatched_files: false
           files: |
-            desktop/src-tauri/target/release/bundle/deb/*.deb
-            desktop/src-tauri/target/release/bundle/rpm/*.rpm
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage.sig
-            desktop/src-tauri/target/release/bundle/dmg/*.dmg
-            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
-            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
-            desktop/src-tauri/target/release/bundle/msi/*.msi
-            desktop/src-tauri/target/release/bundle/msi/*.msi.sig
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/deb/*.deb
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/rpm/*.rpm
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage/*.AppImage
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage/*.AppImage.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg/*.dmg
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos/*.app.tar.gz.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi.sig
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe
+            desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe.sig
 
   # ── Phase 5 · signed-updater manifest (guarded: needs the operator secret) ──
   # ── Flatpak (Phase 27) ───────────────────────────────────────────────────────

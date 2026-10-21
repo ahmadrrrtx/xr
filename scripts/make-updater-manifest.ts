@@ -36,8 +36,20 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Artifact suffix → updater platform key. Order matters only for readability. */
+/**
+ * Artifact shape → updater platform key (launch-audit L-002/L-003: arch-aware).
+ * Specific-arch forms are matched FIRST so an x64 and an arm64 artifact of the
+ * same bundle kind never collide on one key; the arch-less trailing patterns
+ * keep the single-arch era's legacy behaviour (a bare `XR.app.tar.gz` was the
+ * aarch64 build, a bare `…-setup.exe` the x64 NSIS).
+ */
 const PLATFORM_BY_EXT: Array<[RegExp, string]> = [
+  [/amd64\.AppImage$/, "linux-x86_64"],
+  [/aarch64\.app\.tar\.gz$/, "darwin-aarch64"],
+  [/x64\.app\.tar\.gz$/, "darwin-x86_64"],
+  [/(aarch64|arm64)-setup\.exe$/, "windows-aarch64-nsis"],
+  [/x64-setup\.exe$/, "windows-x86_64-nsis"],
+  [/x64[^/]*\.msi$/, "windows-x86_64-msi"],
   [/\.AppImage$/, "linux-x86_64"],
   [/\.app\.tar\.gz$/, "darwin-aarch64"],
   [/-setup\.exe$/, "windows-x86_64-nsis"],
@@ -89,6 +101,11 @@ export function buildManifest(dir: string, version: string, tag: string, notes: 
       platforms["windows-x86_64"] = { ...platforms[specific] };
       break;
     }
+  }
+  // Launch-audit L-002 — the Windows ARM flavour matrix is NSIS-only, so the
+  // generic aarch64 key mirrors it directly when the specific key exists.
+  if (platforms["windows-aarch64-nsis"] && !platforms["windows-aarch64"]) {
+    platforms["windows-aarch64"] = { ...platforms["windows-aarch64-nsis"] };
   }
   return {
     version,

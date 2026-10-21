@@ -74,6 +74,37 @@ describe("updater manifest dry-run", () => {
     }
   });
 
+  test("launch-audit L-002/L-003: per-arch artifacts map to per-arch keys without collision", () => {
+    // What the provisioning tag run now produces with the Intel-mac and
+    // Windows-ARM bundle legs added: both darwin arches + an ARM64 NSIS.
+    const dir = fixtureDir({
+      "XR Desktop_1.1.0_aarch64.app.tar.gz": "x",
+      "XR Desktop_1.1.0_aarch64.app.tar.gz.sig": "SIGMACARM",
+      "XR Desktop_1.1.0_x64.app.tar.gz": "x",
+      "XR Desktop_1.1.0_x64.app.tar.gz.sig": "SIGMACX64",
+      "XR Desktop_1.1.0_x64-setup.exe": "x",
+      "XR Desktop_1.1.0_x64-setup.exe.sig": "SIGNSIS",
+      "XR Desktop_1.1.0_arm64-setup.exe": "x",
+      "XR Desktop_1.1.0_arm64-setup.exe.sig": "SIGNSISARM",
+    });
+    try {
+      const m = buildManifest(dir, "1.1.0", "v1.1.0", "n") as Manifest;
+      expect(m.platforms["darwin-aarch64"].signature).toBe("SIGMACARM");
+      expect(m.platforms["darwin-x86_64"].signature).toBe("SIGMACX64");
+      expect(m.platforms["windows-x86_64-nsis"].signature).toBe("SIGNSIS");
+      expect(m.platforms["windows-aarch64-nsis"].signature).toBe("SIGNSISARM");
+      // The generic aarch64 key mirrors the (only) ARM flavour, NSIS.
+      expect(m.platforms["windows-aarch64"]).toEqual(m.platforms["windows-aarch64-nsis"]);
+      expect(m.platforms["windows-aarch64-nsis"].url).toBe(
+        "https://github.com/ahmadrrrtx/xr/releases/download/v1.1.0/XR.Desktop_1.1.0_arm64-setup.exe",
+      );
+      // x64 NSIS still implies the x64 generic when no MSI exists.
+      expect(m.platforms["windows-x86_64"]).toEqual(m.platforms["windows-x86_64-nsis"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("unprovisioned dir ⇒ zero platforms (publish must skip, never half-ship)", () => {
     const dir = fixtureDir({
       "xr-desktop_1.0.0_amd64.AppImage": "x", // unsigned

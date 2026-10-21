@@ -118,7 +118,7 @@
         "role": "Viewer"
       }
     ],
-    "shortDescription": "XR \u2014 the AI agent you can actually trust",
+    "shortDescription": "XR — the AI agent you can actually trust",
     "longDescription": "XR is a local-first, provider-neutral AI agent with audited trust. This is the desktop shell."
   },
   "plugins": {
