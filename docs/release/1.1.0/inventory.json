@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-21T05:20:41.443Z",
+  "generatedAt": "2026-10-21T06:57:37.554Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -89,6 +89,10 @@
       "bytes": 4699
     },
     {
+      "path": "AGENTS.md",
+      "bytes": 4142
+    },
+    {
       "path": "CHANGELOG.md",
       "bytes": 139771
     },
@@ -109,52 +113,48 @@
       "bytes": 1747
     },
     {
-      "path": "HANDOFF_PHASE_2.1.md",
-      "bytes": 3196
-    },
-    {
-      "path": "HANDOFF_PHASE_2.2.md",
-      "bytes": 6071
-    },
-    {
-      "path": "HANDOFF_PHASE_2.3.md",
-      "bytes": 3438
-    },
-    {
-      "path": "HANDOFF_PHASE_2.4.md",
-      "bytes": 6052
-    },
-    {
-      "path": "HANDOFF_PHASE_2.4_DESIGN.md",
-      "bytes": 6065
-    },
-    {
-      "path": "HANDOFF_PHASE_2.5.md",
-      "bytes": 13767
-    },
-    {
       "path": "LICENSE",
       "bytes": 1071
     },
     {
+      "path": "README-de.md",
+      "bytes": 20754
+    },
+    {
       "path": "README-es.md",
-      "bytes": 18401
+      "bytes": 20955
+    },
+    {
+      "path": "README-fr.md",
+      "bytes": 21033
+    },
+    {
+      "path": "README-hi.md",
+      "bytes": 33674
+    },
+    {
+      "path": "README-ja.md",
+      "bytes": 23631
+    },
+    {
+      "path": "README-pt-BR.md",
+      "bytes": 20586
     },
     {
       "path": "README-ur.md",
-      "bytes": 20584
+      "bytes": 25526
+    },
+    {
+      "path": "README-zh-CN.md",
+      "bytes": 18726
     },
     {
       "path": "README.md",
-      "bytes": 53530
+      "bytes": 37909
     },
     {
       "path": "SECURITY.md",
       "bytes": 19380
-    },
-    {
-      "path": "XR_FIX_TRACKER.md",
-      "bytes": 34559
     },
     {
       "path": "bun.lock",
