@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="XR" width="300">
+<img src="https://raw.githubusercontent.com/ahmadrrrtx/xr/main/assets/logo.png" alt="XR" width="300">
 
 # XR
 
@@ -13,13 +13,12 @@ gate, your approval, a spend ceiling, and a hash-chained log you can verify offl
 [![Cross-platform](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml)
 [![Supply chain](https://github.com/ahmadrrrtx/xr/actions/workflows/supply-chain.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/supply-chain.yml)
 [![npm](https://img.shields.io/npm/v/@rrrtx/xr/latest?label=npm&style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr)
-[![npm beta](https://img.shields.io/npm/v/@rrrtx/xr/beta?label=npm%20beta&style=flat-square&color=6b7280&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr?activeTab=versions)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![Platforms](https://img.shields.io/badge/Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](docs/release/SUPPORT_MATRIX.md)
 
-📄 **Languages:** [English](README.md) · [اردو (Urdu)](README-ur.md) · [Español](README-es.md) — the English README is the source of truth; translations may lag.
+📄 **Languages:** [English](README.md) · [اردو](README-ur.md) · [Español](README-es.md) · [Français](README-fr.md) · [Deutsch](README-de.md) · [Português](README-pt-BR.md) · [中文](README-zh-CN.md) · [日本語](README-ja.md) · [हिन्दी](README-hi.md) — *English is the source of truth.*
 
 [Quick start](#quick-start) · [What XR is](#what-xr-is--and-what-it-is-not) · [How it works](#how-xr-works) · [Providers](#providers) · [Security](#security--the-trust-plane) · [Supply chain](#supply-chain--signed-provenanced-verified) · [Docs](#documentation-map) · [Contributing](#contributing)
 
@@ -41,6 +40,18 @@ XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tam
 
 **Bundled skills:** 65 (counted from `skills/` at release time.)
 <!-- XR:RELEASE-IDENTITY:END -->
+
+---
+
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/ahmadrrrtx/xr/main/previews/implementation/phase-31/01-home-native.png" alt="XR desktop shell — home screen (xr-native theme)" width="860">
+
+**The desktop shell, real build.** Every action below passes the same approval, policy and
+budget gates — no matter which surface you are on.
+[All five desktop bundle legs (Windows x64/arm64, macOS arm64/x64, Linux) build green in CI.](docs/release/DESKTOP-SUPPORT-MATRIX.md)
+
+</div>
 
 ---
 
@@ -78,36 +89,6 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 
 ---
 
-## What XR is — and what it is not
-
-**XR is:**
-
-- a **self-hosted agent runtime** — no mandatory cloud, no telemetry;
-- **provider-neutral** — 26 presets, 16 hosted (BYOK) + 10 local runtimes, one switch command;
-- **governed** — policy, approvals, budgets and audit are enforced in the execution path, not promised in docs;
-- **extensible** — skills, plugins and MCP servers reachable identically from every surface;
-- **signed at the supply chain** — every release is cosign-signed, SLSA3-provenanced and published to npm with provenance (see [below](#supply-chain--signed-provenanced-verified));
-- **MIT-licensed** and readable end to end.
-
-**XR is not:**
-
-- **not certified** against SOC 2, ISO 27001, HIPAA, PCI-DSS or FedRAMP — no external audit exists;
-- **not a sandbox** — in-process policy enforcement, not kernel or VM isolation;
-- **not a service you have to use** — the whole product runs from this repository with local models
-  and your own API keys, and a team account is an optional add-on with no say over what this
-  machine may do (see [Pricing](#pricing));
-- **not a substitute** for a human reviewing consequential actions;
-- **not finished** — the [known-limitations register](docs/release/1.0.0/known-limitations.md) is a
-  first-class release artifact, and the release docs state precisely what the current release
-  supports ([support matrix](docs/release/SUPPORT_MATRIX.md)).
-
-> Every capability claim on this page is backed by evidence recorded in
-> [`release.manifest.json`](release.manifest.json) and re-checked in CI by `bun run claim-lint`,
-> which also **fails the build** on a list of prohibited overclaims. If a sentence here cannot be
-> evidenced, CI rejects it.
-
----
-
 ## Quick start
 
 ### 1. Install
@@ -124,9 +105,7 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 | **Docker** | any | `docker run ghcr.io/ahmadrrrtx/xr:latest` |
 | **From source** | any | `git clone https://github.com/ahmadrrrtx/xr && cd xr && bun install` |
 
-`npm i -g @rrrtx/xr` installs the stable line (dist-tag `latest`). Pre-releases publish to the
-`beta` dist-tag only and never move `latest`. Every channel installs the same canonical build;
-publication status per channel:
+Every channel installs the same canonical build; publication status per channel:
 [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
 ### 2. First run
@@ -182,7 +161,7 @@ flowchart TB
     EX["<b>EXECUTION FABRIC</b> · src/execution<br/>envelope · state machine · idempotency keys<br/>leases · checkpoints · runner = sole loop caller"]
     EX --> LOOP["<b>AGENT LOOP</b> · src/core/agent<br/>chat → tools → observe · plan/act hybrid<br/>turn-repair (strict JSON) · memory writes"]
 
-    LOOP --> PR["<b>PROVIDERS</b><br/>src/providers<br/>26 presets · 5 native<br/>adapters + OpenAI-compat<br/>health() + failover"]
+    LOOP --> PR["<b>PROVIDERS</b><br/>src/providers<br/>26 presets · 6 native<br/>adapters + OpenAI-compat<br/>health() + failover"]
     LOOP --> TL["<b>TOOLS</b><br/>src/tools<br/>files · git · shell<br/>browse · guarded registry"]
     LOOP --> ME["<b>MEMORY &amp; CONTEXT</b><br/>src/context<br/>retrieval · embeddings<br/>compression · summaries"]
 
@@ -262,40 +241,23 @@ honest outcome instead of claiming it stopped cleanly.
 
 ## Providers
 
-XR ships **26 built-in provider presets — 16 hosted and 10 local runtimes**. Swap anytime, no
-restart, no re-config.
+**26 built-in presets — 16 hosted and 10 local runtimes.** Swap anytime, no restart, no re-config.
 
-```mermaid
-flowchart LR
-    A["agent loop"] --> REG["provider registry<br/><small>src/providers/registry.ts</small>"]
-    REG --> NAT["native adapters<br/><small>Anthropic · Google · Mistral<br/>Cohere · AWS Bedrock</small>"]
-    REG --> OAI["OpenAI-compatible transport<br/><small>src/providers/openai-compat.ts</small>"]
-    OAI --> H["11 hosted presets<br/><small>OpenAI · Groq · DeepSeek · Cerebras<br/>Together · Fireworks · SambaNova<br/>HuggingFace · OpenRouter · xAI · Perplexity</small>"]
-    OAI --> L["10 local runtimes<br/><small>Ollama · LM Studio · llama.cpp · Jan<br/>LocalAI · vLLM · GPT4All · KoboldCPP<br/>Text-Gen-WebUI · SGLang</small>"]
-    OAI --> CU["any OpenAI-compatible base URL"]
-    REG -.->|"health() probe<br/>+ failover"| A
-
-    style L fill:#0f2e1a,stroke:#51cf66,color:#e6ffe6
-    style NAT fill:#0b1220,stroke:#00d2ff,color:#e6f6ff
-```
-
-Five hosted providers use dedicated native API adapters (Anthropic, Google, Mistral, Cohere, AWS
-Bedrock). Every other preset — remaining hosted providers and all ten local runtimes — speaks the
-OpenAI-compatible protocol through one transport, and a custom preset can point at any
-OpenAI-compatible base URL.
+Six hosted providers use dedicated native API adapters (Anthropic, Cerebras, Cohere, Google,
+Mistral, AWS Bedrock — `src/providers/native/`). Every other preset — remaining hosted providers
+and all ten local runtimes — speaks the OpenAI-compatible protocol through one transport, and a
+custom preset can point at any OpenAI-compatible base URL.
 
 ```bash
-xr providers list
+xr providers list                    # 26 presets · per-provider default model + capabilities
 xr providers set openai gpt-4o-mini
-xr providers add claude     # key entered masked → OS keychain, else AES-256-GCM sealed file
-xr providers test           # probe configured providers live
+xr providers add claude              # key entered masked → OS keychain, else AES-256-GCM sealed file
+xr providers test                    # probe configured providers live
 ```
 
 Switching models runs a **preflight → canary → swap → verify** state machine that rolls back
-automatically if the new model cannot be reached (`--force` skips the probe).
-
-> Provider count is not a measure of product quality and is deliberately not scored by
-> `xr evaluate`. Counted from `PRESETS` in `src/providers/presets.ts`.
+automatically if the new model cannot be reached (`--force` skips the probe). Counted from the
+`PRESETS` map in `src/providers/presets.ts`.
 
 <details>
 <summary><b>Full provider table with default models</b></summary>
@@ -307,12 +269,12 @@ automatically if the new model cannot be reached (`--force` skips the probe).
 | **Claude** (Anthropic) | Hosted · native adapter | `claude-3-5-sonnet-20241022` |
 | **Gemini** (Google) | Hosted · native adapter | `gemini-1.5-flash` |
 | **Mistral** | Hosted · native adapter | `mistral-small-latest` |
+| **Cerebras** | Hosted · native adapter | `cerebras/csm-8b` |
 | **Cohere** | Hosted · native adapter | `command-r-plus-08-2024` |
 | **AWS Bedrock** | Hosted · native adapter | `claude-3-sonnet` |
 | **OpenAI** | Hosted | `gpt-4o-mini` |
 | **Groq** | Hosted | `llama-3.3-70b-versatile` |
 | **DeepSeek** | Hosted | `deepseek-chat` |
-| **Cerebras** | Hosted | `cerebras/csm-8b` |
 | **Together AI** | Hosted | `Llama-3.3-70B-Instruct-Turbo` |
 | **Fireworks** | Hosted | `llama-v3p1-70b-instruct` |
 | **SambaNova** | Hosted | `Llama-3.1-70B-Instruct` |
@@ -329,30 +291,6 @@ Default models are the presets' launch defaults (`defaultModel`), not ceilings.
 ---
 
 ## Security — the trust plane
-
-```mermaid
-flowchart TB
-    M["model output<br/><small>untrusted data, never instructions</small>"] --> G
-
-    subgraph G["TRUST PLANE — enforced inside the execution path"]
-        direction TB
-        AP["approvals · src/control/approvals.ts<br/><small>human consent, per workspace, auditable</small>"]
-        PO["policy gate · src/security/guard.ts<br/><small>risk classes over every tool effect</small>"]
-        BU["budget governor · src/cost/governor.ts<br/><small>USD + token ceilings, checked mid-loop</small>"]
-        EG["egress allowlist · src/security/egress-proxy.ts<br/><small>only configured domains receive data</small>"]
-        AP --> PO --> BU --> EG
-    end
-
-    G -->|allowed| EFF["real effects<br/><small>files · shell · network · desktop</small>"]
-    G -->|"blocked / denied / over budget"| REJ["refused + recorded"]
-    EFF --> AUD["hash-chained audit log<br/><small>src/state/workspace-store.ts</small>"]
-    REJ --> AUD
-    AUD --> V["xr audit verify<br/><small>offline verification</small>"]
-
-    style G fill:#1a0f2e,stroke:#9a6bff,color:#f0e6ff
-    style REJ fill:#2e1a1a,stroke:#ff6b6b,color:#ffe6e6
-    style V fill:#0f2e1a,stroke:#51cf66,color:#e6ffe6
-```
 
 ### XR Shield — the enforcement boundary
 
@@ -391,6 +329,7 @@ Alongside the boundary, two mechanisms constrain cost and supply chain:
 > **Honesty box:** XR enforces **in-process policy**, not kernel/VM isolation — a guard rail, not
 > a confinement boundary, and not a substitute for reviewing consequential actions. The gaps are
 > written down, not hidden: [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md).
+> Not certified against SOC 2, ISO 27001, HIPAA, PCI-DSS or FedRAMP.
 
 Security architecture, threat model and vulnerability disclosure: [`SECURITY.md`](SECURITY.md).
 
@@ -404,10 +343,10 @@ trusted publishing.
 
 ```mermaid
 flowchart LR
-    T["git tag v*<br/><small>release.manifest.json<br/>stamps identity on 6 surfaces</small>"] --> B["CI build<br/><small>one canonical build<br/>5 targets + source</small>"]
+    T["git tag v*<br/><small>release.manifest.json<br/>stamps identity on 6 surfaces</small>"] --> B["CI build<br/><small>one canonical build<br/>6 targets + source</small>"]
     B --> A["Assemble<br/><small>SHA256SUMS · CycloneDX SBOM<br/>.deb · channel manifests</small>"]
     A --> SIG["cosign keyless sign<br/><small>Rekor + Fulcio<br/>SLSA3 provenance (slsa-framework)</small>"]
-    SIG --> GH["GitHub Release<br/><small>21 signed assets<br/>prerelease flag per semver</small>"]
+    SIG --> GH["GitHub Release<br/><small>signed binaries + bundles<br/>prerelease flag per semver</small>"]
     SIG --> NPM["npm publish<br/><small>OIDC trusted publishing<br/>npm provenance attestation</small>"]
     SIG --> DK["GHCR + Docker Hub<br/><small>cosign-signed images</small>"]
     GH --> V["Verify (anyone, offline-ish)<br/><small>cosign verify-blob · sigstore check<br/>docs/release/VERIFYING_RELEASES.md</small>"]
@@ -418,13 +357,13 @@ flowchart LR
     style V2 fill:#0f2e1a,stroke:#51cf66,color:#e6ffe6
 ```
 
-What you get as a user:
-
 - **Binary channels** (GitHub Releases, Homebrew, WinGet, Scoop, `.deb`, Docker): cosign keyless
   signatures over `SHA256SUMS`, a CycloneDX SBOM and SLSA3 provenance — verify with
-  [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md).
-- **npm**: the `@rrrtx/xr` package is published from the release workflow with npm's **provenance
-  attestation** (visible on the version page), bound to the exact commit of the release tag.
+  [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md). The asset set differs
+  per release lane (CLI channels and desktop bundles ship on their own tag lanes); whatever ships
+  is signed at tag time.
+- **npm**: published from the release workflow with npm **provenance attestation** bound to the
+  release tag commit.
 - **CI hygiene:** dependency installation with `--ignore-scripts`, osv-scanner + `bun audit`,
   gitleaks secret scan, license scan and SBOM drift gates on every run.
 - **Channels can't lag:** channel configs are **generated** from the release manifest and
@@ -462,8 +401,8 @@ trust plane — an MCP server gets no more privilege than a bundled tool.
   (`xr memory recall "…"` shows match % and why), optional session summaries.
 - **Research** (`src/research/`): offline by default; `xr research deep --allow-public-web` opts
   into live fetching with egress rules and per-run budgets; results carry source provenance.
-- **Voice** (`src/voice/`, `src/interfaces/`, `xr voice …`): optional, local-first adapters;
-  voice can trigger capabilities through the same governed pipeline — approvals still apply.
+- **Voice** (`src/voice/`): optional, local-first adapters; voice can trigger capabilities
+  through the same governed pipeline — approvals still apply.
 - **Computer control** (`src/control/`, `src/computer/`): guarded desktop actions behind the
   approval plane; the vision agent is opt-in; platform support and limits documented per OS.
 
@@ -477,55 +416,56 @@ goal kind, then execute it as **bounded-concurrency lanes** — planner → para
 worker lanes → reviewer → synthesizer, with a deterministic security gate between
 stages and a read-only **artifact verifier** after synthesis:
 
+- One funded tree: a workflow's root budget envelope is partitioned across workers in a single
+  ledger transaction; it can never spend more than the root plus one in-flight step.
+- Verifiers earn completion: claimed artifacts are re-checked against the workspace
+  (hashes, missing files); the verdict must be strict-JSON — prose, garbage or a reject **fail
+  the task**.
+- Delegation is depth-capped at 1: workers carry minted identities, cannot spawn sub-workers,
+  attempted grandchild spawns are refused and audited.
+- Crashes are recoverable, honestly: per-step checkpoints carry a hash chain and the consumed
+  meter; a tampered chain **refuses** to resume rather than pretending.
+- Cancellation is workload-aware: stopping aborts the in-flight worker via a live run map;
+  remaining work is marked, never silently dropped.
+
 ```bash
 xr agents list
-xr agents plan "refactor this repo safely"
 xr agents run "compare the three vendor pricing plans"
 xr run "start a long task"          # journaled; crash-safe
-xr run --resume <sessionId>         # continue from the last durable checkpoint
+xr run --resume <sessionId>
 ```
 
-- **One funded tree, not N budgets.** A workflow gets a single root envelope
-  (`budget.perTaskUsd/perTaskTokens`) that is **partitioned across the workers**;
-  each step admits against its child slice *and* the shared root in one ledger
-  transaction, so the tree can never spend more than the root plus one in-flight
-  step. A worker request that tries to carry its own budget is ignored on this
-  path — deliberately: that was the per-worker multiplier this replaced.
-- **Verifiers earn completion.** The artifact verifier re-checks claimed files
-  against the workspace (hashes, missing files); its verdict must be strict-JSON
-  with a reason — prose assurance, garbage, or a reject all **fail the task**.
-- **Delegation is depth-capped at 1.** Workers carry minted identities and can
-  never spawn their own sub-workers; attempted grandchild spawns are refused and
-  audited, not silently flattened.
-- **Crashes are recoverable, honestly.** Per-step checkpoints carry a hash chain
-  and the consumed meter; a tampered chain or a missing checkpoint **refuses** to
-  resume rather than pretending. A resumed run re-asks the model from the
-  checkpointed transcript — the seed is durable, the model's answer is not.
-- The review gate consumes a **strict-JSON decision** from the deterministic `security_checker`;
-  prose-only reviewers fail closed — an unparsable verdict blocks the run rather than waving it through.
-- **Honest failure mapping:** transport errors, budget stops and approval stops mark the task
-  failed instead of faking completion.
-- **Cancellation is workload-aware:** stopping a workflow aborts the in-flight worker via a live
-  run map; remaining work is marked, never silently dropped.
+</details>
 
-Concurrency, per-workflow worker caps, plan-fragment supervision, and verifier
-defaults live under `orchestration.*` in the config. The orchestration plane is
-single-process: budgets are enforced against the shared workspace store, not
-across machines.
+<details>
+<summary><b>Phone &amp; social remotes — Telegram, Discord, WhatsApp</b></summary>
+
+XR is remote-controllable from the phone you already carry, without a cloud relay: the bot
+runs inside your daemon, on your machine, and only routes work it is explicitly allowed to.
+
+**One framework, three adapters** (`src/bots/`): per-chat rate limits and budgets, one task per
+chat with real cancellation, the 20-turn reply context, typing pulses, voice-note
+transcription, and the **durable approval bridge** — the same approval record is shown on every
+surface and the first answer wins, from the desktop, Telegram, Discord or WhatsApp.
+
+- **Telegram**: 6-digit pairing code, DM-only, `/approve` inline buttons.
+- **Discord**: `/xr pair`, DM + allow-listed channels, Message Content intent required, buttons
+  for approvals, egress = `discord.com` + gateway + CDN only.
+- **WhatsApp (most conservative surface)**: unofficial client (Baileys) — against WhatsApp's
+  automated-use terms; opt-in and never bundled (GPL-3.0 dependency, XR ships permissive
+  licenses only). QR companion link; empty allow-list after pairing; AES-256-GCM sealed session;
+  no history scraping.
+- **Fail-closed everywhere:** an unknown sender gets **no reply at all**.
+
+Full decision record, tests, deviations: [`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
 
 </details>
 
 <details>
 <summary><b>Business OS extension (optional, default-off)</b></summary>
 
-An optional, **default-off**, effect-verified extension over local-first records. It ships no
-hosted service, no SLA and no paid tier.
-
-Since Phase 5 it lives outside core as **`@rrrtx/business-os`** ([ADR-0028](docs/adr/0028-satellite-extraction.md)) —
-core carried 33,759 LOC of enterprise and business surface that no user had installed, and one
-maintainer cannot own review, audit and release weight for capability nobody asked for. Behaviour
-is unchanged: still default-off, still fail-closed, `/api/v1/business/*` still answers honestly
-when the extension is absent.
+A **default-off**, effect-verified extension over local-first records — no hosted service, no
+SLA, no paid tier. Since Phase 5 it lives outside core ([ADR-0028](docs/adr/0028-satellite-extraction.md)):
 
 ```bash
 bun add -g @rrrtx/business-os     # business operating layer
@@ -539,153 +479,45 @@ See [`docs/business-os-extension.md`](docs/business-os-extension.md) and the
 
 ---
 
-## Phone & social remotes: Telegram, Discord, WhatsApp
+## The surfaces
 
-XR is remote-controllable from the phone you already carry, without a cloud relay: the bot
-runs inside your daemon, on your machine, and only routes work it is explicitly allowed to.
-
-**One framework, three adapters.** Everything that is not a wire protocol lives in
-`src/bots/`: per-chat rate limits, one task per chat with real cancellation, per-chat spend,
-the 20-turn reply context, typing pulses, text splitting, attachment policy, voice-note
-transcription, and the **durable approval bridge** — the same approval record is shown on every
-surface and the first answer wins, from the desktop, Telegram, Discord or WhatsApp.
-
-| | Telegram | Discord |
-| --- | --- | --- |
-| Pairing | 6-digit code from the chat, typed into XR; 10-minute window, single-use | 6-digit code from XR, typed into Discord with `/xr pair`; same window rules |
-| Who is answered | paired users, DM only | paired users (DM) + allow-listed guild channels, and there only `/`-commands and @mentions |
-| Commands | `/start /help /budget /model /stop /cost /status /approve /deny` | `/xr ask · budget · model · stop · approve · deny · status · help · pair · pairchannel` |
-| Answers | MarkdownV2, 4096-char splits | embeds + button components, 2000-char splits |
-| Approvals | ✅ / ❌ / 👀 inline buttons | ✅ / ❌ / 👀 buttons (green/red/grey) + a dashboard link |
-| Voice notes | Ogg/Opus → your speech model | same pipeline, same caps |
-| Attachments | 5 MB docs · 2 MB photos · 30 KB text | same policy; downloads only from Discord's CDN |
-
-Everything is fail-closed: an unknown sender gets **no reply at all** — not an error, not a
-hint that a bot is listening. Rate limits, attachment caps and per-chat budgets are enforced
-by the shared runtime, not by each adapter.
-
-Discord specifics worth knowing before you connect a bot:
-
-- the bot token is stored in the OS keychain (SecretBroker), never in `config.json`;
-- XR asks for the **MESSAGE_CONTENT** intent — it is privileged, and Discord requires you to
-  switch it on in the Developer Portal. Without it Discord delivers empty message text;
-- the invite URL XR shows requests five permissions only (view channel, send messages, embed
-  links, attach files, read history) — no moderation, no administrator;
-- the gateway is the default transport. Interactions-webhook mode is available for users who
-  already run a public HTTPS endpoint, and every request is verified with Discord's Ed25519
-  signature;
-- network egress is `discord.com`, `gateway.discord.gg` and Discord's CDN — no telemetry,
-  no relay, nothing else.
-
-**WhatsApp** links the same way your second phone would: scan a QR from the XR app
-(Integrations → WhatsApp) and XR becomes a companion device. It is deliberately the most
-conservative surface in the product:
-
-- **⚠️ It uses an unofficial client.** WhatsApp offers no API for personal accounts, so XR
-  links through the open-source Baileys library — the same protocol your phone speaks. That is
-  against WhatsApp's terms for automated use, and accounts have been banned for it. Use a
-  number you can afford to lose.
-- **That client is opt-in, and it is not bundled.** Baileys links against `libsignal-node`,
-  which is **GPL-3.0**, and this project ships only permissive dependencies — the license gate
-  in CI is a release invariant, not a suggestion. So nothing is installed behind your back:
-  add it yourself where the daemon runs (`bun add @whiskeysockets/baileys`) and restart XR.
-  Until then the WhatsApp card says so plainly, the QR button stays disabled, and no socket is
-  ever opened. Nothing else in XR changes: `qrcode` (MIT) still renders the pairing frames.
-- **Linking authorizes nobody.** After pairing, the allow-list is still empty: add the contacts
-  you want (digits with country code) or switch on *"respond to contacts I message first"*,
-  which answers numbers you wrote to first — learned from live messages, never from your chat
-  history. Everything else is ignored silently, groups are dropped, and 1:1 is the only shape
-  this surface speaks.
-- **The session is sealed at rest** in `~/.xr/whatsapp/` (AES-256-GCM, 0600, the same
-  per-install key as your other secrets). Unlinking your phone deletes it; XR refuses to start
-  on a tampered blob instead of quietly re-registering the device.
-- **Rate and cost are bounded**: one message per second per chat, 1500-character replies, and
-  the shared per-chat budget. Approvals arrive as `[1] Approve  [2] Deny  [3] View details`.
-- **No history scraping.** XR answers what it is sent while it is running; it never ingests
-  your chat archive, and the status view shows how many history payloads it declined.
-
-Egress is limited to WhatsApp's own endpoints and the media CDN named by the incoming message.
-
-**Where you connect them.** Integrations → the Discord card (token → invite → a 6-digit code you
-type into Discord with `/xr pair`) or the WhatsApp card (the unofficial-client acknowledgement,
-then a QR you scan from *Settings → Linked devices*). Each card carries a status dot — green
-answering, yellow configured but idle, red needs attention — and a settings popover with the
-allow-lists, limits, logs and disconnect/unpair. Nothing is typed twice and no token is ever
-sent back to the screen.
-
-The full decision record, tests and the deviation list:
-[`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
-
----
-
-## The desktop shell — `desktop/`
-
-**Always-alive tray · Global shortcuts · Auto-update · Crash recovery · macOS/Windows/Linux polish**
-
-The shell (`desktop/`, Tauri v2 + React) is the same agent with a window: the engine runs as a
-supervised sidecar on loopback, and the UI is one more client of it.
+**Desktop shell** (`desktop/`, Tauri v2 + React — the same agent with a window):
 
 | | |
 |---|---|
-| 🛰 **Always alive** | Closing the window hides it; the tray keeps the engine, the shortcuts and the approvals badge working. The menu carries Open XR, New Chat, Toggle HUD, listening and agent pause state, the pending-approval count, today's spend, Settings, updates and Quit — each one drawn in the platform's own idiom (macOS Template icons, taskbar-friendly 16–32 px `.ico`, AppIndicator-sized PNGs). |
-| ⌨️ **Global, and honest about it** | HUD, push-to-talk and screenshot-a-region-and-ask work while XR is unfocused. Chords fall back when the OS already owns them, the Settings screen shows what the machine *actually* holds, and a chord that cannot work (a Wayland session with no capture tool) says so instead of doing nothing. |
-| 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart. A build with no release key refuses to update rather than updating unverified — the state is shown, not hidden. |
-| 🧯 **Crash recovery that tells you the truth** | An interrupted session is detected by a marker file, not a guess. The recovery screen offers resume or start-fresh, marks runs that were cut off as `killed` (never "completed"), can start without the local engine, and can produce a **redacted report you choose to send**. There is no telemetry anywhere in XR, including here. |
-| 🪟 **Native where it counts** | macOS gets the full HIG application menu (⌘W hides, ⌘, settings, a Developer submenu in dev builds), Windows gets MSIX packaging with deep links and toast activation, Linux gets a Flathub-ready Flatpak and a desktop entry that groups correctly. |
+| 🛰 **Always alive** | Tray keeps the engine, shortcuts and approvals badge working when the window closes; menu shows today's spend and pending approvals in the platform's own idiom. |
+| ⌨️ **Global, honestly** | HUD, push-to-talk and screenshot-a-region-and-ask work while unfocused; chords fall back when the OS owns them, and the Settings screen shows what the machine actually holds. |
+| 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart; no release key → refuses to update rather than updating unverified. |
+| 🧯 **Truthful crash recovery** | Marker-file detection; cut-off runs are marked `killed`, never "completed"; optional redacted report you choose to send. No telemetry anywhere. |
+| 🪟 **Native where it counts** | macOS HIG application menu, Windows MSIX with deep links + toast activation, Linux Flathub-ready Flatpak. |
 
 ```bash
-cd desktop
-bun install
-bun run dev:tauri        # compile the sidecar, then run the shell
+cd desktop && bun install && bun run dev:tauri        # compile the sidecar, run the shell
 ```
 
-Verification status per platform — including what has *not* been run on real
-hardware — is in [`docs/release/DESKTOP-SUPPORT-MATRIX.md`](docs/release/DESKTOP-SUPPORT-MATRIX.md).
+Verification status per platform, including what has *not* been run on real hardware:
+[`docs/release/DESKTOP-SUPPORT-MATRIX.md`](docs/release/DESKTOP-SUPPORT-MATRIX.md).
 
-## The mobile companion — `mobile/`
+<details>
+<summary><b>Mobile companion (PWA), VS Code extension, scripting &amp; exit codes</b></summary>
 
-**On your own WiFi · Pairing code you compare · Web Push · Offline outbox**
+**Mobile** (`mobile/`): same agent, window that never leaves your network — `xr serve --lan`,
+QR + 6-digit single-use pairing code, TLS pinned on first use (fingerprint compare), mobile
+sessions refused at `/files`, `/terminal`, `/git`, `/mcp` (403), Web Push sealed twice under a
+key only the paired phone holds, honest offline outbox. Wire format and threat model:
+[`docs/mobile/PWA.md`](docs/mobile/PWA.md) · [`docs/mobile/SECURITY.md`](docs/mobile/SECURITY.md).
 
-The bot remotes above reach your phone through Telegram, Discord and WhatsApp servers. The
-mobile companion is the same agent with a window that never leaves your network: `xr serve --lan`
-binds the daemon to your LAN (opt-in — loopback stays the default), *Settings → Mobile* shows a
-QR and a 6-digit code, and the phone installs XR as a PWA from [`mobile/`](mobile/) — no app
-store, no relay, no third party.
+**Versus Code surface** (`extensions/vscode/`): the agent inside your editor, same governed
+pipeline.
 
-| | |
-|---|---|
-| 🔒 **TLS, pinned on first use** | The daemon mints a self-signed P-256 certificate; the phone shows the SHA-256 fingerprint for you to compare against the desktop, then pins it. A certificate that changes later is a stop screen, not a retry button. |
-| 🛡 **A companion, not a console** | Mobile sessions are refused at `/files`, `/terminal`, `/git` and `/mcp` (403), and pairing is a single-use 6-digit code inside a 10-minute window, rate-limited per source. |
-| 🔔 **Push the push service cannot read** | Notifications ride the browser's push service with the payload sealed twice — RFC 8291 *and* an AES-GCM layer under a key only the paired phone holds. TTL 10 minutes, and the app says *"Push requires XR desktop to be running"* because it does. |
-| 📴 **Honest offline** | Cached chats, approvals and budget render with no connection; sends wait in an outbox and drain in order when you are home. Off WiFi, the app says so instead of spinning. |
-
-```bash
-xr serve --lan                  # opt-in LAN mode: TLS + pairing on 0.0.0.0:3141
-npm --prefix mobile run build   # build the PWA yourself, if you prefer
-```
-
-**Verification status:** Phase 28 landed the PWA, the LAN/TLS/pairing and Web-Push modules and
-their test suites; wiring those routes into the shipping daemon's route table is the remaining
-integration step. Wire format and design:
-[`docs/mobile/PWA.md`](docs/mobile/PWA.md) · threat model:
-[`docs/mobile/SECURITY.md`](docs/mobile/SECURITY.md).
-
-## Scripting & exit codes
-
-`xr doctor --json` is the stable machine-readable entrypoint (redacted config, provider
-readiness, `summary.runnable` verdict; secrets are never printed — only presence).
+**Scripting:** `xr doctor --json` is the stable machine-readable entrypoint (redacted config,
+provider readiness, `summary.runnable`; secrets never printed). Exit codes:
 
 | Code | Meaning |
 |---|---|
-| `0` | ok |
-| `1` | runtime/task failure |
-| `2` | usage error |
-| `3` | network |
-| `4` | denied |
-| `5` | not found |
-| `130` | interrupted (Ctrl+C / SIGINT) |
+| `0` `1` `2` `3` `4` `5` `130` | ok · runtime/task failure · usage error · network · denied · not found · interrupted |
 
-Full contract: [`docs/guides/cli-compat.md`](docs/guides/cli-compat.md).
+</details>
 
 ---
 
@@ -730,14 +562,10 @@ The evaluation harness moved to `@rrrtx/xr-enterprise` in Phase 5 ([ADR-0028](do
 bun add -g @rrrtx/xr-enterprise
 xr-enterprise evaluate run --offline   # 14 suites, 38 scenarios, no network required
 xr-enterprise evaluate claims          # every public claim mapped to its evidence
-xr-enterprise evaluate limitations     # what the benchmarks do NOT measure
-xr-enterprise evaluate compare <a> <b> # regression detection between releases
-xr-enterprise evaluate export <runId>  # hash-verifiable evidence bundle
 ```
 
 It is outcome-based: a scenario passes only when reality is inspected — an artifact on disk, a
-durable record, a state transition, an audit-chain entry. Typing `xr evaluate` on core prints
-where it went and exits 2; the gates in the table above still run in core CI on every PR.
+durable record, a state transition, an audit-chain entry.
 
 ---
 
@@ -746,47 +574,26 @@ where it went and exits 2; the gates in the table above still run in core CI on 
 ```
 xr/
 ├─ bin/xr                    compiled-binary-first launcher (falls back to source)
-├─ src/
-│  ├─ cli/                   router, catalog, lazy command loaders, flags, exit codes
-│  ├─ commands/              one file per CLI command (run, doctor, agents, mcp, audit…)
-│  ├─ interfaces/            shell + TUI, provider/model pickers, onboarding
-│  ├─ core/                  kernel: DI container/lifecycle (app.ts), agent loop (agent.ts)
-│  ├─ services/              agent-, multi-agent-, budget-, config-, mcp-service
-│  ├─ execution/             envelope, runner, state machine, adapters, leases
-│  ├─ agents/                multi-agent planner/registry/types
-│  ├─ providers/             presets, factory, health, native adapters, openai-compat
-│  ├─ tools/                 tool registry + guarded tools (files, git, control, egress)
-│  ├─ reliability/           turn repair, grammar, profiles
-│  ├─ security/              guard, egress-proxy, exec/output integrity, audit signing
-│  ├─ xr-shield/             the enforcement boundary, named and enumerable (ADR-0027)
-│  ├─ hygiene/               host-hygiene scanner (`xr hygiene`; was `shield`)
-│  ├─ state/                 SQLite workspace store, repos, write-gate, migrations
-│  ├─ context/               memory: assembler, retrieval, embeddings, compression
-│  ├─ research/              research engine (offline default, opt-in web)
-│  ├─ mcp/ plugins/ skills/ local/ cost/ control/ computer/ telegram/ discord/ voice/
-│  ├─ daemon/                `xr serve`: API routes, dashboard, chat (127.0.0.1)
-│  ├─ update/ install/       atomic updater + channels; install/uninstall
-│  ├─ observability/ ui/     metrics/logs/exporters; design system
-│  └─ index.ts               CLI entry
+├─ src/                      core runtime — cli·commands·execution·core·services·providers·tools·
+│                            security·xr-shield·state·context·daemon·bots·mcp·plugins·voice·…
+├─ desktop/                  Tauri v2 + React shell (src-tauri = Rust)
+├─ mobile/                   mobile companion PWA (independent version)
+├─ cloud/                    optional hosted control plane (independent version)
+├─ extensions/vscode/        VS Code surface
 ├─ satellites/               extracted packages, released separately (ADR-0028)
-│  ├─ xr-enterprise/         @rrrtx/xr-enterprise — org policy, audit export, SLOs, DR
-│  └─ business-os/           @rrrtx/business-os — default-off business operating layer
 ├─ skills/                   65 bundled skill manifests
-├─ plugins/                  bundled plugins
-├─ scripts/                  gates, release machinery, parity runner, perf budgets
-├─ test/                     suite mirroring src/ + helpers + fixtures
+├─ plugins/ scripts/ test/   bundled plugins · gates & release machinery · suite
 ├─ packaging/                homebrew · winget · scoop manifests (generated)
-├─ docs/                     product, development, release, security, historical
+├─ docs/                     product, development, release, security, audits, historical
 └─ website/                  docs/marketing site (Next.js; scanned by claim-lint)
 ```
 
 Layering is enforced in CI: the `boundaries` gate + `test/architecture/*` pin allowed dependency
-directions (surfaces → services → execution/core → state; tools/providers as leaves), and
-`bun run ownership:check` requires every source area to have an owning document. Core imports
-**nothing** from `satellites/` — enforced three ways (dependency-cruiser rule, boundary test,
-isolation test) — and `bun run size-gate` holds the whole tree under its published ceiling
-([register row #20](docs/security/KNOWN_LIMITATIONS.md) — raised only deliberately, in
-diffs, with reasons) so the 23,376 LOC Phase 5 removed cannot quietly grow back.
+directions, and `bun run ownership:check` requires every source area to have an owning document.
+Core imports **nothing** from `satellites/` — enforced three ways (dependency-cruiser rule,
+boundary test, isolation test) — and `bun run size-gate` holds the whole tree under its
+published ceiling ([register row #20](docs/security/KNOWN_LIMITATIONS.md)) so the 23,376 LOC
+Phase 5 removed cannot quietly grow back.
 
 ---
 
@@ -805,37 +612,32 @@ binary/npm/git layouts) and are atomic with an automatic rollback path.
 | Doc | Purpose |
 |---|---|
 | [**`docs/CONSTITUTION.md`**](docs/CONSTITUTION.md) | **The law the codebase cites** — 30 Articles + the Commandments. Enforced: `claim-lint` fails if code cites an Article that isn't there |
-| [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md) · [`THEME-SYSTEM.md`](docs/THEME-SYSTEM.md) · [`SCREEN-BRIEFS.md`](docs/SCREEN-BRIEFS.md) | Master design contracts for the [`desktop/`](desktop/) shell: visual language, 5 canonical themes, per-screen specs |
-| [`docs/DEEP-DIVE-ARCHITECTURE.md`](docs/DEEP-DIVE-ARCHITECTURE.md) · [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) | Desktop architecture (Tauri v2 plugin matrix, sidecars) and the phased implementation plan (Phase 0 = scaffold) |
+| [`AGENTS.md`](AGENTS.md) · [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md) · [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Operator briefing · contributor guide · security policy & disclosure · conduct |
 | [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md) | The golden path: install → onboarding → provider → first task → restart/resume → uninstall |
 | [`docs/guides/cli-compat.md`](docs/guides/cli-compat.md) | Exit codes, global flags, `--yes` semantics, scripting envs |
 | [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md) | Canonical known-limitations register (living) |
-| [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) | Platform/channel support truth per release |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Version ladder (0.2 / 3.x / 4.x / 7.x / 1.x) + the structural ladder of what moved, phase by phase |
-| [`docs/migration/PHASE-5-SATELLITES.md`](docs/migration/PHASE-5-SATELLITES.md) | Phase 5: `xr shield`→`xr hygiene`, satellites, the re-based deprecation timeline |
-| [`docs/release/RELEASING.md`](docs/release/RELEASING.md) | The release runbook |
-| [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) | cosign/SBOM/SLSA verification walkthrough |
-| [`docs/release/BETA.md`](docs/release/BETA.md) | Pre-release channel and feedback loop |
-| [`docs/mobile/PWA.md`](docs/mobile/PWA.md) · [`docs/mobile/SECURITY.md`](docs/mobile/SECURITY.md) | Mobile companion (Phase 28): LAN pairing, TLS trust-on-first-use, Web Push, offline outbox — and its threat model |
+| [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) · [`DESKTOP-SUPPORT-MATRIX.md`](docs/release/DESKTOP-SUPPORT-MATRIX.md) | Platform/channel support truth per release, desktop verification state per OS |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Version ladder (0.2 → 3.x → 4.x → 7.x → 1.x) + the structural ladder |
+| [`docs/migration/PHASE-5-SATELLITES.md`](docs/migration/PHASE-5-SATELLITES.md) | Phase 5: `xr shield`→`xr hygiene`, satellites, deprecation timeline |
+| [`docs/release/RELEASING.md`](docs/release/RELEASING.md) · [`VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) | Release runbook · cosign/SBOM/SLSA verification walkthrough |
+| [`docs/launch/XR_LAUNCH_FINDINGS.md`](docs/launch/XR_LAUNCH_FINDINGS.md) | Launch audit, findings, fix log and release-readiness verdict |
+| [`docs/REPO-HYGIENE-2026-10.md`](docs/REPO-HYGIENE-2026-10.md) | This repository's cleanup/hygiene pass — every delete/move with evidence |
 | [`docs/`](docs/README.md) | Full documentation index |
-| [`README-ur.md`](README-ur.md) · [`README-es.md`](README-es.md) | This README in [اردو](README-ur.md) and [Español](README-es.md) |
 
 ---
 
 ## Contributing
 
 Contributions are welcome — read [`CONTRIBUTING.md`](CONTRIBUTING.md) and the
-[security policy](SECURITY.md) first. The quality bar is identical for humans and agents: every
-change ships with tests, passes the local gate battery, and keeps claims honest.
+[security policy](SECURITY.md) first; agents start at [`AGENTS.md`](AGENTS.md). The quality bar
+is identical for humans and agents: every change ships with tests, passes the local gate
+battery, and keeps claims honest.
 
 ```bash
 git clone https://github.com/ahmadrrrtx/xr && cd xr
 bun install --frozen-lockfile
 bun run ci        # typecheck + tests + release:check + claim-lint + inventory + gates
 ```
-
-Also: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [issue templates](.github/ISSUE_TEMPLATE) ·
-[`docs/development/`](docs/development)
 
 Found an inaccurate claim in this README or the docs? That is a bug with its own issue template
 ([false claim](.github/ISSUE_TEMPLATE/false_claim.yml)) — please file it.
@@ -845,56 +647,31 @@ Found an inaccurate claim in this README or the docs? That is a bug with its own
 ## Pricing
 
 **XR Personal is free, forever, with every feature in this repository included.** Voice, local
-memory, themes, the CLI, bots, the VS Code surface, the mobile PWA, multi-window, research, agents,
-skills and MCP are free, unlimited, and identical whether you are signed in or not. There is no seat
+memory, themes, the CLI, bots, the VS Code surface, the mobile PWA, research, agents, skills and
+MCP are free, unlimited, and identical whether you are signed in or not. There is no seat
 count, no time limit, no watermark, no nag screen, no telemetry, and no feature that a licence can
 turn off — because the entire list of what a licence gates is eight *hosted* services
 (`BUSINESS_FEATURES` in [`src/cloud/license.ts`](src/cloud/license.ts)) and not one of them runs on
 your machine.
 
-**XR Business is $15 per user per month**, or $144 per user per year ($12 per month equivalent), and
-it buys the things a hosted service can do that a local install cannot:
+**XR Business is $15 per user per month** (or $12 equivalent, billed yearly) and adds the things
+a hosted service can do that a local install cannot: team roles/invitations, shared team
+workspaces, SSO administration, pooled managed models with a per-user quota, sensitivity-scanned
+team memory sync, signed audit export, an admin console, and an opt-in cloud relay. A 30-day
+trial needs no card; Enterprise is quoted per contract. Self-hosting the control plane is
+documented in [`docs/business/SELF-HOST.md`](docs/business/SELF-HOST.md).
 
-| Included with Business | |
-| --- | --- |
-| Team members, roles, invitations | Owner / admin / member, re-checked per request |
-| Shared team workspaces | A new memory scope that sits beside local memory and never replaces it |
-| SSO administration | OIDC (Google, Okta, Azure AD, generic) and SAML 2.0 as a service provider |
-| Pooled managed models | OpenAI, Anthropic and Google, metered per user with a $20/user/month included quota by default |
-| Team memory sync | Sensitivity-scanned locally before anything is uploaded |
-| Audit log and signed CSV export | Hash-chained, with a verify endpoint |
-| Admin console | Role-gated; a member gets a 403 from the API, not a hidden link |
-| Cloud relay | WebSocket routing only, opt-in, off unless an organization turns it on |
+Two rules are enforced by tests, not by copy:
 
-A **30-day trial** needs no card and covers up to 5 seats. **Enterprise** is quoted per contract and
-invoiced manually (NET 30) for buyers who cannot pay by card; there is no self-serve checkout for it,
-and no support SLA is offered on any tier.
-
-Two rules are not negotiable and are enforced by tests, not by copy:
-
-1. **No local feature is paywalled, ever.** `test/cloud/license.test.ts` fails the build if a local
-   capability appears in the licence's feature list.
+1. **No local feature is paywalled, ever.** `test/cloud/license.test.ts` fails the build if a
+   local capability appears in the licence's feature list.
 2. **BYOK stays free and direct.** Your own provider key goes from your machine to the provider;
-   XR neither proxies nor meters it. An organization can *choose* to disable BYOK for its own
-   members, and that is the only way managed models become mandatory.
+   XR neither proxies nor meters it.
 
-Cancelling leaves every local install untouched — permanently — and hosted data stays exportable for
-30 days. Self-hosting the control plane is documented in
-[`docs/business/SELF-HOST.md`](docs/business/SELF-HOST.md), and billing can be left unconfigured
-entirely, in which case everything except payment works.
+Cancelling leaves every local install untouched — permanently.
+
+---
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The software is free, there is no telemetry, and there is no lock-in:
-the hosted team tier costs money, the code does not, and nothing in the paid tier can switch off a
-feature of the program you already have.
-
-<div align="center">
-<br>
-<img src="assets/avatar.png" alt="XR" width="90">
-<br><br>
-<sub><b>XR</b> · built by <a href="https://github.com/ahmadrrrtx">@ahmadrrrtx</a> ·
-<a href="https://github.com/ahmadrrrtx/xr/issues">issues</a> ·
-<a href="https://github.com/ahmadrrrtx/xr/releases">releases</a> ·
-<a href="https://xr-gules.vercel.app">website</a></sub>
-</div>
+[MIT](LICENSE) · XR — a local-first agent runtime you can audit.

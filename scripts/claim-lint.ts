@@ -29,7 +29,7 @@
  *
  * Gates 6–7 live in this scanner rather than as manifest claims: the manifest
  * stamps file *identities*, while these rules police prose in hand-written
- * docs — a direct scan is the honest mechanism (XR_FIX_TRACKER Phase 1.3
+ * docs — a direct scan is the honest mechanism (docs/audits/XR_FIX_TRACKER.md Phase 1.3
  * decision row). Gates 1–5 are unchanged.
  *
  *   bun run scripts/claim-lint.ts            # lint the repository
