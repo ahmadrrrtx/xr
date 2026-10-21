@@ -45,7 +45,7 @@ The release-identity stamp (`release.manifest.json` → `bun run release:check`)
 | `cloud/package.json` | 1.0.0 | no | **Independent** — introduced at 1.0.0 as a separate Bun/Hono deployable (2026-10-13, `c1ad0e0f`) and never re-stamped; anything newer would be coincidence. |
 | `mobile/package.json` | 28.0.0 | no | **Independent** — born at 28.0.0 at introduction (2026-10-13, `7d2338d6`); its number follows its own lineage, not the release. |
 | `desktop/src-tauri/Cargo.toml` | 0.2.0 | no | **Independent** — the desktop inner crate carries its own 0.2.x infancy series; its version field has never been changed since introduction. |
-| `extensions/vscode/package.json` | 0.2.0 | no | **Independent** — added 2026-06-04 (`af733159`) at 0.2.0 and only lockfile-maintained since. (4th surface: not covered by the original audit's release-manifest review — see XR_FIX_TRACKER deviation log.) |
+| `extensions/vscode/package.json` | 0.2.0 | no | **Independent** — added 2026-06-04 (`af733159`) at 0.2.0 and only lockfile-maintained since. (4th surface: not covered by the original audit's release-manifest review — see the XR_FIX_TRACKER deviation log (docs/audits/XR_FIX_TRACKER.md).) |
 
 ## 2. Verify locally (the same gates CI runs)
 
