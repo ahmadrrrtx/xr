@@ -30,3 +30,21 @@ No P1 polish defects found on the driven surfaces: CLI errors carry the ✗/Why/
 - **L-001** — cut tag `v1.1.1` from fixed main; supply-chain tag⇔npm invariant will stay red until npm 1.1.x publishes (by design; steps in READINESS §3).
 - **L-005** — Apple Developer ID + notarization env secrets; Windows signing (Azure Trusted Signing or OV); SmartScreen/Gatekeeper comms.
 - **L-011** — `generate-updater-keys.ts --apply` + `TAURI_UPDATER_KEY` secret; dry-run an update cycle pre-launch.
+
+
+## Wave 5 — CI un-red round (`be50862b`, `19bc129f` — all lanes green 2026-10-21)
+
+Triggered by six red jobs on PR #190 after the F-wave push (`8e677d64`). Every failure
+was reproduced from its CI log before any edit; fixes were verified locally, then
+re-verified by the same CI lanes going green on the fix commits.
+
+| CI job (was) | Root cause (reproduced) | Fix | Proof |
+|---|---|---|---|
+| Channel Install Tests · macOS-homebrew ✗ | F-04 made stamping fail-closed without `xr-windows-arm64.zip` sums; this workflow built windows-x64 only | PR-time canonical build mirrors release.yml (both windows targets, both zips); per-arch stamp assertion | Lane green on `be50862b` ✓ |
+| Channel Install Tests · Windows-winget-scoop ✗ | Same arm64-zip gap — then, when compiled inside the windows-x64 runner, `bun build --target=bun-windows-arm64` deterministically fails: "Failed to extract executable for bun-windows-aarch64-v1.3.14" (two identical attempts) | macOS-hosted `windows-arm64-source` fan-in job builds the arm64 triple + zip; Windows lane builds x64 locally and fetches the fan-in artifact before stamping | Full local simulation (cross-compile → sums → stamp → `--check` → per-arch winget/scoop sha assertions) + lane **green** on `19bc129f` ✓ |
+| Desktop macOS (x64) bundle ✗ | Cross-compiled leg lands under `target/<triple>/release/…`; every assert/upload path hardcoded `target/release/…` (`find: No such file or directory`) | `matrix.targetDir` + all bundle paths switched to it | macOS **arm64 + x64** legs both green on `19bc129f` ✓ — both Intel and Apple Silicon chains now CI-proven for the first time |
+| Vulnerability scan ✗ (10 findings) | NOT this branch: advisories published 2026-10-19/21 after main's last green run; identical pins on main scan the same | Real upgrades, zero ignores: desktop vite→8.3.3 (3 CVEs), vscode markdown-it→14.3.3 (2 CVEs), cloud owner's esbuild override propagated as flat `^0.28.2` ≥ fix 0.25.0 (owner's nested form was a bun no-op; flat still satisfies core-utils + drizzle-kit + tsx `~0.28.0`), desktop ureq 2→3 port (ureq-2 pins webpki-roots 0.26.x with **no fix** for CVE-2026-111943/RUSTSEC-2026-0381 — distrusted emSign intermediates whose private keys are public — while carrying API keys to HTTPS endpoints; ureq-2 has NO zero-code escape: its `native-certs` feature omits `tls` which pins webpki-roots 0.26) + rustls-webpki→0.103.16 + webpki-root-certs/roots→1.0.10 | Local CI-identical osv-scanner: exit 0, 0 unfiltered findings; lane green on `be50862b` and `19bc129f` ✓; ureq port: `cargo check --all-targets` + full shell unit suite 138/138 ✓ |
+| Cross-Platform macOS ✗ (517ms) then Windows ✗ (9.6s p95) | Absolute 500ms `/api/skills` p95 perf gate on shared CI runners; failed on different OSs across runs with unrelated code untouched | Free re-run (no code change) — passes when the runner isn't saturated; logged as P2 hardening candidate (relative/retry-based gate) | xplat lane green on `19bc129f` (all 3 OSs) ✓ |
+| tag⇔npm invariant ✗ | v1.1.x never published to npm | **By design = L-001 alarm. Do NOT widen.** Turns green the moment `@rrrtx/xr@1.1.0` publishes | Escalated, documented |
+
+**Final CI board on `19bc129f` (2026-10-21):** CI ✅ · Cross-Platform CI ✅ · Desktop App — all 5 bundle legs + cargo/clippy + Flatpak ✅ · Channel Install Tests ✅ (incl. real winget+scoop structural validation with per-arch sha binding) · Supply Chain: 6/7 ✅ (secrets, vulns 0, hygiene, trivy, SBOM, licenses) with only the designed-red tag⇔npm alarm open.
