@@ -136,6 +136,10 @@ export function renderWinget(manifest: ReleaseManifest, sums?: Map<string, strin
   const packageId = `${publisher}.XR`;
   const zipUrl = downloadUrl(manifest, "xr-windows-x64.zip");
   const sha = sums ? requireSha(sums.get("xr-windows-x64.zip"), "xr-windows-x64.zip") : "SHA256_XR_WINDOWS_X64_ZIP";
+  // Launch-audit L-004 — the arm64 portable zip rides the same manifest; the
+  // placeholders stamp from the signed SHA256SUMS like every other channel.
+  const armUrl = downloadUrl(manifest, "xr-windows-arm64.zip");
+  const armSha = sums ? requireSha(sums.get("xr-windows-arm64.zip"), "xr-windows-arm64.zip") : "SHA256_XR_WINDOWS_ARM64_ZIP";
   const base = `winget/manifests/r/${publisher}/XR/${version}`;
   return [
     {
@@ -189,6 +193,14 @@ Installers:
         PortableCommandAlias: xr
     InstallerUrl: ${zipUrl}
     InstallerSha256: ${sha}
+  - Architecture: arm64
+    InstallerType: zip
+    NestedInstallerType: portable
+    NestedInstallerFiles:
+      - RelativeFilePath: xr.exe
+        PortableCommandAlias: xr
+    InstallerUrl: ${armUrl}
+    InstallerSha256: ${armSha}
 ManifestType: installer
 ManifestVersion: 1.9.0
 `,
@@ -201,6 +213,7 @@ ManifestVersion: 1.9.0
 export function renderScoop(manifest: ReleaseManifest, sums?: Map<string, string>): string {
   const id = manifest.identity;
   const sha = sums ? requireSha(sums.get("xr-windows-x64.zip"), "xr-windows-x64.zip") : "SHA256_XR_WINDOWS_X64_ZIP";
+  const armSha = sums ? requireSha(sums.get("xr-windows-arm64.zip"), "xr-windows-arm64.zip") : "SHA256_XR_WINDOWS_ARM64_ZIP";
   return (
     JSON.stringify(
       {
@@ -214,6 +227,12 @@ export function renderScoop(manifest: ReleaseManifest, sums?: Map<string, string
             url: downloadUrl(manifest, "xr-windows-x64.zip"),
             hash: sha,
           },
+          // Launch-audit L-004 — native ARM64 zip (the emulated x64 zip worked
+          // under Prism, but native removes the translation tax on agent runs).
+          arm64: {
+            url: downloadUrl(manifest, "xr-windows-arm64.zip"),
+            hash: armSha,
+          },
         },
         bin: "xr.exe",
         checkver: {
@@ -223,6 +242,9 @@ export function renderScoop(manifest: ReleaseManifest, sums?: Map<string, string
           architecture: {
             "64bit": {
               url: `https://github.com/${id.repo.split("/").slice(-2).join("/")}/releases/download/v$version/xr-windows-x64.zip`,
+            },
+            arm64: {
+              url: `https://github.com/${id.repo.split("/").slice(-2).join("/")}/releases/download/v$version/xr-windows-arm64.zip`,
             },
           },
         },

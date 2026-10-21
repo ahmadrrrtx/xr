@@ -161,9 +161,9 @@
     },
     {
       "path": "src/daemon/server.ts",
-      "lines": 879,
+      "lines": 888,
       "owner": "daemon",
-      "reason": "Phase 2.5 · P2-17 (874→879): the two-channel startup banner — the PRIVATE sidecar/operator channel keeps the legacy `Token:`/`?token=` lines the desktop Rust banner parser consumes (byte-stable cross-language contract), while the ordinary human banner carries no bearer material and one honest recovery line (XR_PRINT_TOKEN=1). +5 lines = the reveal condition, the revealToken option and the conditional tail; base lines are shared, so no duplication. Previous: Phase 2.4 · P1-1 (784→874) LAN/TLS listener, mobile auth seam, 403 wall, Secure-cookie rule.",
+      "reason": "Launch audit · L-012 (879→888, 2026-10-20): the ?token= bootstrap doc-comment was rewritten to state the real session-mint semantics (token does not rotate on bootstrap; cookie value IS the token; 'one-time' = URL-stripping only) instead of the overstated 'one-time use' claim — +9 comment lines, zero behavior change; the P2 follow-up (rotating session ids) is tracked in docs/launch/XR_LAUNCH_FINDINGS.md. Previous: Phase 2.5 · P2-17 (874→879) two-channel startup banner; Phase 2.4 · P1-1 (784→874) LAN/TLS listener, mobile auth seam, 403 wall, Secure-cookie rule.",
       "plan": "Phase 3: extract src/daemon/server-lan.ts (LAN bind/banner path) so server.ts returns under 800.",
       "review": "2027-01-15"
     }

@@ -170,10 +170,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Launch-audit L-002/L-003: the matrix now ships leg for EVERY launch
+        # triple. Per-leg `slug` (not `runsOn`) names artifacts: two legs
+        # share macos-latest, so runsOn-named artifacts would silently collide.
         include:
-          - { osName: "Linux", runsOn: ubuntu-22.04, triple: x86_64-unknown-linux-gnu }
-          - { osName: "macOS (arm64)", runsOn: macos-latest, triple: aarch64-apple-darwin }
-          - { osName: "Windows", runsOn: windows-latest, triple: x86_64-pc-windows-msvc }
+          - { osName: "Linux", runsOn: ubuntu-22.04, triple: x86_64-unknown-linux-gnu, slug: linux-x64 }
+          - { osName: "macOS (arm64)", runsOn: macos-latest, triple: aarch64-apple-darwin, slug: darwin-arm64 }
+          # Intel mac: cross-compiled on the arm runner. The engine sidecar is
+          # a REAL bun --target build (never a rename), and the Rust cross
+          # target is added below. Runtime smoke for this leg is honestly
+          # skipped (cross binary can't run on an arm host).
+          - { osName: "macOS (x64)", runsOn: macos-latest, triple: x86_64-apple-darwin, slug: darwin-x64, tauriArgs: "--target x86_64-apple-darwin" }
+          - { osName: "Windows", runsOn: windows-latest, triple: x86_64-pc-windows-msvc, slug: windows-x64 }
+          # Windows ARM: native ARM runner so the sidecar RUNS on-target, and
+          # NSIS only — only NSIS supports ARM64 bundling in Tauri v2.
+          - { osName: "Windows (arm64)", runsOn: windows-11-arm, triple: aarch64-pc-windows-msvc, slug: windows-arm64, tauriArgs: "--bundles nsis" }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -191,6 +202,9 @@ jobs:
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Add the x86_64 cross target (Intel-mac leg only)
+        if: matrix.slug == 'darwin-x64'
+        run: rustup target add x86_64-apple-darwin
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -216,7 +230,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_KEY }}
         with:
           projectPath: desktop
-          args: --verbose
+          args: --verbose ${{ matrix.tauriArgs }}
       - name: List produced bundles
         shell: bash
         run: find desktop/src-tauri/target/release/bundle -maxdepth 3 -type f | sort
@@ -286,6 +300,17 @@ jobs:
           echo "msi=${msi} nsis=${nsis}"
           test "$msi" -ge 1 || { echo "::error::no .msi produced"; exit 1; }
           test "$nsis" -ge 1 || { echo "::error::no NSIS *-setup.exe produced"; exit 1; }
+      # Windows ARM leg (L-002): only NSIS supports ARM64 bundling, so this
+      # leg passes --bundles nsis and asserts EXACTLY that flavour (msi would
+      # be a cross-arch silence hazard, not a deliverable).
+      - name: Assert Windows ARM installer exists (nsis only)
+        if: matrix.slug == 'windows-arm64'
+        shell: bash
+        run: |
+          set -e
+          nsis=$(find desktop/src-tauri/target -path '*/bundle/nsis/*-setup.exe' | wc -l)
+          echo "nsis=${nsis}"
+          test "$nsis" -ge 1 || { echo "::error::no NSIS *-setup.exe produced for windows-arm64"; exit 1; }
       # Phase 27 — MSIX. Tauri 2.12 has no `msix` bundle target, so the built
       # app directory is wrapped by packaging/windows/msix/build-msix.ps1. The
       # script fails loudly when the engine sidecar is missing (an installable
@@ -336,7 +361,7 @@ jobs:
         if: matrix.runsOn == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: xr-msix-windows-latest
+          name: xr-msix-${{ matrix.slug }}
           if-no-files-found: error
           path: desktop/src-tauri/target/release/bundle/msix/*
 
@@ -358,13 +383,13 @@ jobs:
         if: matrix.runsOn == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: xr-portable-windows-latest
+          name: xr-portable-${{ matrix.slug }}
           if-no-files-found: error
           path: desktop/src-tauri/target/release/bundle/xr-portable-win.zip
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: xr-desktop-${{ matrix.runsOn }}
+          name: xr-desktop-${{ matrix.slug }}
           if-no-files-found: error
           path: |
             desktop/src-tauri/target/release/bundle/deb/*.deb
@@ -381,7 +406,7 @@ jobs:
         if: github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: xr-updater-sigs-${{ matrix.runsOn }}
+          name: xr-updater-sigs-${{ matrix.slug }}
           if-no-files-found: ignore
           path: |
             desktop/src-tauri/target/release/bundle/appimage/*.AppImage

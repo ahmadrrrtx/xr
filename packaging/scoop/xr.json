@@ -8,6 +8,10 @@
     "64bit": {
       "url": "https://github.com/ahmadrrrtx/xr/releases/download/v1.1.0/xr-windows-x64.zip",
       "hash": "SHA256_XR_WINDOWS_X64_ZIP"
+    },
+    "arm64": {
+      "url": "https://github.com/ahmadrrrtx/xr/releases/download/v1.1.0/xr-windows-arm64.zip",
+      "hash": "SHA256_XR_WINDOWS_ARM64_ZIP"
     }
   },
   "bin": "xr.exe",
@@ -18,6 +22,9 @@
     "architecture": {
       "64bit": {
         "url": "https://github.com/ahmadrrrtx/xr/releases/download/v$version/xr-windows-x64.zip"
+      },
+      "arm64": {
+        "url": "https://github.com/ahmadrrrtx/xr/releases/download/v$version/xr-windows-arm64.zip"
       }
     }
   }

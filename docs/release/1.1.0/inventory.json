@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-18T13:01:27.117Z",
+  "generatedAt": "2026-10-21T03:35:53.163Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -28,7 +28,7 @@
     },
     "dependencies": {
       "qrcode": "^1.5.4",
-      "unpdf": "^1.8.1",
+      "unpdf": "1.7.0",
       "zod": "^3.23.8"
     },
     "optionalDependencies": {
@@ -47,7 +47,6 @@
       "plugins",
       "skills",
       "assets",
-      "docs",
       "README.md",
       "LICENSE",
       "install.sh",
@@ -56,7 +55,7 @@
   },
   "counts": {
     "sourceFiles": 752,
-    "testFiles": 419,
+    "testFiles": 422,
     "cliCommands": 43,
     "daemonRoutes": 305,
     "providers": 26,
@@ -87,11 +86,11 @@
     },
     {
       "path": ".gitleaksignore",
-      "bytes": 3960
+      "bytes": 4699
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 135577
+      "bytes": 139771
     },
     {
       "path": "CODEOWNERS",
@@ -130,6 +129,10 @@
       "bytes": 6065
     },
     {
+      "path": "HANDOFF_PHASE_2.5.md",
+      "bytes": 13767
+    },
+    {
       "path": "LICENSE",
       "bytes": 1071
     },
@@ -151,11 +154,11 @@
     },
     {
       "path": "XR_FIX_TRACKER.md",
-      "bytes": 33417
+      "bytes": 34559
     },
     {
       "path": "bun.lock",
-      "bytes": 16267
+      "bytes": 16256
     },
     {
       "path": "bunfig.toml",
@@ -175,11 +178,11 @@
     },
     {
       "path": "package.json",
-      "bytes": 6478
+      "bytes": 6465
     },
     {
       "path": "release.manifest.json",
-      "bytes": 15120
+      "bytes": 15842
     },
     {
       "path": "tsconfig.json",
@@ -1079,6 +1082,7 @@
     "test/desktop/runs-core.test.ts",
     "test/desktop/settings-core.test.ts",
     "test/desktop/shield-core.test.ts",
+    "test/desktop/sidecar-targets.test.ts",
     "test/desktop/sink-lint.test.ts",
     "test/desktop/skills-core.test.ts",
     "test/desktop/theater-core.test.ts",
@@ -1224,11 +1228,13 @@
     "test/release/changelog.test.ts",
     "test/release/channels.test.ts",
     "test/release/consumer-smoke.test.ts",
+    "test/release/desktop-identity.test.ts",
     "test/release/installer-powershell.test.ts",
     "test/release/installer-verify.test.ts",
     "test/release/numeric-claims.test.ts",
     "test/release/onboarding.test.ts",
     "test/release/platform-parity.test.ts",
+    "test/release/release-assets-check.test.ts",
     "test/release/release-workflow.test.ts",
     "test/release/tag-npm-invariant.test.ts",
     "test/release/updater-manifest.test.ts",

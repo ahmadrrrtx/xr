@@ -203,6 +203,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/provider-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/real-device-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/release-assets-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/repo-intelligence-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

@@ -16,5 +16,13 @@ Installers:
         PortableCommandAlias: xr
     InstallerUrl: https://github.com/ahmadrrrtx/xr/releases/download/v1.1.0/xr-windows-x64.zip
     InstallerSha256: SHA256_XR_WINDOWS_X64_ZIP
+  - Architecture: arm64
+    InstallerType: zip
+    NestedInstallerType: portable
+    NestedInstallerFiles:
+      - RelativeFilePath: xr.exe
+        PortableCommandAlias: xr
+    InstallerUrl: https://github.com/ahmadrrrtx/xr/releases/download/v1.1.0/xr-windows-arm64.zip
+    InstallerSha256: SHA256_XR_WINDOWS_ARM64_ZIP
 ManifestType: installer
 ManifestVersion: 1.9.0
