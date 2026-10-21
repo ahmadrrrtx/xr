@@ -63,11 +63,47 @@ jobs:
           sudo dpkg -r xr
           test ! -e /usr/bin/xr
 
+  # ── Tier 1a.2: windows-arm64 zip, built on the PROVEN cross-compile host ──
+  # Measured on PR #190 CI (two attempts, identical error): bun 1.3.14 cannot
+  # extract the 'bun-windows-aarch64' baseline on windows-x64 RUNNERS
+  # ("Failed to extract executable … The download may be incomplete"), while
+  # the same compile succeeds on Linux and macOS hosts. The arm64 zip this
+  # lane's stamps bind therefore comes from a macOS-hosted fan-in job instead
+  # of being compiled inside the windows-latest lane.
+  windows-arm64-source:
+    name: windows-arm64 canonical build (cross-compile fan-in)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build windows-arm64 + zip
+        shell: bash
+        run: |
+          bun run scripts/build-matrix.ts --targets "windows-arm64" --out dist --skip-smoke
+          mkdir -p dist/zip && cp dist/xr-windows-arm64.exe dist/zip/xr.exe
+          (cd dist/zip && zip -q ../xr-windows-arm64.zip xr.exe)
+          test -f dist/xr-windows-arm64.zip
+          rm -rf dist/zip
+      - name: Upload arm64 canonical artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-windows-arm64-zip
+          if-no-files-found: error
+          path: |
+            dist/xr-windows-arm64.exe
+            dist/xr-windows-arm64.zip
+
   # ── Tier 1b: Homebrew + WinGet + Scoop structural validation ─────────────
   channel-structural:
     name: ${{ matrix.name }} — stamped channels match canonical build
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    needs: windows-arm64-source
     strategy:
       fail-fast: false
       matrix:
@@ -75,8 +111,12 @@ jobs:
           # L-004: the canonical set this lane validates must mirror
           # release.yml's windows leg (x64 + arm64) or the fail-closed
           # two-arch stamping in channel-manifest.ts correctly refuses.
+          # The Windows lane builds x64 locally and fetches the arm64 zip from
+          # windows-arm64-source — see that job's note (windows-x64 RUNNERS
+          # cannot extract the bun-windows-aarch64 baseline: verified broken,
+          # not flaky).
           - { name: macOS-homebrew, os: macos-latest, targets: "linux-x64,linux-arm64,darwin-arm64,darwin-x64,windows-x64,windows-arm64", channels: "" }
-          - { name: Windows-winget-scoop, os: windows-latest, targets: "windows-x64,windows-arm64", channels: "winget,scoop" }
+          - { name: Windows-winget-scoop, os: windows-latest, targets: "windows-x64", channels: "winget,scoop" }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -108,10 +148,21 @@ jobs:
           Copy-Item dist/xr-windows-x64.exe dist/zip/xr.exe
           Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-x64.zip -Force
           if (-not (Test-Path dist/xr-windows-x64.zip)) { throw "x64 zip not produced" }
-          Copy-Item dist/xr-windows-arm64.exe dist/zip/xr.exe
-          Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-arm64.zip -Force
-          if (-not (Test-Path dist/xr-windows-arm64.zip)) { throw "arm64 zip not produced" }
           Remove-Item -Recurse -Force dist/zip
+      # arm64 zip comes from the macOS fan-in job (windows-x64 runners cannot
+      # extract the bun-windows-aarch64 baseline — verified twice on this PR).
+      - name: Fetch the windows-arm64 canonical artifacts
+        if: matrix.name == 'Windows-winget-scoop'
+        uses: actions/download-artifact@v4
+        with:
+          name: xr-windows-arm64-zip
+          path: dist
+      - name: Assert both windows zips exist (x64 built here, arm64 fanned in)
+        if: matrix.name == 'Windows-winget-scoop'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/xr-windows-arm64.zip)) { throw "arm64 zip missing after fan-in" }
+          if (-not (Test-Path dist/xr-windows-arm64.exe)) { throw "arm64 binary missing after fan-in" }
       - name: Stamp channels from this build's checksums
         shell: bash
         run: |
