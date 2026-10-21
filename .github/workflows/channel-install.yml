@@ -72,8 +72,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS-homebrew, os: macos-latest, targets: "linux-x64,linux-arm64,darwin-arm64,darwin-x64,windows-x64", channels: "" }
-          - { name: Windows-winget-scoop, os: windows-latest, targets: "windows-x64", channels: "winget,scoop" }
+          # L-004: the canonical set this lane validates must mirror
+          # release.yml's windows leg (x64 + arm64) or the fail-closed
+          # two-arch stamping in channel-manifest.ts correctly refuses.
+          - { name: macOS-homebrew, os: macos-latest, targets: "linux-x64,linux-arm64,darwin-arm64,darwin-x64,windows-x64,windows-arm64", channels: "" }
+          - { name: Windows-winget-scoop, os: windows-latest, targets: "windows-x64,windows-arm64", channels: "winget,scoop" }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,6 +95,9 @@ jobs:
           mkdir -p dist/zip && cp dist/xr-windows-x64.exe dist/zip/xr.exe
           (cd dist/zip && zip -q ../xr-windows-x64.zip xr.exe)
           test -f dist/xr-windows-x64.zip
+          cp dist/xr-windows-arm64.exe dist/zip/xr.exe
+          (cd dist/zip && zip -q ../xr-windows-arm64.zip xr.exe)
+          test -f dist/xr-windows-arm64.zip
           rm -rf dist/zip
       - name: Channel zip (Windows lane)
         if: matrix.name == 'Windows-winget-scoop'
@@ -101,7 +107,10 @@ jobs:
           New-Item -ItemType Directory -Force dist/zip | Out-Null
           Copy-Item dist/xr-windows-x64.exe dist/zip/xr.exe
           Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-x64.zip -Force
-          if (-not (Test-Path dist/xr-windows-x64.zip)) { throw "zip not produced" }
+          if (-not (Test-Path dist/xr-windows-x64.zip)) { throw "x64 zip not produced" }
+          Copy-Item dist/xr-windows-arm64.exe dist/zip/xr.exe
+          Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-arm64.zip -Force
+          if (-not (Test-Path dist/xr-windows-arm64.zip)) { throw "arm64 zip not produced" }
           Remove-Item -Recurse -Force dist/zip
       - name: Stamp channels from this build's checksums
         shell: bash
@@ -133,6 +142,13 @@ jobs:
           $scoop = Get-Content dist/channels/scoop/xr.json -Raw | ConvertFrom-Json
           if ($scoop.architecture.'64bit'.hash -ne $sha) { throw "scoop manifest hash does not match canonical build" }
           Write-Host "winget + scoop manifests bind the canonical build ($sha)"
+          # Two-arch contract (L-004): the arm64 entry must bind the arm64 zip's
+          # real hash, not share x64's — arch-swapped shas are the exact hazard
+          # this job exists to refuse.
+          $shaArm = (Get-FileHash dist/xr-windows-arm64.zip -Algorithm SHA256).Hash.ToLower()
+          if (-not ($installer -match "(?s)Architecture: arm64.*?InstallerSha256: $shaArm")) { throw "winget arm64 installer sha256 does not match canonical build" }
+          if ($scoop.architecture.arm64.hash -ne $shaArm) { throw "scoop arm64 hash does not match canonical build" }
+          Write-Host "winget + scoop arm64 entries bind the arm64 build ($shaArm)"
 
   # ── Tier 2: REAL installs from the published release (weekly/on-demand) ──
   published-release-installs:

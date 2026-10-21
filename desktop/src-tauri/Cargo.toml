@@ -45,9 +45,15 @@ tauri-plugin-stronghold = "2"
 tauri-plugin-updater = "2"
 
 # Phase 3 — hardware detection (sysinfo) + localhost Ollama HTTP probes
-# (ureq, blocking, rustls — deliberately not reqwest/tokio).
+# (ureq, blocking, rustls — deliberately not reqwest/tokio). ureq 3 line:
+# ureq 2's `tls` feature pins webpki-roots 0.26.x, which has NO fix for the
+# distrusted emSign intermediates advisory (CVE-2026-111943 / RUSTSEC-2026-0381,
+# private keys public — and these probes carry API keys in Authorization
+# headers over user-supplied HTTPS endpoints, so bundling known-broken roots
+# was a real credential-theft path). ureq 3's rustls-webpki-roots resolves to
+# the 1.0.10+ fixed line.
 sysinfo = "0.33"
-ureq = { version = "2", features = ["json", "tls"] }
+ureq = { version = "3", features = ["json"] }
 
 # Phase 4 — chat persistence (SQLite, WAL; bundled build so no system sqlite needed).
 rusqlite = { version = "0.37", features = ["bundled"] }

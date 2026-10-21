@@ -45,9 +45,14 @@ pub fn ollama_pull(app: AppHandle, model: String) -> u32 {
             );
         };
 
-        let agent = ureq::AgentBuilder::new()
-            .timeout(std::time::Duration::from_secs(600))
-            .build();
+        // ureq 3: timeout_global covers the whole end-to-end call including
+        // the streamed body (the exact blanket behavior ureq 2's .timeout()
+        // gave the long Ollama pull stream).
+        let agent = ureq::Agent::new_with_config(
+            ureq::config::Config::builder()
+                .timeout_global(Some(std::time::Duration::from_secs(600)))
+                .build(),
+        );
         let pull_url = format!("{OLLAMA_BASE}/api/pull");
         let resp = match agent
             .post(&pull_url)
@@ -60,7 +65,7 @@ pub fn ollama_pull(app: AppHandle, model: String) -> u32 {
             }
         };
 
-        let buf = std::io::BufReader::new(resp.into_reader());
+        let buf = std::io::BufReader::new(resp.into_body().into_reader());
         for line in buf.lines() {
             let Ok(line) = line else { break };
             let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else {

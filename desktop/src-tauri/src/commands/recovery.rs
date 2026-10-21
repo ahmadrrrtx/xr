@@ -124,14 +124,17 @@ pub fn loopback_listening(port: u16) -> bool {
 /// is authenticated, which is what makes it the right check: 200 means the
 /// token works, 401/403 means it does not.
 pub fn verify_external_token(port: u16, token: &str) -> Result<(), String> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
-        .build();
+    let agent = ureq::Agent::new_with_config(
+        ureq::config::Config::builder()
+            .timeout_global(Some(Duration::from_secs(5)))
+            .build(),
+    );
     let base = format!("http://127.0.0.1:{port}");
 
     match agent.get(&format!("{base}/api/v1/health")).call() {
         Ok(_) => {}
-        Err(ureq::Error::Status(code, _)) => {
+        // ureq 3: status errors are Error::StatusCode, not Error::Status.
+        Err(ureq::Error::StatusCode(code)) => {
             return Err(format!("something is listening on 127.0.0.1:{port} but it is not an XR engine (HTTP {code})"));
         }
         Err(e) => return Err(format!("could not reach 127.0.0.1:{port}: {e}")),
@@ -139,14 +142,14 @@ pub fn verify_external_token(port: u16, token: &str) -> Result<(), String> {
 
     match agent
         .get(&format!("{base}/api/v1/capabilities"))
-        .set("Authorization", &format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {token}"))
         .call()
     {
         Ok(_) => Ok(()),
-        Err(ureq::Error::Status(code, _)) if code == 401 || code == 403 => {
+        Err(ureq::Error::StatusCode(code)) if code == 401 || code == 403 => {
             Err("the engine is running but rejected that token — check the `Token:` line the engine printed when it started".into())
         }
-        Err(ureq::Error::Status(code, _)) => Err(format!("the engine answered HTTP {code} for an authenticated request")),
+        Err(ureq::Error::StatusCode(code)) => Err(format!("the engine answered HTTP {code} for an authenticated request")),
         Err(e) => Err(format!("token check failed: {e}")),
     }
 }

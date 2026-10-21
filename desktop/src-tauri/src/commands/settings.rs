@@ -561,22 +561,25 @@ pub fn probe_provider(kind: &str, base_url: Option<&str>, api_key: Option<&str>)
         .filter(|b| !b.trim().is_empty())
         .unwrap_or_else(|| default_base_url(kind));
     let url = provider_probe_url(kind, base);
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(6))
-        .build();
+    // ureq 3: new_with_config + .header() replace AgentBuilder/.set().
+    let agent = ureq::Agent::new_with_config(
+        ureq::config::Config::builder()
+            .timeout_global(Some(Duration::from_secs(6)))
+            .build(),
+    );
 
     let mut request = agent.get(&url);
     if let Some(key) = api_key.filter(|k| !k.trim().is_empty()) {
         match kind {
             "anthropic" => {
-                request = request.set("x-api-key", key);
-                request = request.set("anthropic-version", "2023-06-01");
+                request = request.header("x-api-key", key);
+                request = request.header("anthropic-version", "2023-06-01");
             }
             "gemini" => {
-                request = request.set("x-goog-api-key", key);
+                request = request.header("x-goog-api-key", key);
             }
             _ => {
-                request = request.set("Authorization", format!("Bearer {key}").as_str());
+                request = request.header("Authorization", format!("Bearer {key}"));
             }
         }
     }
@@ -587,7 +590,7 @@ pub fn probe_provider(kind: &str, base_url: Option<&str>, api_key: Option<&str>)
 
     match outcome {
         Ok(response) => {
-            let body = response.into_string().unwrap_or_default();
+            let body = response.into_body().read_to_string().unwrap_or_default();
             let parsed: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
             let models = extract_models(kind, &parsed);
             ProviderTestResult {
@@ -597,7 +600,9 @@ pub fn probe_provider(kind: &str, base_url: Option<&str>, api_key: Option<&str>)
                 models,
             }
         }
-        Err(ureq::Error::Status(code, _)) => {
+        // ureq 3: HTTP statuses are Error::StatusCode (4xx/5xx as error is
+        // still the default — http_status_as_error stays true).
+        Err(ureq::Error::StatusCode(code)) => {
             let message = if code == 401 || code == 403 {
                 "Authentication failed — check the API key.".to_string()
             } else {
