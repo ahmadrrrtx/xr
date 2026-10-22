@@ -174,7 +174,20 @@ export const THRESHOLD = 800;
 // (+567 over 4A's 173,098). Headroom ~435. (Not 174,000: the stamped figure
 // would trip release.manifest.json's prohibited "74,000" star-count pattern.)
 // Needs maintainer sign-off.
-export const TREE_CEILING = 174_100; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
+// Launch audit Phase 4C · 174,100 → 174,500 (2026-10-22): the CLI/daemon
+// hardening that 4C requires in core, measured per commit against 4B's 173,665:
+// the `xr serve` sign-in page, POST login and constant-time token checks
+// (src/daemon/session-auth.ts, auth-page.ts, XR-LAUNCH-018/027) and the
+// owner-only daemon token file the VS Code extension re-reads after a restart
+// (src/daemon/token-file.ts, XR-LAUNCH-018/034) +215; stable tool-failure
+// reason codes (src/core/tool-reasons.ts, XR-LAUNCH-024) +141; the updater's
+// latest-release comparison (src/update/release-feed.ts, XR-LAUNCH-019) +17;
+// uninstall following XR_INSTALL_DIR and refusing unsafe dirs
+// (src/install/uninstall.ts, XR-LAUNCH-025) +30. 020, 022, 023 and 034's
+// extension/CI work added nothing under src/. No waived giant grew
+// (daemon/server.ts shrank by 10). Measured 174,068 (+403). Headroom ~432.
+// Needs maintainer sign-off.
+export const TREE_CEILING = 174_500; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
 // the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
 // P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
 // the device registry (hashed session tokens, revocation, mobile-kind tag),
