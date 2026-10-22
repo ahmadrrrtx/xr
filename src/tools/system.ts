@@ -77,6 +77,7 @@ export const shellTool: Tool = {
     const decision = checkAction({ tool: "shell", args: { cmd } }, {
       egressAllowlist: ctx.egressAllowlist ?? [],
       requireApproval: ["shell"],
+      cwd: ctx.cwd, // XR-LAUNCH-031: relative words resolve where the command runs
     });
     if (!decision.allowed) {
       ctx.audit("shell.blocked", { cmd, reason: decision.reason });
