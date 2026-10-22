@@ -12,6 +12,10 @@
  *                       With `--live` the table is compared with what
  *                       `channel:live` reports from the real registries: a row
  *                       that says live for a failing channel is a violation.
+ *  10. VS CODE LISTING — (XR-LAUNCH-034) until the extension is listed, the
+ *                       README labels it "preview — install the .vsix from
+ *                       Releases", and no public surface claims a Marketplace
+ *                       or Open VSX listing.
  *
  * Kept out of claim-lint.ts so the scanner stays readable; claim-lint imports it.
  */
@@ -20,7 +24,7 @@ import { join, relative } from "node:path";
 import type { ChannelId, ReleaseManifest } from "./release-manifest.ts";
 
 export interface LaunchViolation {
-  gate: "status-label" | "channel-claim";
+  gate: "status-label" | "channel-claim" | "vscode-listing";
   file: string;
   line: number;
   text: string;
@@ -204,4 +208,54 @@ export function compareTableWithLive(rows: InstallRow[], results: LiveChannelRes
     if (r.status === "pending" && live.ok) stalePending.push(`${r.label} (${r.channel}) now passes channel:live — update the README legend to ✅ live`);
   }
   return { violations, stalePending };
+}
+
+// ── Gate 10: VS Code extension listing (XR-LAUNCH-034) ──────────────────────
+
+/**
+ * Flip to true only after publish-vscode.yml has published `rrrtx.xr-vscode`
+ * and the Marketplace/Open VSX listing resolves; then replace the README
+ * preview label with the listing in the same PR.
+ */
+export const VSCODE_LISTED = false;
+
+const LISTING_CLAIMS: RegExp[] = [
+  /marketplace\.visualstudio\.com\/items\?itemName=rrrtx\./i,
+  /open-vsx\.org\/extension\/rrrtx\//i,
+  /(?:\bext install|--install-extension)\s+rrrtx\./i,
+  /\b(install|get|download|available)\b[^.]{0,40}\b(from|on|in)\s+the\s+(VS Code\s+|Visual Studio\s+)?(Marketplace|Open VSX)\b/i,
+];
+/** One README line that names the extension, says preview, and points to the .vsix on Releases. */
+export const VSCODE_PREVIEW_LABEL = /VS Code extension[^\n]*\bpreview\b[^\n]*\.vsix[^\n]*\bReleases\b/i;
+
+export function lintVscodeListing(root: string, listed: boolean = VSCODE_LISTED): LaunchViolation[] {
+  if (listed) return [];
+  const out: LaunchViolation[] = [];
+  const readme = join(root, "README.md");
+  const text = existsSync(readme) ? readFileSync(readme, "utf8") : "";
+  if (!VSCODE_PREVIEW_LABEL.test(text)) {
+    out.push({
+      gate: "vscode-listing",
+      file: "README.md",
+      line: 0,
+      text: "",
+      reason: 'the VS Code extension is not listed yet: README.md must label it "preview — install the .vsix from Releases" (XR-LAUNCH-034)',
+    });
+  }
+  const surfaces = [...labelSurfaces(root), join(root, "extensions", "vscode", "README.md")].filter((p) => existsSync(p));
+  for (const abs of surfaces) {
+    readFileSync(abs, "utf8").split("\n").forEach((line, i) => {
+      if (WORDING_DISCLAIMER.test(line)) return;
+      if (LISTING_CLAIMS.some((re) => re.test(line))) {
+        out.push({
+          gate: "vscode-listing",
+          file: relative(root, abs),
+          line: i + 1,
+          text: line.trim().slice(0, 160),
+          reason: "claims a Marketplace/Open VSX listing that does not exist yet; point to the .vsix on GitHub Releases until publish-vscode.yml has run (XR-LAUNCH-034)",
+        });
+      }
+    });
+  }
+  return out;
 }

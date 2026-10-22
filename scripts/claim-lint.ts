@@ -50,10 +50,10 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ROOT, loadManifest, evaluateSurfaces, countSkills, type ReleaseManifest } from "./release-manifest.ts";
 import { TREE_CEILING } from "./size-gate.ts";
-import { compareTableWithLive, lintChannelTable, lintStatusLabel, parseInstallTable } from "./launch-claims.ts";
+import { compareTableWithLive, lintChannelTable, lintStatusLabel, lintVscodeListing, parseInstallTable } from "./launch-claims.ts";
 
 export interface Violation {
-  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution" | "numeric-claim" | "doc-link" | "status-label" | "channel-claim";
+  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution" | "numeric-claim" | "doc-link" | "status-label" | "channel-claim" | "vscode-listing";
   file: string;
   line: number;
   text: string;
@@ -624,6 +624,7 @@ async function main(): Promise<void> {
     ...lintDocsIntegrity(),
     ...lintStatusLabel(manifest, ROOT),
     ...lintChannelTable(manifest, ROOT),
+    ...lintVscodeListing(ROOT),
   ];
   const notes: string[] = [];
   if (process.argv.includes("--live")) {

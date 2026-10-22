@@ -2,7 +2,7 @@
   "$comment": "XR-LAUNCH-012 (decision D7). The status checks branch protection must require on `main`. Each is one aggregate gate job (name = check context) that fails unless every job of its workflow succeeded. scripts/ci-policy.ts validates this file against the workflows; scripts/apply-branch-protection.sh prints the owner-run `gh api` command. Changing this list is an owner decision — update docs/ci/REQUIRED_CHECKS.md with it.",
   "branch": "main",
   "required": [
-    { "workflow": "ci.yml", "job": "quality-gate", "context": "Quality Gate", "covers": "typecheck, truth gate, unit/security/reliability/e2e suites, size + boundaries, perf, a11y, API contract, support-matrix + CI policy" },
+    { "workflow": "ci.yml", "job": "quality-gate", "context": "Quality Gate", "covers": "typecheck, truth gate, VS Code extension tests + package, unit/security/reliability/e2e suites, size + boundaries, perf, a11y, API contract, support-matrix + CI policy" },
     { "workflow": "cross-platform.yml", "job": "cross-platform-gate", "context": "Cross-Platform gate", "covers": "full parity suite + golden path on Linux, macOS, Windows" },
     { "workflow": "supply-chain.yml", "job": "supply-chain-gate", "context": "Supply Chain gate", "covers": "install hygiene, gitleaks, osv + bun audit, licenses, SBOM drift, tag⇔npm invariant, trivy, container --version + file-tool smoke" },
     { "workflow": "npm-pack-smoke.yml", "job": "npm-pack-smoke-gate", "context": "npm Pack Smoke gate", "covers": "packed tarball global install + update --check on Linux, macOS, Windows" },

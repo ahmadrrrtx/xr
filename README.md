@@ -532,8 +532,13 @@ sessions refused at `/files`, `/terminal`, `/git`, `/mcp` (403), Web Push sealed
 key only the paired phone holds, honest offline outbox. Wire format and threat model:
 [`docs/mobile/PWA.md`](docs/mobile/PWA.md) · [`docs/mobile/SECURITY.md`](docs/mobile/SECURITY.md).
 
-**Versus Code surface** (`extensions/vscode/`): the agent inside your editor, same governed
-pipeline.
+**VS Code extension** (`extensions/vscode/`, preview — install the `.vsix` from [GitHub Releases](https://github.com/ahmadrrrtx/xr/releases)): the agent inside your editor, same governed pipeline.
+It is not yet listed on the Visual Studio Marketplace or Open VSX. Install with
+`code --install-extension xr-vscode-<version>.vsix`; a `.vsix` is attached to a release only once
+the owner-run `publish-vscode` workflow has run for it, otherwise build one with
+`cd extensions/vscode && npm ci && npm run build:vsix`. It pairs with the local daemon by
+re-reading `xr serve`'s owner-only token file (`~/.xr/daemon/token`), so a daemon restart
+reconnects without pasting a new token.
 
 **Scripting:** `xr doctor --json` is the stable machine-readable entrypoint (redacted config,
 provider readiness, `summary.runnable`; secrets never printed). Exit codes:

@@ -209,6 +209,38 @@ jobs:
       - name: Production build (static render of every route)
         run: npm run build
 
+  # XR-LAUNCH-034 — the VS Code extension's own typecheck, unit tests
+  # (token-file pairing, reconnect-on-401, chat retry) and a real .vsix package.
+  vscode-extension:
+    name: VS Code extension (typecheck + tests + package)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+
+      - name: Install dependencies (lockfile only, no install scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Package the .vsix (not published)
+        run: node esbuild.mjs && npx --no-install vsce package --no-dependencies -o xr-vscode-ci.vsix
+
   # ── 4. Test suite — sharded lanes (Phase 0 reconciliation) ────────────────
   # The matrix is sharded into four lanes so no runner hosts the whole suite
   # at once, each lane owns an explicit timeout, and a lane-local failure
@@ -675,7 +707,7 @@ jobs:
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [typecheck, truth-gate, baseline, website, test-core, test-security, test-reliability-spawn, test-e2e-blackbox, boundaries, mutation-gate, perf-gate, api-contract, a11y, profiling, unit-tier]
+    needs: [typecheck, truth-gate, baseline, website, vscode-extension, test-core, test-security, test-reliability-spawn, test-e2e-blackbox, boundaries, mutation-gate, perf-gate, api-contract, a11y, profiling, unit-tier]
 
     runs-on: ubuntu-latest
     timeout-minutes: 5

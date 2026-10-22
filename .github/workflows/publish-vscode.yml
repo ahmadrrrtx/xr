@@ -1,0 +1,218 @@
+# =============================================================================
+# Launch audit XR-LAUNCH-034 — publish the VS Code extension (owner-run).
+#
+# workflow_dispatch only. Nothing here runs on push, and nothing is published
+# unless the owner ticks a target AND the matching secret exists:
+#
+#   1. build       npm ci (lockfile), typecheck, unit tests, bundle, package the
+#                  .vsix (optionally as a pre-release) + a .sha256 file.
+#   2. release     (optional) attach the .vsix and .sha256 to an EXISTING GitHub
+#                  release (GITHUB_TOKEN, contents: write). Never overwrites.
+#   3. marketplace (optional) `vsce publish` to the Visual Studio Marketplace.
+#                  Secret VSCE_PAT (Azure DevOps PAT, scope Marketplace: Manage,
+#                  publisher `rrrtx`). vsce reads it from the environment.
+#   4. openvsx     (optional) POST the same .vsix to open-vsx.org.
+#                  Secret OVSX_PAT (namespace `rrrtx` must exist and the Eclipse
+#                  publisher agreement must be signed). The token goes to curl
+#                  on stdin (--config -), never on a command line.
+#
+# A ticked target whose secret is missing FAILS with a clear message instead of
+# reporting success. Until the extension is listed, README.md labels it
+# "preview — install the .vsix from Releases" (claim-lint enforces this).
+# =============================================================================
+name: Publish VS Code extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Attach the .vsix to this existing GitHub release (e.g. v1.1.0). Empty = do not attach."
+        required: false
+        type: string
+        default: ""
+      pre_release:
+        description: "Package and publish as a pre-release"
+        type: boolean
+        default: true
+      marketplace:
+        description: "Publish to the Visual Studio Marketplace (needs secret VSCE_PAT)"
+        type: boolean
+        default: false
+      openvsx:
+        description: "Publish to Open VSX (needs secret OVSX_PAT)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-vscode
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build + test + package the .vsix
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    outputs:
+      vsix: ${{ steps.pkg.outputs.vsix }}
+      version: ${{ steps.pkg.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+
+      - name: Install (lockfile only, no install scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Bundle and package
+        id: pkg
+        env:
+          PRE_RELEASE: ${{ inputs.pre_release }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          vsix="xr-vscode-${version}.vsix"
+          node esbuild.mjs
+          pre=""
+          if [ "${PRE_RELEASE}" = "true" ]; then pre="--pre-release"; fi
+          npx --no-install vsce package --no-dependencies ${pre} -o "${vsix}"
+          sha256sum "${vsix}" > "${vsix}.sha256"
+          cat "${vsix}.sha256"
+          echo "vsix=${vsix}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: xr-vscode-vsix
+          path: |
+            extensions/vscode/${{ steps.pkg.outputs.vsix }}
+            extensions/vscode/${{ steps.pkg.outputs.vsix }}.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Attach to GitHub release ${{ inputs.release_tag }}
+    needs: build
+    if: ${{ inputs.release_tag != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: xr-vscode-vsix
+
+      - name: Upload to the existing release (never overwrites)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+          VSIX: ${{ needs.build.outputs.vsix }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "${TAG}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::release_tag must look like v1.2.3 (got '${TAG}')"; exit 1
+          fi
+          gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" > /dev/null
+          sha256sum -c "${VSIX}.sha256"
+          gh release upload "${TAG}" "${VSIX}" "${VSIX}.sha256" --repo "${GITHUB_REPOSITORY}"
+
+  marketplace:
+    name: Publish to the Visual Studio Marketplace
+    needs: build
+    if: ${{ inputs.marketplace }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    steps:
+      - name: Require the secret
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "${VSCE_PAT}" ]; then
+            echo "::error::VSCE_PAT is not set. Add it (Settings → Secrets → Actions) or untick 'marketplace'."; exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+
+      - name: Install vsce from the lockfile
+        run: npm ci --ignore-scripts
+
+      - name: Download the package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: xr-vscode-vsix
+          path: extensions/vscode
+
+      - name: Publish (token from the environment, never argv)
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          VSIX: ${{ needs.build.outputs.vsix }}
+          PRE_RELEASE: ${{ inputs.pre_release }}
+        run: |
+          set -euo pipefail
+          sha256sum -c "${VSIX}.sha256"
+          pre=""
+          if [ "${PRE_RELEASE}" = "true" ]; then pre="--pre-release"; fi
+          npx --no-install vsce publish --packagePath "${VSIX}" ${pre}
+
+  openvsx:
+    name: Publish to Open VSX
+    needs: build
+    if: ${{ inputs.openvsx }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require the secret
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "${OVSX_PAT}" ]; then
+            echo "::error::OVSX_PAT is not set. Add it (Settings → Secrets → Actions) or untick 'openvsx'."; exit 1
+          fi
+
+      - name: Download the package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: xr-vscode-vsix
+
+      - name: Publish (token on curl's stdin, never argv)
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          VSIX: ${{ needs.build.outputs.vsix }}
+        run: |
+          set -euo pipefail
+          sha256sum -c "${VSIX}.sha256"
+          printf 'url = "https://open-vsx.org/api/-/publish?token=%s"\n' "${OVSX_PAT}" \
+            | curl --config - --proto '=https' --tlsv1.2 --fail-with-body -sS -X POST \
+                -H "Content-Type: application/octet-stream" --data-binary "@${VSIX}"
+          echo

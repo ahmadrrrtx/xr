@@ -24,7 +24,7 @@ export type ChatEvent =
   | { kind: "token"; text: string }
   | { kind: "narration"; text: string }
   | { kind: "tool_call"; id: string; tool: string; args?: unknown }
-  | { kind: "tool_result"; id: string; tool: string; ok: boolean; error?: string }
+  | { kind: "tool_result"; id: string; tool: string; ok: boolean; error?: string; reason?: string; next?: string }
   | { kind: "approval"; id: string; tool: string; reason: string; riskTier?: string; preview?: string; args?: unknown }
   | { kind: "usage"; totalTokens?: number; totalUsd?: number }
   | { kind: "done"; fullText: string; finishReason?: string }
@@ -80,7 +80,8 @@ export function parseChatEvent(raw: unknown): ChatEvent | null {
       const id = str(o.id);
       const tool = str(o.tool);
       if (!id || !tool) return null;
-      return { kind: "tool_result", id, tool, ok: o.ok === true, error: str(o.error) };
+      // XR-LAUNCH-024: a failure carries a stable reason code and a next step.
+      return { kind: "tool_result", id, tool, ok: o.ok === true, error: str(o.error), reason: str(o.reason), next: str(o.next) };
     }
     case "approval_required": {
       const req = o.approval_required as Record<string, unknown> | undefined;
@@ -123,7 +124,19 @@ export class DaemonClient {
     private readonly origin: string,
     private readonly token: string,
     private readonly fetchImpl: typeof fetch = fetch,
+    /** Called on any 401/403 so the session can re-read the token (XR-LAUNCH-034). */
+    private readonly onUnauthorized?: () => void,
   ) {}
+
+  /** The token this client sends (for comparing clients; never logged). */
+  get bearer(): string {
+    return this.token;
+  }
+
+  private async fail(res: Response): Promise<never> {
+    if (res.status === 401 || res.status === 403) this.onUnauthorized?.();
+    throw new DaemonHttpError(res.status, await errorText(res));
+  }
 
   private headers(extra?: Record<string, string>): Record<string, string> {
     return { authorization: `Bearer ${this.token}`, accept: "application/json", ...extra };
@@ -134,7 +147,7 @@ export class DaemonClient {
       headers: this.headers(),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) throw new DaemonHttpError(res.status, await errorText(res));
+    if (!res.ok) return this.fail(res);
     return (await res.json()) as T;
   }
 
@@ -145,7 +158,7 @@ export class DaemonClient {
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) throw new DaemonHttpError(res.status, await errorText(res));
+    if (!res.ok) return this.fail(res);
     return (await res.json()) as T;
   }
 
@@ -199,7 +212,7 @@ export class DaemonClient {
       body: JSON.stringify(body),
       signal,
     });
-    if (!res.ok) throw new DaemonHttpError(res.status, await errorText(res));
+    if (!res.ok) await this.fail(res); // always throws
     if (!res.body) throw new DaemonHttpError(res.status, "The daemon returned an empty stream.");
 
     const reader = res.body.getReader();

@@ -13,7 +13,7 @@ matrix legs, and a renamed leg cannot silently drop out of the gate.
 
 | Context (exact) | Workflow | Covers |
 |---|---|---|
-| `Quality Gate` | `ci.yml` | typecheck, truth gate, unit / security / reliability / e2e suites, size + boundaries, perf, a11y, API contract, support-matrix `--check`, `ci:policy` |
+| `Quality Gate` | `ci.yml` | typecheck, truth gate, VS Code extension tests + package, unit / security / reliability / e2e suites, size + boundaries, perf, a11y, API contract, support-matrix `--check`, `ci:policy` |
 | `Cross-Platform gate` | `cross-platform.yml` | full parity suite + golden path on Linux, macOS, Windows |
 | `Supply Chain gate` | `supply-chain.yml` | install hygiene, gitleaks, osv + `bun audit`, licenses, SBOM drift, tag⇔npm invariant, trivy, container `--version` + file-tool smoke |
 | `npm Pack Smoke gate` | `npm-pack-smoke.yml` | packed tarball: global install + `update --check` on Linux, macOS, Windows |
