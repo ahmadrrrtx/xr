@@ -131,6 +131,14 @@ for now ([support matrix](docs/release/SUPPORT_MATRIX.md)). Alpine/musl source i
 limited the same way: the file tools load glibc's `libc.so.6` and refuse to run without it.
 The Docker image is Debian-based (glibc) for that reason.
 
+Where things go: the installers put XR's program files in `~/.xr-agent` (Windows:
+`%USERPROFILE%\.xr-agent`); set `XR_INSTALL_DIR` to an absolute path to choose another
+directory. `XR_HOME` is XR's **data** home (config, databases, vault; default `~/.xr`) and never
+receives program files. Installers before this change used `XR_HOME` as the install directory
+when it was set; a re-run leaves those files where they are and tells you how to remove them.
+The installers refuse to run without a real, writable home directory (`HOME=/` or unset stops
+them), and they refuse an install directory that is your home, a drive root, or the data home.
+
 Per-platform support tiers: [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
 ### 2. First run

@@ -144,7 +144,9 @@ xr serve          # local dashboard + chat — 127.0.0.1 only, token-authed
 
 ## 5. Restart and resume (durable by default)
 
-State lives under `~/.xr` (override with `XR_HOME`). Close and reopen the shell
+State lives under `~/.xr` (override with `XR_HOME`); the program files the
+installer placed live separately in `~/.xr-agent` (override with `XR_INSTALL_DIR`
+when installing). Close and reopen the shell
 and your session, audit chain, and any resumable task are still there. A failed
 task is reported as failed (never faked as complete) and multi-agent workflows
 can be resumed; honest failure mapping is pinned by `test/multi-agent-e2e.test.ts`.
@@ -152,7 +154,7 @@ can be resumed; honest failure mapping is pinned by `test/multi-agent-e2e.test.t
 ## 6. Uninstall (optional)
 
 ```bash
-xr uninstall --keep-data     # removes the launcher, keeps ~/.xr
+xr uninstall --keep-data     # removes the launcher and the install dir, keeps ~/.xr
 xr uninstall --purge         # removes everything, including your data
 ```
 

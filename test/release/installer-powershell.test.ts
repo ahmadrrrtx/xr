@@ -28,7 +28,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..");
@@ -266,4 +267,129 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     expect(out).not.toContain("does not belong to the set");
     expect(out).not.toContain("ValidationMetadataException");
   }, PS_SPAWN_TEST_TIMEOUT_MS);
+});
+
+// ── XR-LAUNCH-025: install dir vs data home, profile validation, Bun pin ──
+describe("install.ps1 — environment hardening (XR-LAUNCH-025), static", () => {
+  test("XR_HOME (the data home) no longer selects the install directory", () => {
+    expect(ps1Code).not.toMatch(/\$TargetDirectory\s*=\s*if\s*\(\$env:XR_HOME\)/);
+    expect(ps1Code).toContain("$env:XR_INSTALL_DIR");
+    expect(ps1Code).toContain("Resolve-XrInstallTarget -TargetDirectory $TargetDirectory");
+  });
+  test("there is no fallback to the current directory when the profile is missing", () => {
+    expect(ps1Code).not.toContain("(Get-Location).Path");
+  });
+  test("both launchers export XR_INSTALL_DIR so `xr uninstall` finds a custom location", () => {
+    expect(ps1Code).toContain("`$env:XR_INSTALL_DIR = ");
+    expect(ps1Code).toContain('setlocal`r`nset `"XR_INSTALL_DIR=$TargetDirectory`"');
+  });
+  test("Bun is installed only on the source path, after extraction, pinned to the release's .bun-version", () => {
+    const binary = ps1Code.slice(ps1Code.indexOf("function Install-XrBinary"), ps1Code.indexOf("function Install-XrBunRuntime"));
+    expect(binary).not.toContain("Install-XrBunRuntime");
+    const source = ps1Code.slice(ps1Code.indexOf("function Install-XrSource"), ps1Code.indexOf("function Install-XrDependencies"));
+    expect(source.indexOf("tar -xzf")).toBeLessThan(source.indexOf("Install-XrBunRuntime"));
+    expect(source).toContain(".bun-version");
+    expect(ps1Code).toContain("-File $bunScript -Version $BunVersion");
+  });
+});
+
+describeShell("install.ps1 — environment combinations executed (XR-LAUNCH-025)", () => {
+  // Real pwsh spawns: same cold-start budget as the block above.
+  const PS_ENV_TIMEOUT_MS = 30_000;
+  function runEnv(code: string, env: Record<string, string | undefined>): string {
+    const merged: Record<string, string> = {};
+    for (const [k, v] of Object.entries({ ...process.env, ...env })) if (v !== undefined) merged[k] = v;
+    for (const k of ["XR_HOME", "XR_INSTALL_DIR"]) if (!(k in env)) delete merged[k];
+    const res = spawnSync(shell!, ["-NoProfile", "-Command", code], { encoding: "utf8", timeout: 120_000, cwd: ROOT, env: merged });
+    return `${res.stdout ?? ""}${res.stderr ?? ""}`;
+  }
+  const probe = (label: string, args = "") =>
+    `try { $r = Resolve-XrInstallTarget ${args} 6>$null; Write-Output "${label}=OK:$r" } catch { Write-Output ("${label}=STOP:" + $_.Exception.Message) }; `;
+
+  test("each XR_INSTALL_DIR / XR_HOME / -TargetDirectory combination resolves or refuses", () => {
+    const w = mkdtempSync(join(tmpdir(), "xr-ps1-env-"));
+    try {
+      const prof = join(w, "prof");
+      mkdirSync(prof, { recursive: true });
+      const pre = `$env:OS='Windows_NT'; . ./install.ps1 *> $null; $env:USERPROFILE='${prof}'; `;
+      const cases: Array<[string, Record<string, string | undefined>, string, RegExp]> = [
+        ["DEFAULT", {}, "", new RegExp(`DEFAULT=OK:${prof}/\\.xr-agent`)],
+        ["XRHOME", { XR_HOME: join(w, "data") }, "", new RegExp(`XRHOME=OK:${prof}/\\.xr-agent`)],
+        ["INSTALLDIR", { XR_INSTALL_DIR: `${join(w, "apps", "xr")}/` }, "", new RegExp(`INSTALLDIR=OK:${w}/apps/xr\\s`)],
+        ["PARAM", { XR_INSTALL_DIR: join(w, "env") }, `-TargetDirectory '${join(w, "p")}'`, new RegExp(`PARAM=OK:${w}/p\\s`)],
+        ["SAMEDATA", { XR_INSTALL_DIR: join(w, "d"), XR_HOME: join(w, "d") }, "", /SAMEDATA=STOP:.*data home or inside it/],
+        ["INSIDE", { XR_INSTALL_DIR: join(w, "d", "app"), XR_HOME: join(w, "d") }, "", /INSIDE=STOP:.*data home or inside it/],
+        ["CONTAINS", { XR_INSTALL_DIR: w, XR_HOME: join(w, "d") }, "", /CONTAINS=STOP:.*contains XR's data home/],
+        ["DEFAULTDATA", { XR_INSTALL_DIR: join(prof, ".xr") }, "", /DEFAULTDATA=STOP:.*data home or inside it/],
+        ["PROFILE", { XR_INSTALL_DIR: prof }, "", /PROFILE=STOP:.*profile directory itself/],
+        ["ROOT", { XR_INSTALL_DIR: "/" }, "", /ROOT=STOP:.*drive root/],
+        ["RELATIVE", { XR_INSTALL_DIR: "rel/xr" }, "", /RELATIVE=STOP:.*must be an absolute path/],
+        ["DOLLAR", { XR_INSTALL_DIR: join(w, "a$b") }, "", /DOLLAR=STOP:.*may not contain/],
+        ["PERCENT", { XR_INSTALL_DIR: join(w, "a%PATH%") }, "", /PERCENT=STOP:.*may not contain/],
+      ];
+      for (const [label, env, args, want] of cases) {
+        expect(runEnv(pre + probe(label, args), env)).toMatch(want);
+      }
+      // Nothing was created by resolution alone.
+      expect(existsSync(join(w, "d"))).toBe(false);
+      expect(existsSync(join(prof, ".xr-agent"))).toBe(false);
+    } finally {
+      rmSync(w, { recursive: true, force: true });
+    }
+  }, PS_ENV_TIMEOUT_MS * 8);
+
+  test("XR_HOME set: a notice names XR_INSTALL_DIR; a legacy marker in the data home is reported", () => {
+    const w = mkdtempSync(join(tmpdir(), "xr-ps1-legacy-"));
+    try {
+      const prof = join(w, "prof");
+      const data = join(w, "data");
+      mkdirSync(prof, { recursive: true });
+      mkdirSync(data, { recursive: true });
+      Bun.write(join(data, ".xr-install"), "version=0.9.0\n");
+      const out = runEnv(`$env:OS='Windows_NT'; . ./install.ps1 *> $null; $env:USERPROFILE='${prof}'; Resolve-XrInstallTarget`, { XR_HOME: data });
+      expect(out).toContain("is XR's data home; program files go to");
+      expect(out).toContain("XR_INSTALL_DIR");
+      expect(out).toContain("An older installer put XR's program files inside the data home");
+    } finally {
+      rmSync(w, { recursive: true, force: true });
+    }
+  }, PS_ENV_TIMEOUT_MS);
+
+  test("no usable profile: the default target refuses instead of using the current directory", () => {
+    const w = mkdtempSync(join(tmpdir(), "xr-ps1-noprof-"));
+    try {
+      const out = runEnv(
+        // pwsh on Linux creates $HOME at startup (and will not start with a
+        // non-directory HOME), so remove the throwaway HOME inside the session
+        // to model a profile that is missing at install time.
+        `$env:OS='Windows_NT'; . ./install.ps1 *> $null; Set-Location '${w}'; Remove-Item -LiteralPath $HOME -Recurse -Force; ` +
+          probe("NOPROF") +
+          probe("NOPROFPARAM", `-TargetDirectory '${join(w, "x")}'`),
+        { USERPROFILE: join(w, "missing"), HOME: join(w, "also-missing") },
+      );
+      expect(out).toMatch(/NOPROF=STOP:.*No user profile directory found/);
+      expect(out).toContain(`NOPROFPARAM=OK:${join(w, "x")}`);
+      expect(existsSync(join(w, ".xr-agent"))).toBe(false);
+    } finally {
+      rmSync(w, { recursive: true, force: true });
+    }
+  }, PS_ENV_TIMEOUT_MS);
+
+  test("the launchers export XR_INSTALL_DIR (apostrophes escaped) and point at the chosen directory", () => {
+    const w = mkdtempSync(join(tmpdir(), "xr-ps1-launch-"));
+    try {
+      const dir = join(w, "O'Brien", "xr");
+      const out = runEnv(
+        `$env:OS='Windows_NT'; . ./install.ps1 *> $null; Install-XrLauncher -TargetDirectory '${dir.replace(/'/g, "''")}' 6>$null; ` +
+          `Write-Output ("PS1=" + (Get-Content -Raw -LiteralPath '${join(dir, "bin-local", "xr.ps1").replace(/'/g, "''")}'))`,
+        { Path: process.env.PATH },
+      );
+      expect(out).toContain(`$env:XR_INSTALL_DIR = '${dir.replace(/'/g, "''")}'`);
+      const cmd = readFileSync(join(dir, "bin-local", "xr.cmd"), "utf8");
+      expect(cmd).toContain(`setlocal\r\nset "XR_INSTALL_DIR=${dir}"`);
+      expect(cmd).toContain(`${dir}`);
+    } finally {
+      rmSync(w, { recursive: true, force: true });
+    }
+  }, PS_ENV_TIMEOUT_MS);
 });

@@ -21,12 +21,20 @@
 #   -y, --yes         accept defaults non-interactively
 #   --mode=<profile>  minimal | local | byok | hybrid | full (passed to the setup wizard)
 #   --allow-system    allow system-level steps in the setup wizard
+#
+# Environment (launch audit XR-LAUNCH-025):
+#   XR_INSTALL_DIR    where XR's program files go (default: ~/.xr-agent). Must be
+#                     an absolute path; never your home directory or XR's data home.
+#   XR_HOME           XR's DATA home (config, databases, vault; default ~/.xr). The
+#                     installer never puts program files there.
+#   XR_INSTALL_VERSION, XR_INSTALL_BASE_URL (https / loopback mirror), XR_INSTALL_ALLOW_SCRIPTS
+# HOME must be an existing, writable, absolute directory other than "/".
 set -Eeuo pipefail
 
 # Stamped from release.manifest.json `channels.publicVersion` (bun run release:stamp).
 VERSION="1.0.0"
 REPO="ahmadrrrtx/xr"
-TARGET_DIR="${XR_HOME:-$HOME/.xr-agent}"
+TARGET_DIR=""   # resolved by resolve_target() after HOME is validated
 MARKER=".xr-install"
 YES=0
 ALLOW_SYSTEM=0
@@ -48,7 +56,8 @@ XR installer. Usage: install.sh [options]
   -y, --yes         accept defaults non-interactively
   --mode=<profile>  minimal | local | byok | hybrid | full
   --allow-system    allow system-level steps in the setup wizard
-Install directory: $XR_HOME, else ~/.xr-agent. Launcher: ~/.local/bin/xr
+Install directory: $XR_INSTALL_DIR, else ~/.xr-agent. Launcher: ~/.local/bin/xr
+XR_HOME is XR's data home (config, databases); it never receives program files.
 USAGE
 }
 
@@ -89,6 +98,53 @@ if [ -n "${XR_INSTALL_BASE_URL:-}" ]; then
     *) die "XR_INSTALL_BASE_URL must be an https:// or loopback http:// URL. Nothing was installed." ;;
   esac
 fi
+
+# Launch audit XR-LAUNCH-025: HOME must be a real, writable user home. An
+# unset HOME used to crash under `set -u`; HOME=/ (common for service users and
+# bare containers) used to install into /.xr-agent and write /.local/bin/xr.
+validate_home(){
+  local h="${HOME:-}"
+  [ -n "$h" ] || die "HOME is not set. Set HOME to your home directory and rerun. Nothing was installed."
+  case "$h" in /*) ;; *) die "HOME (\"$h\") is not an absolute path. Set HOME to your home directory and rerun. Nothing was installed." ;; esac
+  while [ "${h%/}" != "$h" ] && [ "$h" != "/" ]; do h="${h%/}"; done
+  [ "$h" != "/" ] || die "HOME is \"/\". XR installs per user; run it as a user with a real home directory (or set HOME). Nothing was installed."
+  [ -d "$h" ] || die "HOME ($h) does not exist or is not a directory. Nothing was installed."
+  [ -w "$h" ] || die "HOME ($h) is not writable by this user. Nothing was installed."
+  HOME="$h"
+}
+
+# Launch audit XR-LAUNCH-025: the install dir is XR_INSTALL_DIR (default
+# ~/.xr-agent). XR_HOME is the engine's DATA home — it used to double as the
+# install dir, mixing program files into the user's config/databases.
+resolve_target(){
+  local data="${XR_HOME:-$HOME/.xr}"
+  while [ "${data%/}" != "$data" ] && [ "$data" != "/" ]; do data="${data%/}"; done
+  if [ -n "${XR_INSTALL_DIR:-}" ]; then
+    TARGET_DIR="$XR_INSTALL_DIR"
+    case "$TARGET_DIR" in /*) ;; *) die "XR_INSTALL_DIR (\"$TARGET_DIR\") must be an absolute path. Nothing was installed." ;; esac
+  else
+    TARGET_DIR="$HOME/.xr-agent"
+    if [ -n "${XR_HOME:-}" ]; then
+      warn "XR_HOME ($data) is XR's data home; program files go to $TARGET_DIR. Set XR_INSTALL_DIR to choose the install directory."
+      if [ -f "$data/$MARKER" ]; then
+        warn "An older installer put XR's program files inside the data home ($data). They are left untouched; remove src/, node_modules/ and dist/ there once this install works."
+      fi
+    fi
+  fi
+  while [ "${TARGET_DIR%/}" != "$TARGET_DIR" ] && [ "$TARGET_DIR" != "/" ]; do TARGET_DIR="${TARGET_DIR%/}"; done
+  case "$TARGET_DIR" in
+    *'"'*|*'$'*|*'`'*|*'\'*|*$'\n'*) die "The install directory may not contain quotes, \$, backticks, backslashes or newlines. Nothing was installed." ;;
+  esac
+  [ "$TARGET_DIR" != "/" ] || die "Refusing to install into /. Set XR_INSTALL_DIR to a dedicated directory. Nothing was installed."
+  [ "$TARGET_DIR" != "$HOME" ] || die "Refusing to install into your home directory itself. Set XR_INSTALL_DIR to a dedicated directory such as $HOME/.xr-agent. Nothing was installed."
+  [ "$TARGET_DIR" != "$data" ] || die "The install directory ($TARGET_DIR) is XR's data home (XR_HOME). Program files and data must stay separate; set XR_INSTALL_DIR to another directory. Nothing was installed."
+  case "$TARGET_DIR/" in "$data/"*) die "The install directory ($TARGET_DIR) is inside XR's data home ($data). Program files and data must stay separate; set XR_INSTALL_DIR to another directory. Nothing was installed." ;; esac
+  case "$data/" in "$TARGET_DIR/"*) die "The install directory ($TARGET_DIR) contains XR's data home ($data). Set XR_INSTALL_DIR to a dedicated directory. Nothing was installed." ;; esac
+  return 0
+}
+
+validate_home
+resolve_target
 
 # Where to read answers from. `curl … | bash` makes stdin the script pipe, so
 # reading stdin would never reach the user (and the old installer silently
@@ -159,8 +215,10 @@ cleanup(){
 trap cleanup EXIT
 
 download(){
-  # https only; plain http solely for a loopback XR_INSTALL_BASE_URL (test fixtures).
-  curl --proto "$CURL_PROTO" --tlsv1.2 -fsSL --retry 2 --connect-timeout 20 "$1" -o "$2"
+  # https only — for the first request AND every redirect (--proto-redir; curl's
+  # default would follow a redirect to plain http). Plain http solely for a
+  # loopback XR_INSTALL_BASE_URL (test fixtures). XR-LAUNCH-025.
+  curl --proto "$CURL_PROTO" --proto-redir "$CURL_PROTO" --tlsv1.2 -fsSL --retry 2 --connect-timeout 20 "$1" -o "$2"
 }
 
 sha256_of(){
@@ -249,9 +307,19 @@ fetch_binary(){
   return 0
 }
 
+# Bun is only needed for the source install (the binary path never calls this).
+# $1 = the Bun version the release was built with (its .bun-version), if known.
 ensure_bun(){
-  if command -v bun >/dev/null 2>&1; then ok "Bun $(bun --version)"; return; fi
-  warn "The source install needs Bun."
+  local want="${1:-}"
+  if command -v bun >/dev/null 2>&1; then
+    local have; have="$(bun --version 2>/dev/null || echo unknown)"
+    ok "Bun $have"
+    if [ -n "$want" ] && [ "$have" != "$want" ]; then
+      warn "This release was built with Bun $want; you have Bun $have. If the install fails, install Bun $want: curl -fsSL https://bun.sh/install | bash -s \"bun-v$want\""
+    fi
+    return
+  fi
+  warn "The source install needs Bun${want:+ $want}."
   log "Bun install is user-level. It downloads from https://bun.sh or your Termux package repository."
   if ! prompt_yes "Install Bun now?" y; then die "Install Bun from https://bun.sh and rerun this installer. Nothing was installed."; fi
   case "$(os_name)" in
@@ -260,12 +328,18 @@ ensure_bun(){
       pkg install -y bun || die "Bun install failed."
       ;;
     macos|linux)
-      curl --proto '=https' --tlsv1.2 -fsSL https://bun.sh/install | bash
+      # Pinned to the release's Bun when known; https-only including redirects.
+      if [ -n "$want" ]; then
+        curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL https://bun.sh/install | bash -s "bun-v$want"
+      else
+        warn "This release does not record its Bun version; installing the latest Bun."
+        curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL https://bun.sh/install | bash
+      fi
       export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
       export PATH="$BUN_INSTALL/bin:$PATH"
       ;;
     windows)
-      if command -v npm >/dev/null 2>&1; then npm install -g bun; else die "Use install.ps1 on Windows or install Bun manually."; fi
+      if command -v npm >/dev/null 2>&1; then npm install -g "bun${want:+@$want}"; else die "Use install.ps1 on Windows or install Bun manually."; fi
       ;;
     *) die "Unsupported OS for automatic Bun install." ;;
   esac
@@ -286,13 +360,19 @@ fetch_repo(){
   actual="$(sha256_of "$STAGE/$asset")" || die "No sha256 tool (sha256sum or shasum) available — refusing the unverified source archive."
   [ "$actual" = "$expect" ] || die "Integrity check FAILED for $asset (sha256 ${actual} ≠ published ${expect}). Nothing was installed."
   ok "Source archive verified"
-  ensure_bun
 
   mkdir -p "$(dirname "$TARGET_DIR")"
   NEW_TREE="$(mktemp -d "${TARGET_DIR%/}.new.XXXXXX")"
   tar -xzf "$STAGE/$asset" -C "$NEW_TREE"
   [ -f "$NEW_TREE/src/index.ts" ] || die "Source archive v$VERSION has no src/index.ts. Nothing was installed."
   [ -f "$NEW_TREE/bun.lock" ] || die "Source archive v$VERSION has no bun.lock; refusing a non-reproducible install. Nothing was installed."
+  # Use the Bun this release was built with (XR-LAUNCH-025).
+  local bun_pin=""
+  if [ -f "$NEW_TREE/.bun-version" ]; then
+    bun_pin="$(tr -d ' \t\r\n' < "$NEW_TREE/.bun-version")"
+    [[ "$bun_pin" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || bun_pin=""
+  fi
+  ensure_bun "$bun_pin"
   install_deps "$NEW_TREE"
 
   local previous="${TARGET_DIR%/}.previous"
@@ -336,6 +416,8 @@ install_launcher(){
   cat > "$bin_dir/xr" <<EOF
 #!/usr/bin/env bash
 # XR launcher (written by install.sh v$VERSION): compiled binary first, Bun source fallback.
+# XR_INSTALL_DIR tells \`xr uninstall\` / \`xr update\` where the program files live.
+export XR_INSTALL_DIR="$TARGET_DIR"
 if [ -n "$bin" ] && [ -x "$TARGET_DIR/dist/$bin" ]; then
   exec "$TARGET_DIR/dist/$bin" "\$@"
 fi
@@ -374,7 +456,7 @@ main(){
   log "This downloads XR v$VERSION from GitHub Releases, verifies it against the release's SHA256SUMS, and creates an xr launcher."
   log "Optional Ollama, voice, browser and desktop-control packs are handled later by xr install prompts."
   if ! target_is_ours; then
-    die "$TARGET_DIR exists and is not an XR install. Set XR_HOME to a different directory. Nothing was changed."
+    die "$TARGET_DIR exists and is not an XR install. Set XR_INSTALL_DIR to a different directory. Nothing was changed."
   fi
   if ! prompt_yes "Continue?" y; then
     if [ "$YES" != "1" ] && ! tty_source >/dev/null; then

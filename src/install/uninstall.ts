@@ -29,13 +29,41 @@ export interface UninstallPaths {
   launcher: string;
   /** Shell rc files that may contain the "XR launcher" PATH block. */
   rcFiles: string[];
+  /** The user's home directory (never deleted, even if an env var points at it). */
+  home?: string;
+}
+
+const trimSep = (p: string): string => (p.length > 1 ? p.replace(/(?<=.)[\\/]+$/, "") : p);
+
+/**
+ * Launch audit XR-LAUNCH-025 — mirror of install.sh / install.ps1:
+ *   XR_INSTALL_DIR (the launcher exports it) › a legacy install the old
+ *   installer put INSIDE the data home ($XR_HOME/.xr-install) › ~/.xr-agent.
+ * XR_HOME alone no longer names the install dir.
+ */
+export function resolveInstallDir(env: NodeJS.ProcessEnv, home: string, exists: (p: string) => boolean = existsSync): string {
+  if (env.XR_INSTALL_DIR && env.XR_INSTALL_DIR.length > 0) return trimSep(env.XR_INSTALL_DIR);
+  if (env.XR_HOME && env.XR_HOME.length > 0 && exists(join(env.XR_HOME, ".xr-install"))) return trimSep(env.XR_HOME);
+  return join(home, ".xr-agent");
+}
+
+/** True when deleting `installDir` recursively could destroy unrelated data: a filesystem root, HOME itself, or a parent of the data home. Pure. */
+export function isUnsafeInstallDir(installDir: string, dataHome: string, home?: string, platform: NodeJS.Platform = process.platform): boolean {
+  const norm = (p: string) => {
+    const t = trimSep(p.replace(/\\/g, "/"));
+    return platform === "win32" ? t.toLowerCase() : t;
+  };
+  const dir = norm(installDir);
+  if (dir === "" || dir === "/" || /^[a-z]:\/?$/i.test(dir)) return true;
+  if (home && dir === norm(home)) return true;
+  const data = norm(dataHome);
+  return data !== dir && data.startsWith(dir.endsWith("/") ? dir : `${dir}/`);
 }
 
 /** Resolve the paths uninstall operates on (pure, testable). */
 export function resolveUninstallPaths(env: NodeJS.ProcessEnv = process.env): UninstallPaths {
   const home = env.HOME ?? homedir();
-  // install.sh: TARGET_DIR="${XR_HOME:-$HOME/.xr-agent}"
-  const installDir = env.XR_HOME && env.XR_HOME.length > 0 ? env.XR_HOME : join(home, ".xr-agent");
+  const installDir = resolveInstallDir(env, home);
   // config.ts: XR_HOME = process.env.XR_HOME ?? join(homedir(), ".xr")
   const dataHome = env.XR_HOME && env.XR_HOME.length > 0 ? env.XR_HOME : join(home, ".xr");
   const launcher = join(home, ".local", "bin", process.platform === "win32" ? "xr.cmd" : "xr");
@@ -44,6 +72,7 @@ export function resolveUninstallPaths(env: NodeJS.ProcessEnv = process.env): Uni
     dataHome,
     launcher,
     rcFiles: [join(home, ".bashrc"), join(home, ".zshrc"), join(home, ".profile")],
+    home,
   };
 }
 
@@ -197,8 +226,9 @@ export function removeInstallation(
   }
 
   if (opts.removeInstallDir && existsSync(paths.installDir)) {
-    if (isRunningCheckout(paths.installDir, opts.packageRoot)) {
-      // Never delete the code we are running from.
+    if (isRunningCheckout(paths.installDir, opts.packageRoot) || isUnsafeInstallDir(paths.installDir, paths.dataHome, paths.home)) {
+      // Never delete the code we are running from, nor HOME / a root / a
+      // parent of the data home (a mis-set XR_INSTALL_DIR). XR-LAUNCH-025.
       skippedInstallDir = paths.installDir;
     } else {
       try {
@@ -258,10 +288,10 @@ export function performUninstall(
   paths: UninstallPaths = resolveUninstallPaths(),
 ): UninstallSummary {
   const mode = args.mode;
-  // NOTE: install.sh and config.ts both honour XR_HOME — when it is set, the
-  // install dir and the data home are the SAME directory. In that case
-  // --keep-data must NOT delete it (it holds the user's data); only --purge
-  // does.
+  // NOTE: installers before XR-LAUNCH-025 put the program files INSIDE
+  // $XR_HOME, so the install dir and the data home can still be the SAME
+  // directory (legacy layout). Then --keep-data must NOT delete it (it holds
+  // the user's data); only --purge does.
   const installDirIsDataHome = paths.installDir === paths.dataHome;
   const removeInstallDir = mode === "purge" || !installDirIsDataHome;
   const removeData = mode === "purge";
@@ -392,7 +422,7 @@ export async function uninstallXR(args: string[] = []): Promise<void> {
   if (summary.skippedInstallDir || summary.skippedDataHome) {
     // eslint-disable-next-line no-console
     console.warn(
-      `  Note: ${summary.skippedInstallDir ?? summary.skippedDataHome} looks like the checkout you are running from — it was not deleted.`,
+      `  Note: ${summary.skippedInstallDir ?? summary.skippedDataHome} is the checkout you are running from, or a directory XR must never delete (home, a drive root, a parent of the data home) — it was not deleted.`,
     );
   }
   if (mode === "keep-data") {
