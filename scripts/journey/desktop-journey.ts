@@ -89,10 +89,20 @@ async function engineGone(timeoutMs: number): Promise<boolean> {
   return false;
 }
 
+/** Keep the last 4 KB a child printed, so a launch failure carries the panic instead of only a timeout. */
+function captureOutput(child: ChildProcess): (e: unknown) => Error {
+  let buf = "";
+  const keep = (b: Buffer) => { buf = (buf + b.toString("utf8")).slice(-4000); };
+  child.stdout?.on("data", keep);
+  child.stderr?.on("data", keep);
+  return (e) => new Error(`${e instanceof Error ? e.message : String(e)} [exit ${child.exitCode ?? "running"}; output: ${buf.trim() || "(none)"}]`);
+}
+
 /** Minimal W3C WebDriver client for tauri-driver (no npm dependency). */
 async function webdriverSmoke(app: string): Promise<string> {
   const base = "http://127.0.0.1:4444";
-  const driver = spawn("tauri-driver", [], { stdio: "ignore" });
+  const driver = spawn("tauri-driver", [], { stdio: ["ignore", "pipe", "pipe"] });
+  const explain = captureOutput(driver);
   try {
     for (let i = 0; i < 30; i++) {
       try {
@@ -125,6 +135,8 @@ async function webdriverSmoke(app: string): Promise<string> {
     } finally {
       await wd("DELETE", `/session/${sid}`).catch(() => undefined);
     }
+  } catch (e) {
+    throw explain(e);
   } finally {
     driver.kill();
   }
@@ -263,11 +275,14 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
         need(await engineGone(15_000), "engine sidecar still listening 15 s after the app closed (containment)");
         return `${detail}; sidecar exited with the app`;
       }
-      const app: ChildProcess = spawn(ctx.app, [], { env, stdio: "ignore", detached: process.platform !== "win32" });
+      const app: ChildProcess = spawn(ctx.app, [], { env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
+      const explain = captureOutput(app);
       try {
         const port = await waitForEngineHealth(90_000);
         need(app.exitCode === null, `the app exited early (code ${app.exitCode})`);
         return `GUI process up; engine sidecar healthy on :${port}${process.platform === "darwin" ? " (no WKWebView driver on macOS: render not asserted)" : ""}`;
+      } catch (e) {
+        throw explain(e);
       } finally {
         app.kill("SIGTERM");
         if (!(await engineGone(15_000))) {
