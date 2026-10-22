@@ -200,7 +200,10 @@ export async function runInAppContainer(run: AppContainerRun): Promise<AppContai
     si.writeBigUInt64LE(BigInt(ptr(attrList)), 104);
     const pi = Buffer.alloc(24); // PROCESS_INFORMATION
 
-    const env = { ...run.env, TEMP: scratch, TMP: scratch, USERPROFILE: scratch, HOME: scratch };
+    // LOCALAPPDATA is required: CreateProcessW derives the container's package folder from it and fails
+    // with ERROR_ENVVAR_NOT_FOUND (203) without it. It is a path, not a secret; the child gets its own AC folder.
+    const localAppData = process.env.LOCALAPPDATA ?? join(process.env.USERPROFILE ?? "C:\\Users\\Default", "AppData", "Local");
+    const env = { LOCALAPPDATA: localAppData, ...run.env, TEMP: scratch, TMP: scratch, USERPROFILE: scratch, HOME: scratch };
     const envBlock = Buffer.from(Object.entries(env).map(([k, v]) => `${k}=${v}\0`).join("") + "\0", "utf16le");
     const cmdline = wide(run.argv.map(quoteWindowsArg).join(" "));
     const ok = k32.CreateProcessW(null, ptr(cmdline), null, null, 1,

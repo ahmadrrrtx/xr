@@ -113,6 +113,8 @@
 - **Windows compiled binary detects itself for `xr update`** (XR-LAUNCH-007): an installer-placed `xr.exe` could misreport its channel as "npm registry (npm global install)" and check npm instead of GitHub Releases, because compiled-binary detection read only `import.meta.url`. It now also accepts the percent-decoded URL and `Bun.main` (`B:\~BUN\root\…` on Windows).
 - **Desktop data-safety unit tests no longer race each other**: parallel tests created in the same millisecond shared one temp directory and database ("table notes already exists"); temp names now include a per-process counter. Test-only; import/export behavior is unchanged.
 - **Windows AppContainer sandbox failures name the Win32 error**: a refused `CreateProcessW` now reports its error code in the self-check diagnostic, instead of only "CreateProcessW failed". The AppContainer sandbox stays experimental and is not hardware-verified.
+- **Windows AppContainer sandbox can start its child** (XR-LAUNCH-003, experimental): `CreateProcessW` failed with `ERROR_ENVVAR_NOT_FOUND` (203) because the curated environment block had no `LOCALAPPDATA`, which Windows needs to set up the container's package folder. The block now carries it (a path, not a secret). Still experimental and not hardware-verified.
+- **`xr uninstall` from cmd.exe no longer ends with an error** (Windows, install.ps1 installs): the `xr.cmd` launcher lives in the install directory that uninstall deletes, and cmd.exe re-reads batch files from disk, so a successful uninstall printed "The system cannot find the path specified." and exited 1. Each launcher branch now exits inside its already-parsed block. Reinstall, or rerun install.ps1, to get the new launcher.
 
 ## 1.1.0 — 2026-10-15
 

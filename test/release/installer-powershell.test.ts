@@ -405,6 +405,8 @@ describeShell("install.ps1 — environment combinations executed (XR-LAUNCH-025)
       const cmd = readFileSync(join(dir, "bin-local", "xr.cmd"), "utf8");
       expect(cmd).toContain(`setlocal\r\nset "XR_INSTALL_DIR=${dir}"`);
       expect(cmd).toContain(`${dir}`);
+      // xr uninstall deletes this file mid-run: each branch exits inside its parsed block (no re-read).
+      expect(cmd).toMatch(/%\*\r\n  exit \/b\r\n\) else if exist[^]*%\*\r\n  exit \/b\r\n\) else \(/);
     } finally {
       rmSync(w, { recursive: true, force: true });
     }

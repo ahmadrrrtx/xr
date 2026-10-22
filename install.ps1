@@ -437,7 +437,9 @@ function Install-XrLauncher {
     "Write-Error 'xr: no XR install found at $TargetDirectory. Rerun the installer.'; exit 127"
   ) -join "`n"
   Set-Content -Path $ps1 -Encoding UTF8 -Value $ps1Body
-  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nsetlocal`r`nset `"XR_INSTALL_DIR=$TargetDirectory`"`r`nif exist `"$binary`" (`r`n  `"$binary`" %*`r`n) else if exist `"$entry`" (`r`n  bun run `"$entry`" %*`r`n) else (`r`n  echo xr: no XR install found at $TargetDirectory. Rerun the installer. 1>&2`r`n  exit /b 127`r`n)`r`n"
+  # exit /b inside each parsed block: cmd.exe re-reads a batch file from disk, and `xr uninstall`
+  # deletes this file - so it must never go back to it (bare exit /b keeps xr's exit code).
+  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nsetlocal`r`nset `"XR_INSTALL_DIR=$TargetDirectory`"`r`nif exist `"$binary`" (`r`n  `"$binary`" %*`r`n  exit /b`r`n) else if exist `"$entry`" (`r`n  bun run `"$entry`" %*`r`n  exit /b`r`n) else (`r`n  echo xr: no XR install found at $TargetDirectory. Rerun the installer. 1>&2`r`n  exit /b 127`r`n)`r`n"
 
   # PATH hygiene: append only when genuinely absent, compare case-insensitively
   # and ignore trailing separators, and never write back a PATH we failed to
