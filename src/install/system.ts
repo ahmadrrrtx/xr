@@ -380,8 +380,8 @@ export async function updateXR(args: string[] = []): Promise<void> {
 
   // Phase 1 · T11 — atomic update with health canary + automatic rollback.
   // One contract across git-checkout, npm and compiled-binary layouts
-  // (see src/update/atomic-updater.ts). Phase 3 · T2: the binary layout
-  // downloads the platform binary from the release feed.
+  // (see src/update/atomic-updater.ts). The binary layout resolves the newest
+  // complete release and downloads only when it is newer (XR-LAUNCH-019).
   const { runAtomicUpdate } = await import("../update/atomic-updater.ts");
   const { detectChannel } = await import("../update/channels.ts");
   const version = await runningVersion(rootDir);
@@ -392,8 +392,8 @@ export async function updateXR(args: string[] = []): Promise<void> {
   }
   const { standaloneBinary, latestCompleteRelease, installerCommand } = await import("../update/check.ts");
   if (!channel.managed && standaloneBinary(rootDir)) {
-    // Installer-placed binary: never route it to npm (XR-LAUNCH-007); its
-    // in-place swap is XR-LAUNCH-019, so point at the verified installer.
+    // Installer-placed binary: never route it to npm (XR-LAUNCH-007); it has
+    // no package root to swap in place, so point at the verified installer.
     const { describeUpdate } = await import("../update/npm-channel.ts");
     const d = describeUpdate(version, await latestCompleteRelease());
     if (d.updateAvailable) {
@@ -409,8 +409,7 @@ export async function updateXR(args: string[] = []): Promise<void> {
   }
   const result = await runAtomicUpdate({
     packageRoot: rootDir,
-    version,
-    currentVersion: version,
+    currentVersion: version, // never a target: each layout resolves "latest" itself (XR-LAUNCH-019)
     channel: channel.managed ? channel : undefined,
   });
 
@@ -428,8 +427,8 @@ export async function updateXR(args: string[] = []): Promise<void> {
     return;
   }
   if (result.reason.startsWith("already up to date or")) {
-    // git/binary layouts cannot yet tell these apart (update architecture is
-    // XR-LAUNCH-019); say both instead of claiming "latest".
+    // The git layout cannot tell these apart (binary/npm layouts compare
+    // against the published version first); say both instead of "latest".
     info(`Nothing installed: ${result.reason}. Run \`xr update --check\` to see the published version.`);
     return;
   }
@@ -437,7 +436,7 @@ export async function updateXR(args: string[] = []): Promise<void> {
     warn(`Update did not happen — stayed on ${result.keptCurrent}.`);
   }
   warn(`Update not applied: ${result.reason}`);
-  info("The previous version was left untouched (auto-rollback). Config backup is in ~/.xr/backups.");
+  info(/nothing changed$/.test(result.reason) ? "Nothing was downloaded or changed." : "The previous version was left untouched (auto-rollback). Config backup is in ~/.xr/backups.");
   process.exitCode = 1;
 }
 

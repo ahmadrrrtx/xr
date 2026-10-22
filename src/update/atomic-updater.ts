@@ -366,6 +366,8 @@ export async function runAtomicUpdate(opts: {
   channelCanary?: () => { healthy: boolean; reason?: string };
   /** XR-LAUNCH-007 — the running package's version (CORE_VERSION). */
   currentVersion?: string;
+  /** XR-LAUNCH-019 — newest complete GitHub release for the binary layout (tests inject). */
+  releaseResolver?: () => Promise<string | null>;
   /** XR-LAUNCH-007 — npm/bun global layout: registry + runner overrides (tests inject). */
   npmChannel?: Partial<Pick<import("./npm-channel.ts").NpmPlanOptions, "run" | "manager">> & {
     fetcher?: import("./npm-channel.ts").RegistryFetcher;
@@ -407,16 +409,21 @@ export async function runAtomicUpdate(opts: {
   let noPlanReason = "already up to date or update source unreachable";
 
   if (layout === "binary") {
-    const version = opts.version ?? opts.binary?.version;
-    if (!version) {
-      return { ok: false, keptCurrent: "", reason: "binary layout update requires a target version (release manifest missing)" };
-    }
-    plan = createBinaryUpdatePlan({
-      packageRoot: opts.packageRoot,
-      version,
-      ...(opts.binary ?? {}),
-    });
-    noPlanReason = "binary update skipped (no current binary found)";
+    // XR-LAUNCH-019: resolve the newest COMPLETE release (has SHA256SUMS) and
+    // compare BEFORE downloading; `opts.version` is the running version here,
+    // never a target. An explicit `binary.version` pins the target (tests/DSC).
+    const { CORE_VERSION } = await import("../core/version.ts");
+    const { describeUpdate } = await import("./npm-channel.ts");
+    const current = opts.currentVersion ?? CORE_VERSION;
+    const resolve = opts.releaseResolver ?? (await import("./release-feed.ts")).latestCompleteRelease;
+    const target = opts.binary?.version ?? (await resolve());
+    const d = describeUpdate(current, target);
+    if (!target) return { ok: false, keptCurrent: current, reason: "release feed unreachable — nothing changed" };
+    if (!d.updateAvailable) return { ok: false, keptCurrent: current, reason: d.message };
+    plan = createBinaryUpdatePlan({ packageRoot: opts.packageRoot, ...(opts.binary ?? {}), version: target });
+    if (!plan) return { ok: false, keptCurrent: current, reason: "binary update skipped (no current binary found)" };
+    const res = await applyUpdate(plan); // candidate is a staging path; report the version
+    return res.ok ? { ok: true, activated: target } : res;
   } else if (layout === "git") {
     plan = createGitUpdatePlan({ packageRoot: opts.packageRoot, ...opts.git });
     noPlanReason = "already up to date or fetch failed";

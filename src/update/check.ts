@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { info, ok, warn } from "../interfaces/cli.ts";
 import { detectInstallLayout } from "./atomic-updater.ts";
+import { latestCompleteRelease } from "./release-feed.ts";
 
 /**
  * The running package's version and, when present, the release manifest's
@@ -72,31 +73,8 @@ export async function checkForUpdate(args: string[], rootDir: string): Promise<v
   if (!latest) process.exitCode = 1;
 }
 
-/** Newest published, non-pre-release GitHub release that carries SHA256SUMS. */
-export async function latestCompleteRelease(
-  fetcher: (url: string, init?: RequestInit) => Promise<Response> = (u, i) => fetch(u, i),
-): Promise<string | null> {
-  const { compareSemver } = await import("../skills/semver.ts");
-  try {
-    const { endpointOverride } = await import("./npm-channel.ts");
-    const api = endpointOverride(process.env.XR_UPDATE_RELEASES_URL) ?? "https://api.github.com/repos/ahmadrrrtx/xr/releases?per_page=20";
-    const res = await fetcher(api, {
-      headers: { accept: "application/vnd.github+json", "user-agent": "xr-update-check" },
-    });
-    if (!res.ok) return null;
-    const list = (await res.json()) as Array<{ tag_name?: string; draft?: boolean; prerelease?: boolean; assets?: Array<{ name?: string }> }>;
-    let best: string | null = null;
-    for (const r of list) {
-      if (r.draft || r.prerelease || !r.tag_name) continue;
-      if (!r.assets?.some((a) => a.name === "SHA256SUMS")) continue;
-      const v = r.tag_name.replace(/^v/, "");
-      if (!best || compareSemver(v, best) > 0) best = v;
-    }
-    return best;
-  } catch {
-    return null;
-  }
-}
+// XR-LAUNCH-019: lives in a leaf module so atomic-updater can use it without an import cycle.
+export { latestCompleteRelease } from "./release-feed.ts";
 
 /** True inside a `bun build --compile` binary (modules live in Bun's virtual FS). */
 export function isCompiledBinary(url: string = import.meta.url): boolean {
@@ -105,9 +83,9 @@ export function isCompiledBinary(url: string = import.meta.url): boolean {
 
 /**
  * A compiled binary that is not inside a package `dist/` layout — i.e. one the
- * bootstrap installer placed on PATH. Its in-place update path is
- * XR-LAUNCH-019; until then it must never be routed to npm (it is not an npm
- * install) and `xr update` points at the verified installer instead.
+ * bootstrap installer placed on PATH. It must never be routed to npm (it is
+ * not an npm install); `xr update` compares it with the newest complete release
+ * and, only when newer, points at the verified installer (no in-place swap).
  */
 export function standaloneBinary(rootDir: string): boolean {
   return isCompiledBinary() && detectInstallLayout(rootDir) !== "binary";
