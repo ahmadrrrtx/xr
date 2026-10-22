@@ -44,7 +44,6 @@ tauri-plugin-shell = "2"
 # (Windows/Linux launch a new one per link) to the running instance.
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-store = "2"
-tauri-plugin-stronghold = "2"
 tauri-plugin-updater = "2"
 
 # Phase 3 — hardware detection (sysinfo) + localhost Ollama HTTP probes
@@ -77,8 +76,6 @@ sha2 = "0.10"
 # shutdown on Unix (src/unix.rs). Already transitive via tauri.
 libc = "0.2"
 
-# Stronghold key derivation (Argon2id) — see src/lib.rs `key_derivation`.
-argon2 = "0.5"
 # `tauri::generate_context!` requires serde/serde_json as direct dependencies.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

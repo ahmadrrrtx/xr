@@ -37,21 +37,7 @@ mod unix;
 #[cfg(windows)]
 mod win;
 
-use argon2::{Algorithm, Argon2, Params, Version};
 use tauri::Manager as _;
-
-/// Stronghold key derivation (Argon2id). The password is supplied by the
-/// frontend when a stronghold is opened; the salt is a fixed app constant.
-/// Phase 8 (Settings/Stronghold integration) owns the real UX around this.
-fn key_derivation(password: &str) -> Vec<u8> {
-    const SALT: &[u8] = b"xr-desktop-stronghold-v1";
-    let params = Params::new(32, 3, 4, Some(32)).expect("valid argon2 params");
-    let mut key = [0u8; 32];
-    Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
-        .hash_password_into(password.as_bytes(), SALT, &mut key)
-        .expect("argon2 key derivation is infallible for valid params");
-    key.to_vec()
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -89,7 +75,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_stronghold::Builder::new(key_derivation).build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
