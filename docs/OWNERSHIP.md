@@ -203,6 +203,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/measure-trust-perf.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/memory-recall-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/mutate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/npm-ghost-versions.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/npm-pack-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ownership-map.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/parity-suite-runner.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |

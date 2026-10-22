@@ -40,6 +40,7 @@
     "channel:sync": "bun run scripts/channel-manifest.ts --write",
     "channel:check": "bun run scripts/channel-manifest.ts --check",
     "channel:live": "bun run scripts/channel-live-check.ts",
+    "npm:ghosts": "bun run scripts/npm-ghost-versions.ts",
     "channel:publish-verify": "bun run scripts/channel-publish-verify.ts",
     "changelog:generate": "bun run scripts/changelog.ts --write",
     "changelog:check": "bun run scripts/changelog.ts --check",
