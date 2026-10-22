@@ -35,7 +35,9 @@ concurrency:
 
 jobs:
   matrix:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # workflow_run fires for fork PRs too: only install bundles built from this
+    # repository's own branches (zizmor dangerous-triggers, audit 032).
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
     strategy:
       fail-fast: false
       matrix:
@@ -49,13 +51,14 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Resolve source run
         id: src
         shell: bash
+        env:
+          RUN: ${{ github.event.workflow_run.id || github.event.inputs.run_id }}
         run: |
-          RUN="${{ github.event.workflow_run.id || github.event.inputs.run_id }}"
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -82,7 +85,7 @@ jobs:
             librsvg2-2
 
       - name: Download this OS's bundles
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: xr-desktop-${{ matrix.slug }}
           path: rdm-bundles

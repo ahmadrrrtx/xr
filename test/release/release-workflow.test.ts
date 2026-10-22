@@ -44,7 +44,7 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
     for (const t of ["linux-x64", "linux-arm64", "darwin-arm64", "darwin-x64", "windows-x64"]) {
       expect(workflow).toContain(t);
     }
-    expect(workflow).toContain("ubuntu-latest");
+    expect(workflow).toContain("ubuntu-24.04");
     expect(workflow).toContain("macos-latest");
     expect(workflow).toContain("windows-latest");
   });
@@ -85,7 +85,7 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
     // Match the run line: explanatory comments may name the command.
     expect(workflow).not.toMatch(/^\s*bun publish /m);
     // OIDC trusted publishing needs npm >= 11.5.1 on Node >= 22.
-    expect(workflow).toMatch(/actions\/setup-node@[0-9a-f]{40} # v4\b/); // SHA-pinned (XR-LAUNCH-012)
+    expect(workflow).toMatch(/actions\/setup-node@[0-9a-f]{40} # v\d+\b/); // SHA-pinned (XR-LAUNCH-012); major policed by ci:policy rule 7
     expect(workflow).toContain("npm install -g npm@latest");
     expect(workflow).toContain("id-token: write");
     // No long-lived npm token is consumed (trusted publishing). A set OR empty
@@ -120,7 +120,7 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
 
 describe("Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families", () => {
   test("a single matrix drives Linux + macOS + Windows", () => {
-    expect(crossPlatform).toContain("ubuntu-latest");
+    expect(crossPlatform).toContain("ubuntu-24.04");
     expect(crossPlatform).toContain("macos-latest");
     expect(crossPlatform).toContain("windows-latest");
   });
@@ -145,7 +145,7 @@ describe("Phase 9 · T6 — nightly beta install survey on 3 OS families", () =>
   test("survey jobs exist for all three OS families with the ≥0.99 gate", () => {
     expect(nightly).toContain("beta-install-survey");
     expect(nightly).toContain("--target=0.99");
-    for (const runner of ["ubuntu-latest", "macos-latest", "windows-latest"]) {
+    for (const runner of ["ubuntu-24.04", "macos-latest", "windows-latest"]) {
       expect(nightly).toContain(runner);
     }
     // evidence is uploaded per OS

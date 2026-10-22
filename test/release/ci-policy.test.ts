@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { checkPins, checkWorkflows, loadWorkflows } from "../../scripts/ci-policy.ts";
+import { checkPins, checkRuntime, checkWorkflows, loadWorkflows } from "../../scripts/ci-policy.ts";
 import { checkQuarantine, loadQuarantine, type QuarantineEntry } from "../../scripts/quarantine.ts";
 import { BEGIN, END, cellFor, render, splice, type Targets } from "../../scripts/support-matrix.ts";
 import type { JourneyEvidence } from "../../scripts/journey/cli-journey.ts";
@@ -24,7 +24,7 @@ describe("ci-policy", () => {
       ["ci.yml", "cross-platform.yml", "desktop-app.yml", "journey.yml", "npm-pack-smoke.yml", "supply-chain.yml"],
     );
     expect(rc.nonGating.map((r: { workflow: string }) => r.workflow).sort()).toEqual(
-      ["os-sandbox.yml", "provider-canaries.yml", "real-device-matrix.yml", "soak.yml", "windows-arm64.yml"],
+      ["os-sandbox.yml", "provider-canaries.yml", "real-device-matrix.yml", "soak.yml", "windows-arm64.yml", "workflow-audit.yml"],
     );
   });
 
@@ -38,6 +38,30 @@ describe("ci-policy", () => {
     expect(checkPins("w.yml", `    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0`)).toEqual([]);
   });
 
+  test("runtime (032): floating ubuntu image and Node 20-era first-party majors are violations", () => {
+    const sha = "a".repeat(40);
+    expect(checkRuntime("w.yml", "    runs-on: ubuntu-latest")).toHaveLength(1);
+    expect(checkRuntime("w.yml", "        os: [ubuntu-latest, macos-latest]")).toHaveLength(1);
+    expect(checkRuntime("w.yml", "    runs-on: ubuntu-24.04 # was ubuntu-latest")).toEqual([]);
+    expect(checkRuntime("w.yml", "# ubuntu-latest moves to 26.04")).toEqual([]);
+    expect(checkRuntime("w.yml", `      - uses: actions/checkout@${sha} # v4`)).toHaveLength(1);
+    expect(checkRuntime("w.yml", `      - uses: actions/checkout@${sha} # v5.1.0`)).toEqual([]);
+    expect(checkRuntime("w.yml", `      - uses: actions/cache/restore@${sha} # v4.2.0`)).toHaveLength(1);
+    // v5 of upload-artifact still defaulted to node20; v6 is the first node24 major
+    expect(checkRuntime("w.yml", `      - uses: actions/upload-artifact@${sha} # v5.0.0`)).toHaveLength(1);
+    expect(checkRuntime("w.yml", `      - uses: actions/download-artifact@${sha} # v7.0.0`)).toEqual([]);
+    expect(checkRuntime("w.yml", `      - uses: actions/github-script@${sha}`)).toHaveLength(1);
+    expect(checkRuntime("w.yml", `      - uses: oven-sh/setup-bun@${sha} # v2`)).toEqual([]);
+  });
+
+  test("runtime (032): the pre-032 workflows would have failed rule 7", () => {
+    const old = Bun.spawnSync(["git", "show", "a9a9dd5f:.github/workflows/ci.yml"], { cwd: ROOT });
+    if (old.exitCode !== 0) return; // shallow clone without history: nothing to compare
+    const v = checkRuntime("ci.yml", old.stdout.toString());
+    expect(v.some((x) => x.includes("ubuntu-latest"))).toBe(true);
+    expect(v.some((x) => x.includes("actions/checkout must be v5+"))).toBe(true);
+  });
+
   const wf = (yaml: string) => ({ "x.yml": { parsed: Bun.YAML.parse(yaml) as never, text: yaml } });
   const req = { required: [{ workflow: "x.yml", job: "gate", context: "X gate" }], advisoryJobs: [], nonGatingLegs: [], nonGating: [] };
   const good = `name: X
@@ -48,13 +72,13 @@ on:
     branches: [main]
 jobs:
   a:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps: [{ run: "true" }]
   gate:
     name: X gate
     if: always()
     needs: [a]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps: [{ run: "true" }]
 `;
 
@@ -64,7 +88,7 @@ jobs:
     expect(checkWorkflows(wf(good.replace("    if: always()\n", "")), req).join()).toContain("always()");
     expect(checkWorkflows(wf(good.replace("needs: [a]", "needs: []")), req).join()).toContain("does not need job a");
     expect(checkWorkflows(wf(good.replace("name: X gate", "name: Something else")), req).join()).toContain("branch protection expects");
-    expect(checkWorkflows(wf(good.replace("  a:\n    runs-on: ubuntu-latest", "  a:\n    continue-on-error: true\n    runs-on: ubuntu-latest")), req).join()).toContain("continue-on-error");
+    expect(checkWorkflows(wf(good.replace("  a:\n    runs-on: ubuntu-24.04", "  a:\n    continue-on-error: true\n    runs-on: ubuntu-24.04")), req).join()).toContain("continue-on-error");
     expect(checkWorkflows(wf(good.replace('steps: [{ run: "true" }]', 'steps: [{ name: s, run: "true", continue-on-error: true }]')), req).join()).toContain("failure()-only");
     expect(checkWorkflows(wf(good.replace('steps: [{ run: "true" }]', 'steps: [{ uses: oven-sh/setup-bun@x, with: { bun-version: "1.4.2" } }]')), req).join()).toContain("bun-version-file");
   });

@@ -14,6 +14,8 @@
  *      failure-only diagnostic steps
  *   5. non-gating workflows say so in their name ("(non-gating)")
  *   6. the flaky-test quarantine is valid and unexpired
+ *   7. explicit runner images (no ubuntu-latest) and first-party actions/*
+ *      at or above their first Node-24 major (XR-LAUNCH-032)
  *
  *   bun run ci:policy            exit 1 with one line per violation
  */
@@ -52,6 +54,30 @@ export function checkPins(file: string, text: string): string[] {
   return out;
 }
 
+/** First major of each first-party action whose default runtime is node24. */
+export const NODE24_MIN_MAJOR: Record<string, number> = {
+  "actions/checkout": 5, "actions/cache": 5, "actions/setup-node": 5,
+  "actions/upload-artifact": 6, "actions/download-artifact": 7, "actions/github-script": 8,
+};
+
+/** Rule 7 on raw text: a floating runner image or a Node 20-era action major. */
+export function checkRuntime(file: string, text: string): string[] {
+  const out: string[] = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    const code = line.replace(/\s#.*$/, "");
+    if (/^\s*#/.test(line)) return;
+    if (/\bubuntu-latest\b/.test(code)) out.push(`${file}:${i + 1}: ubuntu-latest floats between images — name one (ubuntu-24.04)`);
+    const m = /^\s*(?:-\s+)?uses:\s*([^\s#@]+)@\S+\s*(#.*)?$/.exec(line);
+    if (!m) return;
+    const action = m[1]!.split("/").slice(0, 2).join("/");
+    const min = NODE24_MIN_MAJOR[action];
+    if (min === undefined) return;
+    const major = Number(/#\s*v(\d+)/.exec(m[2] ?? "")?.[1] ?? NaN);
+    if (!(major >= min)) out.push(`${file}:${i + 1}: ${action} must be v${min}+ (first Node-24 major); the pin comment says ${JSON.stringify((m[2] ?? "").trim())}`);
+  });
+  return out;
+}
+
 const needsOf = (j: Job): string[] => (j.needs === undefined ? [] : Array.isArray(j.needs) ? j.needs : [j.needs]);
 const triggers = (w: Workflow): Record<string, unknown> => {
   const on = (w as Record<string, unknown>).on ?? (w as Record<string, unknown>)["true"];
@@ -63,7 +89,7 @@ const triggers = (w: Workflow): Record<string, unknown> => {
 export function checkWorkflows(workflows: Record<string, { parsed: Workflow; text: string }>, rc: RequiredChecks): string[] {
   const out: string[] = [];
   for (const [file, { parsed, text }] of Object.entries(workflows)) {
-    out.push(...checkPins(file, text));
+    out.push(...checkPins(file, text), ...checkRuntime(file, text));
     for (const [jid, job] of Object.entries(parsed.jobs ?? {})) {
       for (const st of job.steps ?? []) {
         if (st.uses?.startsWith("oven-sh/setup-bun@")) {

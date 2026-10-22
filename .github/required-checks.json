@@ -23,6 +23,7 @@
     { "workflow": "real-device-matrix.yml", "reason": "physical-device evidence, owner-run" },
     { "workflow": "soak.yml", "reason": "multi-hour endurance run, scheduled" },
     { "workflow": "os-sandbox.yml", "reason": "experimental native sandboxes (D3), security review pending" },
-    { "workflow": "windows-arm64.yml", "reason": "Windows ARM64 is unverified without hardware (D4)" }
+    { "workflow": "windows-arm64.yml", "reason": "Windows ARM64 is unverified without hardware (D4)" },
+    { "workflow": "workflow-audit.yml", "reason": "zizmor workflow-security report (XR-LAUNCH-032); findings are triaged, not gating" }
   ]
 }

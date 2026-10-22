@@ -50,12 +50,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { osName: "Linux (reference)", runsOn: ubuntu-latest, bunOs: linux }
+          - { osName: "Linux (reference)", runsOn: ubuntu-24.04, bunOs: linux }
           - { osName: "macOS", runsOn: macos-latest, bunOs: darwin }
           - { osName: "Windows", runsOn: windows-latest, bunOs: win32 }
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -164,7 +164,7 @@ jobs:
     name: Cross-Platform gate
     if: always()
     needs: [parity]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every required job succeeded

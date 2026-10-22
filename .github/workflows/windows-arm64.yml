@@ -55,7 +55,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Install native bun-windows-aarch64 (checksum-verified)
         env:
@@ -78,6 +78,7 @@ jobs:
       - name: Runtime is native arm64 (not x64 emulation)
         run: |
           bun --version
+          # shellcheck disable=SC2016 # a single-quoted JavaScript program for bun -e
           bun -e 'if (process.platform !== "win32" || process.arch !== "arm64") { console.error(`expected win32/arm64, got ${process.platform}/${process.arch}`); process.exit(1); }; console.log("win32/arm64 native")'
 
       - name: bun:ffi availability on this Bun (diagnostic)

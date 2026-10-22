@@ -1,0 +1,80 @@
+# XR-LAUNCH-032 — workflow security audit (zizmor), REPORT ONLY.
+#
+# actionlint is the gating workflow lint (ci.yml truth-gate). zizmor audits
+# the same files for security smells — template injection, credential
+# persistence, cache poisoning, dangerous triggers, unpinned uses — and
+# publishes its findings to the run summary plus an artifact. Findings never
+# fail this workflow; a zizmor that cannot run at all does, so a broken audit
+# is visible rather than silently green. Triage lives in docs/ci/CI.md.
+
+name: Workflow Audit (non-gating)
+
+on:
+  pull_request:
+    paths: [".github/workflows/**", ".github/dependabot.yml"]
+  push:
+    branches: [main]
+    paths: [".github/workflows/**"]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor (report only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - name: zizmor (pinned binary)
+        env:
+          ZIZMOR_VERSION: "1.31.1"
+          ZIZMOR_SHA256: d185f726bdaf92df78273217dfdd24ebcd6b0ef48cf3ce776ff5762b6e138c99
+          # Enables zizmor's online audits (impostor commits, known-vulnerable
+          # actions) with this run's read-only token.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/zizmor"; mkdir -p "$d"
+          curl -fsSLo "$d/zizmor.tgz" "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${ZIZMOR_SHA256}  $d/zizmor.tgz" | sha256sum -c -
+          tar -xzf "$d/zizmor.tgz" -C "$d" zizmor
+          set +e
+          "$d/zizmor" --no-progress --format plain .github/workflows > zizmor.txt 2>&1
+          rc=$?
+          set -e
+          {
+            echo "### zizmor ${ZIZMOR_VERSION} (report only)"
+            echo
+            echo '```'
+            tail -n 1 zizmor.txt
+            echo '```'
+            echo
+            echo "Full report: the \`zizmor-report\` artifact. Exit code ${rc} (10–14 = findings by top severity)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 0 = clean, 10–14 = findings (reported above). Anything else means
+          # the audit itself did not run.
+          case "$rc" in
+            0|1[0-4]) ;;
+            *) cat zizmor.txt; echo "::error::zizmor failed to run (exit ${rc})"; exit "$rc" ;;
+          esac
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: zizmor-report
+          path: zizmor.txt
+          if-no-files-found: ignore
+          retention-days: 30

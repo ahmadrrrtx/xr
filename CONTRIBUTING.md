@@ -278,7 +278,7 @@ pass/fail/skip counts in the job summary (`.github/workflows/ci.yml`,
 | Requirement | Spec | Why / who enforces |
 |---|---|---|
 | Bun | **1.4.2** (CI pin via `.bun-version` + `packageManager`) | `bun test` is the one runner; feature drift between versions is a real parity class (cross-platform.yml) |
-| OS | Linux x64 (CI: `ubuntu-latest`); macOS/Windows supported with platform-specific exclusions | `scripts/platform-parity.ts` is the one computation authority for file selection |
+| OS | Linux x64 (CI: `ubuntu-24.04`); macOS/Windows supported with platform-specific exclusions | `scripts/platform-parity.ts` is the one computation authority for file selection |
 | Network | **None required.** Every e2e suite talks to a local stub (`test/helpers/stub-openai.ts` binds `127.0.0.1:0`); external canaries skip without provider secrets | A hermetic suite must run offline; `test/e2e-blackbox/*` never dials out |
 | Ports | Ephemeral-port availability on loopback; hook suites and e2e stubs must never collide with a hardcoded port | `test/helpers/suite-tmp.ts` preload + `isPortFree`/`assertStubClosed` hygiene in `test/e2e-blackbox/hygiene.test.ts` (zero leaked listeners is a TEST) |
 | Process spawn | Enough headroom to fork real CLI children (`bun run src/index.ts`) — a few dozen concurrent short-lived processes | `test/e2e-blackbox/*` + `test/reliability/*` are spawn classes; the `test / reliability-spawn` lane exists because they are the first to show resource pressure |

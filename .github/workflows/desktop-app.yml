@@ -60,7 +60,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Install Linux system dependencies (WebKit2GTK 4.1 + tray)
         run: |
           sudo apt-get update
@@ -134,7 +134,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
@@ -193,7 +193,7 @@ jobs:
           - { osName: "Windows (arm64)", runsOn: windows-11-arm, triple: aarch64-pc-windows-msvc, slug: windows-arm64, tauriArgs: "--bundles nsis", targetDir: target/release }
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -259,6 +259,7 @@ jobs:
           set -euo pipefail
           thumb=""
           if [ "${{ runner.os }}" = "Windows" ] && [ "$HAS_WINDOWS_CERT" = "true" ]; then
+            # shellcheck disable=SC2016 # a single-quoted PowerShell program: $vars are PowerShell's
             thumb="$(pwsh -NoProfile -Command '
               $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
               $pfx = Join-Path $env:RUNNER_TEMP "xr-signing.pfx"
@@ -451,7 +452,7 @@ jobs:
           Get-ChildItem $out | Format-Table Name,Length
       - name: Upload MSIX
         if: matrix.runsOn == 'windows-latest'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-msix-${{ matrix.slug }}
           if-no-files-found: error
@@ -473,13 +474,13 @@ jobs:
           ls -la desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip
       - name: Upload portable artifact
         if: matrix.runsOn == 'windows-latest'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-portable-${{ matrix.slug }}
           if-no-files-found: error
           path: desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip
       - name: Upload installer artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-desktop-${{ matrix.slug }}
           if-no-files-found: error
@@ -496,7 +497,7 @@ jobs:
       # travel with the sigs so the manifest job can refuse an orphan .sig.
       - name: Upload updater signature artifacts (present only when provisioned)
         if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-updater-sigs-${{ matrix.slug }}
           if-no-files-found: ignore
@@ -560,13 +561,13 @@ jobs:
           - { slug: darwin-x64, runsOn: macos-15-intel, webdriver: false }
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
       - name: Download the bundle built by the bundle job
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: xr-desktop-${{ matrix.slug }}
           path: bundles
@@ -589,11 +590,12 @@ jobs:
         run: |
           set -euo pipefail
           wd=""; [ "${{ matrix.webdriver }}" = "true" ] && wd="--webdriver"
+          # shellcheck disable=SC2206 # $wd is empty or the single word --webdriver; unquoted on purpose
           run=(bun run scripts/journey/desktop-journey.ts --slug "${{ matrix.slug }}" --bundles bundles $wd --evidence "evidence/desktop-${{ matrix.slug }}-${{ matrix.runsOn }}.json")
           if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a "${run[@]}"; else "${run[@]}"; fi
       - name: Upload journey evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: journey-evidence-desktop-${{ matrix.slug }}-${{ matrix.runsOn }}
           path: evidence/*.json
@@ -627,7 +629,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Install desktop-entry + AppStream validators
         run: |
@@ -678,7 +680,7 @@ jobs:
 
       - name: Upload the Flatpak repo
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-flatpak
           if-no-files-found: error
@@ -689,13 +691,13 @@ jobs:
   # fixtures; publishing happens only on tags with provisioned keys.
   updater-manifest:
     name: Desktop latest.json — assemble + verify (publish on tags only)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [bundle]
     permissions:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -705,7 +707,7 @@ jobs:
       - name: Updater manifest + signature verifier tests (ephemeral test key)
         run: bun test test/release/updater-manifest.test.ts
       - name: Download signed updater artifacts (tags) or the unsigned bundles (dry run)
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: ${{ github.ref_type == 'tag' && 'xr-updater-sigs-*' || 'xr-desktop-*' }}
           path: updater-artifacts
@@ -758,7 +760,7 @@ jobs:
     name: Desktop gate (bundles + latest.json + journey)
     if: always()
     needs: [shell-check, shell-test-windows, bundle, journey, updater-manifest, flatpak]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every required job succeeded

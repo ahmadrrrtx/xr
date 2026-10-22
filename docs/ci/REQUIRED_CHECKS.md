@@ -32,6 +32,7 @@ blocks a PR forever, so `ci:policy` rejects path filters on required workflows.
 | `Soak (non-gating)` | multi-hour endurance run (5 h nightly), trend evidence |
 | `OS sandbox (experimental) (non-gating)` | native sandboxes (D3), security review pending |
 | `Windows ARM64 (file authority) (non-gating)` | Windows ARM64 is unverified without hardware (D4) |
+| `Workflow Audit (non-gating)` | zizmor workflow-security report (XR-LAUNCH-032); findings are triaged, not gating |
 | `windows-11-arm` leg of the CLI journey; `windows-arm64` bundle + journey legs of the desktop workflow | same (D4); `continue-on-error` is scoped to that leg only |
 | `test / quarantine (non-blocking)` in `ci.yml` | runs the quarantined flaky files (see [CI.md](CI.md#flaky-tests-no-retries-quarantine)) |
 | `test / e2e-blackbox-proof` in `ci.yml` | Exit-Gate proof lane, red by design until F-02/F-03 land |

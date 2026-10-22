@@ -14,15 +14,44 @@ required checks themselves are listed in [REQUIRED_CHECKS.md](REQUIRED_CHECKS.md
    with a `# vX` comment. The one exception is `slsa-github-generator`, which
    must be referenced by tag for its provenance verification. Bun comes from
    `.bun-version` (currently 1.4.2) via `bun-version-file`; Dependabot proposes
-   action bumps weekly.
+   action bumps weekly. Runner images are named (`ubuntu-24.04`, never
+   `ubuntu-latest`), and first-party `actions/*` stay on their Node-24 majors.
 4. **Evidence over claims.** The support matrix is generated from journey
    evidence (below). A hand edit fails the Quality Gate.
 
 `bun run ci:policy` enforces 1–3 mechanically: gate shape, no `paths:` filter
 on required workflows, no job-level `continue-on-error` except on listed
 non-gating legs, step-level `continue-on-error` only on failure-only diagnostic
-steps, SHA pins, the Bun pin source, quarantine validity, and the Dependabot
-config.
+steps, SHA pins, the Bun pin source, quarantine validity, the Dependabot
+config, and (rule 7) named runner images plus the Node-24 action floor:
+checkout/cache/setup-node v5, upload-artifact v6, download-artifact v7,
+github-script v8. The floor reads the `# vX` comment that Dependabot keeps in
+step with the SHA.
+
+## Workflow lint and audit (XR-LAUNCH-032)
+
+- **actionlint (gating).** The truth-gate job runs actionlint 1.7.12 with
+  shellcheck 0.11.0 over every workflow and every `run:` block. Both binaries
+  are downloaded at fixed versions and sha256-checked. Run it locally:
+  `actionlint -shellcheck=$(command -v shellcheck) -pyflakes=`. Intentional
+  shell patterns carry an inline `# shellcheck disable=SCxxxx # reason`.
+- **zizmor (report only).** `Workflow Audit (non-gating)` runs zizmor 1.31.1
+  (pinned, sha256-checked) on workflow changes and weekly, and posts the counts
+  to the run summary with the full report as an artifact. Findings do not fail
+  it; a zizmor that cannot run does. Baseline with offline audits at
+  XR-LAUNCH-032: 115 findings (27 high), mostly `artipacked` (checkout
+  credentials persisted) and `cache-poisoning` in release paths. Real-Device
+  Matrix's `workflow_run` trigger stays flagged, but its job now only installs
+  bundles built from this repository, never from a fork PR.
+- **Orphan registration.** `zz-probe-native-fs.yml` no longer exists in the
+  tree, but GitHub still lists it (workflow id 386530097) because its old runs
+  remain. Only the owner can remove it, as deleting runs destroys history:
+
+  ```bash
+  gh workflow disable 386530097 -R ahmadrrrtx/xr
+  gh run list -R ahmadrrrtx/xr --workflow 386530097 --limit 500 --json databaseId -q '.[].databaseId' \
+    | xargs -n1 gh run delete -R ahmadrrrtx/xr
+  ```
 
 ## Flaky tests: no retries, quarantine
 
@@ -87,8 +116,8 @@ must say where it ran.
 
 ## Report-only workflows
 
-Provider Canaries, Real-Device Matrix, Soak, OS sandbox and Windows ARM64 carry
-`(non-gating)` in their names. They must still complete:
+Provider Canaries, Real-Device Matrix, Soak, OS sandbox, Windows ARM64 and
+Workflow Audit carry `(non-gating)` in their names. They must still complete:
 
 - canaries run a keyless fixture leg (`scripts/canary-fixture.ts`) that must
   pass. The live leg is an audited skip without owner secrets;
