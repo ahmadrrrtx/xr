@@ -62,12 +62,15 @@ export async function runDockerJourney(evidenceClass: "CI" | "LR"): Promise<Jour
     await step("launch", async () => {
       const v = await sh(["docker", "run", "--rm", "-v", `${volume}:/data`, tag, "--version"]);
       need(v.status === 0 && v.out.includes(N), `--version: ${tail(v.out, 200)}`);
+      // XR-LAUNCH-020: real write_file → read_file through the glibc-backed authority.
+      const f = await sh(["docker", "run", "--rm", "--entrypoint", "bun", tag, "run", "scripts/container-file-smoke.ts"]);
+      need(f.status === 0 && f.out.includes('"pass":true'), `container file-tool smoke: ${tail(f.out, 400)}`);
       const d = await sh(["docker", "run", "-d", "--name", name, "-v", `${volume}:/data`, "-p", "127.0.0.1::7842", tag]);
       need(d.status === 0, `docker run -d: ${tail(d.out)}`);
       const port = (await sh(["docker", "port", name, "7842/tcp"])).out.trim().split(/\r?\n/)[0]?.split(":").pop();
       for (let i = 0; i < 60; i++) {
         try {
-          if ((await fetch(`http://127.0.0.1:${port}/api/v1/health`, { signal: AbortSignal.timeout(2000) })).ok) return `--version ${N}; serve healthy on 127.0.0.1:${port}`;
+          if ((await fetch(`http://127.0.0.1:${port}/api/v1/health`, { signal: AbortSignal.timeout(2000) })).ok) return `--version ${N}; file tools OK; serve healthy on 127.0.0.1:${port}`;
         } catch {
           /* booting */
         }
@@ -106,7 +109,7 @@ export async function runDockerJourney(evidenceClass: "CI" | "LR"): Promise<Jour
   } finally {
     await sh(["docker", "rm", "-f", name]);
     // Files the container wrote into bind mounts are root-owned: remove them from inside.
-    await sh(["docker", "run", "--rm", "-v", `${work}:/w`, "--entrypoint", "sh", "oven/bun:1.4.2-alpine", "-c", "rm -rf /w/*"]);
+    await sh(["docker", "run", "--rm", "-v", `${work}:/w`, "--entrypoint", "sh", "oven/bun:1.4.2-slim", "-c", "rm -rf /w/*"]);
     rmSync(work, { recursive: true, force: true });
   }
   const { commit, dirty } = await gitState();

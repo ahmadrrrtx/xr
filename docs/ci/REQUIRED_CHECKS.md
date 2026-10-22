@@ -15,7 +15,7 @@ matrix legs, and a renamed leg cannot silently drop out of the gate.
 |---|---|---|
 | `Quality Gate` | `ci.yml` | typecheck, truth gate, unit / security / reliability / e2e suites, size + boundaries, perf, a11y, API contract, support-matrix `--check`, `ci:policy` |
 | `Cross-Platform gate` | `cross-platform.yml` | full parity suite + golden path on Linux, macOS, Windows |
-| `Supply Chain gate` | `supply-chain.yml` | install hygiene, gitleaks, osv + `bun audit`, licenses, SBOM drift, tag⇔npm invariant, trivy |
+| `Supply Chain gate` | `supply-chain.yml` | install hygiene, gitleaks, osv + `bun audit`, licenses, SBOM drift, tag⇔npm invariant, trivy, container `--version` + file-tool smoke |
 | `npm Pack Smoke gate` | `npm-pack-smoke.yml` | packed tarball: global install + `update --check` on Linux, macOS, Windows |
 | `Desktop gate (bundles + latest.json + journey)` | `desktop-app.yml` | cargo check / clippy / test on every OS leg, bundles per OS, `latest.json` assemble + verify, desktop clean-machine journey, Flatpak metadata |
 | `Clean-Machine Journey gate` | `journey.yml` | CLI binary + npm journeys on every hosted target; Docker image journey (amd64, arm64) |

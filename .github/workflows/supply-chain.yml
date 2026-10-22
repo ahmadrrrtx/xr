@@ -157,6 +157,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build the shipped image
         run: docker build -t xr:scan .
+      # XR-LAUNCH-020: the image must actually run XR and its file tools. The
+      # filesystem authority dlopens glibc's libc.so.6; on a musl base it fails
+      # closed and every read_file/write_file would be refused.
+      - name: Container smoke — xr --version + real file tools (glibc authority)
+        run: |
+          docker run --rm xr:scan --version
+          docker run --rm --entrypoint bun xr:scan run scripts/container-file-smoke.ts
       - name: Trivy image scan (high/critical gate)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

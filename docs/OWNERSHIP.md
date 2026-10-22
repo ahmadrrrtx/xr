@@ -171,6 +171,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/claim-lint.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/compile-sidecar.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/consumer-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/container-file-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-brand-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-ipc-acl.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

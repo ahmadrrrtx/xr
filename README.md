@@ -127,7 +127,9 @@ release's checksum-verified source archive, which needs Bun. Pin a release with
 The installers never fall back to an unreleased branch: if the release or its checksums are
 missing, they stop and install nothing. Windows ARM64 is **unverified**: XR's file tools need
 `bun:ffi`, which the pinned Bun disables on native Windows ARM64, so they refuse to run there
-for now ([support matrix](docs/release/SUPPORT_MATRIX.md)).
+for now ([support matrix](docs/release/SUPPORT_MATRIX.md)). Alpine/musl source installs are
+limited the same way: the file tools load glibc's `libc.so.6` and refuse to run without it.
+The Docker image is Debian-based (glibc) for that reason.
 
 Per-platform support tiers: [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 

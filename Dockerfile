@@ -1,14 +1,22 @@
 # XR — single-container image (fixes the #1 r/LocalLLaMA complaint:
 # "hostile to docker"). Runs the whole agent + dashboard in one container.
-# Bun is pinned to .bun-version (D4); `apk upgrade` below still patches alpine.
-FROM oven/bun:1.4.2-alpine AS base
+# Bun is pinned to .bun-version (D4); `apt-get upgrade` below still patches Debian.
+#
+# XR-LAUNCH-020 — glibc base (Debian slim), not Alpine/musl: the filesystem
+# authority behind every file tool (src/security/fs-native.ts) dlopens glibc's
+# `libc.so.6`, which musl does not provide, so on Alpine read_file/write_file
+# failed closed with `unsupported`. CI proves the image with
+# scripts/container-file-smoke.ts (real write_file → read_file + escape refusal).
+FROM oven/bun:1.4.2-slim AS base
 
-# Phase 4 · T6 — patch the base image at BUILD time. The pinned
-# oven/bun tag can lag alpine security releases (e.g. OpenSSL
-# CVE-2026-45447: libcrypto3/libssl3 3.5.6-r0 -> 3.5.7-r0), which the trivy
-# container-scan gate flags as HIGH/fixed. `apk upgrade` pulls the patched
-# packages so the SHIPPED image is clean on the day it is built.
-RUN apk upgrade --no-cache
+# Phase 4 · T6 — patch the base image at BUILD time. The pinned oven/bun tag
+# can lag Debian security releases, which the trivy container-scan gate flags
+# as HIGH/fixed. `apt-get upgrade` pulls the patched packages so the SHIPPED
+# image is clean on the day it is built.
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
