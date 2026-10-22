@@ -328,7 +328,7 @@ export function printError(err: CliErrorShape): void {
     return;
   }
 
-  console.error();
+  console.error(""); // XR-LAUNCH-028: never zero-arg — Bun prints a bare console.error to STDOUT
   console.error(`  ${statusMark("error")} ${xrBold(err.what)}`);
   if (err.why) {
     console.error(`  ${xrDim("Why")}   ${err.why}`);
@@ -344,7 +344,7 @@ export function printError(err: CliErrorShape): void {
   if (isVerbose() && err.detail) {
     console.error(`  ${xrDim("Detail")} ${err.detail}`);
   }
-  console.error();
+  console.error("");
 }
 
 // ── Did-you-mean ──────────────────────────────────────────────────────────────

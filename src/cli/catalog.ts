@@ -56,6 +56,8 @@ export interface CatalogEntry {
    * for order-independent allowance and what command-side validation tightens
    * against; a regression test keeps `usage` mentioning every declared flag. */
   flags?: string[];
+  /** XR-LAUNCH-028 — refuse undeclared options and an undeclared global --dry-run (router.assertStrictFlags). */
+  strictFlags?: boolean;
 }
 
 export const GROUP_LABELS: Record<CommandGroup, string> = {
@@ -685,7 +687,8 @@ export const CATALOG: CatalogEntry[] = [
   {
     name: "doctor",
     description: "full system health check + repair hints",
-    usage: "xr doctor [--network] [--json] [--perf]",
+    usage: "xr doctor [--deep] [--network] [--perf] [--json]",
+    flags: ["--deep", "--network", "--perf"], strictFlags: true,
     group: "system",
     glyph: "status",
     aliases: ["health", "check"],
@@ -702,6 +705,7 @@ export const CATALOG: CatalogEntry[] = [
     name: "status",
     description: "installation and component status",
     usage: "xr status [--json] [--network]",
+    flags: ["--network"], strictFlags: true,
     group: "system",
     glyph: "status",
     needsKernel: true,
@@ -713,6 +717,7 @@ export const CATALOG: CatalogEntry[] = [
     name: "update",
     description: "check for updates and install with rollback guard",
     usage: "xr update [--check] [--json] [--yes]",
+    flags: ["--check"], strictFlags: true,
     group: "system",
     glyph: "running",
     aliases: ["upgrade"],
@@ -729,18 +734,20 @@ export const CATALOG: CatalogEntry[] = [
     // agent as a task prompt; the clean-machine journey caught it.
     name: "uninstall",
     description: "remove the launcher and installation (--purge also removes local data)",
-    usage: "xr uninstall [--keep-data|--purge] [--yes]",
+    usage: "xr uninstall [--keep-data|--purge] [--dry-run] [--yes]",
+    flags: ["--keep-data", "--purge", "--dry-run"], strictFlags: true,
     group: "system",
     glyph: "warning",
     needsKernel: false,
-    examples: [{ cmd: "xr uninstall", description: "remove XR, keep your data" }, { cmd: "xr uninstall --purge --yes", description: "remove XR and all local data" }],
+    examples: [{ cmd: "xr uninstall", description: "remove XR, keep your data" }, { cmd: "xr uninstall --purge --dry-run", description: "show what --purge would remove; change nothing" }, { cmd: "xr uninstall --purge --yes", description: "remove XR and all local data" }],
     related: ["update", "reset"],
     topics: ["uninstall", "system"],
   },
   {
     name: "repair",
     description: "repair config, permissions, and dependencies safely",
-    usage: "xr repair [--yes] [--network]",
+    usage: "xr repair [--yes] [--network] [--allow-system]",
+    flags: ["--network", "--allow-system"], strictFlags: true,
     group: "system",
     glyph: "settings",
     needsKernel: true,

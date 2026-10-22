@@ -370,6 +370,7 @@ export async function purgeThenUninstall(
 export async function uninstallXR(args: string[] = []): Promise<void> {
   const mode: UninstallMode = args.includes("--purge") ? "purge" : "keep-data";
   const yes = args.includes("--yes") || args.includes("-y");
+  const dryRun = args.includes("--dry-run"); // XR-LAUNCH-028: preview only, even with --yes
 
   const paths = resolveUninstallPaths();
   // eslint-disable-next-line no-console
@@ -384,6 +385,12 @@ export async function uninstallXR(args: string[] = []): Promise<void> {
   } else {
     // eslint-disable-next-line no-console
     console.log(`  Data home:  ${paths.dataHome}  (kept)`);
+  }
+
+  if (dryRun) {
+    // eslint-disable-next-line no-console
+    console.log(`Dry run: nothing was removed.${mode === "purge" ? " --purge would also delete XR's OS keychain entries." : ""} Run without --dry-run to uninstall.`);
+    return;
   }
 
   if (!yes) {

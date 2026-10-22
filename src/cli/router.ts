@@ -21,7 +21,7 @@ import { parseGlobalFlags, EXIT, type GlobalFlags } from "./flags.ts";
 import { setOutputFlags, emitJson, isJsonMode, printDidYouMean, printError, tip } from "./output.ts";
 import { handleFatal, usageError, CliError } from "./errors.ts";
 import { CORE_VERSION, CODENAME, PKG, DISPLAY_VERSION, versionInfo } from "../core/version.ts";
-import { resolveCommandName, getCatalogEntry, allAliasesAndNames } from "./catalog.ts";
+import { resolveCommandName, getCatalogEntry, allAliasesAndNames, type CatalogEntry } from "./catalog.ts";
 import { decideRoute } from "./route-decision.ts";
 import { showHelp, showCommandHelp } from "./help.ts";
 import { bootTrace } from "../core/boot-trace.ts";
@@ -173,10 +173,32 @@ function injectRunOverrides(args: string[], flags: GlobalFlags): string[] {
 }
 
 /**
+ * XR-LAUNCH-028 — command-local flag validation for catalog entries marked
+ * `strictFlags`: an undeclared option (or a value on one of these boolean
+ * options) is a usage error (exit 2, stderr only) before the kernel boots,
+ * and so is a global `--dry-run` the command does not declare. Tokens after
+ * `--` are left alone.
+ */
+export function assertStrictFlags(entry: CatalogEntry, rest: string[], flags: GlobalFlags): void {
+  const declared = entry.flags ?? [];
+  const fix = `Usage: ${entry.usage}`;
+  const stop = flags.endOfOptions === undefined ? rest.length : Math.max(0, flags.endOfOptions - 1);
+  for (const tok of rest.slice(0, stop)) {
+    if (!tok.startsWith("-") || tok === "-") continue;
+    const name = tok.split("=")[0]!;
+    if (!declared.includes(name)) throw usageError(`unknown option for ${entry.name}: ${name}`, fix, [`xr help ${entry.name}`]);
+    if (tok.includes("=")) throw usageError(`${name} takes no value`, fix, [`xr help ${entry.name}`]);
+  }
+  if (flags.dryRun && !declared.includes("--dry-run")) {
+    throw usageError(`xr ${entry.name} has no --dry-run (it would be ignored)`, fix, [`xr help ${entry.name}`]);
+  }
+}
+
+/**
  * Re-attach global flags that the shared parser consumed so legacy command
  * handlers still see `--json`, `--quiet`, etc. on `ctx.args`.
  */
-function reinjectGlobalFlags(args: string[], flags: GlobalFlags): string[] {
+export function reinjectGlobalFlags(args: string[], flags: GlobalFlags): string[] {
   const out = [...args];
   const has = (flag: string) => out.includes(flag);
   if (flags.json && !has("--json")) out.push("--json");
@@ -185,6 +207,9 @@ function reinjectGlobalFlags(args: string[], flags: GlobalFlags): string[] {
   if (flags.verbose && !has("--verbose")) out.push("--verbose");
   if (flags.debug && !has("--debug")) out.push("--debug");
   if (flags.yes && !has("--yes") && !has("-y")) out.push("--yes");
+  // XR-LAUNCH-028: commands that honour --dry-run (memory, control, agents,
+  // uninstall …) never saw it, so a requested preview ran for real.
+  if (flags.dryRun && !has("--dry-run")) out.push("--dry-run");
   if (flags.noColor && !has("--no-color")) out.push("--no-color");
   if (flags.workspace && !has("--workspace") && !has("-w")) {
     out.push("--workspace", flags.workspace);
@@ -346,6 +371,7 @@ export async function runCli(argv: string[]): Promise<number> {
     // ── Registered command (lazy kernel boot, command-scoped profile) ────
     if (route.kind === "command" && route.command) {
       const regName = route.command;
+      if (route.catalog?.strictFlags) assertStrictFlags(route.catalog, rest, flags);
       if (regName === "run" && flags.commandMode !== undefined) {
         throw usageError("--mode requires agent, plan, or ask for xr run.");
       }

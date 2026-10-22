@@ -36,14 +36,14 @@ export class StatusCommand implements Command {
 export class RepairCommand implements Command {
   name = "repair";
   description = "repair config, permissions and dependencies safely";
-  usage = "xr repair [--yes] [--network]";
+  usage = "xr repair [--yes] [--network] [--allow-system]";
   async execute(ctx: CommandContext): Promise<void> { await repairXR(ctx.args); }
 }
 
 export class UpdateCommand implements Command {
   name = "update";
   description = "update XR with config backup and rollback guard";
-  usage = "xr update [--yes]";
+  usage = "xr update [--check] [--json] [--yes]";
   async execute(ctx: CommandContext): Promise<void> { await updateXR(ctx.args); }
 }
 

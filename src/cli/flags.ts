@@ -52,6 +52,8 @@ export interface GlobalFlags {
   /** Phase 2.5 · P1-4 — unknown pre-head dashed tokens wait here; the router
    * either matches a catalog-declared local or errors (exit 2) pre-boot. */
   pendingDashes?: string[];
+  /** XR-LAUNCH-028 — index in `args` where `--` ended option parsing (absent if none). */
+  endOfOptions?: number;
   /** Raw original argv (for debugging). */
   raw: string[];
 }
@@ -139,6 +141,7 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
 
     // End of flags
     if (token === "--") {
+      out.endOfOptions = args.length;
       args.push(...argv.slice(i + 1));
       break;
     }
@@ -148,9 +151,8 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
       const eq = token.indexOf("=");
       const name = token.slice(2, eq);
       const value = token.slice(eq + 1);
-      if (!applyValue(out, name, value) && !seenPositional) {
-        (out.pendingDashes ??= []).push(token);
-      }
+      // XR-LAUNCH-028: an unknown `--x=y` after a head is command-owned like `--x` (it used to vanish).
+      if (!applyValue(out, name, value)) (seenPositional ? args : (out.pendingDashes ??= [])).push(token);
       continue;
     }
 
