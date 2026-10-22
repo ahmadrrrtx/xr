@@ -557,6 +557,33 @@ export function scanNumericClaims(
       }
     }
   }
+  // XR-LAUNCH-022: per-OS test-file counts have ONE source — `bun run
+  // platform:parity:check` over test/platform/exclusions.json. Hand-copied
+  // counts in the support matrix prose went stale ("239 files" while the
+  // suite had 443), so the narrative must point at the source, not copy it.
+  if (rel === "docs/release/SUPPORT_MATRIX.md") {
+    const lines = stripFences(text).split("\n");
+    let generated = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      if (line.includes("<!-- BEGIN GENERATED")) generated = true;
+      if (line.includes("<!-- END GENERATED")) {
+        generated = false;
+        continue;
+      }
+      if (generated || HISTORY_EXEMPT.test(line)) continue;
+      const m = line.match(/\b\d[\d,]*\s+(?:test\s+|documented\s+)?(?:files?|exclusions?)\b/i);
+      if (m) {
+        out.push({
+          gate: "numeric-claim",
+          file: rel,
+          line: i + 1,
+          text: m[0],
+          reason: "test-file counts in the support matrix come from `bun run platform:parity:check` and test/platform/exclusions.json — reference them instead of copying a number (XR-LAUNCH-022)",
+        });
+      }
+    }
+  }
   return out;
 }
 

@@ -141,3 +141,43 @@ describe("--stamp-docs — the stamp keeps every marked surface in sync and is i
     expect(second.changed).toEqual([]);
   });
 });
+
+describe("XR-LAUNCH-022 — support-matrix test-file counts are single-sourced from platform-parity", () => {
+  const SM = join(ROOT, "docs/release/SUPPORT_MATRIX.md");
+  const gate = (text: string) => scanNumericClaims(text, SM, null).filter((v) => v.reason.includes("platform:parity:check"));
+
+  test("a hand-typed file or exclusion count in the prose trips the gate", () => {
+    expect(gate("| Linux x64 | Tier 1 | full unit suite (239 files), typecheck |\n")).toHaveLength(1);
+    // One finding per offending line (the line is fixed as a whole).
+    expect(gate("unit suite (234 files; 5 documented exclusions with reasons)\n")).toHaveLength(1);
+    expect(gate("5 documented exclusions with reasons\n")).toHaveLength(1);
+    expect(gate("runs 1,204 test files\n")).toHaveLength(1);
+  });
+
+  test("the generated block, history-marked lines and fenced code are exempt", () => {
+    const doc = [
+      "<!-- BEGIN GENERATED: journey matrix -->",
+      "| x | 94 files |",
+      "<!-- END GENERATED: journey matrix -->",
+      "Back then it ran 239 files. <!-- xr:numeric-history -->",
+      "```",
+      "443 test files",
+      "```",
+      "every test file (count: `bun run platform:parity:check`)",
+    ].join("\n");
+    expect(gate(doc)).toEqual([]);
+  });
+
+  test("the rule is scoped to SUPPORT_MATRIX.md", () => {
+    const other = join(ROOT, "docs/release/RELEASING.md");
+    expect(scanNumericClaims("ran 239 files\n", other, null).filter((v) => v.reason.includes("platform:parity:check"))).toEqual([]);
+  });
+
+  test("the real support matrix passes and points at the parity source", () => {
+    const text = readFileSync(SM, "utf8");
+    expect(gate(text)).toEqual([]);
+    expect(text).toContain("platform:parity:check");
+    expect(text).toContain("test/platform/exclusions.json");
+    expect(text).not.toContain("first green\nruns land with the Phase-9 merge");
+  });
+});
