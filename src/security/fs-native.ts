@@ -21,7 +21,8 @@ import { dlopen, FFIType, ptr, toArrayBuffer, CString, type Pointer } from "bun:
 import { readdirSync, closeSync, fstatSync, readSync, writeSync, ftruncateSync } from "node:fs";
 
 export class FilesystemError extends Error {
-  constructor(readonly code: "denied" | "missing" | "stale" | "limit" | "unsupported" | "escape" | "binary" = "denied") {
+  /** `detail` refines a denial for reason codes (XR-LAUNCH-024); the message is unchanged. */
+  constructor(readonly code: "denied" | "missing" | "stale" | "limit" | "unsupported" | "escape" | "binary" = "denied", readonly detail?: "secret-path") {
     super(code === "escape" ? "path escapes the project root" : `filesystem ${code}`);
     this.name = "FilesystemError";
   }

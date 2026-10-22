@@ -7748,6 +7748,14 @@
                       "description": "Tool output for type=tool_result.",
                       "type": "string"
                     },
+                    "reason": {
+                      "description": "Stable tool failure code for type=tool_result when ok=false (e.g. denied:escape, denied:secret-path, blocked:isolation-unavailable).",
+                      "type": "string"
+                    },
+                    "next": {
+                      "description": "Short next step for a person for type=tool_result when ok=false.",
+                      "type": "string"
+                    },
                     "usage": {
                       "type": "object",
                       "properties": {

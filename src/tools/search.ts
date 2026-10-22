@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import type { Tool, ToolResult } from "../core/types.ts";
 import { FilesystemAuthority, filesystemMessage } from "../security/filesystem.ts";
+import { filesystemReason } from "../core/tool-reasons.ts";
 import { readTrustRequest } from "../runtime/trust/tool-support.ts";
 const MAX_MATCHES = 200, MAX_FILE_BYTES = 1_000_000, MAX_TOTAL_BYTES = 16_000_000;
 const SKIP = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", "target", ".venv", "__pycache__"]);
@@ -66,7 +67,7 @@ export const searchCodeTool: Tool = {
       }
       ctx.audit("search_code", { path: root, matches: out.length, engine: available ? "ripgrep" : "js", authority: fs.descriptor() });
       return { ok: true, output: out.join("\n") || "(no matches)", data: { matches: out.length, engine: available ? "ripgrep" : "js" } };
-    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    } catch (e) { return { ok: false, output: filesystemMessage(e), reason: filesystemReason(e) }; }
     finally { if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };

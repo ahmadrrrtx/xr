@@ -27,7 +27,7 @@ export async function runAuthorized(
       reason: v.reason,
       grantId: grant?.grantId,
     });
-    return { ok: false, output: `blocked: grant ${v.code}: ${v.reason}` };
+    return { ok: false, output: `blocked: grant ${v.code}: ${v.reason}`, reason: "denied:policy" };
   }
   return tool.run(args, { ...ctx, grant: v.grant });
 }

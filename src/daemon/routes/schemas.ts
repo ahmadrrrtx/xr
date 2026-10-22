@@ -517,6 +517,8 @@ export const ChatStreamEvent = z.looseObject({
   args: z.unknown().optional().describe("Tool arguments for type=tool_call."),
   ok: z.boolean().optional().describe("Tool success for type=tool_result."),
   result: z.string().optional().describe("Tool output for type=tool_result."),
+  reason: z.string().optional().describe("Stable tool failure code for type=tool_result when ok=false (e.g. denied:escape, denied:secret-path, blocked:isolation-unavailable)."),
+  next: z.string().optional().describe("Short next step for a person for type=tool_result when ok=false."),
   usage: z.looseObject({ inTokens: z.number().optional(), outTokens: z.number().optional() }).optional(),
   fullText: z.string().optional().describe("Final generated text (backward-compatible final result)."),
   finishReason: z.string().optional().describe("Loop stop reason (done|error|budget|max_steps|approval|cancelled)."),

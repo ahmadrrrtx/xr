@@ -39,6 +39,12 @@ export interface TurnSummary {
   dryRun?: boolean;
 }
 
+/** XR-LAUNCH-024 — why a tool failed (codes: src/core/tool-reasons.ts). */
+export interface ToolFailureInfo {
+  reason: string;
+  next: string;
+}
+
 export interface CoderUI {
   readonly canPrompt: boolean;
   banner(lines: string[]): void;
@@ -46,7 +52,8 @@ export interface CoderUI {
   thinking(): void;
   token(text: string): void;
   toolCall(id: string, tool: string, args: Record<string, unknown>): void;
-  toolResult(id: string, tool: string, ok: boolean, text: string): void;
+  /** XR-LAUNCH-024: `failure` = stable reason code + next step when ok is false. */
+  toolResult(id: string, tool: string, ok: boolean, text: string, failure?: ToolFailureInfo): void;
   approvalRequest(info: ApprovalInfo): void;
   promptApproval(info: ApprovalInfo, allowDiff: boolean): Promise<string>;
   diff(path: string, patch: string): void;
@@ -148,9 +155,10 @@ export class TtyUI implements CoderUI {
     if (status) this.line(style.dim(status));
   }
 
-  toolResult(_id: string, tool: string, ok: boolean, text: string): void {
+  toolResult(_id: string, tool: string, ok: boolean, text: string, failure?: ToolFailureInfo): void {
     if (!ok) {
-      this.line(style.red(`  ✕ ${tool}: ${text.split("\n")[0]?.slice(0, termWidth() - 6) ?? "failed"}`));
+      this.line(style.red(`  ✕ ${tool}: ${text.split("\n")[0]?.slice(0, termWidth() - 6) || "failed"}`));
+      if (failure) this.line(style.dim(`    ${failure.reason} — ${failure.next}`));
       return;
     }
     if (tool === "shell") {
@@ -257,8 +265,8 @@ export class JsonUI implements CoderUI {
     this.emit({ type: "tool", id, tool, args, status: "running" });
   }
 
-  toolResult(id: string, tool: string, ok: boolean, text: string): void {
-    this.emit({ type: "tool", id, tool, status: ok ? "ok" : "error", output: text.slice(0, 4000) });
+  toolResult(id: string, tool: string, ok: boolean, text: string, failure?: ToolFailureInfo): void {
+    this.emit({ type: "tool", id, tool, status: ok ? "ok" : "error", output: text.slice(0, 4000), ...(!ok && failure ? { reason: failure.reason, next: failure.next } : {}) });
   }
 
   approvalRequest(info: ApprovalInfo): void {

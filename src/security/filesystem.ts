@@ -103,7 +103,7 @@ export class FilesystemAuthority {
     this.active();
     const absolute = resolve(this.root, p);
     if (this.lease && !this.lease.permits(absolute, op, id)) throw new FilesystemError();
-    if (op === "read" && (isSecretPath(p) || isSecretPath(absolute)) && !this.lease?.permitsSensitiveRead(absolute, id)) throw new FilesystemError();
+    if (op === "read" && (isSecretPath(p) || isSecretPath(absolute)) && !this.lease?.permitsSensitiveRead(absolute, id)) throw new FilesystemError("denied", "secret-path");
   }
   private open(p: string, directory = false): number {
     this.active();
@@ -346,7 +346,7 @@ export class FilesystemAuthority {
     fdClose(srcFd);
     const srcId = objectId(srcSt);
     this.check(a, "write", srcId);
-    if (isSecretPath(a) || isSecretPath(resolve(this.root, a)) || (srcSt.isDirectory() && this.sensitiveDescendant(a, 0))) throw new FilesystemError();
+    if (isSecretPath(a) || isSecretPath(resolve(this.root, a)) || (srcSt.isDirectory() && this.sensitiveDescendant(a, 0))) throw new FilesystemError("denied", "secret-path");
     this.assertAbsent(b);
     const sp = splitParent(a), dp = splitParent(b);
     const identity = Object.freeze({ ...this.descriptor(), operation: "rename", path: a, target: b, sourceObject: srcId });
