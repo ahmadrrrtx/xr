@@ -188,7 +188,7 @@ jobs:
         shell: pwsh
         run: |
           $sha = (Get-FileHash dist/xr-windows-x64.zip -Algorithm SHA256).Hash.ToLower()
-          $installer = Get-Content dist/channels/winget/manifests/r/ahmadrrrtx/XR/*/ahmadrrrtx.XR.installer.yaml -Raw
+          $installer = Get-Content dist/channels/winget/manifests/a/ahmadrrrtx/XR/*/ahmadrrrtx.XR.installer.yaml -Raw
           if ($installer -notmatch [regex]::Escape("InstallerSha256: $sha")) { throw "winget installer sha256 does not match canonical build" }
           $scoop = Get-Content dist/channels/scoop/xr.json -Raw | ConvertFrom-Json
           if ($scoop.architecture.'64bit'.hash -ne $sha) { throw "scoop manifest hash does not match canonical build" }
@@ -203,7 +203,7 @@ jobs:
 
   # ── Tier 2: REAL installs from the published release (weekly/on-demand) ──
   published-release-installs:
-    name: Real channel installs from the published release (report-only)
+    name: Real channel installs of the public version
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -217,22 +217,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Resolve latest published release assets
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Resolve the public version's release assets
+        # The PUBLIC version (release.manifest.json channels.publicVersion), not
+        # GitHub's "latest": v1.1.0 was "latest" with no CLI assets, so this job
+        # warned and exited 0 every week while every channel was broken
+        # (launch audit XR-LAUNCH-001/012). Missing assets are now a failure.
         shell: bash
         id: rel
         run: |
-          V=$(curl -fsSL https://api.github.com/repos/${{ github.repository }}/releases/latest | bun -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.parse(s).tag_name.replace(/^v/,"")))')
+          V=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).channels.publicVersion)')
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          code=$(curl -s -o /dev/null -w "%{http_code}" "https://github.com/${{ github.repository }}/releases/download/v${V}/SHA256SUMS")
-          echo "assets=$code" >> "$GITHUB_OUTPUT"
-      - name: Report when no published asset set exists yet (honest, not green)
-        if: steps.rel.outputs.assets != '200'
-        shell: bash
-        run: |
-          echo "::warning::No published release assets for the current channel feed yet — real channel install validated at the next tagged release (Phase 9 T3 records first-run status in docs/release/SUPPORT_MATRIX.md)."
-          exit 0
+          code=$(curl -s -o /dev/null -w "%{http_code}" -L "https://github.com/${{ github.repository }}/releases/download/v${V}/SHA256SUMS")
+          if [ "$code" != "200" ]; then
+            echo "::error::public version v${V} has no SHA256SUMS on its GitHub release (HTTP $code) — every channel claim for it is false"
+            exit 1
+          fi
       - name: apt channel — real install from published .deb
-        if: steps.rel.outputs.assets == '200' && matrix.channel == 'apt'
+        if: matrix.channel == 'apt'
         run: |
           V="${{ steps.rel.outputs.version }}"
           BASE="https://github.com/${{ github.repository }}/releases/download/v${V}"
@@ -243,23 +246,22 @@ jobs:
           sudo dpkg -i /tmp/xr.deb
           test "$(/usr/bin/xr --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" = "$V"
           sudo dpkg -r xr
-      - name: brew channel — real install via the published formula
-        if: steps.rel.outputs.assets == '200' && matrix.channel == 'brew'
+      - name: brew channel — real install from the tap
+        if: matrix.channel == 'brew'
         env:
-          TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO || 'ahmadrrrtx/homebrew-tap' }}
+          TAP_NAME: ahmadrrrtx/tap
         run: |
           V="${{ steps.rel.outputs.version }}"
-          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/v${V}/homebrew/xr.rb" -o xr.rb || \
-            curl -fsSL "https://raw.githubusercontent.com/${TAP_REPO}/main/Formula/xr.rb" -o xr.rb
-          brew install --formula ./xr.rb
+          brew install "$TAP_NAME/xr"
           xr --version | grep "$V"
           brew uninstall xr
       - name: scoop channel — real install via the published manifest
-        if: steps.rel.outputs.assets == '200' && matrix.channel == 'scoop'
+        if: matrix.channel == 'scoop'
         shell: pwsh
         run: |
           $V = '${{ steps.rel.outputs.version }}'
-          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v$V/scoop/xr.json" -OutFile xr.json
+          # GitHub release assets are flat: the stamped scoop manifest is the asset "xr.json".
+          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v$V/xr.json" -OutFile xr.json
           scoop install ./xr.json
           xr --version | Select-String $V
           scoop uninstall xr

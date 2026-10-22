@@ -32,7 +32,7 @@
  *   bun run scripts/tag-npm-invariant.ts --repair --yes
  */
 import { spawnSync } from "node:child_process";
-import { ROOT } from "./release-manifest.ts";
+import { ROOT, loadManifest } from "./release-manifest.ts";
 
 const HISTORICAL = /^(v3\.|v4\.|v7\.|backup-)/;
 const LINE_1_TAG = /^v1\./;
@@ -68,11 +68,23 @@ export interface InvariantResult {
   npmPre: string[];
   missingOnNpm: string[];
   missingOnGit: string[];
+  /** Stable git tags excused because the manifest lists them as withdrawn. */
+  withdrawn: string[];
+  /** Withdrawn versions that nevertheless appear on npm — always a failure. */
+  withdrawnOnNpm: string[];
 }
 
+/**
+ * XR-LAUNCH-001 — a tag whose release pipeline failed before publishing (v1.1.0)
+ * is declared in release.manifest.json `channels.withdrawnTags` with evidence.
+ * Such a tag is excused from "must exist on npm", and must NEVER appear on npm:
+ * a withdrawn version reaching the registry later is exactly the drift this
+ * gate exists to catch. Tags are never deleted to make the gate pass.
+ */
 export function assertTagNpmInvariant(opts: {
   gitTags: string[];
   npmVersions: string[];
+  withdrawnTags?: string[];
 }): InvariantResult {
   const line1 = opts.gitTags
     .filter((t) => classifyGitTag(t) === "line-1")
@@ -84,16 +96,21 @@ export function assertTagNpmInvariant(opts: {
   const npmPre = npmLine1.filter((v) => isPrerelease(v));
   const npmSet = new Set(npm1);
   const gitSet = new Set(git1);
-  const missingOnNpm = git1.filter((v) => !npmSet.has(v));
+  const withdrawnSet = new Set((opts.withdrawnTags ?? []).map((t) => t.replace(/^v/, "")));
+  const withdrawn = git1.filter((v) => withdrawnSet.has(v));
+  const withdrawnOnNpm = npmLine1.filter((v) => withdrawnSet.has(v));
+  const missingOnNpm = git1.filter((v) => !npmSet.has(v) && !withdrawnSet.has(v));
   const missingOnGit = npm1.filter((v) => !gitSet.has(v));
   return {
-    ok: missingOnNpm.length === 0 && missingOnGit.length === 0,
+    ok: missingOnNpm.length === 0 && missingOnGit.length === 0 && withdrawnOnNpm.length === 0,
     git1,
     npm1,
     gitPre,
     npmPre,
     missingOnNpm,
     missingOnGit,
+    withdrawn,
+    withdrawnOnNpm,
   };
 }
 
@@ -152,7 +169,8 @@ async function main(): Promise<void> {
 
   const gitTags = listLocalGitTags();
   const packument = await fetchNpmPackument();
-  const result = assertTagNpmInvariant({ gitTags, npmVersions: packument.versions });
+  const withdrawnTags = (loadManifest().channels?.withdrawnTags ?? []).map((w) => w.tag);
+  const result = assertTagNpmInvariant({ gitTags, npmVersions: packument.versions, withdrawnTags });
 
   if (skipIfUnpublished && result.git1.length === 0 && result.npm1.length === 0) {
     const pre = result.gitPre.length + result.npmPre.length;
@@ -168,6 +186,9 @@ async function main(): Promise<void> {
   console.log(`tag⇔npm: npm 1.x (stable) = [${result.npm1.join(", ") || "none"}]`);
   if (result.gitPre.length) console.log(`tag⇔npm: git pre-release (not gated) = [${result.gitPre.join(", ")}]`);
   if (result.npmPre.length) console.log(`tag⇔npm: npm pre-release (not gated) = [${result.npmPre.join(", ")}]`);
+  if (result.withdrawn.length) {
+    console.log(`tag⇔npm: withdrawn tags (manifest channels.withdrawnTags; never published) = [${result.withdrawn.map((v) => "v" + v).join(", ")}]`);
+  }
   console.log(`tag⇔npm: dist-tags = ${JSON.stringify(packument.distTags)}`);
 
   if (repair) {
@@ -185,6 +206,11 @@ async function main(): Promise<void> {
     }
     if (result.missingOnGit.length) {
       console.error(`tag⇔npm FAIL — npm versions without git tags: ${result.missingOnGit.join(", ")}`);
+    }
+    if (result.withdrawnOnNpm.length) {
+      console.error(
+        `tag⇔npm FAIL — withdrawn versions are on npm: ${result.withdrawnOnNpm.join(", ")} (remove them from channels.withdrawnTags only with a full, verified release)`,
+      );
     }
     process.exit(1);
   }

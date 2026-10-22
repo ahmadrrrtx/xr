@@ -14,6 +14,27 @@
     "npm": "https://www.npmjs.com/package/@rrrtx/xr",
     "stability": "stable"
   },
+  "channels": {
+    "comment": "Public release channels (launch-audit XR-LAUNCH-001/002; owner decisions D1 + D6, 2026-10-22). identity.version is the in-development line on main; publicVersion is what EVERY public install path serves today. The bootstrap installers are stamped from publicVersion (bun run release:stamp), and `bun run channel:live` asserts each claimed channel serves exactly publicVersion with bytes matching that release's signed SHA256SUMS. Promote publicVersion only after the new release's live channel check passes (docs/release/CHANNELS.md#public-version). withdrawnTags exist in git but were never published: their GitHub releases must be marked pre-release and npm must never carry them (scripts/tag-npm-invariant.ts).",
+    "publicVersion": "1.0.0",
+    "claimed": [
+      "github-releases",
+      "npm",
+      "homebrew",
+      "winget",
+      "scoop",
+      "docker"
+    ],
+    "homebrewTap": "ahmadrrrtx/homebrew-tap",
+    "wingetPackageId": "ahmadrrrtx.XR",
+    "dockerImage": "ghcr.io/ahmadrrrtx/xr",
+    "withdrawnTags": [
+      {
+        "tag": "v1.1.0",
+        "reason": "Release run 38663173550 failed at its gates job (Identity + claim + channel gates, exit 2), so no CLI binaries, SHA256SUMS, npm tarball, Docker image or channel manifests were produced. The GitHub release only carries 5 unsigned desktop bundles attached by desktop-app.yml. Superseded by the next complete release; see launch audit XR-LAUNCH-001."
+      }
+    ]
+  },
   "stampTargets": [
     {
       "id": "package.json",
@@ -119,8 +140,8 @@
     },
     {
       "id": "validated-channels",
-      "text": "The same canonical build installs through GitHub Releases, Homebrew, WinGet, Scoop, .deb, npm and Docker, with channel configs generated from one manifest.",
-      "evidence": "scripts/channel-manifest.ts (one generator) + packaging/ (generated, drift-gated by `bun run channel:check` in CI) + .github/workflows/channel-install.yml (install tests). Real published-release installs run in the weekly job; .deb is dpkg-installed on every PR.",
+      "text": "Every channel in channels.claimed serves the same canonical build of channels.publicVersion, with channel configs generated from one manifest; channels not yet live (Homebrew tap, WinGet review) are marked pending in the README install table.",
+      "evidence": "scripts/channel-manifest.ts (one generator) + packaging/ (generated, drift-gated by `bun run channel:check` in CI) + scripts/channel-live-check.ts (`bun run channel:live`: every claimed channel resolved against the live registry and the signed SHA256SUMS) run daily by .github/workflows/channel-live.yml + .github/workflows/channel-install.yml (real installs of the public version; .deb is dpkg-installed on every PR).",
       "expires": "2027-07-31"
     },
     {

@@ -19,10 +19,15 @@ keys exist to lose.
 
 ## 1. Verify the signature over the checksum manifest (once per release)
 
+`--certificate-identity` is an exact match, so a `v*` wildcard there never
+matches. Use `--certificate-identity-regexp` as below (verified against the
+v1.0.0 `SHA256SUMS.bundle` on 2026-10-22: `Verified OK`). Image tags are the
+bare version (`1.0.0`, `latest`) — there is no `v`-prefixed image tag.
+
 ```bash
 # install cosign: https://docs.sigstore.dev/cosign/installation/
 cosign verify-blob \
-  --certificate-identity 'https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v*' \
+  --certificate-identity-regexp '^https://github\.com/ahmadrrrtx/xr/\.github/workflows/release\.yml@refs/tags/v[0-9]' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --bundle SHA256SUMS.bundle \
   SHA256SUMS
@@ -63,13 +68,13 @@ jq '.subject' multiple.intoto.jsonl ; sha256sum xr-linux-x64
 ## 4. Verify the container image
 
 ```bash
-cosign verify ghcr.io/ahmadrrrtx/xr:v<version> \
-  --certificate-identity 'https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v*' \
+cosign verify ghcr.io/ahmadrrrtx/xr:<version> \
+  --certificate-identity-regexp '^https://github\.com/ahmadrrrtx/xr/\.github/workflows/release\.yml@refs/tags/v[0-9]' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
 The image also carries buildx SBOM + SLSA provenance attestations
-(`docker buildx imagetools inspect ghcr.io/ahmadrrrtx/xr:v<version>`).
+(`docker buildx imagetools inspect ghcr.io/ahmadrrrtx/xr:<version>`).
 
 ## 5. Verify npm provenance
 
@@ -81,7 +86,8 @@ npm audit signatures        # verifies the registry-side provenance attestation
 
 `bun run scripts/verify-release.ts --artifact <file> --sums SHA256SUMS \
 --sbom sbom.cyclonedx.json --provenance multiple.intoto.jsonl \
---cosign-identity 'https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v*'`
+--cosign-identity 'https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v.*'`
+(the script switches to `--certificate-identity-regexp` when the value contains `*`).
 
 The verifier fails closed: it reports exactly what it verified and makes no
 claim for anything it could not check. Keyless/Rekor proof exists only after

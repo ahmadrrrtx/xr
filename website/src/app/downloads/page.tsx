@@ -22,7 +22,7 @@ const platforms = [
   { icon: WindowsIcon, label: "Windows x64", note: "Windows 10+ · WSL2 recommended", version: site.version, href: RELEASES },
   { icon: Binary, label: "Linux (AppImage)", note: "Ubuntu 22.04+ / Fedora 38+ · portable", version: site.version, href: RELEASES },
   { icon: Binary, label: "Linux (.deb)", note: "Ubuntu 22.04+ / Debian · package install", version: site.version, href: RELEASES },
-  { icon: Term, label: "npm CLI", note: "Any platform with Node 20+ · `npm i -g @rrrtx/xr`", version: site.version, href: "#install" },
+  { icon: Term, label: "npm CLI", note: "Linux · macOS · Windows with Bun 1.3+ · `npm i -g @rrrtx/xr`", version: site.publicVersion, href: "#install" },
 ];
 
 export default function DownloadsPage() {

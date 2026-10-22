@@ -64,9 +64,121 @@ export interface StampTarget {
   kind: "json-version" | "json-version-only" | "toml-version" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
 }
 
+/**
+ * Launch-audit XR-LAUNCH-001 / owner decision D1 (2026-10-22) — public channels.
+ *
+ * `identity.version` is the in-development line carried on `main`. The public
+ * install paths (bootstrap installers, npm `latest`, GitHub "latest" release,
+ * Homebrew, WinGet, Scoop, Docker `latest`) serve `channels.publicVersion`, which
+ * is promoted only after that version's live channel check passes
+ * (`bun run channel:live`). Keeping the two apart prevents the v1.1.0 failure
+ * mode: installers stamped with a version whose artifacts were never published.
+ */
+export const CHANNEL_IDS = ["github-releases", "npm", "homebrew", "winget", "scoop", "docker"] as const;
+export type ChannelId = (typeof CHANNEL_IDS)[number];
+
+export interface WithdrawnTag {
+  /** Git tag that exists but was never published (e.g. "v1.1.0"). */
+  tag: string;
+  /** Why it was withdrawn — evidence, not prose. */
+  reason: string;
+}
+
+export interface ReleaseChannels {
+  comment?: string;
+  /** Version every public install path serves today (stable semver). */
+  publicVersion: string;
+  /** Channels publicly claimed; each is verified live by scripts/channel-live-check.ts. */
+  claimed: ChannelId[];
+  /** Homebrew tap repository (owner/homebrew-<name>); install as owner/<name>/xr. */
+  homebrewTap: string;
+  /** WinGet PackageIdentifier in microsoft/winget-pkgs. */
+  wingetPackageId: string;
+  /** Container image reference without tag. */
+  dockerImage: string;
+  /** Tags that exist in git but were never published on any channel. */
+  withdrawnTags: WithdrawnTag[];
+}
+
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+/** Compare two semver strings (core numerically; a pre-release sorts before its release). */
+export function compareSemver(a: string, b: string): number {
+  const [ac, ap] = splitSemver(a);
+  const [bc, bp] = splitSemver(b);
+  for (let i = 0; i < 3; i++) {
+    if (ac[i] !== bc[i]) return ac[i] < bc[i] ? -1 : 1;
+  }
+  if (ap === bp) return 0;
+  if (ap === "") return 1;
+  if (bp === "") return -1;
+  return ap < bp ? -1 : 1;
+}
+
+function splitSemver(v: string): [number[], string] {
+  const clean = v.replace(/^v/, "").split("+")[0];
+  const dash = clean.indexOf("-");
+  const core = dash === -1 ? clean : clean.slice(0, dash);
+  const pre = dash === -1 ? "" : clean.slice(dash + 1);
+  return [core.split(".").map((n) => Number.parseInt(n, 10)), pre];
+}
+
+/** The version public install paths serve (falls back to identity.version for legacy manifests). */
+export function publicVersionOf(manifest: Pick<ReleaseManifest, "identity" | "channels">): string {
+  return manifest.channels?.publicVersion ?? manifest.identity.version;
+}
+
+function validateChannels(channels: ReleaseChannels, id: ReleaseIdentity): void {
+  if (typeof channels.publicVersion !== "string" || !SEMVER.test(channels.publicVersion)) {
+    throw new Error(`manifest.channels.publicVersion must be semver, got "${String(channels.publicVersion)}"`);
+  }
+  if (channels.publicVersion.includes("-")) {
+    throw new Error(
+      `manifest.channels.publicVersion "${channels.publicVersion}" is a pre-release; public channels serve stable versions only`,
+    );
+  }
+  if (compareSemver(channels.publicVersion, id.version) > 0) {
+    throw new Error(
+      `manifest.channels.publicVersion ${channels.publicVersion} is ahead of identity.version ${id.version}; promote only released versions`,
+    );
+  }
+  if (!Array.isArray(channels.claimed) || channels.claimed.length === 0) {
+    throw new Error("manifest.channels.claimed must be a non-empty array");
+  }
+  for (const c of channels.claimed) {
+    if (!(CHANNEL_IDS as readonly string[]).includes(c)) {
+      throw new Error(`manifest.channels.claimed has unknown channel "${c}" (known: ${CHANNEL_IDS.join(", ")})`);
+    }
+  }
+  if (!/^[A-Za-z0-9-]+\/homebrew-[A-Za-z0-9-]+$/.test(channels.homebrewTap ?? "")) {
+    throw new Error(`manifest.channels.homebrewTap must look like owner/homebrew-<name>, got "${String(channels.homebrewTap)}"`);
+  }
+  if (!/^[A-Za-z0-9-]+\.[A-Za-z0-9.-]+$/.test(channels.wingetPackageId ?? "")) {
+    throw new Error(`manifest.channels.wingetPackageId must look like Publisher.Package, got "${String(channels.wingetPackageId)}"`);
+  }
+  if (!/^[a-z0-9.-]+\/[a-z0-9._/-]+$/.test(channels.dockerImage ?? "")) {
+    throw new Error(`manifest.channels.dockerImage must be registry/owner/name without a tag, got "${String(channels.dockerImage)}"`);
+  }
+  if (!Array.isArray(channels.withdrawnTags)) {
+    throw new Error("manifest.channels.withdrawnTags must be an array (use [] when none)");
+  }
+  for (const w of channels.withdrawnTags) {
+    if (!w || typeof w.tag !== "string" || !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(w.tag)) {
+      throw new Error(`manifest.channels.withdrawnTags entry has an invalid tag: ${JSON.stringify(w)}`);
+    }
+    if (typeof w.reason !== "string" || w.reason.trim().length < 10) {
+      throw new Error(`manifest.channels.withdrawnTags ${w.tag} needs an evidence-backed reason`);
+    }
+    if (w.tag.slice(1) === channels.publicVersion) {
+      throw new Error(`manifest.channels.publicVersion ${channels.publicVersion} cannot also be a withdrawn tag`);
+    }
+  }
+}
+
 export interface ReleaseManifest {
   manifestVersion: number;
   identity: ReleaseIdentity;
+  channels?: ReleaseChannels;
   stampTargets: StampTarget[];
   claims: ReleaseClaim[];
   prohibitedClaims: ProhibitedClaim[];
@@ -98,6 +210,7 @@ export function loadManifest(path: string = MANIFEST_PATH): ReleaseManifest {
   if (id.stability === "stable" && id.version.includes("-")) {
     throw new Error(`prerelease version "${id.version}" cannot be labeled "stable" (Article XXII.4)`);
   }
+  if (parsed.channels !== undefined) validateChannels(parsed.channels, id);
   if (!Array.isArray(parsed.stampTargets) || parsed.stampTargets.length === 0) {
     throw new Error("manifest.stampTargets must be a non-empty array");
   }
@@ -228,7 +341,12 @@ export function versionInfo(): VersionInfo {
  * update, not a regeneration: only the release-owned scalars are rewritten, and
  * `skillCount` is inserted/updated so the site can render a true scale number.
  */
-export function stampSiteTs(current: string, id: ReleaseIdentity, skillCount: number): string {
+export function stampSiteTs(
+  current: string,
+  id: ReleaseIdentity,
+  skillCount: number,
+  publicVersion: string = id.version,
+): string {
   const scalars: Array<[string, string]> = [
     ["version", id.version],
     ["codename", id.codename],
@@ -245,6 +363,18 @@ export function stampSiteTs(current: string, id: ReleaseIdentity, skillCount: nu
       throw new Error(`website/src/lib/site.ts is missing the stampable field "${key}"`);
     }
     out = out.replace(re, `$1${key}: ${JSON.stringify(value)},`);
+  }
+
+  // XR-LAUNCH-001: what the install channels serve, so the site never
+  // announces an unpublished development line as "available".
+  const publicRe = /^(\s*)publicVersion:\s*"[^"]*",/m;
+  if (publicRe.test(out)) {
+    out = out.replace(publicRe, `$1publicVersion: ${JSON.stringify(publicVersion)},`);
+  } else {
+    out = out.replace(
+      /^(\s*)displayVersion:\s*"[^"]*",/m,
+      `$&\n$1/** Version every install channel serves (release.manifest.json channels.publicVersion). */\n$1publicVersion: ${JSON.stringify(publicVersion)},`,
+    );
   }
 
   const skillRe = /^(\s*)skillCount:\s*\d+,/m;
@@ -265,7 +395,7 @@ export function stampSiteTs(current: string, id: ReleaseIdentity, skillCount: nu
 export const README_BEGIN = "<!-- XR:RELEASE-IDENTITY:BEGIN -->";
 export const README_END = "<!-- XR:RELEASE-IDENTITY:END -->";
 
-export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number): string {
+export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number, publicVersion: string = id.version): string {
   const stabilityLine =
     id.stability === "public-beta"
       ? `\n\n> **Status: Public Beta.** ${id.name} is honestly labeled beta software: install and use it,\n> expect the documented golden path to work on the validated platforms, and check the\n> [support matrix](docs/release/SUPPORT_MATRIX.md) and\n> [known-limitations register](docs/release/${id.version}/known-limitations.md) before adopting it\n> for anything critical. \`v*-beta.*\` tags land on the prerelease channel (npm \`beta\` dist-tag,\n> GitHub prerelease) for early adopters; feedback goes through the\n> [beta loop](docs/release/BETA.md).`
@@ -284,8 +414,21 @@ export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number): strin
 
 ${id.description}
 
-**Bundled skills:** ${skillCount} (counted from \`skills/\` at release time.)
+**Bundled skills:** ${skillCount} (counted from \`skills/\` at release time.)${publicChannelLine(id, publicVersion)}
 ${README_END}`;
+}
+
+/**
+ * XR-LAUNCH-001 — when `main` carries a version that public channels do not
+ * serve, say so next to the version line instead of implying it is installable.
+ */
+export function publicChannelLine(id: ReleaseIdentity, publicVersion: string): string {
+  if (publicVersion === id.version) return "";
+  return `
+
+> **Install channels currently serve \`${publicVersion}\`.** \`${id.version}\` is the in-development line on
+> \`main\`: it is not published to npm, Homebrew, WinGet, Scoop or Docker, and the installers below
+> install \`${publicVersion}\`. See [docs/release/CHANNELS.md](docs/release/CHANNELS.md#public-version).`;
 }
 
 export function stampMarkerBlock(content: string, block: string): string {
@@ -376,8 +519,13 @@ function normalizeEol(text: string): string {
  * A missing declared target is itself a failure (research R1: incomplete
  * coverage is the defect class, not just stale content).
  */
+function isInstallerTarget(target: StampTarget): boolean {
+  return target.kind === "shell-var" || target.kind === "powershell-var";
+}
+
 export function evaluateSurfaces(manifest: ReleaseManifest, root: string = ROOT): SurfaceResult[] {
   const id = manifest.identity;
+  const pub = publicVersionOf(manifest);
   const skillCount = countSkills(root);
   const results: SurfaceResult[] = [];
 
@@ -390,7 +538,7 @@ export function evaluateSurfaces(manifest: ReleaseManifest, root: string = ROOT)
     const current = readFileSync(abs, "utf8");
     let desired: string;
     try {
-      desired = renderTarget(target, current, id, skillCount);
+      desired = renderTarget(target, current, id, skillCount, pub);
     } catch (err) {
       results.push({
         id: target.id,
@@ -401,11 +549,12 @@ export function evaluateSurfaces(manifest: ReleaseManifest, root: string = ROOT)
       continue;
     }
     const inSync = normalizeEol(current) === normalizeEol(desired);
+    const want = isInstallerTarget(target) ? `public ${pub}` : id.version;
     results.push({
       id: target.id,
       path: target.path,
       inSync,
-      detail: inSync ? `in sync at ${id.version}` : `out of sync — expected version ${id.version}`,
+      detail: inSync ? `in sync at ${want}` : `out of sync — expected version ${want}`,
     });
   }
   return results;
@@ -416,6 +565,7 @@ export function renderTarget(
   current: string,
   id: ReleaseIdentity,
   skillCount: number,
+  publicVersion: string = id.version,
 ): string {
   switch (target.kind) {
     case "json-version":
@@ -427,13 +577,15 @@ export function renderTarget(
     case "generated-module":
       return buildVersionTs(id);
     case "site-identity":
-      return stampSiteTs(current, id, skillCount);
+      return stampSiteTs(current, id, skillCount, publicVersion);
     case "marker-block":
-      return stampMarkerBlock(current, buildReadmeBlock(id, skillCount));
+      return stampMarkerBlock(current, buildReadmeBlock(id, skillCount, publicVersion));
+    // The bootstrap installers install what public channels serve (XR-LAUNCH-001/002),
+    // never an in-development version whose artifacts may not exist.
     case "shell-var":
-      return stampShellVersion(current, id.version);
+      return stampShellVersion(current, publicVersion);
     case "powershell-var":
-      return stampPowershellVersion(current, id.version);
+      return stampPowershellVersion(current, publicVersion);
     default: {
       const exhaustive: never = target.kind;
       throw new Error(`unknown stamp target kind: ${String(exhaustive)}`);
@@ -443,6 +595,7 @@ export function renderTarget(
 
 export function writeSurfaces(manifest: ReleaseManifest, root: string = ROOT): SurfaceResult[] {
   const id = manifest.identity;
+  const pub = publicVersionOf(manifest);
   const skillCount = countSkills(root);
   const results: SurfaceResult[] = [];
 
@@ -452,10 +605,11 @@ export function writeSurfaces(manifest: ReleaseManifest, root: string = ROOT): S
       throw new Error(`declared stamp target does not exist: ${target.path}`);
     }
     const current = readFileSync(abs, "utf8");
-    const desired = renderTarget(target, current, id, skillCount);
+    const desired = renderTarget(target, current, id, skillCount, pub);
     if (normalizeEol(current) !== normalizeEol(desired)) {
       writeFileSync(abs, desired, "utf8");
-      results.push({ id: target.id, path: target.path, inSync: true, detail: `stamped → ${id.version}` });
+      const want = isInstallerTarget(target) ? `public ${pub}` : id.version;
+      results.push({ id: target.id, path: target.path, inSync: true, detail: `stamped → ${want}` });
     } else {
       results.push({ id: target.id, path: target.path, inSync: true, detail: "already in sync" });
     }
@@ -471,7 +625,9 @@ async function main(): Promise<void> {
   const id = manifest.identity;
 
   if (args.includes("--print")) {
-    console.log(JSON.stringify({ ...id, display: DISPLAY(id), skillCount: countSkills() }, null, 2));
+    console.log(
+      JSON.stringify({ ...id, display: DISPLAY(id), skillCount: countSkills(), publicVersion: publicVersionOf(manifest) }, null, 2),
+    );
     return;
   }
 

@@ -39,6 +39,10 @@ gate, your approval, a spend ceiling, and a hash-chained log you can verify offl
 XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.
 
 **Bundled skills:** 65 (counted from `skills/` at release time.)
+
+> **Install channels currently serve `1.0.0`.** `1.1.0` is the in-development line on
+> `main`: it is not published to npm, Homebrew, WinGet, Scoop or Docker, and the installers below
+> install `1.0.0`. See [docs/release/CHANNELS.md](docs/release/CHANNELS.md#public-version).
 <!-- XR:RELEASE-IDENTITY:END -->
 
 ---
@@ -93,20 +97,29 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 
 ### 1. Install
 
-| Channel | Platform | Command |
-|---|---|---|
-| **npm** (stable `latest`) | Linux · macOS · Windows · Termux | `npm i -g @rrrtx/xr` |
-| **Binary** | Linux · macOS · Termux · WSL | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` |
-| **Binary** | Windows PowerShell 5.1 / 7+ | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` |
-| **Homebrew** | macOS · Linux | `brew install ahmadrrrtx/tap/xr` |
-| **WinGet** | Windows | `winget install ahmadrrrtx.XR` |
-| **Scoop** | Windows | download `scoop/xr.json` from the release · `scoop install ./xr.json` |
-| **.deb** | Debian · Ubuntu | download `xr_<ver>_amd64.deb` · `sudo dpkg -i xr_*_amd64.deb` |
-| **Docker** | any | `docker run ghcr.io/ahmadrrrtx/xr:latest` |
-| **From source** | any | `git clone https://github.com/ahmadrrrtx/xr && cd xr && bun install` |
+Every public channel serves the same canonical **v1.0.0** build (`channels.publicVersion` in
+[`release.manifest.json`](release.manifest.json)). Status is checked against the live registries
+by `bun run channel:live`; see [`docs/release/CHANNELS.md`](docs/release/CHANNELS.md#public-version).
 
-Every channel installs the same canonical build; publication status per channel:
-[`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
+| Channel | Platform | Command | Status |
+|---|---|---|---|
+| **Installer** (verified binary) | Linux · macOS · WSL · Termux¹ | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` | ✅ live |
+| **Installer** (verified binary) | Windows PowerShell 5.1 / 7+ | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` | ✅ live |
+| **npm** (`latest`) | Linux · macOS · Windows | `npm i -g @rrrtx/xr` (needs [Bun](https://bun.sh) ≥ 1.3 on `PATH`) | ✅ live |
+| **Docker** | linux/amd64 · arm64 | `docker run ghcr.io/ahmadrrrtx/xr:1.0.0` | ✅ live |
+| **Scoop** | Windows x64 | download `xr.json` from the [v1.0.0 release](https://github.com/ahmadrrrtx/xr/releases/tag/v1.0.0) · `scoop install ./xr.json` | ✅ live |
+| **.deb** | Debian · Ubuntu (amd64) | download `xr_1.0.0_amd64.deb` from the release · `sudo dpkg -i xr_1.0.0_amd64.deb` | ✅ live |
+| **Homebrew** | macOS · Linux | `brew install ahmadrrrtx/tap/xr` | ⏳ tap publish pending |
+| **WinGet** | Windows x64 | `winget install ahmadrrrtx.XR` | ⏳ community-repo review pending |
+| **From source** | any | `git clone --branch v1.0.0 https://github.com/ahmadrrrtx/xr && cd xr && bun install --frozen-lockfile` | ✅ |
+
+¹ Platforms without a compiled binary (Termux, Windows ARM64, Alpine/musl) get the same
+release's checksum-verified source archive, which needs Bun. Pin a release with
+`… | bash -s -- --version=1.0.0` (PowerShell: `-ReleaseVersion 1.0.0` when running the file).
+The installers never fall back to an unreleased branch: if the release or its checksums are
+missing, they stop and install nothing.
+
+Per-platform support tiers: [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
 ### 2. First run
 

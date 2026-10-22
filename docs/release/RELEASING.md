@@ -8,9 +8,11 @@ release does not happen.**
 
 - npm trusted publishing configured for `@rrrtx/xr` (OIDC → this repo,
   `.github/workflows/release.yml`, environment `npm-publish`).
-- (Homebrew tap) repo `ahmadrrrtx/homebrew-tap` created; repo variables
-  `HOMEBREW_TAP_PUBLISH=true`, `HOMEBREW_TAP_REPO=ahmadrrrtx/homebrew-tap`;
-  secret `TAP_GITHUB_TOKEN` scoped to the tap repo only.
+- (Homebrew tap) public repo `ahmadrrrtx/homebrew-tap` created with at least one
+  commit; secret `TAP_GITHUB_TOKEN` (fine-grained, `contents: write` on the tap
+  repo only). Used only by `publish-channels.yml`.
+- (WinGet) secret `WINGET_TOKEN` (classic PAT, `public_repo`) for
+  `wingetcreate submit`. Used only by `publish-channels.yml`.
 - GHCR package linked to this repo (auto on first push).
 
 ## 1. Prepare (on a release PR)
@@ -99,17 +101,35 @@ conventional-commit changelog → **cosign keyless `sign-blob`** + verify-blob �
 GitHub Release (prerelease honored) → **SLSA3 provenance** → npm OIDC publish
 (`beta` for prerelease, `latest` for stable) → independent `verify-release.ts`
 → consumer-smoke of the published version → GHCR image + cosign signature →
-channel manifests stamped from the signed sums and attached (+ tap push when
-operator-enabled). Untagged `workflow_dispatch` stops after assemble/sign
-(dry-run).
+channel manifests stamped from the signed sums and attached. Untagged
+`workflow_dispatch` stops after assemble/sign (dry-run).
+
+The tag run does **not** push the Homebrew tap or submit to WinGet, and it does
+**not** change what the installers serve. If any job fails, the GitHub release
+must not stay a full release. Mark it pre-release (`gh release edit vX.Y.Z
+--prerelease`) and add the tag to `channels.withdrawnTags` with the failing run
+as evidence (this is what happened to v1.1.0).
+
+## 3b. Promote to the public channels
+
+Follow [CHANNELS.md § Promotion runbook](CHANNELS.md#promotion-runbook-moving-publicversion-forward):
+**Publish Channels** (verified tap push + `brew install` smoke + WinGet
+submission) → `bun run channel:live --version X.Y.Z` green → set
+`channels.publicVersion` → `bun run release:stamp` → merge. Only that last step
+changes what `install.sh` / `install.ps1` install and what the README calls
+available.
 
 ## 4. Post-release verification (evidence, not ceremony)
 
 - Follow `docs/release/VERIFYING_RELEASES.md`: `cosign verify-blob` the
   SHA256SUMS bundle + `sha256sum -c` on one binary per OS family.
-- Weekly `channel-install.yml` runs REAL installs from the published assets
-  (apt/brew/scoop) and reports. First-run status for each channel goes into
-  `docs/release/SUPPORT_MATRIX.md` — nothing is declared live before that.
+- `channel-live.yml` (daily, and on every change to the release manifest or the
+  installers) resolves every claimed channel against the live registries and
+  clean-HOME installs the public version with `install.sh` (Linux, macOS) and
+  `install.ps1` (Windows). Weekly `channel-install.yml` runs real apt/brew/scoop
+  installs of the public version and **fails** on missing assets. Channel status
+  goes into `docs/release/SUPPORT_MATRIX.md`; nothing is declared live before
+  `channel:live` passes for it.
 - The nightly beta survey reports install-success per OS; investigate any dip
   below 99% before the next tag.
 

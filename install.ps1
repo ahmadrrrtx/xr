@@ -1,10 +1,16 @@
-# XR Stage 2 — native Windows bootstrapper.
+# XR bootstrap installer for native Windows.
 #
 # Remote (documented, tested):
 #   iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 #
 # Local file (also supported, with arguments):
-#   .\install.ps1 -AssumeYes -InstallMode minimal -TargetDirectory C:\tools\xr
+#   .\install.ps1 -AssumeYes -InstallMode minimal -TargetDirectory C:\tools\xr -ReleaseVersion 1.0.0
+#
+# It installs ONE pinned, published release: the compiled binary verified
+# against the release's SHA256SUMS, or (when no binary fits) that release's
+# verified xr-source.tar.gz with `bun install --frozen-lockfile`. It never
+# installs from an unpinned branch, and a missing or unverifiable release stops
+# the install with nothing half-installed (launch audit XR-LAUNCH-002).
 #
 # ---------------------------------------------------------------------------
 # WHY THIS FILE HAS NO TOP-LEVEL param() BLOCK
@@ -40,8 +46,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $XrRepo = 'ahmadrrrtx/xr'
-$XrBranch = 'main'
-$Version = '1.1.0'
+# Stamped from release.manifest.json `channels.publicVersion` (bun run release:stamp).
+# The installer only ever installs a published, pinned release (XR-LAUNCH-002).
+$Version = '1.0.0'
+$XrInstallMarker = '.xr-install'
 
 function Write-XrStep { param([string]$Message) Write-Host "  > $Message" -ForegroundColor Cyan }
 function Write-XrOk { param([string]$Message) Write-Host "  [ok] $Message" -ForegroundColor Green }
@@ -96,59 +104,112 @@ function Get-XrBinaryName {
   return "xr-$osTag-$arch.exe"
 }
 
-# Phase 3 - T2: download the standalone binary (default distribution path).
-# Phase 9 - Part 20: verified-only. Install ONLY when sha256 matches the
-# release's SHA256SUMS (fail closed); otherwise fall back to source.
-function Install-XrBinary {
+function Test-XrVersionString {
+  param([string]$Value)
+  return $Value -match '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'
+}
+
+function Get-XrReleaseBase {
+  param([string]$ReleaseVersion)
+  return "https://github.com/$XrRepo/releases/download/v$ReleaseVersion"
+}
+
+function Get-XrSha256 {
+  param([string]$Path)
+  return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+# Expected sha256 for an asset from the release's SHA256SUMS ($null when absent).
+function Get-XrExpectedSha {
+  param([string]$SumsPath, [string]$Name)
+  foreach ($line in Get-Content -LiteralPath $SumsPath) {
+    $parts = $line.Trim() -split '\s+'
+    if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $Name) { return $parts[0].ToLowerInvariant() }
+  }
+  return $null
+}
+
+# True when the target is absent, empty, or provably an XR install (installer
+# marker, an XR source tree, or only the dist\ folder an older installer left).
+function Test-XrTargetIsOurs {
   param([string]$TargetDirectory)
-  $name = Get-XrBinaryName
-  if (-not $name) { return $false }
-  $base = "https://github.com/$XrRepo/releases/download/v$Version"
-  $url = "$base/$name"
-  $distDir = Join-Path $TargetDirectory 'dist'
-  New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-  Write-XrStep "Downloading compiled binary v$Version ($name)"
-  $sumsPath = Join-Path $distDir '.sha256sums.tmp'
-  $binaryPath = Join-Path $distDir $name
+  if (-not (Test-Path -LiteralPath $TargetDirectory)) { return $true }
+  if (-not (Test-Path -LiteralPath $TargetDirectory -PathType Container)) { return $false }
+  if (Test-Path -LiteralPath (Join-Path $TargetDirectory $XrInstallMarker)) { return $true }
+  $pkg = Join-Path $TargetDirectory 'package.json'
+  if ((Test-Path -LiteralPath $pkg) -and ((Get-Content -LiteralPath $pkg -Raw) -match '"name":\s*"@rrrtx/xr"')) { return $true }
+  $others = @(Get-ChildItem -LiteralPath $TargetDirectory -Force | Where-Object { $_.Name -ne 'dist' })
+  if ($others.Count -gt 0) { return $false }
+  $dist = Join-Path $TargetDirectory 'dist'
+  if (-not (Test-Path -LiteralPath $dist)) { return $true }
+  $foreign = @(Get-ChildItem -LiteralPath $dist -Force | Where-Object { $_.Name -notlike 'xr-*' -and $_.Name -ne '.sha256sums.tmp' })
+  return ($foreign.Count -eq 0)
+}
+
+function Write-XrInstallMarker {
+  param([string]$TargetDirectory, [string]$ReleaseVersion, [string]$Method)
+  Set-Content -LiteralPath (Join-Path $TargetDirectory $XrInstallMarker) -Encoding ASCII -Value "version=$ReleaseVersion`nmethod=$Method`nrepo=$XrRepo`n"
+}
+
+# Download the release's SHA256SUMS into the staging directory. Missing release
+# = hard stop with nothing installed; there is no unpinned fallback.
+function Get-XrReleaseSums {
+  param([string]$ReleaseVersion, [string]$Stage)
+  $base = Get-XrReleaseBase -ReleaseVersion $ReleaseVersion
+  $sumsPath = Join-Path $Stage 'SHA256SUMS'
+  Write-XrStep "Fetching release checksums for v$ReleaseVersion"
   try {
     Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile $sumsPath -UseBasicParsing -ErrorAction Stop | Out-Null
   } catch {
-    Write-XrWarn 'Release checksums unavailable - refusing an unverified binary; falling back to source.'
-    Remove-Item $sumsPath -Force -ErrorAction SilentlyContinue
-    return $false
+    Stop-XrInstall "XR v$ReleaseVersion is not available from GitHub Releases (no SHA256SUMS at $base). Release checksums unavailable - refusing an unverified install. Nothing was installed. See https://github.com/$XrRepo/releases or pass -ReleaseVersion <published version>."
   }
-  try {
-    Invoke-WebRequest -Uri $url -OutFile $binaryPath -UseBasicParsing -ErrorAction Stop | Out-Null
-  } catch {
-    Write-XrWarn 'Binary download unavailable; falling back to source checkout.'
-    Remove-Item $sumsPath -Force -ErrorAction SilentlyContinue
-    return $false
-  }
-  $expect = $null
-  foreach ($line in Get-Content $sumsPath) {
-    $parts = $line.Trim() -split '\s+'
-    if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $name) { $expect = $parts[0]; break }
-  }
-  Remove-Item $sumsPath -Force -ErrorAction SilentlyContinue
+  if ((Get-Item -LiteralPath $sumsPath).Length -eq 0) { Stop-XrInstall "SHA256SUMS for v$ReleaseVersion is empty. Nothing was installed." }
+  return $sumsPath
+}
+
+# Returns $true when the verified binary is installed; $false when this
+# release has no usable binary for the platform (the caller then installs the
+# verified source archive). A checksum mismatch is fatal, never a fallback.
+function Install-XrBinary {
+  param([string]$TargetDirectory, [string]$ReleaseVersion, [string]$Stage, [string]$SumsPath)
+  $name = Get-XrBinaryName
+  if (-not $name) { return $false }
+  $expect = Get-XrExpectedSha -SumsPath $SumsPath -Name $name
   if (-not $expect) {
     Write-XrWarn "No checksum entry for $name in SHA256SUMS - refusing the unverified binary."
-    Remove-Item $binaryPath -Force -ErrorAction SilentlyContinue
     return $false
   }
-  $actual = (Get-FileHash $binaryPath -Algorithm SHA256).Hash.ToLower()
-  if ($actual -ne $expect.ToLower()) {
-    Write-XrWarn "Integrity check FAILED for $name (sha256 $actual != published $expect). Refusing the binary (possible tampering)."
-    Remove-Item $binaryPath -Force -ErrorAction SilentlyContinue
+  $base = Get-XrReleaseBase -ReleaseVersion $ReleaseVersion
+  $staged = Join-Path $Stage $name
+  Write-XrStep "Downloading compiled binary v$ReleaseVersion ($name)"
+  try {
+    Invoke-WebRequest -Uri "$base/$name" -OutFile $staged -UseBasicParsing -ErrorAction Stop | Out-Null
+  } catch {
+    Write-XrWarn "Binary download unavailable ($name)."
     return $false
   }
-  & $binaryPath --version 2>$null | Out-Null
-  if ($LASTEXITCODE -eq 0) {
-    Write-XrOk "Compiled binary installed and verified ($name)"
-    return $true
+  $actual = Get-XrSha256 -Path $staged
+  if ($actual -ne $expect) {
+    Stop-XrInstall "Integrity check FAILED for $name (sha256 $actual != published $expect). Refusing the binary (possible tampering). Nothing was installed."
   }
-  Write-XrWarn 'Binary failed to run; falling back to source checkout.'
-  Remove-Item $binaryPath -Force -ErrorAction SilentlyContinue
-  return $false
+  $createdTarget = -not (Test-Path -LiteralPath $TargetDirectory)
+  $distDir = Join-Path $TargetDirectory 'dist'
+  New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+  $partial = Join-Path $distDir ".$name.partial"
+  Move-Item -LiteralPath $staged -Destination $partial -Force
+  $ran = $false
+  try { & $partial --version 2>$null | Out-Null; $ran = ($LASTEXITCODE -eq 0) } catch { $ran = $false }
+  if (-not $ran) {
+    Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue
+    if (-not (Get-ChildItem -LiteralPath $distDir -Force)) { Remove-Item -LiteralPath $distDir -Force -ErrorAction SilentlyContinue }
+    if ($createdTarget -and -not (Get-ChildItem -LiteralPath $TargetDirectory -Force)) { Remove-Item -LiteralPath $TargetDirectory -Force -ErrorAction SilentlyContinue }
+    Write-XrWarn 'Binary failed to run on this system.'
+    return $false
+  }
+  Move-Item -LiteralPath $partial -Destination (Join-Path $distDir $name) -Force
+  Write-XrInstallMarker -TargetDirectory $TargetDirectory -ReleaseVersion $ReleaseVersion -Method 'binary'
+  Write-XrOk "Compiled binary installed and verified ($name, v$ReleaseVersion)"
+  return $true
 }
 
 function Install-XrBunRuntime {
@@ -158,12 +219,12 @@ function Install-XrBunRuntime {
     Write-XrOk "Bun $(bun --version)"
     return
   }
-  Write-XrWarn 'Bun is required to run XR.'
+  Write-XrWarn 'The source install needs Bun.'
   Write-XrStep 'Bun install is user-level and downloads from https://bun.sh.'
   if (-not (Confirm-XrAction -Question 'Install Bun now?' -DefaultYes $true -AssumeYes $AssumeYes)) {
-    Stop-XrInstall 'Bun is required. Install it from https://bun.sh and rerun this installer.'
+    Stop-XrInstall 'Bun is required for the source install. Install it from https://bun.sh and rerun this installer. Nothing was installed.'
   }
-  $bunScript = Join-Path $env:TEMP ("bun-install-" + [Guid]::NewGuid().ToString('n') + ".ps1")
+  $bunScript = Join-Path ([IO.Path]::GetTempPath()) ("bun-install-" + [Guid]::NewGuid().ToString('n') + ".ps1")
   try {
     Invoke-WebRequest -Uri 'https://bun.sh/install.ps1' -OutFile $bunScript -UseBasicParsing -ErrorAction Stop
     & powershell -NoProfile -ExecutionPolicy Bypass -File $bunScript
@@ -177,64 +238,66 @@ function Install-XrBunRuntime {
   Write-XrOk "Bun $(bun --version)"
 }
 
+# Source install from the SAME pinned release (never a branch): verify the
+# archive, install dependencies from the frozen lockfile in a sibling staging
+# tree, then swap it into place. The previous tree is kept, never deleted.
 function Install-XrSource {
-  param([string]$TargetDirectory)
-  if (Test-Path (Join-Path $TargetDirectory '.git')) {
-    Write-XrStep "Existing XR checkout found at $TargetDirectory"
-    if (Get-Command git -ErrorAction SilentlyContinue) {
-      Push-Location $TargetDirectory
-      try {
-        git fetch --quiet origin $XrBranch
-        git pull --ff-only origin $XrBranch
-      } catch {
-        Write-XrWarn 'Git update failed; continuing with the existing checkout.'
-      } finally {
-        Pop-Location
+  param([string]$TargetDirectory, [string]$ReleaseVersion, [string]$Stage, [string]$SumsPath, [bool]$AssumeYes)
+  $asset = 'xr-source.tar.gz'
+  $expect = Get-XrExpectedSha -SumsPath $SumsPath -Name $asset
+  if (-not $expect) { Stop-XrInstall "Release v$ReleaseVersion has no checksum for $asset - refusing an unverified source install. Nothing was installed." }
+  if (-not (Get-Command tar -ErrorAction SilentlyContinue)) { Stop-XrInstall 'tar.exe is required for the source install (built into Windows 10 1803 and later).' }
+  $archive = Join-Path $Stage $asset
+  Write-XrStep "Downloading source archive v$ReleaseVersion"
+  try {
+    Invoke-WebRequest -Uri "$(Get-XrReleaseBase -ReleaseVersion $ReleaseVersion)/$asset" -OutFile $archive -UseBasicParsing -ErrorAction Stop | Out-Null
+  } catch {
+    Stop-XrInstall "Could not download $asset for v$ReleaseVersion. Nothing was installed."
+  }
+  $actual = Get-XrSha256 -Path $archive
+  if ($actual -ne $expect) { Stop-XrInstall "Integrity check FAILED for $asset (sha256 $actual != published $expect). Nothing was installed." }
+  Write-XrOk 'Source archive verified'
+  Install-XrBunRuntime -AssumeYes $AssumeYes
+
+  $parent = Split-Path $TargetDirectory -Parent
+  if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+  $newTree = "$($TargetDirectory.TrimEnd('\','/')).new-" + [Guid]::NewGuid().ToString('n')
+  New-Item -ItemType Directory -Force -Path $newTree | Out-Null
+  try {
+    tar -xzf $archive -C $newTree
+    if ($LASTEXITCODE -ne 0) { Stop-XrInstall "Could not unpack $asset (tar exit $LASTEXITCODE). Nothing was installed." }
+    if (-not (Test-Path -LiteralPath (Join-Path $newTree 'src\index.ts'))) { Stop-XrInstall "Source archive v$ReleaseVersion has no src\index.ts. Nothing was installed." }
+    if (-not (Test-Path -LiteralPath (Join-Path $newTree 'bun.lock'))) { Stop-XrInstall "Source archive v$ReleaseVersion has no bun.lock; refusing a non-reproducible install. Nothing was installed." }
+    Install-XrDependencies -TargetDirectory $newTree
+
+    if (Test-Path -LiteralPath $TargetDirectory) {
+      $stamp = Get-Date -Format 'yyyyMMddHHmmss'
+      $previous = "$($TargetDirectory.TrimEnd('\','/')).previous"
+      if (Test-Path -LiteralPath (Join-Path $TargetDirectory '.git')) {
+        $previous = "$($TargetDirectory.TrimEnd('\','/')).backup-$stamp"
+      } elseif (Test-Path -LiteralPath $previous) {
+        if (Test-Path -LiteralPath (Join-Path $previous $XrInstallMarker)) { Remove-Item -LiteralPath $previous -Recurse -Force }
+        else { $previous = "$($TargetDirectory.TrimEnd('\','/')).previous-$stamp" }
       }
-    } else {
-      Write-XrWarn 'Git missing; cannot update the existing checkout.'
+      Move-Item -LiteralPath $TargetDirectory -Destination $previous
+      Write-XrWarn "Kept your previous install at $previous (remove it once the new install works)."
     }
-    return
+    Move-Item -LiteralPath $newTree -Destination $TargetDirectory
+  } finally {
+    if (Test-Path -LiteralPath $newTree) { Remove-Item -LiteralPath $newTree -Recurse -Force -ErrorAction SilentlyContinue }
   }
-  if ((Test-Path $TargetDirectory) -and ($null -ne (Get-ChildItem -LiteralPath $TargetDirectory -Force | Select-Object -First 1))) {
-    Stop-XrInstall "$TargetDirectory exists and is not an XR git checkout. Use -TargetDirectory or set XR_HOME."
-  }
-  New-Item -ItemType Directory -Force -Path (Split-Path $TargetDirectory -Parent) | Out-Null
-  if (Get-Command git -ErrorAction SilentlyContinue) {
-    Write-XrStep "Cloning XR into $TargetDirectory"
-    git clone --branch $XrBranch "https://github.com/$XrRepo.git" $TargetDirectory
-    if ($LASTEXITCODE -ne 0) { Stop-XrInstall "git clone failed (exit $LASTEXITCODE)." }
-  } else {
-    Write-XrStep 'Git not found. Downloading the source archive instead; updates will require rerunning the installer.'
-    $stage = Join-Path $env:TEMP ("xr-" + [Guid]::NewGuid().ToString('n'))
-    New-Item -ItemType Directory -Force -Path $stage | Out-Null
-    try {
-      $zip = Join-Path $stage 'xr.zip'
-      Invoke-WebRequest -Uri "https://github.com/$XrRepo/archive/refs/heads/$XrBranch.zip" -OutFile $zip -UseBasicParsing
-      Expand-Archive -Path $zip -DestinationPath $stage -Force
-      $src = Join-Path $stage "xr-$XrBranch"
-      if (-not (Test-Path $src)) { Stop-XrInstall 'Downloaded archive did not contain the expected source directory.' }
-      New-Item -ItemType Directory -Force -Path $TargetDirectory | Out-Null
-      Copy-Item -Path (Join-Path $src '*') -Destination $TargetDirectory -Recurse -Force
-    } finally {
-      Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
-    }
-  }
+  Write-XrInstallMarker -TargetDirectory $TargetDirectory -ReleaseVersion $ReleaseVersion -Method 'source'
+  Write-XrOk "Source install v$ReleaseVersion placed at $TargetDirectory"
 }
 
 function Install-XrDependencies {
   param([string]$TargetDirectory)
-  Write-XrStep 'Installing XR package dependencies'
+  Write-XrStep 'Installing XR package dependencies (frozen lockfile)'
   # Supply-chain hardening (matches CI): never run package lifecycle scripts
-  # during install. XR's runtime deps are audited, but `playwright` (an
-  # optionalDependency) and any transitive dep could otherwise run install
-  # scripts that touch the user's system. CI uses `bun install --ignore-scripts`
-  # for the same reason - see .github/workflows/* and CONTRIBUTING.md.
-  #
-  # Override with XR_INSTALL_ALLOW_SCRIPTS=1 only if you understand the risk
-  # and have a verified bun.lock.
+  # during install, and never resolve versions outside the release's bun.lock.
+  # Override scripts with XR_INSTALL_ALLOW_SCRIPTS=1 only if you understand the risk.
   $allowScripts = $env:XR_INSTALL_ALLOW_SCRIPTS -eq '1'
-  $installArgs = @('install')
+  $installArgs = @('install', '--frozen-lockfile')
   if (-not $allowScripts) {
     $installArgs += '--ignore-scripts'
   } else {
@@ -243,7 +306,7 @@ function Install-XrDependencies {
   Push-Location $TargetDirectory
   try {
     bun @installArgs
-    if ($LASTEXITCODE -ne 0) { Stop-XrInstall "bun install failed (exit $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) { Stop-XrInstall "bun $($installArgs -join ' ') failed (exit $LASTEXITCODE). Nothing was installed." }
   } finally {
     Pop-Location
   }
@@ -259,8 +322,13 @@ function Install-XrLauncher {
   $entry = Join-Path $TargetDirectory 'src\index.ts'
   $binary = Join-Path $TargetDirectory ("dist\" + (Get-XrBinaryName))
   # Phase 3 - T2: compiled binary first (default distribution path), Bun source fallback.
-  Set-Content -Path $ps1 -Encoding UTF8 -Value "if (Test-Path `"$binary`") { & `"$binary`" @args; exit `$LASTEXITCODE }; & bun run `"$entry`" @args`nexit `$LASTEXITCODE`n"
-  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nif exist `"$binary`" (`r`n  `"$binary`" %*`r`n) else (`r`n  bun run `"$entry`" %*`r`n)`r`n"
+  $ps1Body = @(
+    "if (Test-Path -LiteralPath `"$binary`") { & `"$binary`" @args; exit `$LASTEXITCODE }",
+    "if (Test-Path -LiteralPath `"$entry`") { & bun run `"$entry`" @args; exit `$LASTEXITCODE }",
+    "Write-Error 'xr: no XR install found at $TargetDirectory. Rerun the installer.'; exit 127"
+  ) -join "`n"
+  Set-Content -Path $ps1 -Encoding UTF8 -Value $ps1Body
+  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nif exist `"$binary`" (`r`n  `"$binary`" %*`r`n) else if exist `"$entry`" (`r`n  bun run `"$entry`" %*`r`n) else (`r`n  echo xr: no XR install found at $TargetDirectory. Rerun the installer. 1>&2`r`n  exit /b 127`r`n)`r`n"
 
   # PATH hygiene: append only when genuinely absent, compare case-insensitively
   # and ignore trailing separators, and never write back a PATH we failed to
@@ -290,11 +358,15 @@ function Invoke-XrInstall {
     [ValidateSet('minimal', 'local', 'byok', 'hybrid', 'full')]
     [string]$InstallMode,
     # Install location. Defaults to $env:XR_HOME, else <user profile>\.xr-agent.
-    [string]$TargetDirectory
+    [string]$TargetDirectory,
+    # Published release to install (default: the stamped public version; also $env:XR_INSTALL_VERSION).
+    [string]$ReleaseVersion,
+    # Skip the compiled binary and install the release's verified source archive.
+    [switch]$FromSource
   )
 
   if (-not (Test-XrOnWindows)) {
-    Stop-XrInstall 'install.ps1 is the Windows bootstrapper. On macOS/Linux use: curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | sh'
+    Stop-XrInstall 'install.ps1 is the Windows bootstrapper. On macOS/Linux use: curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash'
   }
   if ($PSVersionTable.PSVersion.Major -lt 5) {
     Stop-XrInstall "PowerShell 5.1 or newer is required (found $($PSVersionTable.PSVersion)). Install Windows Management Framework 5.1 or PowerShell 7."
@@ -312,23 +384,43 @@ function Invoke-XrInstall {
   if (-not $TargetDirectory) {
     $TargetDirectory = if ($env:XR_HOME) { $env:XR_HOME } else { Join-Path (Get-XrHomeDirectory) '.xr-agent' }
   }
+  $installVersion = $Version
+  if ($ReleaseVersion) { $installVersion = $ReleaseVersion } elseif ($env:XR_INSTALL_VERSION) { $installVersion = $env:XR_INSTALL_VERSION }
+  $installVersion = $installVersion.TrimStart('v')
+  if (-not (Test-XrVersionString -Value $installVersion)) {
+    Stop-XrInstall "Invalid version '$installVersion'. Use a published release such as -ReleaseVersion 1.0.0."
+  }
 
   Write-Host ""
-  Write-Host "  XR Stage 2 Installer v$Version" -ForegroundColor Cyan
+  Write-Host "  XR Installer v$installVersion" -ForegroundColor Cyan
   Write-Host "  Windows - PowerShell $($PSVersionTable.PSVersion) - Target: $TargetDirectory" -ForegroundColor DarkGray
   Write-Host ""
-  Write-XrStep 'This will download XR from GitHub, install Bun dependencies, and create an xr launcher.'
+  Write-XrStep "This downloads XR v$installVersion from GitHub Releases, verifies it against the release's SHA256SUMS, and creates an xr launcher."
   Write-XrStep 'Optional Ollama, voice, browser and desktop-control packs are handled later by xr install prompts.'
+  if (-not (Test-XrTargetIsOurs -TargetDirectory $TargetDirectory)) {
+    Stop-XrInstall "$TargetDirectory exists and is not an XR install. Use -TargetDirectory or set XR_HOME. Nothing was changed."
+  }
   if (-not (Confirm-XrAction -Question 'Continue?' -DefaultYes $true -AssumeYes $AssumeYes.IsPresent)) {
     Stop-XrInstall 'Cancelled by user.'
   }
 
-  Install-XrBunRuntime -AssumeYes $AssumeYes.IsPresent
-  if (Install-XrBinary -TargetDirectory $TargetDirectory) {
-    Write-XrStep 'Using the compiled binary distribution (source checkout skipped).'
-  } else {
-    Install-XrSource -TargetDirectory $TargetDirectory
-    Install-XrDependencies -TargetDirectory $TargetDirectory
+  # Everything is downloaded and verified in a private staging directory
+  # first; the target is only touched once an artifact has verified.
+  $stage = Join-Path ([IO.Path]::GetTempPath()) ("xr-install-" + [Guid]::NewGuid().ToString('n'))
+  New-Item -ItemType Directory -Force -Path $stage | Out-Null
+  try {
+    $sumsPath = Get-XrReleaseSums -ReleaseVersion $installVersion -Stage $stage
+    $binaryInstalled = $false
+    if (-not $FromSource) {
+      $binaryInstalled = Install-XrBinary -TargetDirectory $TargetDirectory -ReleaseVersion $installVersion -Stage $stage -SumsPath $sumsPath
+    }
+    if ($binaryInstalled) {
+      Write-XrStep 'Using the compiled binary distribution (source install skipped).'
+    } else {
+      Install-XrSource -TargetDirectory $TargetDirectory -ReleaseVersion $installVersion -Stage $stage -SumsPath $sumsPath -AssumeYes $AssumeYes.IsPresent
+    }
+  } finally {
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
   }
   Install-XrLauncher -TargetDirectory $TargetDirectory
 
@@ -341,7 +433,7 @@ function Invoke-XrInstall {
   if ($LASTEXITCODE -ne 0) { Write-XrWarn 'XR installed, but the setup wizard reported issues. Run: xr doctor' }
 
   Write-Host ""
-  Write-XrOk 'XR bootstrap complete. Open a new PowerShell window and run: xr doctor'
+  Write-XrOk "XR v$installVersion installed. Open a new PowerShell window and run: xr doctor"
 }
 
 # ---------------------------------------------------------------------------

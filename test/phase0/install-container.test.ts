@@ -84,9 +84,14 @@ describe("T12 · installer is non-interactive-safe", () => {
 
   test("install.sh never blocks on a prompt without a TTY", () => {
     // `prompt_yes` must return (declining) rather than calling `read` when
-    // stdin/stdout are not a terminal — otherwise an unattended run hangs.
-    expect(installSh).toMatch(/is_tty\(\)\s*\{\s*\[ -t 0 \] && \[ -t 1 \]/);
-    expect(installSh).toMatch(/if ! is_tty; then return 1; fi/);
+    // there is no terminal at all — otherwise an unattended run hangs.
+    // Under `curl | bash` stdin is the script pipe, so answers come from the
+    // controlling terminal (/dev/tty) when one exists (launch audit XR-LAUNCH-002;
+    // behaviour covered by test/release/installer-behavior.test.ts).
+    expect(installSh).toMatch(/tty_source\(\)\{/);
+    expect(installSh).toContain('if { : </dev/tty; } 2>/dev/null; then echo "/dev/tty"');
+    expect(installSh).toContain('src="$(tty_source)" || return 1');
+    expect(installSh).toContain('read -r ans <"$src"');
   });
 
   test("install.sh propagates --yes to the nested installer", () => {
@@ -113,12 +118,17 @@ describe("T12 · installer is non-interactive-safe", () => {
     expect(installPs1).toMatch(/if \(\$AssumeYes\) \{ \$wizardArgs \+= '--yes' \}/);
   });
 
-  test("both installers are stamped from the release manifest", () => {
+  test("both installers are stamped with the PUBLIC version from the release manifest", () => {
+    // Launch audit XR-LAUNCH-001/002: installers pin channels.publicVersion (the
+    // version every channel actually serves), not identity.version (the line
+    // in development on main, which may not be published yet).
     const manifest = JSON.parse(readFileSync(join(REPO_ROOT, "release.manifest.json"), "utf8")) as {
       identity: { version: string };
+      channels?: { publicVersion?: string };
     };
-    expect(installSh).toContain(`VERSION="${manifest.identity.version}"`);
-    expect(installPs1).toContain(`$Version = '${manifest.identity.version}'`);
+    const pinned = manifest.channels?.publicVersion ?? manifest.identity.version;
+    expect(installSh).toContain(`VERSION="${pinned}"`);
+    expect(installPs1).toContain(`$Version = '${pinned}'`);
   });
 });
 

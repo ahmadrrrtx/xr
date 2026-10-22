@@ -1,0 +1,111 @@
+# =============================================================================
+# Launch audit XR-LAUNCH-001 — do the public channels serve what we claim?
+#
+# Repo-side gates (release:check, channel:check, claim-lint) cannot see the
+# registries. This job asks them, daily and on every change to the release
+# manifest: every channel in release.manifest.json `channels.claimed` must serve
+# `channels.publicVersion` with bytes matching that release's signed SHA256SUMS
+# (scripts/channel-live-check.ts). Red here means a public claim is false
+# right now — fix the channel or the claim, never the check.
+# =============================================================================
+name: Channel Live
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  push:
+    branches: [main]
+    paths:
+      - release.manifest.json
+      - install.sh
+      - install.ps1
+      - scripts/channel-live-check.ts
+      - .github/workflows/channel-live.yml
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Vet a candidate version instead of channels.publicVersion (promotion check)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    name: Claimed channels serve the public version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: channel:live
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE: ${{ inputs.version }}
+        run: |
+          if [ -n "$CANDIDATE" ]; then
+            bun run scripts/channel-live-check.ts --version "$CANDIDATE"
+          else
+            bun run scripts/channel-live-check.ts
+          fi
+
+  installer-smoke:
+    name: install.sh from main installs the public version (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Clean-HOME install with the repository's install.sh
+        run: |
+          V=$(python3 -c 'import json;print(json.load(open("release.manifest.json"))["channels"]["publicVersion"])')
+          export HOME="$RUNNER_TEMP/xr-clean-home"
+          mkdir -p "$HOME"
+          bash install.sh --yes </dev/null
+          test -f "$HOME/.xr-agent/.xr-install"
+          grep -q "version=$V" "$HOME/.xr-agent/.xr-install"
+          "$HOME/.local/bin/xr" --version | tee "$RUNNER_TEMP/xr-version.txt"
+          grep -q "$V" "$RUNNER_TEMP/xr-version.txt"
+      - name: A missing release fails closed and leaves nothing behind
+        run: |
+          export HOME="$RUNNER_TEMP/xr-missing-home"
+          mkdir -p "$HOME"
+          if bash install.sh --yes --version=0.0.1 </dev/null; then
+            echo "::error::install.sh succeeded for a release that does not exist"; exit 1
+          fi
+          test ! -e "$HOME/.xr-agent" || { echo "::error::install.sh left $HOME/.xr-agent behind"; exit 1; }
+
+  installer-smoke-windows:
+    name: install.ps1 from main installs the public version (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Clean-profile install with the repository's install.ps1
+        shell: pwsh
+        run: |
+          $v = (Get-Content release.manifest.json -Raw | ConvertFrom-Json).channels.publicVersion
+          $target = Join-Path $env:RUNNER_TEMP 'xr-clean'
+          .\install.ps1 -AssumeYes -TargetDirectory $target
+          if (-not (Test-Path (Join-Path $target '.xr-install'))) { throw 'install marker missing' }
+          $out = & (Join-Path $target 'bin-local\xr.cmd') --version
+          Write-Host $out
+          if (-not ($out -match [regex]::Escape($v))) { throw "expected v$v, got: $out" }
+      - name: A missing release fails closed and leaves nothing behind
+        shell: pwsh
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'xr-missing'
+          $failed = $false
+          try { .\install.ps1 -AssumeYes -TargetDirectory $target -ReleaseVersion 0.0.1 } catch { $failed = $true; Write-Host "refused: $($_.Exception.Message)" }
+          if (-not $failed) { throw 'install.ps1 succeeded for a release that does not exist' }
+          if (Test-Path $target) { throw "install.ps1 left $target behind" }
