@@ -167,3 +167,21 @@ test("parseChatEvent: untyped frames are narration, unknown types are dropped", 
   assert.equal(parseChatEvent({ type: "mystery", text: "x" }), null);
   assert.equal(parseChatEvent("not an object"), null);
 });
+
+test("bootstrapLink asks the daemon for a single-use link with the bearer header; the token never enters a URL (XR-LAUNCH-027)", async () => {
+  const { impl, calls } = fakeFetch({
+    "POST /auth/bootstrap?next=%2F": () => json({ url: "http://127.0.0.1:3141/?bootstrap=one-time-code", expiresInSeconds: 60 }),
+  });
+  const client = new DaemonClient("http://127.0.0.1:3141", "secret-token", impl);
+  assert.equal(await client.bootstrapLink(), "http://127.0.0.1:3141/?bootstrap=one-time-code");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].headers.authorization, "Bearer secret-token");
+  assert.ok(!calls[0].url.includes("secret-token"));
+});
+
+test("bootstrapLink refuses a link that points away from the daemon origin, and surfaces HTTP errors", async () => {
+  const offsite = fakeFetch({ "POST /auth/bootstrap?next=%2F": () => json({ url: "http://evil.example/?bootstrap=x" }) });
+  await assert.rejects(new DaemonClient("http://127.0.0.1:3141", "t", offsite.impl).bootstrapLink(), DaemonHttpError);
+  const old = fakeFetch({});
+  await assert.rejects(new DaemonClient("http://127.0.0.1:3141", "t", old.impl).bootstrapLink(), (e: unknown) => e instanceof DaemonHttpError && e.status === 404);
+});

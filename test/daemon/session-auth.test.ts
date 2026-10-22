@@ -1,9 +1,11 @@
 /**
- * XR-LAUNCH-018 / 027 (minimal) / 034 — `xr serve` browser sign-in.
+ * XR-LAUNCH-018 / 027 / 034 — `xr serve` browser sign-in.
  *
  *   · unauthenticated `/` → the HTML sign-in page, even for `curl /`;
  *   · the form POSTs the token in the body → session cookie → dashboard;
  *   · constant-time token comparison everywhere authorizeRequest looks;
+ *   · 027: the cookie is a random session id (never the token); bootstrap
+ *     links are single-use and expire; logout revokes; `?token=` is retired;
  *   · `<XR home>/daemon/token` is 0600, holds the current token, and goes away on stop.
  */
 
@@ -14,8 +16,13 @@ import { join } from "node:path";
 import { Store } from "../../src/state/workspace-store.ts";
 import { authorizeRequest, makeHandler, serve } from "../../src/daemon/server.ts";
 import {
-  cookieHasToken,
+  BOOTSTRAP_PATH,
+  BOOTSTRAP_TTL_MS,
+  BrowserSessions,
+  cookieValues,
   LOGIN_PATH,
+  LOGOUT_PATH,
+  SESSION_MAX_AGE_S,
   safeReturnPath,
   tokenEquals,
   wantsSignInPage,
@@ -30,10 +37,10 @@ afterAll(() => {
   else process.env.XR_HOME = savedHome;
 });
 
-function freshHandler() {
+function freshHandler(browser?: BrowserSessions) {
   const tmp = mkdtempSync(join(tmpdir(), "xr-signin-"));
   process.env.XR_HOME = join(tmp, "home");
-  return makeHandler(new Store(join(tmp, "d.db")), TOKEN);
+  return makeHandler(new Store(join(tmp, "d.db")), TOKEN, browser ? { browser } : {});
 }
 
 function loginRequest(body: string, headers: Record<string, string> = {}) {
@@ -102,7 +109,9 @@ describe("XR-LAUNCH-018 · POST /auth/login", () => {
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Strict");
     expect(cookie).not.toContain("Secure"); // loopback HTTP: Secure only on LAN TLS
+    expect(cookie).toContain(`Max-Age=${SESSION_MAX_AGE_S}`);
     const session = cookie.split(";")[0];
+    expect(session).not.toContain(TOKEN); // XR-LAUNCH-027: a session id, never the API token
     const api = await h(new Request(`${BASE}/api/overview`, { headers: { cookie: session } }));
     expect(api.status).toBe(200);
   });
@@ -157,7 +166,7 @@ describe("XR-LAUNCH-018 · POST /auth/login", () => {
   });
 });
 
-describe("XR-LAUNCH-027 (minimal) · constant-time comparison", () => {
+describe("XR-LAUNCH-027 · constant-time comparison", () => {
   test("tokenEquals: equal, unequal, different length, empty/absent", () => {
     expect(tokenEquals(TOKEN, TOKEN)).toBe(true);
     expect(tokenEquals(TOKEN.slice(0, -1) + "0", TOKEN)).toBe(false);
@@ -167,27 +176,173 @@ describe("XR-LAUNCH-027 (minimal) · constant-time comparison", () => {
     expect(tokenEquals("", "")).toBe(false); // an empty expected token never authorizes
   });
 
-  test("cookieHasToken finds the session pair among others and rejects near-misses", () => {
-    expect(cookieHasToken(`a=1; xr_session=${TOKEN}; b=2`, "xr_session", TOKEN)).toBe(true);
-    expect(cookieHasToken(`xr_session=${TOKEN}x`, "xr_session", TOKEN)).toBe(false);
-    expect(cookieHasToken(`other_xr_session=${TOKEN}`, "xr_session", TOKEN)).toBe(false);
+  test("cookieValues finds every pair of that exact name", () => {
+    expect(cookieValues("a=1; xr_session=s1; b=2; xr_session=s2", "xr_session")).toEqual(["s1", "s2"]);
+    expect(cookieValues("other_xr_session=x", "xr_session")).toEqual([]);
   });
 
-  test("authorizeRequest semantics unchanged: bearer, cookie, GET bootstrap, nothing else", () => {
+  test("authorizeRequest: bearer, a live session id, a single-use GET bootstrap code — nothing else", () => {
+    const sessions = new BrowserSessions();
+    const sid = sessions.create();
+    const code = sessions.mintBootstrap();
     const r = (init: RequestInit & { url?: string }) => new Request(init.url ?? `${BASE}/`, init);
-    expect(authorizeRequest(r({ headers: { authorization: `Bearer ${TOKEN}` } }), TOKEN).kind).toBe("bearer");
-    expect(authorizeRequest(r({ headers: { authorization: `Bearer ${TOKEN}0` } }), TOKEN).kind).toBe("denied");
-    expect(authorizeRequest(r({ headers: { authorization: TOKEN } }), TOKEN).kind).toBe("denied");
-    expect(authorizeRequest(r({ headers: { cookie: `xr_session=${TOKEN}` } }), TOKEN).kind).toBe("session");
-    expect(authorizeRequest(r({ url: `${BASE}/?token=${TOKEN}` }), TOKEN).kind).toBe("bootstrap");
-    expect(authorizeRequest(r({ url: `${BASE}/?token=${TOKEN}`, method: "POST" }), TOKEN).kind).toBe("denied");
+    expect(authorizeRequest(r({ headers: { authorization: `Bearer ${TOKEN}` } }), TOKEN, sessions).kind).toBe("bearer");
+    expect(authorizeRequest(r({ headers: { authorization: `Bearer ${TOKEN}0` } }), TOKEN, sessions).kind).toBe("denied");
+    expect(authorizeRequest(r({ headers: { authorization: TOKEN } }), TOKEN, sessions).kind).toBe("denied");
+    expect(authorizeRequest(r({ headers: { cookie: `xr_session=${sid}` } }), TOKEN, sessions).kind).toBe("session");
+    // The API token is no longer a cookie value, and ?token= is retired.
+    expect(authorizeRequest(r({ headers: { cookie: `xr_session=${TOKEN}` } }), TOKEN, sessions).kind).toBe("denied");
+    expect(authorizeRequest(r({ url: `${BASE}/?token=${TOKEN}` }), TOKEN, sessions).kind).toBe("denied");
+    // A POST never consumes the code; the GET then works exactly once.
+    expect(authorizeRequest(r({ url: `${BASE}/?bootstrap=${code}`, method: "POST" }), TOKEN, sessions).kind).toBe("denied");
+    const first = authorizeRequest(r({ url: `${BASE}/chat?bootstrap=${code}&x=1` }), TOKEN, sessions);
+    expect(first).toEqual({ kind: "bootstrap", url: `${BASE}/chat?x=1` });
+    expect(authorizeRequest(r({ url: `${BASE}/chat?bootstrap=${code}` }), TOKEN, sessions).kind).toBe("denied");
   });
 
-  test("safeReturnPath keeps same-origin paths and strips token parameters", () => {
+  test("safeReturnPath keeps same-origin paths and strips token and bootstrap parameters", () => {
     expect(safeReturnPath("/chat?x=1&token=abc")).toBe("/chat?x=1");
+    expect(safeReturnPath("/chat?bootstrap=abc&x=1")).toBe("/chat?x=1");
     expect(safeReturnPath("/a b")).toBe("/a%20b");
     expect(safeReturnPath(null)).toBe("/");
     expect(safeReturnPath("javascript:alert(1)")).toBe("/");
+  });
+});
+
+describe("XR-LAUNCH-027 · session ids and single-use bootstrap", () => {
+  test("session ids are random, never the token, and expire after 7 days", () => {
+    let now = 1_000_000;
+    const s = new BrowserSessions(() => now);
+    const a = s.create();
+    const b = s.create();
+    expect(a).not.toBe(b);
+    expect(a).not.toContain(TOKEN);
+    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(s.isValid(a)).toBe(true);
+    expect(s.isValid(`${a}x`)).toBe(false);
+    expect(s.isValid("")).toBe(false);
+    now += SESSION_MAX_AGE_S * 1000 - 1;
+    expect(s.isValid(a)).toBe(true);
+    now += 1;
+    expect(s.isValid(a)).toBe(false);
+  });
+
+  test("bootstrap codes are single-use and expire after 60 s", () => {
+    let now = 5_000;
+    const s = new BrowserSessions(() => now);
+    const code = s.mintBootstrap();
+    expect(s.consumeBootstrap(code)).toBe(true);
+    expect(s.consumeBootstrap(code)).toBe(false);
+    const late = s.mintBootstrap();
+    now += BOOTSTRAP_TTL_MS;
+    expect(s.consumeBootstrap(late)).toBe(false);
+    expect(s.consumeBootstrap(late)).toBe(false);
+    expect(s.consumeBootstrap(TOKEN)).toBe(false);
+  });
+
+  test("stores are bounded: the oldest session is evicted first", () => {
+    const s = new BrowserSessions();
+    const first = s.create();
+    for (let i = 0; i < 256; i++) s.create();
+    expect(s.size.sessions).toBe(256);
+    expect(s.isValid(first)).toBe(false);
+  });
+
+  test("a bootstrap link signs in once: 302 to the clean URL with a session cookie; a replay gets the sign-in page", async () => {
+    const browser = new BrowserSessions();
+    const h = freshHandler(browser);
+    const code = browser.mintBootstrap();
+    const res = await h(new Request(`${BASE}/chat?bootstrap=${code}`, { headers: { accept: "text/html" } }));
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`${BASE}/chat`);
+    const cookie = (res.headers.get("set-cookie") ?? "").split(";")[0]!;
+    expect(cookie.startsWith("xr_session=")).toBe(true);
+    expect(cookie).not.toContain(TOKEN);
+    expect(cookie).not.toContain(code);
+    expect((await h(new Request(`${BASE}/api/overview`, { headers: { cookie } }))).status).toBe(200);
+    const replay = await h(new Request(`${BASE}/chat?bootstrap=${code}`, { headers: { accept: "text/html" } }));
+    expect(replay.status).toBe(401);
+    expect(replay.headers.get("content-type")).toContain("text/html");
+    expect(replay.headers.get("set-cookie")).toBeNull();
+  });
+
+  test("the retired ?token= link lands on the sign-in page and sets no cookie", async () => {
+    const res = await freshHandler()(new Request(`${BASE}/?token=${TOKEN}`, { headers: { accept: "text/html" } }));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("set-cookie")).toBeNull();
+    const html = await res.text();
+    expect(html).toContain("Sign in to Control Center");
+    expect(html).not.toContain(TOKEN);
+  });
+
+  test("a leaked session cookie is not a bearer token", async () => {
+    const browser = new BrowserSessions();
+    const h = freshHandler(browser);
+    const sid = browser.create();
+    expect((await h(new Request(`${BASE}/api/overview`, { headers: { authorization: `Bearer ${sid}` } }))).status).toBe(401);
+  });
+
+  test("POST /auth/bootstrap mints a single-use link for bearer clients; anonymous callers get 401", async () => {
+    const browser = new BrowserSessions();
+    const h = freshHandler(browser);
+    const anon = await h(new Request(`${BASE}${BOOTSTRAP_PATH}`, { method: "POST", headers: { accept: "application/json" } }));
+    expect(anon.status).toBe(401);
+    const res = await h(new Request(`${BASE}${BOOTSTRAP_PATH}?next=%2Fchat`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const body = (await res.json()) as { url: string; expiresInSeconds: number };
+    expect(body.expiresInSeconds).toBe(60);
+    const link = new URL(body.url);
+    expect(link.origin).toBe(BASE);
+    expect(link.pathname).toBe("/chat");
+    expect(body.url).not.toContain(TOKEN);
+    const code = link.searchParams.get("bootstrap")!;
+    expect(browser.consumeBootstrap(code)).toBe(true);
+    // next= is a return path, never an open redirect
+    const evil = await h(new Request(`${BASE}${BOOTSTRAP_PATH}?next=${encodeURIComponent("//evil.example/x")}`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } }));
+    expect(new URL(((await evil.json()) as { url: string }).url).pathname).toBe("/");
+  });
+
+  test("POST /auth/logout revokes the session and clears the cookie; a cross-origin logout is refused", async () => {
+    const browser = new BrowserSessions();
+    const h = freshHandler(browser);
+    const sid = browser.create();
+    const cookie = `xr_session=${sid}`;
+    const evil = await h(new Request(`${BASE}${LOGOUT_PATH}`, { method: "POST", headers: { cookie, origin: "http://evil.example" } }));
+    expect(evil.status).toBe(403);
+    expect(browser.isValid(sid)).toBe(true);
+    const res = await h(new Request(`${BASE}${LOGOUT_PATH}`, { method: "POST", headers: { cookie, origin: BASE } }));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/");
+    expect(res.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(browser.isValid(sid)).toBe(false);
+    expect((await h(new Request(`${BASE}/api/overview`, { headers: { cookie } }))).status).toBe(401);
+  });
+
+  test("a real serve(): the private banner prints single-use links (never ?token=), and each works once", async () => {
+    const home = join(mkdtempSync(join(tmpdir(), "xr-serve-027-")), "home");
+    process.env.XR_HOME = home;
+    const lines: string[] = [];
+    const log = console.log;
+    console.log = (...a: unknown[]) => lines.push(a.map(String).join(" "));
+    let handle: Awaited<ReturnType<typeof serve>> | undefined;
+    try {
+      handle = await serve({ port: 0, token: TOKEN, revealToken: true });
+      const text = lines.join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+      expect(text).not.toContain("?token=");
+      expect(text).toContain(`Token: ${TOKEN}`); // the desktop sidecar still reads this line
+      const m = text.match(/Dashboard\s+(http:\/\/\S+\?bootstrap=\S+)/);
+      expect(m).not.toBeNull();
+      const link = m![1]!;
+      const first = await fetch(link, { redirect: "manual", headers: { accept: "text/html" } });
+      expect(first.status).toBe(302);
+      expect(first.headers.get("set-cookie")).toContain("xr_session=");
+      const again = await fetch(link, { redirect: "manual", headers: { accept: "text/html" } });
+      expect(again.status).toBe(401);
+    } finally {
+      console.log = log;
+      handle?.stop();
+    }
   });
 });
 

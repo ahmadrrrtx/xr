@@ -17,10 +17,14 @@ import { join } from "node:path";
 // missing exports) instead of a single module-resolution error.
 import * as S from "../../src/daemon/server.ts";
 import { Store } from "../../src/state/workspace-store.ts";
+import { BrowserSessions } from "../../src/daemon/session-auth.ts";
 
 const { allowedDaemonHosts, clientIpFor, hostAllowed, makeHandler, RateLimiter } = S;
 
 const TOKEN = "origin-host-guard-token";
+/** XR-LAUNCH-027 — browser sessions are random ids, never the token. */
+const BROWSER = new BrowserSessions();
+const SID = BROWSER.create();
 const GOOD = ["localhost", "127.0.0.1", "[::1]"] as const;
 const EVIL = ["evil.example", "localhost.evil.example", "127.0.0.1.evil.example"] as const;
 
@@ -56,7 +60,7 @@ function req(
 ): Request {
   const headers: Record<string, string> = { ...(init.headers ?? {}) };
   if (init.auth === "bearer") headers.authorization = `Bearer ${TOKEN}`;
-  if (init.auth === "session") headers.cookie = init.cookies ?? `xr_session=${TOKEN}`;
+  if (init.auth === "session") headers.cookie = init.cookies ?? `xr_session=${SID}`;
   if (init.origin) headers.origin = init.origin;
   const r = new Request(`http://${host}:3141${path}`, { method: init.method ?? "GET", headers });
   return r;
@@ -87,14 +91,14 @@ describe("Host gate (421 before auth and open paths)", () => {
     { name: "bearer GET", method: "GET", auth: "bearer", path: "/api/budget" },
     { name: "bearer POST", method: "POST", auth: "bearer", path: "/api/budget" },
     {
-      name: "session POST", method: "POST", auth: "session", path: "/api/budget", cookies: `xr_session=${TOKEN}`,
+      name: "session POST", method: "POST", auth: "session", path: "/api/budget", cookies: `xr_session=${SID}`,
       origin: "http://127.0.0.1:3141",
     },
   ];
 
   for (const m of METHODS) {
     test(`${m.name}: good Host passes the gate, evil Host → 421 (token must not override)`, async () => {
-      const h = makeHandler(store, TOKEN);
+      const h = makeHandler(store, TOKEN, { browser: BROWSER });
       const good = await h(req("127.0.0.1", m.path, { method: m.method, auth: m.auth, cookies: m.cookies, origin: m.origin }));
       expect([200, 400, 403, 404, 405]).toContain(good.status); // gate passed; route/CSRF decides
       expect(good.status).not.toBe(421);
@@ -106,7 +110,7 @@ describe("Host gate (421 before auth and open paths)", () => {
   }
 
   test("open paths still work with a good Host; wrong Host on an open path is refused", async () => {
-    const h = makeHandler(store, TOKEN);
+    const h = makeHandler(store, TOKEN, { browser: BROWSER });
     expect((await h(req("localhost", "/api/health", { auth: "none" }))).status).toBe(200);
     expect((await h(req("localhost", "/api/v1/health", { auth: "none" }))).status).toBe(200);
     expect((await h(req("localhost", "/assets/auth.js", { auth: "none" }))).status).toBe(200);
@@ -128,11 +132,11 @@ describe("Origin gate (session-authenticated mutating requests)", () => {
   const EMPTY = "{}" as const;
 
   test("session POST: same-origin on any loopback spelling → 200; evil/missing Origin → 403", async () => {
-    const h = makeHandler(store, TOKEN);
+    const h = makeHandler(store, TOKEN, { browser: BROWSER });
     const put = async (origin: string | undefined) =>
       h(new Request(`http://127.0.0.1:3141${POST}`, {
         method: "POST",
-        headers: { cookie: `xr_session=${TOKEN}`, ...JSON_HEADERS, ...(origin ? { origin } : {}) },
+        headers: { cookie: `xr_session=${SID}`, ...JSON_HEADERS, ...(origin ? { origin } : {}) },
         body: EMPTY,
       }));
 
@@ -148,7 +152,7 @@ describe("Origin gate (session-authenticated mutating requests)", () => {
   });
 
   test("session GET is Origin-exempt; bearer is Origin-exempt for all verbs (2xx regardless)", async () => {
-    const h = makeHandler(store, TOKEN);
+    const h = makeHandler(store, TOKEN, { browser: BROWSER });
     const getRes = await h(req("127.0.0.1", "/api/budget", { auth: "session", origin: "http://evil.example:3141" }));
     expect(getRes.status).toBe(200);
     for (const o of ["http://127.0.0.1:3141", "http://localhost:3141", "http://evil.example:3141", undefined]) {
@@ -164,7 +168,7 @@ describe("Origin gate (session-authenticated mutating requests)", () => {
 
 describe("health payload (P2-21)", () => {
   test("unauth health returns {ok, ts} only — no name/version/host/binding/configCache", async () => {
-    const h = makeHandler(store, TOKEN);
+    const h = makeHandler(store, TOKEN, { browser: BROWSER });
     for (const p of ["/api/health", "/api/v1/health"]) {
       const res = await h(req("localhost", p, { auth: "none" }));
       expect(res.status).toBe(200);

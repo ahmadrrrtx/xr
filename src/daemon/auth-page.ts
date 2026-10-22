@@ -12,8 +12,8 @@
  *     role="alert";
  *   · XR-LAUNCH-018: the form POSTs the token in the request body to
  *     /auth/login (src/daemon/session-auth.ts), which sets the same HttpOnly
- *     SameSite=Strict session cookie as the `?token=` bootstrap and redirects
- *     back to the deep link (hidden `next` field). The token never enters the
+ *     SameSite=Strict session cookie as a single-use `?bootstrap=` link, then
+ *     redirects to the deep link (hidden `next` field). The token never enters the
  *     URL, history or referrers. The page tells the user where the token is
  *     (`<XR home>/daemon/token`, owner-only, written by the running daemon),
  *     so a hidden banner token is no longer a dead end. No token is ever

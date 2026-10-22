@@ -56,7 +56,7 @@ import {
   xrMetrics,
 } from "../observability/index.ts";
 import { CORE_VERSION } from "../core/version.ts";
-import { cookieHasToken, handleLoginPost, LOGIN_PATH, sessionCookie, signInPageResponse, tokenEquals, wantsSignInPage } from "./session-auth.ts";
+import { BANNER_BOOTSTRAP_TTL_MS, BOOTSTRAP_PATH, BrowserSessions, handleLoginPost, handleSessionPost, LOGIN_PATH, LOGOUT_PATH, sessionCookie, signInPageResponse, tokenEquals, wantsSignInPage } from "./session-auth.ts";
 import { writeDaemonTokenFile } from "./token-file.ts";
 import { applySecurityHeaders, SECURITY_TXT_URL } from "./security-headers.ts";
 import { envSecretCompatEnabled, setSecretReadAuditor } from "../security/secret-broker.ts";
@@ -171,47 +171,30 @@ const responseHelpers: DaemonResponseHelpers = {
 export const SESSION_COOKIE = "xr_session";
 
 /**
- * One-SHOT-PER-GET bootstrap → secure cookie (launch-audit L-012 honesty pass).
+ * Request authentication (XR-LAUNCH-027; session-auth.ts has the details).
  *
- *   · Authorization: Bearer <token>  — API clients (always allowed).
- *   · Cookie: xr_session=<token>      — browser sessions (always allowed).
- *   · ?token=<token>                  — accepted ONLY on a page GET to
- *     bootstrap a browser session; the handler redirects to the same path
- *     WITHOUT the token in the URL and sets the HttpOnly/SameSite cookie.
- *
- * Honest semantics (previously overstated as "one-time use"): the daemon
- * token does NOT rotate on bootstrap — the link can mint a session cookie
- * on any GET until the daemon restarts and the cookie's value IS the token.
- * The "one-time" property is only that the redirect strips the token from
- * the URL so it never lingers in that browser's history/referrers after
- * first use. Why this is accepted: loopback-only bind by default, the Host
- * gate (421) and CSRF origin wall bound who can even reach the daemon, the
- * token is hidden from the terminal banner by default (XR_PRINT_TOKEN=1
- * opts back in), and the model is "single user on their own machine".
- * The query token NEVER authorizes a mutating request — CSRF-safe.
+ *   · Authorization: Bearer <token>   — API clients (desktop, CLI, extension).
+ *   · Cookie: xr_session=<session id> — browser sessions: a random id held in
+ *     BrowserSessions (digest only), never the API token.
+ *   · ?bootstrap=<code>               — a single-use, short-lived code, accepted
+ *     only on a GET; the handler mints a session and redirects to the same URL
+ *     without the code. A POST never consumes (or burns) a code — CSRF-safe.
+ * `?token=<API token>` no longer authenticates anything: it lands on the
+ * sign-in page, which drops it from the return path.
  */
 export function authorizeRequest(
   req: Request,
   token: string,
+  sessions: BrowserSessions,
 ): { kind: "bearer" } | { kind: "session" } | { kind: "bootstrap"; url: string } | { kind: "denied" } {
   const authorization = req.headers.get("authorization") ?? "";
   if (authorization.startsWith("Bearer ") && tokenEquals(authorization.slice(7), token)) return { kind: "bearer" };
-
-  const cookie = req.headers.get("cookie") ?? "";
-  if (cookieHasToken(cookie, SESSION_COOKIE, token)) return { kind: "session" };
-
+  if (sessions.fromCookie(req.headers.get("cookie") ?? "", SESSION_COOKIE)) return { kind: "session" };
   const url = new URL(req.url);
-  const queryToken = url.searchParams.get("token");
-  if (queryToken !== null && tokenEquals(queryToken, token)) {
-    // Bootstrap is page-navigation only (GET); the redirect strips the token from
-    // the URL. The link stays valid for the daemon's lifetime (027 → Phase 5).
-    if (req.method.toUpperCase() === "GET") {
-      url.searchParams.delete("token");
-      return { kind: "bootstrap", url: url.toString() };
-    }
-    return { kind: "denied" };
-  }
-  return { kind: "denied" };
+  const code = url.searchParams.get("bootstrap");
+  if (code === null || req.method.toUpperCase() !== "GET" || !sessions.consumeBootstrap(code)) return { kind: "denied" };
+  url.searchParams.delete("bootstrap");
+  return { kind: "bootstrap", url: url.toString() };
 }
 
 /**
@@ -401,8 +384,11 @@ export function makeHandler(
     whatsapp?: WhatsAppManager;
     /** Phase 2.4 · P1-1 — present only when the CLI certified a LAN/TLS start. */
     lan?: LanInput;
+    /** XR-LAUNCH-027 — browser sessions + bootstrap codes, shared with serve()'s banner links. */
+    browser?: BrowserSessions;
   } = {},
 ) {
+  const browser = opts.browser ?? new BrowserSessions();
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
   const state: DaemonState = {
@@ -482,7 +468,7 @@ export function makeHandler(
       path !== "/api/telegram/webhook" &&
       path !== "/api/discord/webhook"
     ) {
-      let auth: ReturnType<typeof authorizeRequest> | { kind: "mobile" } = authorizeRequest(req, token);
+      let auth: ReturnType<typeof authorizeRequest> | { kind: "mobile" } = authorizeRequest(req, token, browser);
       // Phase 2.4 · P1-1 — a paired-device cookie becomes a narrowly recognised
       // "mobile" session at the EXISTING seam (never a bearer bypass).
       if (auth.kind === "denied" && mobileCtx) {
@@ -496,7 +482,7 @@ export function makeHandler(
       // redirect to the token-free URL (the token never lingers).
       if (auth.kind === "bootstrap") {
         // §15#10 — Secure when, and only when, the listener is LAN TLS.
-        const cookie = sessionCookie(SESSION_COOKIE, token, Boolean(lanRuntime));
+        const cookie = sessionCookie(SESSION_COOKIE, browser.create(), Boolean(lanRuntime));
         return new Response(null, {
           status: 302,
           headers: { location: auth.url, "set-cookie": cookie },
@@ -604,7 +590,9 @@ export function makeHandler(
     }
 
     // XR-LAUNCH-018: sign-in form POST (open path; rate-limited and body-capped above).
-    if (path === LOGIN_PATH && method === "POST") return handleLoginPost(req, token, { cookieName: SESSION_COOKIE, secure: Boolean(lanRuntime), allowedHosts: allowedDaemonHosts(process.env, lanExtraHosts) });
+    if (path === LOGIN_PATH && method === "POST") return handleLoginPost(req, token, { cookieName: SESSION_COOKIE, secure: Boolean(lanRuntime), allowedHosts: allowedDaemonHosts(process.env, lanExtraHosts), sessions: browser });
+    // XR-LAUNCH-027: mint a single-use bootstrap link / sign out (after the auth gate and the CSRF wall).
+    if ((path === BOOTSTRAP_PATH || path === LOGOUT_PATH) && method === "POST") return handleSessionPost(req, path, { cookieName: SESSION_COOKIE, secure: Boolean(lanRuntime), sessions: browser, privileged: desktopPrivileged });
     const { config } = loadConfig();
     const response =
       (await routes({
@@ -762,7 +750,8 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // device that is already linked.
   const whatsapp = new WhatsAppManager({ store, dashboardBaseUrl: `http://127.0.0.1:${port}/` });
   const lanRuntime: LanInput | undefined = opts.lan;
-  const handler = makeHandler(store, token, { telegram, discord, whatsapp, lan: opts.lan });
+  const browser = new BrowserSessions(); // XR-LAUNCH-027: the banner's links are single-use codes from this store
+  const handler = makeHandler(store, token, { telegram, discord, whatsapp, lan: opts.lan, browser });
   void telegram.autoStartOnBoot().catch((err) => {
     structuredLog("warn", "telegram.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
   });
@@ -824,8 +813,8 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   if (!lanRuntime) console.log(`
   ${xrBold(xrCyan("XR"))} ${xrDim("—")} Local Server
   ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${boundPort}`)}
-  ${xrGreen("✓")} Dashboard     ${xrCyan(reveal ? `${url}?token=${token}` : url)}
-  ${xrGreen("✓")} Chat          ${xrCyan(reveal ? `http://${displayHost}:${boundPort}/chat?token=${token}` : `http://${displayHost}:${boundPort}/chat`)}
+  ${xrGreen("✓")} Dashboard     ${xrCyan(reveal ? `${url}?bootstrap=${browser.mintBootstrap(BANNER_BOOTSTRAP_TTL_MS)}` : url)}
+  ${xrGreen("✓")} Chat          ${xrCyan(reveal ? `http://${displayHost}:${boundPort}/chat?bootstrap=${browser.mintBootstrap(BANNER_BOOTSTRAP_TTL_MS)}` : `http://${displayHost}:${boundPort}/chat`)}
   ${reveal ? `${xrDim("Token:")} ${xrDim(token)}` : `${xrDim("Token:")} ${xrDim("(hidden — sign in on the dashboard with the token in " + (tokenFile.path ?? "~/.xr/daemon/token") + ", or run `XR_PRINT_TOKEN=1 xr serve` on a private terminal)")}`}
   ${xrDim(
     bindHost === CONTAINER_BIND

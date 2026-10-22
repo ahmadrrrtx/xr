@@ -62,8 +62,11 @@ first gate; the proxy is the boundary.
 
 ## 5. Dashboard (daemon)
 
-- One-time `?token=` bootstrap → HttpOnly/SameSite=Strict session cookie;
-  the URL is redirected token-free and the HTML never embeds the token.
+- Sign-in form or a single-use `?bootstrap=` link (60 s from `POST /auth/bootstrap`,
+  10 min from an `XR_PRINT_TOKEN=1` banner) → HttpOnly/SameSite=Strict cookie
+  holding a random session id (never the token; 7-day max, in memory, revoked by
+  `POST /auth/logout`). The URL is redirected code-free, the HTML never embeds
+  the token, and `?token=` no longer authenticates (XR-LAUNCH-027).
 - Strict CSP: `script-src 'self'` (external assets), no unsafe-inline; all
   interactivity via the allowlisted `data-xr-action` dispatcher (no eval).
 - CSRF/Origin: cookie-authenticated mutating requests must match the daemon

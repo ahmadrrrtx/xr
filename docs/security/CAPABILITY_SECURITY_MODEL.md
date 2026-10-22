@@ -315,7 +315,7 @@ Regression test: `test/capabilities/no-bypass.test.ts` proves no direct executio
 
 ## 14. API Security
 
-- Daemon authorizeRequest: Bearer token or session cookie (bootstrap via ?token= one-time page GET → cookie, then redirect strips token)
+- Daemon authorizeRequest: Bearer token or a random session-id cookie (sign-in form, or a single-use `?bootstrap=` code on a page GET → cookie, then the redirect strips the code; `?token=` no longer authenticates — XR-LAUNCH-027)
 - CSRF/Origin enforcement for mutating requests: cookie-authenticated must carry Origin matching daemon origin
 - Rate limiting: fixed-window per-IP 600/60s → 429 with Retry-After
 - Body cap: MAX_BODY 2 MiB → 413

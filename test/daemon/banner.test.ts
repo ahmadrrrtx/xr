@@ -14,10 +14,12 @@
  *            the recovery path is ONE honest line (XR_PRINT_TOKEN=1 or the
  *            dashboard paste sign-in).
  *   PRIVATE— desktop sidecar (`--parent-pid`) or explicit operator opt-in
- *            (`XR_PRINT_TOKEN=1`): the exact legacy `Token:` + `?token=` lines
- *            still print, byte-identical, because the Rust banner parser
+ *            (`XR_PRINT_TOKEN=1`): the exact legacy `Token:` line still
+ *            prints, byte-identical, because the Rust banner parser
  *            (engine_state.rs) is a real cross-language contract — its tests
- *            are untouched by design.
+ *            are untouched by design. XR-LAUNCH-027: the Dashboard/Chat links
+ *            carry single-use `?bootstrap=` codes, never `?token=` (the parser
+ *            ignores both link lines either way).
  *
  * Static contract tests against the banner source (no server boot needed).
  */
@@ -37,17 +39,18 @@ describe("P2-17 two-channel banner design", () => {
   test("the PUBLIC side can never print a token (invariant over the shared template)", () => {
     // One banner template; every token-bearing expression must sit inside a `reveal ?` scope.
     const lines = server.slice(server.indexOf("if (!lanRuntime) console.log"), server.indexOf("stopTriggers")).split("\n");
-    const tokenLines = lines.filter((ln) => ln.includes("${token}") || ln.includes("?token=") || ln.includes("(token)"));
+    const tokenLines = lines.filter((ln) => ln.includes("${token}") || ln.includes("?token=") || ln.includes("(token)") || ln.includes("?bootstrap="));
     expect(tokenLines.length).toBeGreaterThanOrEqual(3); // Dashboard, Chat, Token rows
     for (const ln of tokenLines) expect(ln, ln).toContain("reveal ? ");
     expect(server).toContain("XR_PRINT_TOKEN=1 xr serve` on a private terminal"); // the honest one-line recovery
   });
 
-  test("the PRIVATE side keeps the exact legacy lines the Rust banner parser consumes", () => {
+  test("the PRIVATE side keeps the exact Token line the Rust banner parser consumes; links are single-use codes (XR-LAUNCH-027)", () => {
     const banner = server.slice(server.indexOf("if (!lanRuntime) console.log"), server.indexOf("stopTriggers"));
     expect(banner).toContain('${xrDim("Token:")} ${xrDim(token)}');
-    expect(banner).toContain("`${url}?token=${token}`");
-    expect(banner).toContain("/chat?token=" + "${token}");
+    expect(banner).toContain("`${url}?bootstrap=${browser.mintBootstrap(BANNER_BOOTSTRAP_TTL_MS)}`");
+    expect(banner).toContain("/chat?bootstrap=" + "${browser.mintBootstrap(BANNER_BOOTSTRAP_TTL_MS)}");
+    expect(banner).not.toContain("?token=");
   });
 
   test("Desktop path opts in: the CLI marks the sidecar handshake (--parent-pid) as private", () => {

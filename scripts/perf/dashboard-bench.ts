@@ -28,9 +28,11 @@ async function main(): Promise<void> {
   // (EADDRINUSE) and flakes the perf gate on CI.
   const handle = await serve({ port: 0 });
   const port = handle.port;
-  const url = `http://127.0.0.1:${port}/?token=${handle.token}`;
-  // Phase 4 · T5 — one-time bootstrap: exchange the query token for the
-  // session cookie ONCE, then measure the cookie-authenticated HTML render.
+  // XR-LAUNCH-027 — mint a single-use bootstrap link with the bearer token,
+  // exchange it for the session cookie ONCE, then measure the
+  // cookie-authenticated HTML render.
+  const minted = await fetch(`http://127.0.0.1:${port}/auth/bootstrap`, { method: "POST", headers: { authorization: `Bearer ${handle.token}` } });
+  const url = ((await minted.json()) as { url: string }).url;
   const boot = await fetch(url, { redirect: "manual" });
   const cookie = (boot.headers.get("set-cookie") ?? "").split(";")[0];
   const cleanUrl = boot.headers.get("location") ?? url;

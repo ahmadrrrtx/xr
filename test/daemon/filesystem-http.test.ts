@@ -32,8 +32,9 @@ async function fixture() {
   const base = `http://127.0.0.1:${ready.port}`;
   const unauth = await fetch(`${base}/api/v1/files/read?path=safe.txt`);
   expect(unauth.status).toBe(401);
-  const bootstrap = await fetch(`${base}/?token=${ready.token}`, { redirect: "manual" });
-  expect(bootstrap.status).toBe(302); // Existing token->HttpOnly-cookie bootstrap contract.
+  const minted = await fetch(`${base}/auth/bootstrap`, { method: "POST", headers: { authorization: `Bearer ${ready.token}` } });
+  const bootstrap = await fetch(((await minted.json()) as { url: string }).url, { redirect: "manual" });
+  expect(bootstrap.status).toBe(302); // XR-LAUNCH-027: single-use code -> HttpOnly session-cookie bootstrap.
   const cookie = bootstrap.headers.get("set-cookie")!.split(";")[0]!;
   const request = (path: string, method = "GET", body?: unknown) => fetch(base + path, { method, headers: { cookie, origin: base, ...(body === undefined ? {} : { "content-type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   return {

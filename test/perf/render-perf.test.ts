@@ -20,11 +20,13 @@ describe("Phase 3 · T5 — dashboard first render", () => {
 
     const port = 40000 + Math.floor(Math.random() * 10000);
     const handle = await serve({ port });
-    const url = `http://127.0.0.1:${port}/?token=${handle.token}`;
     try {
-      // Phase 4 · T5 — the query token is a one-time bootstrap: it 302s to a
-      // token-free URL and sets the session cookie. The render budget is
-      // measured on the full HTML fetch through the bootstrap flow.
+      // XR-LAUNCH-027 — a single-use bootstrap link (minted with the bearer
+      // token, as the VS Code extension does) 302s to a code-free URL and sets
+      // the session cookie. The render budget is measured on the full HTML
+      // fetch through the bootstrap flow.
+      const minted = await fetch(`http://127.0.0.1:${port}/auth/bootstrap`, { method: "POST", headers: { authorization: `Bearer ${handle.token}` } });
+      const url = ((await minted.json()) as { url: string }).url;
       const start = performance.now();
       const res = await fetch(url, { redirect: "manual" });
       expect(res.status).toBe(302);

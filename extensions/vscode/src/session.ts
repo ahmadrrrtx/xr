@@ -174,10 +174,6 @@ export class DaemonSession implements vscode.Disposable {
     return { tokens, fileProblem: describeTokenFileProblem(file) };
   }
 
-  private async findToken(setting: string) {
-    return (await this.findTokens(setting)).tokens[0] ?? null;
-  }
-
   private publish(status: DaemonStatus): void {
     this.current = status;
     for (const l of this.listeners) l(status);
@@ -261,8 +257,10 @@ export class DaemonSession implements vscode.Disposable {
   }
 
   /**
-   * Dashboard URL on the configured loopback origin. The token is added only when
-   * one is already known, using the daemon's `?token=` bootstrap parameter.
+   * Dashboard URL on the configured loopback origin. When connected, the daemon
+   * mints a single-use sign-in link (XR-LAUNCH-027); otherwise, or if that fails
+   * (an older daemon), the plain URL opens the dashboard's sign-in page. The
+   * API token is never put in the URL.
    */
   async dashboardUrl(): Promise<string | null> {
     const cfg = vscode.workspace.getConfiguration("xr");
@@ -272,11 +270,13 @@ export class DaemonSession implements vscode.Disposable {
     } catch {
       return null;
     }
-    // Prefer the token the live connection proved; else the first configured one.
-    const token = this.current.state === "connected" && this.client ? this.client.bearer : (await this.findToken(cfg.get<string>("token", "")))?.token;
-    const url = new URL("/", origin);
-    if (token) url.searchParams.set("token", token);
-    return url.toString();
+    const plain = new URL("/", origin).toString();
+    if (this.current.state !== "connected" || !this.client) return plain;
+    try {
+      return await this.client.bootstrapLink("/");
+    } catch {
+      return plain;
+    }
   }
 
   dispose(): void {

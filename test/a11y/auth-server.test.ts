@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../../src/state/workspace-store.ts";
 import { makeHandler } from "../../src/daemon/server.ts";
+import { BrowserSessions } from "../../src/daemon/session-auth.ts";
 
 const TOKEN = "auth-contract-token";
 function freshHandler() {
@@ -71,9 +72,16 @@ describe("T3 — accessible auth responses", () => {
     expect(css.status).toBe(401);
   });
 
-  test("the `?token=` GET bootstrap still works exactly as before (desktop + reveal links)", async () => {
-    const res = await freshHandler()(
-      new Request(`http://127.0.0.1:7842/?token=${TOKEN}`, { headers: { accept: "text/html" } }),
+  test("a single-use `?bootstrap=` link signs in (reveal banner + VS Code links); the retired `?token=` gets the accessible page", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "xr-a11y-auth-"));
+    process.env.XR_HOME = join(tmp, "home");
+    const browser = new BrowserSessions();
+    const h = makeHandler(new Store(join(tmp, "d.db")), TOKEN, { browser });
+    const retired = await h(new Request(`http://127.0.0.1:7842/?token=${TOKEN}`, { headers: { accept: "text/html" } }));
+    expect(retired.status).toBe(401);
+    expect(retired.headers.get("content-type")).toContain("text/html");
+    const res = await h(
+      new Request(`http://127.0.0.1:7842/?bootstrap=${browser.mintBootstrap()}`, { headers: { accept: "text/html" } }),
     );
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("http://127.0.0.1:7842/");

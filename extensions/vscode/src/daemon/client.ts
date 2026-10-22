@@ -162,6 +162,22 @@ export class DaemonClient {
     return (await res.json()) as T;
   }
 
+  /**
+   * XR-LAUNCH-027 — a single-use, short-lived dashboard sign-in link minted by
+   * the daemon. The API token never goes into a URL (history, logs, referrers).
+   */
+  async bootstrapLink(next = "/"): Promise<string> {
+    const res = await this.fetchImpl(`${this.origin}/auth/bootstrap?next=${encodeURIComponent(next)}`, {
+      method: "POST",
+      headers: this.headers(),
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return this.fail(res);
+    const body = (await res.json()) as { url?: unknown };
+    if (typeof body.url !== "string" || !body.url.startsWith(this.origin + "/")) throw new DaemonHttpError(502, "The daemon returned no sign-in link.");
+    return body.url;
+  }
+
   /** Unauthenticated liveness and version probe. */
   async health(): Promise<{ ok: boolean; version?: string }> {
     const res = await this.fetchImpl(this.origin + "/api/health", { signal: AbortSignal.timeout(2500) });
