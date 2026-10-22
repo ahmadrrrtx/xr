@@ -404,6 +404,9 @@ pub fn apply_pending_import(data: &Path) -> Result<Option<String>, String> {
     apply_pending_import_with(data, now_ms(), 20, std::time::Duration::from_millis(250))
 }
 
+/// Test helper: one attempt, no retry delay (the real lib build never calls it,
+/// so it is compiled for tests only to keep `clippy -D warnings` clean).
+#[cfg(test)]
 pub fn apply_pending_import_at(data: &Path, stamp: u128) -> Result<Option<String>, String> {
     apply_pending_import_with(data, stamp, 1, std::time::Duration::ZERO)
 }
