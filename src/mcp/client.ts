@@ -15,6 +15,7 @@
  */
 
 import { spawn, ChildProcess } from "node:child_process";
+import { shimSafe } from "../util/win-spawn.ts";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { CORE_VERSION, PKG } from "../core/version.ts";
 import {
@@ -380,11 +381,9 @@ export class McpClient {
           `(signed isolation grant ${isolation}). Env is allow-listed but the process is not sandboxed.`;
         console.error(`[MCP security] WARNING: ${this.sandboxWarning}`);
       }
-      this.proc = spawn(this.cfg.command!, this.cfg.args || [], {
-        stdio: ["pipe", "pipe", "pipe"],
-        env,
-        shell: false,
-      });
+      // `npx`-style servers are .cmd shims on Windows (spawn EINVAL otherwise).
+      const [cmd, args, extra] = shimSafe(this.cfg.command!, this.cfg.args || [], env);
+      this.proc = spawn(cmd, args, { ...extra, stdio: ["pipe", "pipe", "pipe"], env, shell: false });
     }
 
     if (!this.proc) {

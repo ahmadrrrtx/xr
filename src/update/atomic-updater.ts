@@ -22,6 +22,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { shimSafe } from "../util/win-spawn.ts";
 import { applyUpdate, type UpdatePlan, type UpdateResult } from "./selfheal.ts";
 
 // ── Install layout detection ──────────────────────────────────────────────
@@ -390,8 +391,9 @@ export async function runAtomicUpdate(opts: {
     });
   if (channel.managed && channel.channel !== "npm") {
     const { channelHealthCanary } = await import("./channels.ts");
+    const [xc, xa, xo] = shimSafe("xr", ["--version"]); // xr.cmd for npm installs on Windows
     const current =
-      spawnSync("xr", ["--version"], { encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] })
+      spawnSync(xc, xa, { ...xo, encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] })
         .stdout?.trim()
         .match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/)?.[1] ?? "current";
     const plan = createChannelUpdatePlan({

@@ -17,6 +17,7 @@
  *               the previous version is re-installed (rollback) and it fails.
  */
 import { spawnSync } from "node:child_process";
+import { shimSafe } from "../util/win-spawn.ts";
 import { compareSemver } from "../skills/semver.ts";
 import type { UpdatePlan } from "./selfheal.ts";
 
@@ -122,7 +123,8 @@ export interface NpmPlanOptions {
 }
 
 const defaultRun = (cmd: string[]) => {
-  const r = spawnSync(cmd[0]!, cmd.slice(1), { encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"] });
+  const [c, a, o] = shimSafe(cmd[0]!, cmd.slice(1)); // npm is a .cmd shim on Windows
+  const r = spawnSync(c, a, { ...o, encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"] });
   return { status: r.status, stdout: r.stdout ?? "", stderr: r.error ? String(r.error.message) : (r.stderr ?? "") };
 };
 

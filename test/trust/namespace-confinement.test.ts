@@ -120,7 +120,10 @@ describe("unshare setup fails closed", () => {
     expect(script).not.toContain("pivot_root");
   });
 
-  test("every mount step is checked (no '|| true' on a confinement step)", () => {
+  // The unshare script is Linux-only. Windows has none of the POSIX staging
+  // mountpoints (/mnt, /srv, …), so the generator correctly refuses there
+  // (the test above) and there are no mount steps to inspect.
+  test.if(process.platform !== "win32")("every mount step is checked (no '|| true' on a confinement step)", () => {
     const script = unshareRootScript(["/srv/ws-does-not-matter"], ["/usr/share"]);
     for (const line of script.split("\n").filter((l) => /\bmount\b/.test(l) && !l.startsWith("fail()"))) {
       expect(line).toMatch(/\|\| fail [a-z-]+/);

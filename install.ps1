@@ -280,7 +280,10 @@ function Install-XrBinary {
   $createdTarget = -not (Test-Path -LiteralPath $TargetDirectory)
   $distDir = Join-Path $TargetDirectory 'dist'
   New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-  $partial = Join-Path $distDir ".$name.partial"
+  # Keep the binary's own extension LAST (.partial-xr-windows-x64.exe): Windows
+  # only executes a file whose extension is in PATHEXT, so a '.exe.partial'
+  # candidate could never pass the run check below.
+  $partial = Join-Path $distDir ".partial-$name"
   Move-Item -LiteralPath $staged -Destination $partial -Force
   $ran = $false
   try { & $partial --version 2>$null | Out-Null; $ran = ($LASTEXITCODE -eq 0) } catch { $ran = $false }

@@ -11,6 +11,7 @@ import { RestrictedProcessBackend } from "../../src/runtime/trust/environment/re
 import { InProcessBackend } from "../../src/runtime/trust/environment/in-process.ts";
 import { makeTrust, type TrustHarness } from "./_helpers.ts";
 import type { TrustRequest } from "../../src/runtime/trust/types.ts";
+import { tier2Remediation } from "../../src/runtime/trust/policy.ts";
 
 let NS_AVAILABLE = false;
 try {
@@ -246,7 +247,7 @@ describe("XR 4.2 execution-fabric trust integration", () => {
     expect(rec.state).toBe("denied");
     expect(rec.outcome!.error?.code).toBe("TRUST_BLOCKED");
     expect(rec.trust!.decision.kind).toBe("blocked");
-    expect(rec.trust!.decision.remediation).toContain("bubblewrap");
+    expect(rec.trust!.decision.remediation).toBe(tier2Remediation(process.platform));
     expect(ran).toBe(false);
     svc.destroy();
   });

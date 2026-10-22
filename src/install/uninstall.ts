@@ -17,6 +17,7 @@ import { purgeXrSecrets, type SecretPurgeReport } from "../security/secret-migra
 import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
+import { shimSafe } from "../util/win-spawn.ts";
 
 export type UninstallMode = "keep-data" | "purge";
 
@@ -309,7 +310,8 @@ export function performUninstall(
     const run =
       args.run ??
       ((cmd: string[]): { ok: boolean } => {
-        const r = spawnSync(cmd[0]!, cmd.slice(1), { encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"] });
+        const [c, a, o] = shimSafe(cmd[0]!, cmd.slice(1)); // npm is a .cmd shim on Windows
+        const r = spawnSync(c, a, { ...o, encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"] });
         return { ok: r.status === 0 };
       });
     channelRemoved = run(channelInfo.uninstall).ok;

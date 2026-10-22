@@ -16,7 +16,15 @@
 import { mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncOptions } from "node:child_process";
+import { shimSafe } from "../src/util/win-spawn.ts";
+
+// npm and the installed launcher (xr.cmd) are batch shims on Windows, which
+// Bun >= 1.4 refuses to spawn bare (EINVAL) — route them through shimSafe.
+const spawnShim = (cmd: string, args: string[], opts: SpawnSyncOptions & { encoding: "utf8" }) => {
+  const [c, a, o] = shimSafe(cmd, args, (opts.env ?? process.env) as NodeJS.ProcessEnv);
+  return spawnSync(c, a, { ...opts, ...o });
+};
 
 const ROOT = join(import.meta.dir, "..");
 const reports: string[] = [];
@@ -45,7 +53,7 @@ function mkdirs(...dirs: string[]): void {
 const env = { ...process.env, PATH: `${process.env.HOME}/.bun/bin:${process.env.PATH ?? ""}`, XR_HOME: xrHome };
 
 // ── 1. Pack ───────────────────────────────────────────────────────────────
-const pack = spawnSync("npm", ["pack", "--pack-destination", tarballDir], {
+const pack = spawnShim("npm", ["pack", "--pack-destination", tarballDir], {
   cwd: ROOT, env, encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"],
 });
 check("pack-succeeds", pack.status === 0, (pack.stderr ?? "").slice(0, 300));
@@ -58,7 +66,7 @@ check("tarball-produced", tarball.endsWith(".tgz"), tarball);
 // happens to contain $TMPDIR) and installs there, so the artifact never lands
 // in installDir and every later check fails for an environmental reason.
 writeFileSync(join(installDir, "package.json"), JSON.stringify({ name: "xr-e2e-artifact-root", private: true }, null, 2) + "\n");
-const npmInstall = spawnSync("npm", ["install", "--no-audit", "--no-fund", join(tarballDir, tarball)], {
+const npmInstall = spawnShim("npm", ["install", "--no-audit", "--no-fund", join(tarballDir, tarball)], {
   cwd: installDir, env, encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"],
 });
 check("artifact-installs", npmInstall.status === 0, (npmInstall.stderr ?? "").slice(0, 300));
@@ -66,7 +74,7 @@ const bin = join(installDir, "node_modules", ".bin", process.platform === "win32
 check("launcher-present", existsSync(bin));
 
 const run = (args: string[], cwd: string) =>
-  spawnSync(bin, args, { cwd, env, encoding: "utf8", timeout: 120_000, stdio: ["ignore", "pipe", "pipe"] });
+  spawnShim(bin, args, { cwd, env, encoding: "utf8", timeout: 120_000, stdio: ["ignore", "pipe", "pipe"] });
 
 // ── 3a. Doctor + version identity (Phase 0 invariant) ─────────────────────
 // NOTE: in a fresh hermetic environment the doctor correctly reports

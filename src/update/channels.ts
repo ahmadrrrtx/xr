@@ -22,6 +22,7 @@ import { existsSync } from "node:fs";
 import { platform } from "node:os";
 import { join, delimiter } from "node:path";
 import { spawnSync } from "node:child_process";
+import { shimSafe } from "../util/win-spawn.ts";
 import type { UpdatePlan } from "./selfheal.ts";
 
 // ── Channel model ─────────────────────────────────────────────────────────
@@ -236,12 +237,14 @@ export interface ChannelUpdateOptions {
 }
 
 export function defaultRun(cmd: string[]): { ok: boolean; error?: string } {
-  const r = spawnSync(cmd[0]!, cmd.slice(1), { encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] });
+  const [c, a, o] = shimSafe(cmd[0]!, cmd.slice(1)); // npm/scoop shims are .cmd on Windows
+  const r = spawnSync(c, a, { ...o, encoding: "utf8", timeout: 600_000, stdio: ["ignore", "pipe", "pipe"] });
   return r.status === 0 ? { ok: true } : { ok: false, error: (r.stderr ?? r.error?.message ?? `exit ${String(r.status)}`).slice(0, 300) };
 }
 
 export function channelHealthCanary(): { healthy: boolean; reason?: string } {
-  const version = spawnSync("xr", ["--version"], { encoding: "utf8", timeout: 60_000, stdio: ["ignore", "pipe", "pipe"] });
+  const [c, a, o] = shimSafe("xr", ["--version"]);
+  const version = spawnSync(c, a, { ...o, encoding: "utf8", timeout: 60_000, stdio: ["ignore", "pipe", "pipe"] });
   if (version.status !== 0) return { healthy: false, reason: `xr --version failed (exit ${version.status})` };
   return { healthy: true };
 }

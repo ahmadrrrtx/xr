@@ -452,7 +452,7 @@ export function scanNumericClaims(
   const out: Violation[] = [];
   const comma = formattedCeiling();
   const k = `${Math.round(TREE_CEILING / 1000)}K`;
-  const rel = relative(ROOT, file);
+  const rel = relative(ROOT, file).replace(/\\/g, "/"); // POSIX on every OS
   // Marker values must equal TREE_CEILING even on history-exempt lines.
   for (const m of text.matchAll(TREE_CEILING_MARKER)) {
     if (m[1] !== comma) {
@@ -594,7 +594,7 @@ export function scanNumericClaims(
  */
 export function scanDocLinks(text: string, file: string): Violation[] {
   const out: Violation[] = [];
-  const rel = relative(ROOT, file);
+  const rel = relative(ROOT, file).replace(/\\/g, "/"); // POSIX on every OS
   const lines = stripFences(text).split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];

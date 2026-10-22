@@ -12,7 +12,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { checkAction } from "../../src/security/guard.ts";
 import { shellPathCandidates, shellWords } from "../../src/security/shell-words.ts";
 
@@ -54,7 +54,8 @@ describe("checkAction(shell) — per-word secret-path decisions", () => {
     const d = shell("cat /tmp/xr-031/secret.txt");
     expect(d.allowed).toBe(false);
     if (!d.allowed) {
-      expect(d.reason).toContain("secret/credential path (/tmp/xr-031/secret.txt)");
+      // OS-native form (\tmp\xr-031\secret.txt on Windows).
+      expect(d.reason).toContain(`secret/credential path (${normalize("/tmp/xr-031/secret.txt")})`);
       expect(d.reason).not.toContain("cat ");
     }
     expect(shell("cat /tmp/xr-031/notes.txt").allowed).toBe(true);

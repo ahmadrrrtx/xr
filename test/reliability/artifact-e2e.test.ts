@@ -28,8 +28,10 @@ describe("Phase 1 · hermetic artifact E2E", () => {
       child.stderr.on("data", (d) => (err += String(d)));
       child.on("close", (code) => resolve({ code, stdout: out, stderr: err }));
     });
+    // Print BEFORE asserting: a failed expect() throws, so the stderr (the only
+    // diagnostic) would otherwise never reach the CI log.
+    if (result.code !== 0) console.error(`[artifact-e2e] exit ${result.code}\nstdout:\n${result.stdout.slice(-4000)}\nstderr:\n${result.stderr.slice(-4000)}`);
     expect(result.code).toBe(0);
-    if (result.code !== 0) console.error(result.stderr);
     const report = result.stdout.trim().split("\n").find((l) => l.startsWith("{"));
     expect(report).toBeDefined();
     const parsed = JSON.parse(report!) as { ok: boolean; doctorVersion: string };

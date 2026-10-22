@@ -28,7 +28,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -124,6 +124,14 @@ describe("install.ps1 — security posture", () => {
     expect(ps1).toMatch(/SHA256SUMS/);
     expect(ps1).toMatch(/Get-FileHash/);
     expect(ps1).toMatch(/Integrity check FAILED/);
+  });
+
+  test("the staged binary keeps its .exe extension last, so the run check can execute it", () => {
+    // Windows only executes PATHEXT extensions: a `.exe.partial` candidate
+    // always "failed to run" and every binary install fell back to source
+    // (first Windows journey run, 2026-10-22).
+    expect(ps1Code).toMatch(/\$partial = Join-Path \$distDir "\.partial-\$name"/);
+    expect(ps1Code).not.toMatch(/\.\$name\.partial/);
   });
 
   test("temp files are uniquely named and cleaned up", () => {
@@ -303,20 +311,28 @@ describeShell("install.ps1 — environment combinations executed (XR-LAUNCH-025)
     const res = spawnSync(shell!, ["-NoProfile", "-Command", code], { encoding: "utf8", timeout: 120_000, cwd: ROOT, env: merged });
     return `${res.stdout ?? ""}${res.stderr ?? ""}`;
   }
+  // Windows runners hand out 8.3 short temp paths (C:\Users\RUNNER~1\…) while
+  // the installer reports long ones, and paths use `\` — so expand to the
+  // long form up front and match either separator with regex-escaped parts.
+  const tempDir = (prefix: string) => {
+    const d = mkdtempSync(join(tmpdir(), prefix));
+    return process.platform === "win32" ? realpathSync.native(d) : d;
+  };
+  const pathRx = (p: string) => p.split(/[\\/]/).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\\\/]");
   const probe = (label: string, args = "") =>
     `try { $r = Resolve-XrInstallTarget ${args} 6>$null; Write-Output "${label}=OK:$r" } catch { Write-Output ("${label}=STOP:" + $_.Exception.Message) }; `;
 
   test("each XR_INSTALL_DIR / XR_HOME / -TargetDirectory combination resolves or refuses", () => {
-    const w = mkdtempSync(join(tmpdir(), "xr-ps1-env-"));
+    const w = tempDir("xr-ps1-env-");
     try {
       const prof = join(w, "prof");
       mkdirSync(prof, { recursive: true });
       const pre = `$env:OS='Windows_NT'; . ./install.ps1 *> $null; $env:USERPROFILE='${prof}'; `;
       const cases: Array<[string, Record<string, string | undefined>, string, RegExp]> = [
-        ["DEFAULT", {}, "", new RegExp(`DEFAULT=OK:${prof}/\\.xr-agent`)],
-        ["XRHOME", { XR_HOME: join(w, "data") }, "", new RegExp(`XRHOME=OK:${prof}/\\.xr-agent`)],
-        ["INSTALLDIR", { XR_INSTALL_DIR: `${join(w, "apps", "xr")}/` }, "", new RegExp(`INSTALLDIR=OK:${w}/apps/xr\\s`)],
-        ["PARAM", { XR_INSTALL_DIR: join(w, "env") }, `-TargetDirectory '${join(w, "p")}'`, new RegExp(`PARAM=OK:${w}/p\\s`)],
+        ["DEFAULT", {}, "", new RegExp(`DEFAULT=OK:${pathRx(join(prof, ".xr-agent"))}`)],
+        ["XRHOME", { XR_HOME: join(w, "data") }, "", new RegExp(`XRHOME=OK:${pathRx(join(prof, ".xr-agent"))}`)],
+        ["INSTALLDIR", { XR_INSTALL_DIR: `${join(w, "apps", "xr")}/` }, "", new RegExp(`INSTALLDIR=OK:${pathRx(join(w, "apps", "xr"))}\\s`)],
+        ["PARAM", { XR_INSTALL_DIR: join(w, "env") }, `-TargetDirectory '${join(w, "p")}'`, new RegExp(`PARAM=OK:${pathRx(join(w, "p"))}\\s`)],
         ["SAMEDATA", { XR_INSTALL_DIR: join(w, "d"), XR_HOME: join(w, "d") }, "", /SAMEDATA=STOP:.*data home or inside it/],
         ["INSIDE", { XR_INSTALL_DIR: join(w, "d", "app"), XR_HOME: join(w, "d") }, "", /INSIDE=STOP:.*data home or inside it/],
         ["CONTAINS", { XR_INSTALL_DIR: w, XR_HOME: join(w, "d") }, "", /CONTAINS=STOP:.*contains XR's data home/],
@@ -356,7 +372,7 @@ describeShell("install.ps1 — environment combinations executed (XR-LAUNCH-025)
   }, PS_ENV_TIMEOUT_MS);
 
   test("no usable profile: the default target refuses instead of using the current directory", () => {
-    const w = mkdtempSync(join(tmpdir(), "xr-ps1-noprof-"));
+    const w = tempDir("xr-ps1-noprof-");
     try {
       const out = runEnv(
         // pwsh on Linux creates $HOME at startup (and will not start with a

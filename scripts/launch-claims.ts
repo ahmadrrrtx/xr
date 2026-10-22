@@ -97,7 +97,7 @@ export function lintStatusLabel(manifest: ReleaseManifest, root: string): Launch
         if (re.test(line) && !WORDING_DISCLAIMER.test(line)) {
           out.push({
             gate: "status-label",
-            file: relative(root, abs),
+            file: relative(root, abs).replace(/\\/g, "/"),
             line: i + 1,
             text: line.trim().slice(0, 160),
             reason: `stable-production wording while the release label is "${stability}" (decision D2: "Public beta" until ${LAUNCH_GATES_PATH} is all green)`,
@@ -249,7 +249,7 @@ export function lintVscodeListing(root: string, listed: boolean = VSCODE_LISTED)
       if (LISTING_CLAIMS.some((re) => re.test(line))) {
         out.push({
           gate: "vscode-listing",
-          file: relative(root, abs),
+          file: relative(root, abs).replace(/\\/g, "/"),
           line: i + 1,
           text: line.trim().slice(0, 160),
           reason: "claims a Marketplace/Open VSX listing that does not exist yet; point to the .vsix on GitHub Releases until publish-vscode.yml has run (XR-LAUNCH-034)",

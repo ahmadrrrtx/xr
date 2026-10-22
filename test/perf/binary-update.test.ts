@@ -50,9 +50,12 @@ function fakeBinary(dir: string, name: string, version: string): string {
  */
 function fakeExecutable(dir: string, baseName: string, version: string): string {
   if (process.platform === "win32") {
-    const bin = join(dir, `${baseName}.cmd`);
-    writeFileSync(bin, `@echo off\r\necho v${version} (Truth)\r\nexit /b 0\r\n`);
-    return bin;
+    // Bun/Node refuse to spawn .cmd/.bat without a shell (CVE-2024-27980
+    // hardening), so a batch fake is unspawnable here. Use the running bun.exe:
+    // `--version` exits 0 and `doctor --json` (not a bun command) exits 1 —
+    // exactly the "doctor exits 1 by design" contract the canary must accept.
+    void dir; void baseName; void version;
+    return process.execPath;
   }
   const bin = join(dir, baseName);
   writeFileSync(bin, `#!/usr/bin/env bash\necho "v${version} (Truth)"\nexit 0\n`);
@@ -122,8 +125,8 @@ describe("Phase 3 · T2 — binary distribution update contract", () => {
       // This case SPAWNS the fake, so it must be natively executable on the
       // host OS (a bash shebang is unspawnable on Windows — see fakeExecutable).
       const bin = fakeExecutable(dir, "xr-fake", "7.0.1");
-      // fake binary always exits 0 → canary healthy for --version; doctor
-      // probe in binaryCanary also runs the fake (exit 0) → healthy.
+      // --version exits 0; the doctor probe exits 0 (POSIX fake) or 1 (bun.exe
+      // on Windows, see fakeExecutable) — both are healthy by design.
       const r = binaryCanary(bin, 30_000);
       expect(r.healthy).toBe(true);
     } finally {
