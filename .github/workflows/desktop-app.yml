@@ -585,6 +585,15 @@ jobs:
           & "$HOME/.cargo/bin/msedgedriver-tool.exe"
           $PWD.Path >> $env:GITHUB_PATH
           cargo install tauri-driver --locked --version 2.1.0
+          # WebView2 Runtime >= 150 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS in an elevated
+          # host, and every hosted-runner process is elevated, so msedgedriver's
+          # --remote-debugging-port never reaches the webview ("DevToolsActivePort file doesn't
+          # exist"; actions/runner-images#14738, MicrosoftEdge/WebView2Feedback#5645). The HKLM
+          # policy still applies: scope it to xr-desktop.exe on this throwaway runner only.
+          # Shipped apps are unchanged.
+          $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $k -Force | Out-Null
+          New-ItemProperty -Path $k -Name 'xr-desktop.exe' -Value '--remote-debugging-port=0' -PropertyType String -Force | Out-Null
       - name: Journey
         shell: bash
         run: |
