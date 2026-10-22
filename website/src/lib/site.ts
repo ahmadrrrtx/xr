@@ -24,6 +24,8 @@ export const site = {
   version: "1.1.0",
   codename: "Graphite",
   displayVersion: "1.1.0 (Graphite)",
+  /** Version every install channel serves (release.manifest.json channels.publicVersion). */
+  publicVersion: "1.0.0",
   /** Bundled skills, mechanically counted from skills/ at stamp time. */
   skillCount: 65,
   nav: [

@@ -514,28 +514,12 @@ jobs:
         with:
           files: |
             dist/channels/**
-      - name: Push the Homebrew formula to the project tap (operator-enabled)
-        # Operator opt-in: set repo variable HOMEBREW_TAP_PUBLISH=true, variable
-        # HOMEBREW_TAP_REPO=owner/homebrew-tap and secret TAP_GITHUB_TOKEN scoped
-        # to that repo only (least privilege). Without it, the stamped formula
-        # still ships as a release asset — nothing unsigned, nothing missing.
-        if: ${{ vars.HOMEBREW_TAP_PUBLISH == 'true' }}
-        env:
-          TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
-        run: |
-          git config user.name "xr-release-bot"
-          git config user.email "release-bot@users.noreply.github.com"
-          git clone "https://x-access-token:${{ secrets.TAP_GITHUB_TOKEN }}@github.com/${TAP_REPO}.git" tap
-          mkdir -p tap/Formula
-          cp dist/channels/homebrew/xr.rb tap/Formula/xr.rb
-          cd tap
-          if ! git diff --quiet; then
-            git add Formula/xr.rb
-            git commit -m "xr: ${{ needs.assemble.outputs.version }} (stamped from signed SHA256SUMS)"
-            git push
-          else
-            echo "tap already in sync"
-          fi
+      # Homebrew/WinGet publication is deliberately NOT done here (launch audit
+      # XR-LAUNCH-001): a tag's channels are published only after the release is
+      # verified live, by running .github/workflows/publish-channels.yml for the
+      # version, then promoting release.manifest.json `channels.publicVersion`
+      # (docs/release/CHANNELS.md#public-version). Pushing the tap from the tag
+      # run is how a formula could point at a release that later failed.
 
   # ── 9. Independent artifact verification (fresh workspace, signed bundle) ─
   verify-release:

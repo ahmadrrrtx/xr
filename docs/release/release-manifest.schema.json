@@ -36,7 +36,7 @@
         "properties": {
           "id": { "type": "string" },
           "path": { "type": "string" },
-          "kind": { "type": "string", "enum": ["json-version", "generated-module", "site-identity", "marker-block", "shell-var", "powershell-var"] }
+          "kind": { "type": "string", "enum": ["json-version", "json-version-only", "toml-version", "generated-module", "site-identity", "marker-block", "shell-var", "powershell-var"] }
         }
       }
     },
@@ -66,6 +66,35 @@
       }
     },
     "supervisedTerms": { "type": "array", "items": { "type": "string" } },
-    "scannedSurfaces": { "type": "array", "items": { "type": "string" } }
+    "scannedSurfaces": { "type": "array", "items": { "type": "string" } },
+    "channels": {
+      "type": "object",
+      "description": "Launch audit XR-LAUNCH-001 — what the public channels serve. Installers and the README are stamped with publicVersion (not identity.version); scripts/channel-live-check.ts verifies every claimed channel against the live registry; a withdrawn tag is excused from the tag⇔npm invariant and must never appear on npm.",
+      "required": ["publicVersion", "claimed", "homebrewTap", "wingetPackageId", "dockerImage", "withdrawnTags"],
+      "properties": {
+        "comment": { "type": "string" },
+        "publicVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$", "description": "Stable version every public install path serves; must not be ahead of identity.version." },
+        "claimed": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["github-releases", "npm", "homebrew", "winget", "scoop", "docker"] }
+        },
+        "homebrewTap": { "type": "string", "pattern": "^[A-Za-z0-9-]+/homebrew-[A-Za-z0-9-]+$" },
+        "wingetPackageId": { "type": "string", "pattern": "^[A-Za-z0-9-]+\\.[A-Za-z0-9.-]+$" },
+        "dockerImage": { "type": "string", "pattern": "^[a-z0-9.-]+/[a-z0-9._/-]+$" },
+        "withdrawnTags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["tag", "reason"],
+            "properties": {
+              "tag": { "type": "string", "pattern": "^v\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$" },
+              "reason": { "type": "string", "minLength": 10 }
+            }
+          }
+        }
+      }
+    }
   }
 }

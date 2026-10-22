@@ -32,16 +32,29 @@ Bun runtime defect; the Windows binary is still built + natively smoke-tested by
 
 ## Distribution channels (install/update/uninstall)
 
-| Channel | Platform | Install validation | Update/rollback |
-|---|---|---|---|
-| GitHub release binary (default) | all five targets | nightly beta install survey ≥ 99% (3 OS families) + release-matrix native smoke | `xr update` — atomic swap, sha256-verified, canary + auto-rollback |
-| Homebrew (`ahmadrrrtx/tap`) | macOS arm/x64 · Linux x64/arm64 | formula generated + stamped from signed sums (CI); **real `brew install` runs in the weekly channel job after first tagged release** | `brew upgrade xr` / `brew install xr@<prev>` (delegated by `xr update`) |
-| Scoop | Windows x64 | manifest generated + verified (CI + weekly real-install job) | `scoop update xr` / `scoop install xr@<prev>` |
-| WinGet | Windows x64 | manifests generated + verified (CI); community-repo submission tracked | `winget upgrade ahmadrrrtx.XR` / `winget install ... --version <prev>` |
-| .deb | Debian/Ubuntu x64 | **real `dpkg -i` install, `md5sums` verify, smoke, and `dpkg -r` removal on every PR** | `apt-get install --only-upgrade xr` / pinned downgrade (delegated) |
-| npm (`@rrrtx/xr`) | any Bun-supported OS | release workflow publish with OIDC provenance; artifact E2E (`test/reliability/artifact-e2e.test.ts`) | `npm i -g @rrrtx/xr@latest` / pinned `@<prev>` (delegated) |
-| Docker (`ghcr.io/ahmadrrrtx/xr`) | linux/amd64+arm64 | image build + trivy scan every PR; nightly golden path **inside** the image; cosign-signed digest at release | image tags (`:latest`, `:beta`, semver tags) |
-| git checkout / source | contributor | full CI floor | `git fetch` + atomic swap (Phase-1 contract) |
+Every public channel serves **v1.0.0** (`channels.publicVersion`;
+see [CHANNELS.md § Public version](CHANNELS.md#public-version)). `v1.1.0` is a
+withdrawn tag: its release pipeline failed before publishing, and it is not served
+by any channel. "Live status" is what `bun run channel:live` reported on
+2026-10-22. It is re-checked daily by `.github/workflows/channel-live.yml`.
+
+| Channel | Platform | Live status (v1.0.0) | Install validation | Update/rollback |
+|---|---|---|---|---|
+| Bootstrap installer `install.sh` | Linux x64/arm64 · macOS arm64/x64 · WSL; Termux/musl via verified source | ✅ live | pinned release, `SHA256SUMS`-verified, fails closed with nothing installed (`test/release/installer-behavior.test.ts`, 11 behaviour cases); clean-HOME install of the real v1.0.0 verified on Linux x64 (sandbox, 2026-10-22); macOS clean-HOME smoke in `channel-live.yml` (**added, first CI run pending**) | re-run the installer / `xr update` |
+| Bootstrap installer `install.ps1` | Windows x64 (PowerShell 5.1/7+) | ✅ live | pinned release, `Get-FileHash` against `SHA256SUMS`, fails closed; pwsh 7.4 parse + function tests on Linux (`installer-powershell.test.ts`); Windows clean-profile smoke in `channel-live.yml` (**added, first CI run pending**) | re-run the installer / `xr update` |
+| GitHub release binary | linux-x64/arm64, darwin-arm64/x64, windows-x64 | ⚠️ assets live; `v1.1.0` must be marked pre-release (owner action) so `v1.0.0` is "Latest" | 9 required assets + signed `SHA256SUMS` (`channel:live`); release-matrix native smoke | `xr update` — atomic swap, sha256-verified, canary + auto-rollback |
+| npm (`@rrrtx/xr`) | any OS with **Bun ≥ 1.3** on `PATH` (the package's launcher is `#!/usr/bin/env bun`) | ✅ live (`latest` = 1.0.0) | release workflow publish with OIDC provenance; artifact E2E (`test/reliability/artifact-e2e.test.ts`) | `npm i -g @rrrtx/xr@latest` / pinned `@<prev>` (delegated) |
+| Docker (`ghcr.io/ahmadrrrtx/xr`) | linux/amd64+arm64 | ✅ live (`:1.0.0` == `:latest`) | image build + trivy scan every PR; cosign-signed digest at release | bare-version tags (`:1.0.0`, `:1.0`, `:latest`) — there is no `v`-prefixed tag |
+| Scoop (release asset `xr.json`) | Windows x64 | ✅ live | manifest hash = signed `SHA256SUMS` (`channel:live`); weekly real install of the public version (`channel-install.yml`) | `scoop update xr` / `scoop install xr@<prev>` |
+| .deb (release asset) | Debian/Ubuntu x64 | ✅ live | **real `dpkg -i` install, `md5sums` verify, smoke, and `dpkg -r` removal on every PR**; weekly real install of the public version | `apt-get install --only-upgrade xr` / pinned downgrade (delegated) |
+| Homebrew (`ahmadrrrtx/tap`) | macOS arm/x64 · Linux x64/arm64 | ⏳ **not live** — the tap repository does not exist yet (owner action, then **Publish Channels**) | formula stamped from signed sums and verified before publish (`channel-publish-verify.ts`); `brew install` + `brew test` on macOS in `publish-channels.yml` and weekly in `channel-install.yml` | `brew upgrade xr` / `brew install xr@<prev>` (delegated by `xr update`) |
+| WinGet (`ahmadrrrtx.XR`) | Windows x64 | ⏳ **not live** — first submission to `microsoft/winget-pkgs` pending (owner action via **Publish Channels**, then moderator review) | manifests verified against signed sums before `wingetcreate submit` | `winget upgrade ahmadrrrtx.XR` / `winget install ... --version <prev>` |
+| git checkout / source | contributor | ✅ (`git clone --branch v1.0.0`) | full CI floor | `git fetch` + atomic swap (Phase-1 contract) |
+
+Known v1.0.0 behaviour: on a machine without Bun, the setup wizard that the
+installers run at the end reports Bun as missing and exits non-zero. The
+installers report this as "setup wizard reported issues" and still finish; the
+compiled binary itself does not need Bun.
 
 **Deferred channels (recorded, not claimed):** `.rpm` (needs rpmbuild toolchain
 in CI for structural validation — tracked) and Snap (needs snapcraft — tracked).

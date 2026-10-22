@@ -157,7 +157,9 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/build-deb.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/build-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/changelog.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/channel-live-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/channel-manifest.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/channel-publish-verify.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ci-capability-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/claim-lint.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/compile-sidecar.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

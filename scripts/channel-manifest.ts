@@ -140,7 +140,9 @@ export function renderWinget(manifest: ReleaseManifest, sums?: Map<string, strin
   // placeholders stamp from the signed SHA256SUMS like every other channel.
   const armUrl = downloadUrl(manifest, "xr-windows-arm64.zip");
   const armSha = sums ? requireSha(sums.get("xr-windows-arm64.zip"), "xr-windows-arm64.zip") : "SHA256_XR_WINDOWS_ARM64_ZIP";
-  const base = `winget/manifests/r/${publisher}/XR/${version}`;
+  // winget-pkgs layout: manifests/<lowercase first letter of the identifier>/<Publisher>/<Package>/<version>.
+  // (Was hard-coded to "r/", which winget-pkgs would reject for ahmadrrrtx.XR.)
+  const base = `winget/manifests/${publisher[0].toLowerCase()}/${publisher}/XR/${version}`;
   return [
     {
       relpath: `${base}/${packageId}.yaml`,

@@ -38,6 +38,8 @@
     "release:check": "bun run scripts/release-manifest.ts --check",
     "channel:sync": "bun run scripts/channel-manifest.ts --write",
     "channel:check": "bun run scripts/channel-manifest.ts --check",
+    "channel:live": "bun run scripts/channel-live-check.ts",
+    "channel:publish-verify": "bun run scripts/channel-publish-verify.ts",
     "changelog:generate": "bun run scripts/changelog.ts --write",
     "changelog:check": "bun run scripts/changelog.ts --check",
     "platform:parity:check": "bun run scripts/platform-parity.ts --validate",

@@ -13,10 +13,14 @@ const ps1 = readFileSync(join(ROOT, "install.ps1"), "utf8");
 
 describe("Phase 9 · install.sh verified-only binary path", () => {
   test("fetches the release SHA256SUMS before installing any binary", () => {
-    expect(sh).toContain('/SHA256SUMS" -o "$sums_file"');
+    expect(sh).toContain('download "$BASE/SHA256SUMS" "$STAGE/SHA256SUMS"');
+    // Sums are fetched in main() before any binary or source download.
+    const main = sh.slice(sh.indexOf("main(){"));
+    expect(main.indexOf("fetch_sums")).toBeGreaterThan(-1);
+    expect(main.indexOf("fetch_sums")).toBeLessThan(main.indexOf("fetch_binary"));
   });
   test("fails closed when checksums are unavailable", () => {
-    expect(sh).toContain("Release checksums unavailable — refusing an unverified binary");
+    expect(sh).toContain("Release checksums unavailable — refusing an unverified install");
   });
   test("fails closed when the checksum does not match (tamper detection)", () => {
     expect(sh).toContain("Integrity check FAILED for $bin");
