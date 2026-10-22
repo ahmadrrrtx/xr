@@ -10,7 +10,7 @@
  *                    descriptors are ordinary Node fds; content reopen through /proc/self/fd.
  *   darwin 11+       openat(O_NOFOLLOW_ANY) per call; descriptors are ordinary Node fds; listing
  *                    through fdopendir/readdir.
- *   win32 x64        ntdll NtCreateFile with a RootDirectory handle and OBJ_DONT_REPARSE, walked one
+ *   win32 x64/arm64  ntdll NtCreateFile with a RootDirectory handle and OBJ_DONT_REPARSE, walked one
  *                    component at a time. Descriptors are raw kernel32 HANDLEs (NOT CRT fds: Bun's own
  *                    runtime cannot fstat or read a CRT fd minted through a separate ucrtbase). All I/O
  *                    is GetFileInformationByHandle / ReadFile / WriteFile / SetEndOfFile / DuplicateHandle.
@@ -183,7 +183,14 @@ const NT = {
 };
 let winLib: ReturnType<typeof loadWin> | undefined;
 function loadWin() {
-  if (platform !== "win32" || arch !== "x64") unsupported();
+  // XR-LAUNCH-005 (decision D4): arm64 Windows is LLP64 like x64, so every
+  // structure below (UNICODE_STRING, OBJECT_ATTRIBUTES, IO_STATUS_BLOCK,
+  // OVERLAPPED, BY_HANDLE_FILE_INFORMATION, FILE_*_INFORMATION) has the same
+  // size and offsets, and ntdll/kernel32 export the same entry points. arm64 is
+  // NOT hardware-verified in this repository: `winSelfTest` runs once per
+  // process and a failure makes the authority report `unsupported` (fail
+  // closed) instead of guessing.
+  if (platform !== "win32" || !["x64", "arm64"].includes(arch)) unsupported();
   try {
     const nt = dlopen("ntdll.dll", {
       NtCreateFile: { args: [FFIType.ptr, FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
@@ -202,10 +209,56 @@ function loadWin() {
       GetCurrentProcess: { args: [], returns: FFIType.i64 },
       GetLastError: { args: [], returns: FFIType.u32 },
     }).symbols;
+    winSelfTest(nt, k32);
     return { nt, k32 };
   } catch { unsupported(); }
 }
 const win = () => winLib ??= loadWin();
+
+/**
+ * Prove the FFI round-trip before trusting it, using the same call shapes the
+ * authority uses: open %SystemRoot% by path (root acquisition), open
+ * "System32" anchored at that handle (NtCreateFile + RootDirectory +
+ * OBJ_DONT_REPARSE), open %SystemRoot%\System32 by path, and require both
+ * System32 handles to name the same directory. Any mismatch or error → throw
+ * (→ `unsupported`).
+ */
+function winSelfTest(
+  nt: { NtCreateFile: (...a: never[]) => number; NtClose: (h: number) => number },
+  k32: { CreateFileW: (...a: never[]) => number | bigint; GetFileInformationByHandle: (h: number, p: Pointer) => number },
+): void {
+  const sysRoot = process.env.SystemRoot ?? "C:\\Windows";
+  const byPath = (p: string): number => {
+    const buf = Buffer.from(p + "\0", "utf16le");
+    const h = Number((k32.CreateFileW as (...a: unknown[]) => number | bigint)(ptr(buf), NT.FILE_GENERIC_READ, NT.FILE_SHARE_ALL, null, NT.OPEN_EXISTING, NT.FILE_FLAG_BACKUP_SEMANTICS, null));
+    if (h === -1 || h === 0) throw new Error("self-test: CreateFileW failed");
+    return h;
+  };
+  const handles: number[] = [];
+  try {
+    const root = byPath(sysRoot);
+    handles.push(root);
+    const h = byPath(sysRoot + "\\System32");
+    handles.push(h);
+    const { us, data } = unicode("System32");
+    const oa = objectAttributes(root, us, NT.OBJ_CASE_INSENSITIVE | NT.OBJ_DONT_REPARSE);
+    const iosb = Buffer.alloc(16);
+    const out = Buffer.alloc(8);
+    const status = (nt.NtCreateFile as (...a: unknown[]) => number)(ptr(out), NT.FILE_GENERIC_READ, ptr(oa), ptr(iosb), null, NT.FILE_ATTRIBUTE_NORMAL, NT.FILE_SHARE_ALL, NT.FILE_OPEN, NT.FILE_DIRECTORY_FILE | NT.FILE_SYNCHRONOUS_IO_NONALERT, null, 0);
+    void data;
+    if ((status >>> 0) !== 0) throw new Error("self-test: NtCreateFile failed");
+    const h2 = Number(out.readBigUInt64LE(0));
+    handles.push(h2);
+    const a = Buffer.alloc(52);
+    const b = Buffer.alloc(52);
+    if (!k32.GetFileInformationByHandle(h, ptr(a)) || !k32.GetFileInformationByHandle(h2, ptr(b))) throw new Error("self-test: no file info");
+    // dwVolumeSerialNumber @28, nFileIndexHigh @44, nFileIndexLow @48; attributes @0 must say directory.
+    const id = (x: Buffer) => `${x.readUInt32LE(28)}:${x.readUInt32LE(44)}:${x.readUInt32LE(48)}`;
+    if (id(a) !== id(b) || (a.readUInt32LE(0) & NT.ATTR_DIRECTORY) === 0) throw new Error("self-test: identity mismatch");
+  } finally {
+    for (const x of handles) nt.NtClose(x);
+  }
+}
 
 /** NTSTATUS → fixed policy code. Raw NTSTATUS text is never returned. */
 function ntError(status: number): FilesystemError {

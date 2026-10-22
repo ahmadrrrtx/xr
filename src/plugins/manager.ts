@@ -425,7 +425,7 @@ export class PluginManager {
     const sandboxAvailable = await detectBwrap();
     const place = decidePluginPlacement(hard, sandboxAvailable, assessment.effectiveTier);
     if (place === "blocked") {
-      const reason = `high-risk plugin (granted ${hard.join(",")}) requires Tier-2 isolation (bubblewrap); refused`;
+      const reason = `high-risk plugin (granted ${hard.join(",")}) requires Tier-2 isolation (bubblewrap${process.platform === "linux" ? "" : ", Linux-only in this release"}); refused`;
       this.loadErrors.set(entry.id, { reason, kind: "untrusted" });
       this.registry.setHealth(entry.id, { state: "untrusted", checkedAt: Date.now(), detail: reason, errors: [reason] });
       this.store.audit("plugin.isolation_denied", { plugin: entry.id, granted: hard, placement: place });

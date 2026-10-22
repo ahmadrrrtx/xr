@@ -1,0 +1,119 @@
+# XR-LAUNCH-005 (decision D4): Windows ARM64 file authority.
+#
+# The file tools sit on src/security/fs-native.ts, which reaches ntdll through
+# bun:ffi. Bun's native windows-aarch64 build disabled bun:ffi until
+# oven-sh/bun#33696 (merged 2026-07-20, fixes oven-sh/bun#28055); on a Bun
+# without it, dlopen throws and the authority reports `unsupported` (fails
+# closed). This lane is the evidence gate for the Windows ARM64 claim. It is not a
+# required check. Two rows: the pinned Bun (CLI; expected red until it carries
+# bun:ffi on windows-aarch64) and Bun 1.4.2 (what desktop-app.yml compiles the
+# sidecar with).
+#
+# setup-bun falls back to x64 (emulated) on Windows ARM64 (oven-sh/setup-bun#164),
+# which would test the wrong binary, so the native build is fetched directly
+# and its SHA-256 is checked against the release's SHASUMS256.txt.
+name: Windows ARM64 (file authority)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bun-version:
+        description: "Bun version to test (default: .bun-version). Use this to try a newer Bun without changing the pin."
+        required: false
+        default: ""
+  schedule:
+    - cron: "30 4 * * 1"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/security/fs-native.ts"
+      - "src/security/filesystem.ts"
+      - ".github/workflows/windows-arm64.yml"
+      - ".bun-version"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  file-authority:
+    name: windows-11-arm — Bun ${{ matrix.bun }} (${{ matrix.ships }})
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The CLI binary / npm path runs on the pinned Bun (packageManager,
+          # .bun-version). Expected red until that Bun has bun:ffi on
+          # windows-aarch64, so it does not block; it is the evidence row.
+          - { bun: pinned, ships: "CLI", expectGreen: false }
+          # The desktop sidecar is compiled with Bun 1.4.2 (desktop-app.yml).
+          - { bun: "1.4.2", ships: "desktop sidecar", expectGreen: true }
+    continue-on-error: ${{ !matrix.expectGreen }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install native bun-windows-aarch64 (checksum-verified)
+        env:
+          BUN_INPUT: ${{ inputs.bun-version }}
+        run: |
+          set -euo pipefail
+          ver="${BUN_INPUT:-${{ matrix.bun }}}"
+          if [ "$ver" = "pinned" ]; then ver="$(tr -d ' \r\n' < .bun-version)"; fi
+          base="https://github.com/oven-sh/bun/releases/download/bun-v${ver}"
+          mkdir -p "$RUNNER_TEMP/bun" && cd "$RUNNER_TEMP/bun"
+          curl -fsSL -o bun.zip "$base/bun-windows-aarch64.zip"
+          curl -fsSL -o SHASUMS256.txt "$base/SHASUMS256.txt"
+          want="$(grep ' bun-windows-aarch64.zip$' SHASUMS256.txt | cut -d' ' -f1)"
+          got="$(sha256sum bun.zip | cut -d' ' -f1)"
+          if [ -z "$want" ] || [ "$want" != "$got" ]; then echo "::error::bun-windows-aarch64.zip checksum mismatch"; exit 1; fi
+          unzip -q bun.zip
+          echo "$RUNNER_TEMP/bun/bun-windows-aarch64" >> "$GITHUB_PATH"
+          echo "Bun ${ver} (native arm64) installed"
+
+      - name: Runtime is native arm64 (not x64 emulation)
+        run: |
+          bun --version
+          bun -e 'if (process.platform !== "win32" || process.arch !== "arm64") { console.error(`expected win32/arm64, got ${process.platform}/${process.arch}`); process.exit(1); }; console.log("win32/arm64 native")'
+
+      - name: bun:ffi availability on this Bun (diagnostic)
+        id: ffi
+        run: |
+          if bun -e 'const { dlopen, FFIType } = require("bun:ffi"); const k = dlopen("kernel32.dll", { GetCurrentProcessId: { args: [], returns: FFIType.u32 } }); if (k.symbols.GetCurrentProcessId() !== process.pid) process.exit(2); console.log("bun:ffi OK")'; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::error::bun:ffi is unavailable on this Bun build for windows-aarch64 — the file authority fails closed ('unsupported'). Raise .bun-version to a release containing oven-sh/bun#33696, or keep Windows ARM64 out of the support claims."
+          fi
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: File authority works natively (read + list, not 'unsupported')
+        run: |
+          mkdir -p "$RUNNER_TEMP/ws" && echo hello > "$RUNNER_TEMP/ws/a.txt"
+          XR_WS="$RUNNER_TEMP/ws" bun -e '
+            const { FilesystemAuthority } = await import("./src/security/filesystem.ts");
+            const fs = new FilesystemAuthority(process.env.XR_WS);
+            if (fs.read("a.txt").content.trim() !== "hello") throw new Error("read mismatch");
+            const names = fs.list(".").map((e) => e.path ?? String(e));
+            console.log("list:", JSON.stringify(names));
+            console.log("file authority OK on", process.platform, process.arch);
+          '
+
+      - name: Security + file-tool suites (same exclusions as Windows x64)
+        env:
+          XR_TEST_TIMEOUT_MS: "20000"
+        run: |
+          files="$(bun run scripts/platform-parity.ts --os win32 --args | tr ' ' '\n' | grep -E '^test/(security|tools)/' || true)"
+          if [ -z "$files" ]; then echo "::error::platform-parity produced no security/tool files"; exit 1; fi
+          # shellcheck disable=SC2086
+          bun test $files

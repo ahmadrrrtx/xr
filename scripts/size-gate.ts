@@ -154,7 +154,16 @@ export const THRESHOLD = 800;
 // ~171,964 at the Phase 1 commit (80007d7f): +354 net, of which 46 lines left
 // atomic-updater.ts with the broken npm plan. Headroom ~180. Needs maintainer
 // sign-off like every ceiling move.
-export const TREE_CEILING = 172_500; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
+// Launch audit Phase 2B · 172,500 → 173,500 (2026-10-22): the shell/file
+// boundary, which is core trust surface and cannot move to a satellite:
+// the unshare fallback now pivot_roots into a minimal root with every mount
+// step checked and a detect-time self-check (XR-LAUNCH-004), the experimental
+// opt-in macOS Seatbelt and Windows AppContainer mechanisms
+// (src/runtime/trust/environment/{seatbelt,appcontainer}.ts, XR-LAUNCH-003)
+// and the Windows ARM64 FFI self-test in fs-native.ts (XR-LAUNCH-005).
+// Measured 173,010 (+692 over 2A). Headroom ~490. Needs maintainer sign-off
+// and the security review that 2B requires anyway.
+export const TREE_CEILING = 173_500; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
 // the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
 // P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
 // the device registry (hashed session tokens, revocation, mobile-kind tag),

@@ -12,8 +12,10 @@
  *   - ambient environment stripped; only explicit broker-approved env set.
  *
  * Primary mechanism: bubblewrap (`bwrap`), the auditable unprivileged sandbox
- * used by Flatpak. Fallback: raw `unshare` user+mount+pid+net namespaces with
- * tmpfs over sensitive paths (a weaker filesystem boundary, documented).
+ * used by Flatpak. Fallback: raw `unshare` user+mount+pid+net namespaces that
+ * pivot_root into the same kind of minimal root (XR-LAUNCH-004). The fallback is
+ * only offered after a self-check proves the confinement on this host; if the
+ * self-check or any mount step fails, Tier 2 is refused (fail closed).
  *
  * HONEST LIMITS (see describe()):
  *   - Network is NONE inside the sandbox. A per-host ALLOWLIST is not
@@ -24,8 +26,10 @@
  *   - It confines the process; it does not protect the host kernel itself
  *     from a kernel 0-day (no claim of absolute isolation).
  */
-import { existsSync, lstatSync, openSync, closeSync } from "node:fs";
+import { existsSync, lstatSync, openSync, closeSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SANDBOX_EXEC, SEATBELT_PATH, seatbeltArgv } from "./seatbelt.ts";
 import {
   type BackendRunContext,
   type EnvironmentBackend,
@@ -36,7 +40,17 @@ import {
 import { NO_ENFORCEMENT, type ResourceEnforcement } from "../resources.ts";
 import type { EnvironmentExecutable, EnvironmentRunResult, PlacementGuarantees } from "../types.ts";
 
-type Mechanism = "bwrap" | "unshare";
+type Mechanism = "bwrap" | "unshare" | "seatbelt" | "appcontainer";
+
+/**
+ * XR-LAUNCH-003 (decision D3): the macOS (Seatbelt) and Windows (AppContainer)
+ * mechanisms are experimental and off unless XR_OS_SANDBOX=experimental. Off
+ * means "unavailable" → the trust gate refuses Tier-2 work (fail closed); it
+ * never means "run unsandboxed".
+ */
+export function osSandboxOptIn(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.XR_OS_SANDBOX === "experimental";
+}
 
 /**
  * Phase 4 · T1 — the bundled seccomp blocklist for bubblewrap
@@ -68,11 +82,16 @@ const BWRAP_GUARANTEES: PlacementGuarantees = {
 
 const UNSHARE_GUARANTEES: PlacementGuarantees = {
   kernelBoundary: true,
-  enforcedFilesystem: true, // tmpfs over /home,/root,/tmp,/var,/run hides sensitive host paths
+  enforcedFilesystem: true, // pivot_root into a minimal root; only granted roots bound (XR-LAUNCH-004); self-checked at detect()
   enforcedNetwork: true,
   enforcedProcess: true,
   noAmbientAuthority: true,
 };
+
+/** Seatbelt has no PID namespace: the process tree is bounded by group kill only. */
+const SEATBELT_GUARANTEES: PlacementGuarantees = { ...BWRAP_GUARANTEES, enforcedProcess: false };
+/** AppContainer + Job object (KILL_ON_JOB_CLOSE). */
+const APPCONTAINER_GUARANTEES: PlacementGuarantees = { ...BWRAP_GUARANTEES };
 
 const ENFORCEMENT: ResourceEnforcement = {
   ...NO_ENFORCEMENT,
@@ -93,10 +112,19 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
   private mechanism: Mechanism | null = null;
   private bwrapPath = "bwrap";
 
+  /** `only` restricts detection to one mechanism (tests exercise each separately). */
+  constructor(private readonly opts: { only?: Mechanism } = {}) {}
+
+  /** The mechanism detect() selected, or null (refuse). */
+  get activeMechanism(): Mechanism | null {
+    return this.mechanism;
+  }
+
   async detect(): Promise<boolean> {
+    if (process.platform === "darwin" || process.platform === "win32") return this.detectNative();
     if (process.getuid?.() === 0) return false; // unprivileged sandbox only
     // Try bubblewrap first.
-    const bwrap = await runChild({
+    const bwrap = this.opts.only === "unshare" ? { exitCode: 1 } : await runChild({
       argv: ["bwrap", "--version"],
       cwd: "/",
       env: { PATH: "/usr/bin:/bin" },
@@ -108,6 +136,10 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
       this.guarantees = BWRAP_GUARANTEES;
       return true;
     }
+    if (this.opts.only === "bwrap") {
+      this.mechanism = null;
+      return false;
+    }
     // Fall back to raw user namespaces.
     const un = await runChild({
       argv: ["unshare", "-Urmnp", "--fork", "--mount-proc", "true"],
@@ -116,13 +148,31 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
       timeoutMs: 5000,
       maxOutputBytes: 4096,
     });
-    if (un.exitCode === 0) {
+    if (un.exitCode === 0 && (await unshareConfinementSelfCheck())) {
       this.mechanism = "unshare";
       this.guarantees = UNSHARE_GUARANTEES;
       return true;
     }
     this.mechanism = null;
     return false;
+  }
+
+  /** macOS / Windows: experimental native sandboxes, opt-in, self-checked. */
+  private async detectNative(): Promise<boolean> {
+    this.mechanism = null;
+    if (!osSandboxOptIn()) return false;
+    try {
+      if (process.platform === "darwin" && existsSync(SANDBOX_EXEC) && process.getuid?.() !== 0 && (await nativeSelfCheck("seatbelt"))) {
+        this.mechanism = "seatbelt";
+        this.guarantees = SEATBELT_GUARANTEES;
+      } else if (process.platform === "win32" && process.arch === "x64" && (await nativeSelfCheck("appcontainer"))) {
+        this.mechanism = "appcontainer";
+        this.guarantees = APPCONTAINER_GUARANTEES;
+      }
+    } catch {
+      this.mechanism = null;
+    }
+    return this.mechanism !== null;
   }
 
   async run(exec: EnvironmentExecutable, ctx: BackendRunContext): Promise<EnvironmentRunResult> {
@@ -145,6 +195,9 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     }
 
     const envInject = ctx.envInject;
+    if (this.mechanism === "seatbelt" || this.mechanism === "appcontainer") {
+      return this.runNative(this.mechanism, exec, ctx, writable, envInject);
+    }
     // Phase 4 · T1 — seccomp: open the bundled blocklist and hand it to
     // bubblewrap as fd 3 (`--seccomp 3`). Defense-in-depth inside the
     // namespace boundary; if the file cannot be opened the sandbox still
@@ -182,6 +235,11 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
       }
     });
 
+    if (this.mechanism === "unshare" && raw.exitCode === 125 && raw.stderr.includes(SETUP_FAILED_MARKER)) {
+      ctx.onBoundary?.("filesystem confinement could not be established");
+      return refused(`filesystem confinement could not be established (${setupFailureStep(raw.stderr)}); the command did not run`);
+    }
+
     const boundaryEvent =
       raw.outputTruncated || raw.timedOut || raw.spawnError !== undefined || raw.exitCode !== 0;
     if (boundaryEvent && ctx.onBoundary) {
@@ -199,6 +257,55 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
       boundaryEvent,
       boundaryDetail: raw.spawnError ?? (raw.outputTruncated ? "output limit" : raw.timedOut ? "wall-clock timeout" : undefined),
     };
+  }
+
+  // ── macOS Seatbelt / Windows AppContainer (experimental, opt-in) ─────────
+  private async runNative(
+    mechanism: "seatbelt" | "appcontainer",
+    exec: EnvironmentExecutable,
+    ctx: BackendRunContext,
+    writable: readonly string[],
+    envInject: Record<string, string>,
+  ): Promise<EnvironmentRunResult> {
+    const scratch = mkdtempSync(join(tmpdir(), "xr-sb-"));
+    try {
+      const raw =
+        mechanism === "seatbelt"
+          ? await runChild({
+              argv: seatbeltArgv(writable, ctx.grant.fs.readOnlyRoots, scratch, ["/bin/sh", "-c", `${this.limitScript(exec)} exec "$0" "$@"`, ...exec.argv]),
+              cwd: exec.cwd,
+              env: { PATH: SEATBELT_PATH, HOME: scratch, TMPDIR: scratch, ...exec.env, ...envInject },
+              timeoutMs: exec.timeoutMs,
+              maxOutputBytes: exec.maxOutputBytes,
+              stdin: exec.stdin,
+            })
+          : await (await import("./appcontainer.ts")).runInAppContainer({
+              argv: exec.argv,
+              cwd: exec.cwd,
+              env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows", PATH: process.env.PATH ?? "", PATHEXT: process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD", ...exec.env, ...envInject },
+              writableRoots: writable,
+              timeoutMs: exec.timeoutMs,
+              maxOutputBytes: exec.maxOutputBytes,
+              stdin: exec.stdin,
+            });
+      const boundaryEvent = raw.outputTruncated || raw.timedOut || raw.spawnError !== undefined || raw.exitCode !== 0;
+      if (boundaryEvent && ctx.onBoundary) ctx.onBoundary(raw.spawnError ?? (raw.timedOut ? "timeout" : `exit=${raw.exitCode}`));
+      return {
+        ok: raw.exitCode === 0 && !raw.timedOut && raw.spawnError === undefined,
+        exitCode: raw.exitCode,
+        stdout: raw.stdout,
+        stderr: raw.stderr,
+        timedOut: raw.timedOut,
+        outputTruncated: raw.outputTruncated,
+        durationMs: raw.durationMs,
+        boundaryEvent,
+        boundaryDetail: raw.spawnError ?? (raw.outputTruncated ? "output limit" : raw.timedOut ? "wall-clock timeout" : undefined),
+      };
+    } catch (e) {
+      return refused(`${mechanism} sandbox failed to start (${(e as Error).message}); the command did not run`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   }
 
   // ── bubblewrap ──────────────────────────────────────────────────────────
@@ -280,38 +387,40 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
   }
 
   // ── raw unshare fallback ────────────────────────────────────────────────
+  //
+  // XR-LAUNCH-004: the old fallback only laid tmpfs over a few directories
+  // (and skipped any that were ancestors of the workspace, with every mount
+  // error ignored), so /home stayed readable and writable while the audit row
+  // said verified=true. It now builds the same minimal root bwrap builds and
+  // pivot_roots into it:
+  //   - a private tmpfs root (staged on an empty host mountpoint, inside the
+  //     new mount namespace only — nothing is created on the host);
+  //   - /usr (+ usrmerge links or binds for /bin /sbin /lib /lib64) and a
+  //     handful of /etc files, which are host-root-owned and therefore not
+  //     writable from the user namespace (only the caller's uid is mapped);
+  //   - read-only roots bind-mounted and remounted read-only (verified);
+  //   - the granted writable roots bind-mounted at their own paths;
+  //   - fresh /proc (new PID namespace), minimal /dev, tmpfs /tmp;
+  //   - pivot_root + lazy unmount of the old root, so nothing else — /home,
+  //     /root, /var, other /tmp dirs — exists inside; then the skeleton root
+  //     is remounted read-only.
+  // Every step is checked: any failure prints SETUP_FAILED_MARKER and exits
+  // 125, and run() reports a refused, unverified placement instead of running
+  // the command with a weaker boundary.
   private buildUnshare(
     exec: EnvironmentExecutable,
     ctx: BackendRunContext,
     writableRoots: readonly string[],
     envInject: Record<string, string>,
   ): string[] {
-    // Build an inner shell that hides sensitive paths under tmpfs, sets a
-    // clean env, applies ulimits, then execs the command. (No pivot_root: the
-    // base rootfs stays visible read-only — a weaker boundary than bwrap.)
-    const mounts = ["mount --make-rprivate / 2>/dev/null || true"];
-    // Hide sensitive dirs under tmpfs — but NEVER tmpfs a directory that is an
-    // ancestor of a granted writable root, or we would hide the workspace itself
-    // (a tmpfs over /tmp would swallow a workspace under /tmp before we bind it).
-    for (const d of ["/home", "/root", "/tmp", "/var", "/run"]) {
-      const ancestorOfWritable = writableRoots.some((w) => w === d || w.startsWith(d + "/"));
-      if (!ancestorOfWritable) {
-        mounts.push(`mount -t tmpfs tmpfs ${d} 2>/dev/null || true`);
-      }
-    }
-    // Bind granted writable roots. Their parent was not tmpfs'd above, so the
-    // host content stays accessible and the bind references the real path.
-    for (const r of writableRoots) {
-      mounts.push(`mkdir -p ${shellQuote(r)} 2>/dev/null || true`);
-      mounts.push(`mount --bind ${shellQuote(r)} ${shellQuote(r)} 2>/dev/null || true`);
-    }
     const env = { PATH: "/usr/bin:/bin", HOME: "/tmp", ...exec.env, ...envInject };
     const exports = Object.entries(env)
       .map(([k, v]) => `export ${k}=${shellQuote(v)}`)
       .join("; ");
     const limits = this.limitScript(exec);
     const cmd = exec.argv.map(shellQuote).join(" ");
-    const script = `${mounts.join("; ")}; ${exports}; cd ${shellQuote(exec.cwd)}; ${limits} exec ${cmd}`;
+    const setup = unshareRootScript(writableRoots, ctx.grant.fs.readOnlyRoots);
+    const script = `${setup}\n${exports}; cd ${shellQuote(exec.cwd)} || fail chdir; ${limits} exec ${cmd}`;
     return ["unshare", "-Urmnp", "--fork", "--mount-proc", "/bin/sh", "-c", script];
   }
 
@@ -340,7 +449,182 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
 
   describe(): string {
     const mech = this.mechanism ?? "unavailable";
+    if (this.mechanism === "seatbelt" || this.mechanism === "appcontainer") {
+      return `${this.mechanism === "seatbelt" ? "macOS Seatbelt (sandbox-exec)" : "Windows AppContainer + Job object"} sandbox — EXPERIMENTAL (XR_OS_SANDBOX=experimental), not hardware-verified. Granted roots + scratch only; user home unreadable; network NONE; ambient env stripped.`;
+    }
     return `Linux namespace sandbox (${mech}). user+mount+pid+net+ipc+uts+cgroup namespaces; minimal rebuilt root; host home/secrets absent; network NONE; ambient env stripped; ulimit cpu/mem/proc. LIMITS: network allowlist not enforceable (net=none only); Linux-only; confines the process but makes no claim against host-kernel 0-days.`;
+  }
+}
+
+/**
+ * Prove a native mechanism on this host before offering it: a throwaway
+ * workspace must be writable and a sibling file must be unreadable from inside.
+ */
+async function nativeSelfCheck(mechanism: "seatbelt" | "appcontainer"): Promise<boolean> {
+  const { mkdirSync, writeFileSync, existsSync: exists } = await import("node:fs");
+  const base = mkdtempSync(join(tmpdir(), "xr-os-selfcheck-"));
+  const ws = join(base, "ws");
+  const sibling = join(base, "sibling.txt");
+  try {
+    mkdirSync(ws);
+    writeFileSync(sibling, "XR-SELFCHECK-SECRET");
+    if (mechanism === "seatbelt") {
+      const scratch = join(base, "scratch");
+      mkdirSync(scratch);
+      const r = await runChild({
+        argv: seatbeltArgv([ws], [], scratch, ["/bin/sh", "-c", `echo ok > probe.txt; cat ${shellQuote(sibling)}`]),
+        cwd: ws,
+        env: { PATH: SEATBELT_PATH, HOME: scratch, TMPDIR: scratch },
+        timeoutMs: 10_000,
+        maxOutputBytes: 8192,
+      });
+      return exists(join(ws, "probe.txt")) && r.exitCode !== 0 && !r.stdout.includes("XR-SELFCHECK-SECRET");
+    }
+    const { runInAppContainer } = await import("./appcontainer.ts");
+    const r = await runInAppContainer({
+      argv: ["cmd.exe", "/d", "/c", `echo ok> probe.txt & type "${sibling}"`],
+      cwd: ws,
+      env: { SystemRoot: process.env.SystemRoot ?? "C:\\Windows", PATH: process.env.PATH ?? "" },
+      writableRoots: [ws],
+      timeoutMs: 10_000,
+      maxOutputBytes: 8192,
+    });
+    return exists(join(ws, "probe.txt")) && !r.stdout.includes("XR-SELFCHECK-SECRET");
+  } catch {
+    return false;
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+}
+
+/** Printed (stderr) by the unshare setup script when a confinement step fails. */
+export const SETUP_FAILED_MARKER = "XR_SANDBOX_SETUP_FAILED";
+
+function setupFailureStep(stderr: string): string {
+  const m = stderr.match(new RegExp(`${SETUP_FAILED_MARKER}: ([a-z0-9_ -]+)`));
+  return m ? `step: ${m[1]!.trim()}` : "setup step failed";
+}
+
+const STAGING_CANDIDATES = ["/mnt", "/media", "/srv", "/opt", "/run", "/var/empty"];
+
+/**
+ * POSIX-sh setup that runs as mapped-root inside `unshare -Urmnp`: builds a
+ * minimal root on a tmpfs and pivot_roots into it. Exported for tests.
+ */
+export function unshareRootScript(writableRoots: readonly string[], readOnlyRoots: readonly string[]): string {
+  const binds = [...writableRoots, ...readOnlyRoots];
+  const within = (x: string, y: string) => x === y || x.startsWith(y.endsWith("/") ? y : y + "/");
+  const related = (a: string, b: string) => within(a, b) || within(b, a);
+  const staging = STAGING_CANDIDATES.find((d) => existsSync(d) && !binds.some((r) => related(r, d)));
+  const q = shellQuote;
+  const lines: string[] = [
+    `fail() { echo "${SETUP_FAILED_MARKER}: $1" >&2; exit 125; }`,
+  ];
+  if (!staging) {
+    lines.push("fail no-staging-mountpoint");
+    return lines.join("\n");
+  }
+  const R = staging;
+  lines.push(
+    "mount --make-rprivate / || fail make-rprivate",
+    `PIVOT=""; for c in /usr/sbin/pivot_root /sbin/pivot_root /usr/bin/pivot_root /bin/pivot_root; do [ -x "$c" ] && PIVOT="$c" && break; done; [ -n "$PIVOT" ] || fail no-pivot_root`,
+    `mount -t tmpfs -o mode=0755 xr-root ${q(R)} || fail root-tmpfs`,
+    `mkdir -p ${q(R + "/usr")} ${q(R + "/proc")} ${q(R + "/dev")} ${q(R + "/tmp")} ${q(R + "/etc")} || fail root-dirs`,
+    `mount --rbind /usr ${q(R + "/usr")} || fail bind-usr`,
+  );
+  for (const d of ["/bin", "/sbin", "/lib", "/lib64", "/lib32", "/libx32"]) {
+    if (!existsSync(d)) continue;
+    if (isSymlink(d)) lines.push(`ln -s ${q(readLinkTarget(d))} ${q(R + d)} || fail link-${d.slice(1)}`);
+    else lines.push(`mkdir -p ${q(R + d)} && mount --rbind ${q(d)} ${q(R + d)} || fail bind-${d.slice(1)}`);
+  }
+  for (const f of ["/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/nsswitch.conf", "/etc/passwd", "/etc/group", "/etc/hosts", "/etc/localtime"]) {
+    if (existsSync(f)) lines.push(`: > ${q(R + f)} && mount --bind ${q(f)} ${q(R + f)} || fail bind-etc`);
+  }
+  if (existsSync("/etc/ld.so.conf.d")) lines.push(`mkdir -p ${q(R + "/etc/ld.so.conf.d")} && mount --rbind /etc/ld.so.conf.d ${q(R + "/etc/ld.so.conf.d")} || fail bind-etc`);
+  // Minimal /dev: individual device nodes, no host /dev tree.
+  for (const n of ["null", "zero", "full", "random", "urandom", "tty"]) {
+    lines.push(`if [ -e /dev/${n} ]; then : > ${q(R + "/dev/" + n)} && mount --bind /dev/${n} ${q(R + "/dev/" + n)} || fail bind-dev; fi`);
+  }
+  lines.push(
+    `ln -s /proc/self/fd ${q(R + "/dev/fd")}; ln -s /proc/self/fd/0 ${q(R + "/dev/stdin")}; ln -s /proc/self/fd/1 ${q(R + "/dev/stdout")}; ln -s /proc/self/fd/2 ${q(R + "/dev/stderr")}`,
+    `mkdir -p ${q(R + "/dev/shm")} && mount -t tmpfs -o mode=1777 xr-shm ${q(R + "/dev/shm")} || fail dev-shm`,
+    `mount -t proc proc ${q(R + "/proc")} || fail proc`,
+    `mount -t tmpfs -o mode=1777 xr-tmp ${q(R + "/tmp")} || fail tmp`,
+  );
+  // Writable roots after /tmp so a workspace under /tmp is bound on top of the scratch tmpfs.
+  for (const r of writableRoots) {
+    if (!existsSync(r)) continue;
+    lines.push(`mkdir -p ${q(R + r)} && mount --rbind ${q(r)} ${q(R + r)} || fail bind-writable`);
+  }
+  for (const r of readOnlyRoots) {
+    if (!existsSync(r)) continue;
+    const t = q(R + r);
+    lines.push(
+      `mkdir -p ${t} && mount --rbind ${q(r)} ${t} || fail bind-readonly`,
+      `{ mount -o remount,bind,ro,nosuid,nodev ${t} 2>/dev/null || mount -o remount,bind,ro,nosuid ${t} 2>/dev/null || mount -o remount,bind,ro ${t}; } || fail remount-readonly`,
+      `if [ -w ${t} ]; then fail readonly-still-writable; fi`,
+    );
+  }
+  lines.push(
+    `cd ${q(R)} || fail chdir-root`,
+    `mkdir .oldroot || fail oldroot`,
+    `"$PIVOT" . .oldroot || fail pivot_root`,
+    "cd / || fail chdir-root",
+    "umount -l /.oldroot || fail umount-oldroot",
+    "rmdir /.oldroot 2>/dev/null || true",
+    // The skeleton itself becomes read-only: writes outside the granted roots,
+    // /tmp and /dev/shm fail with EROFS instead of landing in throwaway tmpfs.
+    "mount -o remount,bind,ro / || fail root-readonly",
+  );
+  return lines.join("\n");
+}
+
+/**
+ * Prove the fallback on this host before offering it: a throwaway workspace
+ * must be writable, the caller's real HOME (and /home, /root) must be absent,
+ * and writing beside the workspace must fail. Any deviation → false (Tier 2 is
+ * then unavailable and the trust gate refuses, fail closed).
+ */
+async function unshareConfinementSelfCheck(): Promise<boolean> {
+  const { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync: exists } = await import("node:fs");
+  const { tmpdir, homedir } = await import("node:os");
+  const base = mkdtempSync(join(tmpdir(), "xr-ns-selfcheck-"));
+  const ws = join(base, "ws");
+  const sibling = join(base, "sibling.txt");
+  try {
+    mkdirSync(ws);
+    writeFileSync(sibling, "host");
+    const home = homedir();
+    const ancestors: string[] = [];
+    for (let a = ws; a !== "/" && a.length > 1; ) {
+      const parent = a.slice(0, a.lastIndexOf("/")) || "/";
+      ancestors.push(`[ "$(ls -A ${shellQuote(parent)})" = ${shellQuote(a.slice(a.lastIndexOf("/") + 1))} ] || exit 7`);
+      a = parent;
+    }
+    const isAncestor = (p: string) => ws === p || ws.startsWith(p + "/");
+    const probe = [
+      `echo ok > ${shellQuote(join(ws, "probe.txt"))} || exit 3`,
+      `[ -e ${shellQuote(sibling)} ] && exit 4`,
+      ...(isAncestor(home) || home === "/tmp" ? [] : [`[ -e ${shellQuote(home)} ] && exit 5`]),
+      ...(isAncestor("/root") ? [] : ["[ -e /root ] && exit 6"]),
+      // Every ancestor of the workspace holds exactly the next path component and
+      // nothing else, except "/" itself (the minimal root).
+      ...ancestors.filter((l) => !l.startsWith(`[ "$(ls -A '/')"`)),
+      "exit 0",
+    ].join("; ");
+    const script = `${unshareRootScript([ws], [])}\ncd ${shellQuote(ws)} || exit 8; ${probe}`;
+    const r = await runChild({
+      argv: ["unshare", "-Urmnp", "--fork", "--mount-proc", "/bin/sh", "-c", script],
+      cwd: "/",
+      env: { PATH: "/usr/bin:/bin" },
+      timeoutMs: 10_000,
+      maxOutputBytes: 8192,
+    });
+    return r.exitCode === 0 && exists(join(ws, "probe.txt"));
+  } catch {
+    return false;
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 }
 

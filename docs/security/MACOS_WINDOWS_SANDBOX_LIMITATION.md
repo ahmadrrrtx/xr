@@ -1,6 +1,13 @@
 # XR — macOS / Windows Sandbox Limitation (review item #3)
 
 **Status:** Formal limitation doc — closes the documentation gap for KNOWN_LIMITATIONS #1.
+
+> **Update (launch audit XR-LAUNCH-003, decision D3):** experimental Tier-2 mechanisms now exist —
+> macOS Seatbelt (`src/runtime/trust/environment/seatbelt.ts`) and Windows AppContainer + Job object
+> (`src/runtime/trust/environment/appcontainer.ts`). They are **off unless `XR_OS_SANDBOX=experimental`**,
+> must pass a self-check before they are offered, and have only CI evidence (`os-sandbox.yml`),
+> no user-hardware runs. Without the opt-in, shell commands on macOS/Windows still need Docker/Podman
+> and are otherwise refused (fail closed). Security review is required before they leave experimental.
 **Owner:** Trust/Security Lead.
 **References:** [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) #1, #2, #3,
 [GUARANTEE_MATRIX.md](./GUARANTEE_MATRIX.md), [SECURITY.md](../../SECURITY.md) §scope,
@@ -31,7 +38,7 @@ isolated:
 |---|---|---|---|---|
 | 0 | In-process (`node:vm` realm, defense-in-depth only) | Validated | Validated | Validated |
 | 1 | Restricted-process (dropped privileges + seccomp) | Validated | **Unvalidated** | **Unvalidated** |
-| 2 | Namespace (`bwrap`/`unshare` + pivot_root) | Validated (bwrap); weaker (unshare) | N/A — not a macOS concept | N/A |
+| 2 | OS sandbox: Linux namespaces (`bwrap`/`unshare` + pivot_root); macOS Seatbelt; Windows AppContainer | Validated (bwrap); unshare pivot_root + self-check (XR-LAUNCH-004) | **Experimental, opt-in** (`XR_OS_SANDBOX=experimental`), not hardware-verified | **Experimental, opt-in**, x64 only, not hardware-verified |
 | 3 | Container (Docker/Podman + seccomp + capabilities) | Validated | **Unvalidated** | **Unvalidated** |
 | 4 | gVisor (`runsc` userspace kernel) | Validated when `runsc` present + opt-in | N/A | N/A |
 | 5 | Firecracker / Kata microVM | **Detection hook only** (orchestration is Phase 5+) | N/A | N/A |

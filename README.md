@@ -123,7 +123,9 @@ by `bun run channel:live`; see [`docs/release/CHANNELS.md`](docs/release/CHANNEL
 release's checksum-verified source archive, which needs Bun. Pin a release with
 `… | bash -s -- --version=1.0.0` (PowerShell: `-ReleaseVersion 1.0.0` when running the file).
 The installers never fall back to an unreleased branch: if the release or its checksums are
-missing, they stop and install nothing.
+missing, they stop and install nothing. Windows ARM64 is **unverified**: XR's file tools need
+`bun:ffi`, which the pinned Bun disables on native Windows ARM64, so they refuse to run there
+for now ([support matrix](docs/release/SUPPORT_MATRIX.md)).
 
 Per-platform support tiers: [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
@@ -568,7 +570,7 @@ XR's differentiator is that its claims are checked by machines on every PR.
 | `bun test` + parity suite | **4,461 pass / 19 skip / 0 fail across 411 files** (root `bun test` scope; measured on the Linux lane with bun 1.4.3 at `ec672fe`, 2026-10-17 — see [docs/release/TEST-BASELINE.json](docs/release/TEST-BASELINE.json); refresh step: [RELEASING.md §1g](docs/release/RELEASING.md)); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
-| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a <!-- XR:TREE-CEILING -->172,500<!-- /XR:TREE-CEILING -->-LOC ceiling on the whole tree** |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a <!-- XR:TREE-CEILING -->173,500<!-- /XR:TREE-CEILING -->-LOC ceiling on the whole tree** |
 | `claim-lint` constitution gate | every `Article N` cited anywhere in `src/`, `test/`, `scripts/`, `.github/` exists in [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) |
 | `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
 | `channel:check` | channel configs match the release manifest |

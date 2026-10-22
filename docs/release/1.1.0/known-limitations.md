@@ -191,7 +191,7 @@ sessions yet (exception E-1). The first-task ≥95% figure is an automated proxy
 fresh-machine attempts).
 
 ### The LOC ceiling is re-baselined and machine-stamped
-Row #20 (new since 1.0.0): **the <!-- XR:TREE-CEILING -->172,500<!-- /XR:TREE-CEILING -->-LOC
+Row #20 (new since 1.0.0): **the <!-- XR:TREE-CEILING -->173,500<!-- /XR:TREE-CEILING -->-LOC
 tree ceiling is a no-regrowth guard, not the plan's ≤110k target.**
 History: Phase 5 measured 154,426 → 131,050 LOC and set the gate at 135,000; Phase 7 raised it once, deliberately, to 136,000 for the memory policy layer; later phases raised it again — each time in a diff, with the reason beside `TREE_CEILING` in `scripts/size-gate.ts` — and the excerpt row, previously published at the Phase-5 value, went stale behind those raises. <!-- xr:numeric-history -->
 The present-tense figure is now stamped from the single

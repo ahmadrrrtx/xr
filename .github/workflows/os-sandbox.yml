@@ -1,0 +1,59 @@
+# XR-LAUNCH-003 (decision D3): experimental native sandboxes.
+#
+# macOS Seatbelt (sandbox-exec) and Windows AppContainer + Job object, both
+# opt-in via XR_OS_SANDBOX=experimental. This lane is the only place they run
+# for real: echo, git status and an in-workspace write must succeed; a write
+# beside the workspace, a read of a sibling secret and a network connect must
+# fail. It is not a required check. The feature stays labelled experimental and
+# unverified until this lane is green AND a security review signs it off; a
+# hosted runner is not the same as user hardware (macOS 14/15, Windows 11).
+name: OS sandbox (experimental)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/runtime/trust/environment/**"
+      - "src/runtime/trust/policy.ts"
+      - "test/trust/os-sandbox.test.ts"
+      - ".github/workflows/os-sandbox.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: ${{ matrix.os }} — native sandbox smoke
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      XR_OS_SANDBOX: experimental
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Smoke (echo, git status, in-workspace write; outside write/read and network denied)
+        run: bun test test/trust/os-sandbox.test.ts
+      - name: Sandbox off by default (no opt-in → Tier 2 still refused)
+        shell: bash
+        env:
+          XR_OS_SANDBOX: ""
+        run: |
+          bun -e '
+            const { NamespaceSandboxBackend } = await import("./src/runtime/trust/environment/namespace.ts");
+            const ok = await new NamespaceSandboxBackend().detect();
+            if (ok) { console.error("sandbox detected without the opt-in"); process.exit(1); }
+            console.log("off by default: OK");
+          '

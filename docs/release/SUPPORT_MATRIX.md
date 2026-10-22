@@ -19,6 +19,7 @@ until every gate in [launch-gates.json](launch-gates.json) is green with evidenc
 | macOS arm64 | **Tier 1** | typecheck + full unit suite (239 files, POSIX-compatible) + golden path on every push/PR; binary build + native smoke in release matrix | `cross-platform.yml`, `release.yml` |
 | macOS x64 (Intel) | Tier 2 | canonical build cross-compiles; native smoke unavailable on arm64 runners (recorded honestly) | `release.yml` |
 | Windows x64 | **Tier 1*** | typecheck + unit suite (234 files; 5 documented exclusions with reasons) + golden path on every push/PR; binary build + native smoke; winget/scoop manifest binding tests | `cross-platform.yml`, `channel-install.yml`, `test/platform/exclusions.json` |
+| Windows ARM64 | **unverified** | file authority accepts arm64 (same LLP64 layouts as x64) behind a once-per-process FFI self-test that fails closed; **Bun 1.3.14 (the pinned CLI runtime) disables `bun:ffi` on native windows-aarch64** (oven-sh/bun#28055, fixed by #33696), so CLI file tools report `unsupported` there until the pin is raised; the desktop sidecar is compiled with Bun 1.4.2, which should carry the fix — unverified until the lane is green. No hardware run. | `windows-arm64.yml` (`windows-11-arm`, native Bun, not a required check) |
 | Termux (Android) | Tier 3 | installer path only (community) | `install.sh` termux branch |
 
 \* The full-parity Windows/macOS jobs are introduced by Phase 9; the first green
