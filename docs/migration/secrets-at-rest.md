@@ -8,6 +8,11 @@ containers, CI runners)
 been read and re-sealed successfully; nothing is deleted
 **User action required:** none — migration is automatic and transparent
 
+> **Update (launch audit Phase 4B):** writes now go to the OS keychain first and the
+> file is used only when that fails; existing file entries are moved into the
+> keychain. See [secrets-keychain-first.md](secrets-keychain-first.md). The sealed
+> format below is unchanged and still applies to the fallback.
+
 ---
 
 ## Why this migration exists

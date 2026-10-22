@@ -27,30 +27,22 @@
 # conversion only, every pixel from the owner-supplied original — no
 # derived geometry), committed at desktop/src-tauri/icons.
 #
-# Unsigned builds: code-signing/notarization keys are owner secrets and are
-# deliberately NOT referenced here; artifacts are honest "CI builds".
+# Signing (XR-LAUNCH-008, decision D5): wired but gated on owner secrets
+# (TAURI_UPDATER_KEY[_PASSWORD], APPLE_*, WINDOWS_CERTIFICATE[_PASSWORD]).
+# Without them every leg is an honest UNSIGNED build with a notice; see
+# docs/release/DESKTOP_SIGNING.md. No key material is ever in the repo.
 # =============================================================================
 name: Desktop App (Tauri packaging)
 
 on:
+  # XR-LAUNCH-012 / D7: the bundle + latest.json + desktop journey jobs are
+  # REQUIRED checks, so this workflow runs on every PR and push to main. A
+  # required workflow behind a `paths:` filter never reports on PRs outside
+  # those paths and blocks them forever.
   pull_request:
     branches: [main]
-    paths:
-      - "desktop/**"
-      # Phase 27: the shell's packaging artefacts (flatpak manifest, AppStream
-      # metadata, MSIX tiles) and the tests that pin them live outside desktop/.
-      # Without these two lines a PR that only edits the Flatpak manifest would
-      # change shipped packaging with no CI at all.
-      - "packaging/**"
-      - "test/desktop/**"
-      - ".github/workflows/desktop-app.yml"
   push:
     branches: [main]
-    paths:
-      - "desktop/**"
-      - "packaging/**"
-      - "test/desktop/**"
-      - ".github/workflows/desktop-app.yml"
     tags: ["v*"]
   workflow_dispatch:
 
@@ -68,24 +60,25 @@ jobs:
     timeout-minutes: 40
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Install Linux system dependencies (WebKit2GTK 4.1 + tray)
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           components: clippy
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: desktop/src-tauri
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.2
+          bun-version-file: .bun-version
       - name: Install engine dependencies
         run: bun install --frozen-lockfile
       # Sidecar MUST exist before cargo check: tauri-build validates
@@ -119,6 +112,13 @@ jobs:
         run: |
           bunx tsc --noEmit
           bunx eslint .
+      # XR-LAUNCH-009 — the production renderer must carry no demo data. Seed
+      # generators sit behind `import.meta.env.DEV`; this builds the real
+      # production bundle and greps it for content only the seeds produce.
+      - name: Production renderer build has no demo data (XR-LAUNCH-009)
+        run: |
+          (cd desktop && bunx vite build --outDir "$RUNNER_TEMP/desktop-dist")
+          bun run scripts/desktop-seed-gate.ts "$RUNNER_TEMP/desktop-dist"
 
   # ── Windows runtime proof ────────────────────────────────────────────────────
   # Everything under `#[cfg(windows)]` (W-1 CREATE_NO_WINDOW, W-2 job-object
@@ -134,17 +134,19 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: desktop/src-tauri
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.2
+          bun-version-file: .bun-version
       - name: Install engine dependencies
         run: bun install --frozen-lockfile
       # Same precondition as the Linux job: tauri-build validates externalBin.
@@ -165,6 +167,8 @@ jobs:
     needs: [shell-check, shell-test-windows]
     runs-on: ${{ matrix.runsOn }}
     timeout-minutes: 90
+    # Windows ARM64 is reported, not gating (D4/D7).
+    continue-on-error: ${{ matrix.slug == 'windows-arm64' }}
     permissions:
       contents: write # attach installers to the release on tag runs (read-only elsewhere in effect)
     strategy:
@@ -189,13 +193,13 @@ jobs:
           - { osName: "Windows (arm64)", runsOn: windows-11-arm, triple: aarch64-pc-windows-msvc, slug: windows-arm64, tauriArgs: "--bundles nsis", targetDir: target/release }
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
+          bun-version-file: .bun-version
           # desktop/bun.lock is lockfileVersion 2 (written by bun 1.4.x) —
           # older bun fails with "Unknown lockfile version" on --frozen-lockfile.
-          bun-version: 1.4.2
       - name: Install Linux system dependencies (WebKit2GTK 4.1 + tray)
         if: matrix.runsOn == 'ubuntu-22.04'
         run: |
@@ -203,12 +207,14 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
       - name: Add the x86_64 cross target (Intel-mac leg only)
         if: matrix.slug == 'darwin-x64'
         run: rustup target add x86_64-apple-darwin
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: desktop/src-tauri
       - name: Install frontend dependencies
@@ -223,19 +229,104 @@ jobs:
       - name: Smoke-test the sidecar (real boot + health probe)
         shell: bash
         run: bash scripts/smoke-sidecar.sh ${{ matrix.triple }}
+      # XR-LAUNCH-026: shell unit tests on EVERY OS leg, not only Linux +
+      # Windows x64. darwin-x64 is cross-compiled on an arm runner, so its tests
+      # cannot run here; its runtime proof is the native macos-15-intel journey.
+      - name: cargo test (shell unit tests on this OS leg)
+        if: matrix.slug != 'darwin-x64'
+        shell: bash
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
+      # XR-LAUNCH-008 (decision D5): signing is wired but gated on owner
+      # secrets. Absent secrets ⇒ an UNSIGNED build plus a notice (PRs, forks);
+      # never a silent "signed" claim. Only presence flags reach the planner;
+      # certificate material goes straight from the secret to the OS keystore.
+      - name: Signing plan (secrets-gated)
+        shell: bash
+        env:
+          HAS_UPDATER_KEY: ${{ secrets.TAURI_UPDATER_KEY != '' }}
+          HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+          HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+          HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+          WINDOWS_CERTIFICATE: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE || '' }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          thumb=""
+          if [ "${{ runner.os }}" = "Windows" ] && [ "$HAS_WINDOWS_CERT" = "true" ]; then
+            # shellcheck disable=SC2016 # a single-quoted PowerShell program: $vars are PowerShell's
+            thumb="$(pwsh -NoProfile -Command '
+              $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+              $pfx = Join-Path $env:RUNNER_TEMP "xr-signing.pfx"
+              [IO.File]::WriteAllBytes($pfx, $bytes)
+              $pw = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+              $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+              Remove-Item $pfx -Force
+              $cert.Thumbprint')"
+          fi
+          os="linux"; [ "${{ runner.os }}" = "macOS" ] && os="macos"; [ "${{ runner.os }}" = "Windows" ] && os="windows"
+          # Absolute, forward-slash path (Git Bash on Windows: pwd -W → D:/a/_temp).
+          cfg="$(cd "$RUNNER_TEMP" && (pwd -W 2>/dev/null || pwd))/tauri-signing.json"
+          bun run scripts/desktop-signing-plan.ts --os "$os" --tag "${{ github.ref_type == 'tag' }}" \
+            ${thumb:+--thumbprint "$thumb"} --out "$cfg"
+          echo "XR_SIGNING_CONFIG=$cfg" >> "$GITHUB_ENV"
+          cat "$cfg"
+          # macOS: hand the Apple credentials to the bundler ONLY when present —
+          # an empty APPLE_CERTIFICATE would make the bundler try to import it.
+          if [ "$os" = "macos" ] && [ "$HAS_APPLE_CERT" = "true" ]; then
+            {
+              for k in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY; do
+                printf '%s<<XR_EOF\n%s\nXR_EOF\n' "$k" "${!k}"
+              done
+              if [ "$HAS_APPLE_NOTARY" = "true" ]; then
+                for k in APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do printf '%s<<XR_EOF\n%s\nXR_EOF\n' "$k" "${!k}"; done
+              fi
+            } >> "$GITHUB_ENV"
+          fi
       - name: Build bundles (tauri-action)
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Phase 5 · signed updater artifacts. Empty secret ⇒ tauri build
-          # emits no .sig files ⇒ the manifest job publishes nothing (honest).
+          # Updater signing key (minisign, from `tauri signer generate`) and its
+          # password. Empty ⇒ the plan above turned createUpdaterArtifacts off.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_KEY_PASSWORD }}
+          # macOS: APPLE_* arrive via GITHUB_ENV from the plan step only when
+          # provisioned; the bundler then signs (hardened runtime) and, with the
+          # notary credentials, notarizes + staples.
         with:
           projectPath: desktop
-          args: --verbose ${{ matrix.tauriArgs }}
+          args: --verbose ${{ matrix.tauriArgs }} --config ${{ env.XR_SIGNING_CONFIG }}
       - name: List produced bundles
         shell: bash
         run: find desktop/src-tauri/${{ matrix.targetDir }}/bundle -maxdepth 3 -type f | sort
+      # XR-LAUNCH-008 acceptance: signatures are checked by the OS tools, not
+      # assumed from a green build. Runs only when the plan signed this leg.
+      - name: Verify macOS signature + notarization (codesign / spctl / stapler)
+        if: runner.os == 'macOS' && env.XR_SIGNED_OS == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          if [ "$XR_NOTARIZED" = "1" ]; then
+            spctl --assess --type execute --verbose=4 "$app"
+            for dmg in desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg/*.dmg; do xcrun stapler validate "$dmg"; done
+          fi
+      - name: Verify Windows Authenticode (signtool verify /pa)
+        if: runner.os == 'Windows' && env.XR_SIGNED_OS == '1'
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -Last 1
+          if (-not $signtool) { throw "signtool.exe not found" }
+          $files = Get-ChildItem desktop/src-tauri/${{ matrix.targetDir }}/bundle -Recurse -Include *.msi,*-setup.exe
+          if ($files.Count -eq 0) { throw "no installers to verify" }
+          foreach ($f in $files) { & $signtool.FullName verify /pa /v $f.FullName; if ($LASTEXITCODE -ne 0) { throw "signtool verify failed: $($f.Name)" } }
       - name: Assert Linux bundles (deb + rpm + AppImage)
         if: matrix.runsOn == 'ubuntu-22.04'
         shell: bash
@@ -361,7 +452,7 @@ jobs:
           Get-ChildItem $out | Format-Table Name,Length
       - name: Upload MSIX
         if: matrix.runsOn == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-msix-${{ matrix.slug }}
           if-no-files-found: error
@@ -383,13 +474,13 @@ jobs:
           ls -la desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip
       - name: Upload portable artifact
         if: matrix.runsOn == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-portable-${{ matrix.slug }}
           if-no-files-found: error
           path: desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip
       - name: Upload installer artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-desktop-${{ matrix.slug }}
           if-no-files-found: error
@@ -406,7 +497,7 @@ jobs:
       # travel with the sigs so the manifest job can refuse an orphan .sig.
       - name: Upload updater signature artifacts (present only when provisioned)
         if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-updater-sigs-${{ matrix.slug }}
           if-no-files-found: ignore
@@ -425,7 +516,7 @@ jobs:
       # assets on upload (spaces → periods); make-updater-manifest.ts mirrors that.
       - name: Attach installers (+ .sig when provisioned) to the GitHub release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.ref_name }}
           fail_on_unmatched_files: false
@@ -441,6 +532,83 @@ jobs:
             desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi.sig
             desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe
             desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe.sig
+
+  # ── XR-LAUNCH-011 — desktop clean-machine journey (REQUIRED) ──────────────
+  # A runner that did NOT build the bundle downloads it and walks install →
+  # launch (GUI + engine sidecar health; WebDriver render check on Linux and
+  # Windows x64) → core agent smoke through the installed engine → uninstall.
+  # Update is de-scoped until the XR-LAUNCH-008 updater key exists. Evidence
+  # JSON feeds docs/release/SUPPORT_MATRIX.md (scripts/support-matrix.ts).
+  journey:
+    name: Desktop journey — ${{ matrix.slug }} on ${{ matrix.runsOn }}
+    needs: [bundle]
+    runs-on: ${{ matrix.runsOn }}
+    timeout-minutes: 45
+    # Windows ARM64 is reported, not gating (D4/D7).
+    continue-on-error: ${{ matrix.slug == 'windows-arm64' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { slug: linux-x64, runsOn: ubuntu-22.04, webdriver: true }
+          - { slug: linux-x64, runsOn: ubuntu-24.04, webdriver: true }
+          - { slug: windows-x64, runsOn: windows-latest, webdriver: true }
+          # No arm64 msedgedriver from msedgedriver-tool: launch + sidecar only.
+          - { slug: windows-arm64, runsOn: windows-11-arm, webdriver: false }
+          - { slug: darwin-arm64, runsOn: macos-14, webdriver: false }
+          - { slug: darwin-arm64, runsOn: macos-15, webdriver: false }
+          # The cross-built Intel bundle, run natively on Intel hardware.
+          - { slug: darwin-x64, runsOn: macos-15-intel, webdriver: false }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Download the bundle built by the bundle job
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: xr-desktop-${{ matrix.slug }}
+          path: bundles
+      - name: WebDriver prerequisites (Linux — WebKitWebDriver + Xvfb + tauri-driver)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y webkit2gtk-driver xvfb
+          cargo install tauri-driver --locked --version 2.1.0
+      - name: WebDriver prerequisites (Windows x64 — matching msedgedriver + tauri-driver)
+        if: runner.os == 'Windows' && matrix.webdriver
+        shell: pwsh
+        run: |
+          cargo install --git https://github.com/chippers/msedgedriver-tool --rev 8c4b34f51b45f5cf08013366d703de464ab871d1 --locked
+          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
+          $PWD.Path >> $env:GITHUB_PATH
+          cargo install tauri-driver --locked --version 2.1.0
+          # WebView2 Runtime >= 150 ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS in an elevated
+          # host, and every hosted-runner process is elevated, so msedgedriver's
+          # --remote-debugging-port never reaches the webview ("DevToolsActivePort file doesn't
+          # exist"; actions/runner-images#14738, MicrosoftEdge/WebView2Feedback#5645). The HKLM
+          # policy still applies: scope it to xr-desktop.exe on this throwaway runner only.
+          # Shipped apps are unchanged.
+          $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $k -Force | Out-Null
+          New-ItemProperty -Path $k -Name 'xr-desktop.exe' -Value '--remote-debugging-port=0' -PropertyType String -Force | Out-Null
+      - name: Journey
+        shell: bash
+        run: |
+          set -euo pipefail
+          wd=""; [ "${{ matrix.webdriver }}" = "true" ] && wd="--webdriver"
+          # shellcheck disable=SC2206 # $wd is empty or the single word --webdriver; unquoted on purpose
+          run=(bun run scripts/journey/desktop-journey.ts --slug "${{ matrix.slug }}" --bundles bundles $wd --evidence "evidence/desktop-${{ matrix.slug }}-${{ matrix.runsOn }}.json")
+          if [ "$RUNNER_OS" = "Linux" ]; then xvfb-run -a "${run[@]}"; else "${run[@]}"; fi
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: journey-evidence-desktop-${{ matrix.slug }}-${{ matrix.runsOn }}
+          path: evidence/*.json
+          if-no-files-found: warn
 
   # ── Phase 5 · signed-updater manifest (guarded: needs the operator secret) ──
   # ── Flatpak (Phase 27) ───────────────────────────────────────────────────────
@@ -470,7 +638,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Install desktop-entry + AppStream validators
         run: |
@@ -486,9 +654,9 @@ jobs:
         run: appstreamcli validate --no-net packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: 1.4.2
+          bun-version-file: .bun-version
 
       # The manifest is checked by the same test that runs locally, so CI and
       # `bun test test/desktop/` can never disagree about what is required:
@@ -521,45 +689,92 @@ jobs:
 
       - name: Upload the Flatpak repo
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: xr-flatpak
           if-no-files-found: error
           path: flatpak-repo
 
+  # REQUIRED (D7). On PRs/pushes it is a dry run: the generator and the
+  # signature verifier run against the real bundle payloads and the test-key
+  # fixtures; publishing happens only on tags with provisioned keys.
   updater-manifest:
-    name: Assemble + publish latest.json (only when updater keys provisioned)
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    name: Desktop latest.json — assemble + verify (publish on tags only)
+    runs-on: ubuntu-24.04
     needs: [bundle]
     permissions:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-      - name: Download signed updater artifacts
-        id: dl
-        continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          pattern: xr-updater-sigs-*
+          bun-version-file: .bun-version
+      - name: Install engine dependencies
+        run: bun install --frozen-lockfile
+      - name: Updater manifest + signature verifier tests (ephemeral test key)
+        run: bun test test/release/updater-manifest.test.ts
+      - name: Download signed updater artifacts (tags) or the unsigned bundles (dry run)
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: ${{ github.ref_type == 'tag' && 'xr-updater-sigs-*' || 'xr-desktop-*' }}
           path: updater-artifacts
           merge-multiple: true
       - name: Assemble latest.json
         run: |
+          version="${GITHUB_REF_NAME#v}"; tag="$GITHUB_REF_NAME"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            version="$(bun -e 'console.log(require("./release.manifest.json").identity.version)')"; tag="v$version"
+            echo "DRY_RUN=1" >> "$GITHUB_ENV"
+          fi
           bun run scripts/make-updater-manifest.ts \
-            --dir updater-artifacts --version "${GITHUB_REF_NAME#v}" --tag "$GITHUB_REF_NAME" \
+            --dir updater-artifacts --version "$version" --tag "$tag" \
             --notes "Release $GITHUB_REF_NAME — see CHANGELOG.md" --out latest.json
           test -f latest.json
           if [ "$(python3 -c 'import json;print(len(json.load(open("latest.json"))["platforms"]))')" = "0" ]; then
             echo "::warning::no signed updater artifacts — skipping publish (updater not provisioned)"
             echo "SKIP=1" >> "$GITHUB_ENV"
           fi
-      - name: Publish latest.json to the release
+          case "$GITHUB_REF_NAME" in *-*) echo "CHANNEL=beta" >> "$GITHUB_ENV" ;; *) echo "CHANNEL=stable" >> "$GITHUB_ENV" ;; esac
+      # XR-LAUNCH-008: the same minisign check the shipped updater performs,
+      # against the committed pubkey. A tampered manifest, a swapped payload or
+      # a signature from another key fails here and nothing is published.
+      - name: Verify every signature in latest.json against the committed pubkey
         if: env.SKIP != '1'
-        uses: softprops/action-gh-release@v2
+        run: bun run scripts/verify-updater-signatures.ts --manifest latest.json --dir updater-artifacts
+      - name: Publish latest.json to the release (stable channel)
+        if: env.SKIP != '1' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ github.ref_name }}
           files: latest.json
+      # Beta channel endpoint (desktop/src-tauri/src/commands/updates.rs):
+      # releases/download/updater-beta/latest.json on a rolling pre-release.
+      - name: Publish latest.json to the rolling updater-beta pre-release (beta channel)
+        if: env.SKIP != '1' && env.CHANNEL == 'beta' && github.ref_type == 'tag'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: updater-beta
+          name: "Updater channel: beta"
+          prerelease: true
+          make_latest: false
+          body: "Rolling pointer for the desktop beta update channel. Installers live on the versioned releases."
+          files: latest.json
+
+  # XR-LAUNCH-012 (D7): the ONE check branch protection requires for this
+  # workflow (.github/required-checks.json). It fails unless every job it
+  # needs succeeded — a skipped or cancelled job is not a pass.
+  desktop-gate:
+    name: Desktop gate (bundles + latest.json + journey)
+    if: always()
+    needs: [shell-check, shell-test-windows, bundle, journey, updater-manifest, flatpak]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every required job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needs: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "::error::a required job ended '$r'"; exit 1; }; done

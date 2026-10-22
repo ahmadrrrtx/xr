@@ -57,6 +57,11 @@ if (!KEEP) {
 const root = mkdtempSync(join(base, ROOT_PREFIX));
 
 process.env.TMPDIR = root; // POSIX: node:os tmpdir() checks TMPDIR first
+// XR-LAUNCH-012: the suite never reads or writes the developer's (or runner's)
+// real ~/.xr. Without this, any test that loads config before setting XR_HOME
+// mutated the real config.json (telegram rate limit, trigger pause, budgets),
+// and later files — in this run and the next — inherited it.
+process.env.XR_HOME = join(root, "xr-home");
 process.env.TMP = root; // Windows parity
 process.env.TEMP = root; // Windows parity
 
@@ -73,6 +78,19 @@ process.env.XR_AUDIT_NO_AUTOKEY = "1";
 // explicitly; production never sets this. Guard unit tests pass their own
 // env/options and are unaffected.
 process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER ??= "1";
+
+// XR-LAUNCH-012: daemon routes fire best-effort reachability probes (the
+// npm-registry internet check, hosted-provider health). On a loaded CI runner
+// those real-network calls stretched unrelated daemon tests past bun's 5 s
+// per-test budget. The suite is hermetic by contract, so off-machine probes are
+// off; loopback probes (local runtimes, the suite's stubs) still run for real.
+// A test that exercises a probe itself sets XR_NETWORK_PROBES back explicitly.
+process.env.XR_NETWORK_PROBES ??= "off";
+
+// XR-LAUNCH-015: secrets now go to the OS keychain first. The suite must never
+// write a developer's real Keychain / Secret Service / DPAPI store, so the
+// file backend is forced; secret tests inject a mocked OS backend explicitly.
+process.env.XR_SECRET_BACKEND ??= "file";
 
 if (KEEP) {
   console.log(`[suite-tmp] XR_TEST_TMP_KEEP=1 — suite temp root kept at ${root}`);

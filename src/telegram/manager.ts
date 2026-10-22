@@ -90,8 +90,8 @@ export class TelegramManager {
 
   /**
    * A3 — resolve the webhook secret from the SecretBroker, synchronously
-   * (the manager is constructed in sync contexts; the broker's sync path
-   * is env+memo+file and never spawns). A legacy secret found in the state
+   * (the manager is constructed in sync contexts; the sync path is
+   * env+memo+file, plus at most one keychain read per name outside the daemon). A legacy secret found in the state
    * file is migrated into the broker and scrubbed from disk by the next
    * save; a missing secret is generated fresh (32 random bytes, hex).
    */

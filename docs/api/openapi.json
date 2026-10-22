@@ -2789,7 +2789,7 @@
                     "type": "boolean"
                   },
                   "userId": {
-                    "description": "Optional operator identity recorded in the audit.",
+                    "description": "Ignored (XR-LAUNCH-030): the daemon records the authenticated caller — local:token, browser:<session label> or mobile:<device id>.",
                     "type": "string"
                   }
                 },
@@ -7746,6 +7746,14 @@
                     },
                     "result": {
                       "description": "Tool output for type=tool_result.",
+                      "type": "string"
+                    },
+                    "reason": {
+                      "description": "Stable tool failure code for type=tool_result when ok=false (e.g. denied:escape, denied:secret-path, blocked:isolation-unavailable).",
+                      "type": "string"
+                    },
+                    "next": {
+                      "description": "Short next step for a person for type=tool_result when ok=false.",
                       "type": "string"
                     },
                     "usage": {

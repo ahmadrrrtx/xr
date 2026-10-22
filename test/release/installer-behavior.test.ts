@@ -14,6 +14,10 @@
  *     verified source archive;
  *   - `curl | bash` without a terminal declines with a clear --yes hint
  *     instead of hanging.
+ * XR-LAUNCH-025 (Phase 4C) adds one test per environment combination:
+ * XR_INSTALL_DIR vs XR_HOME (data home), HOME validation, the binary path
+ * without Bun, the release-pinned Bun on the source path, and https-only
+ * redirects.
  * POSIX only (bash + coreutils); Windows is covered by installer-powershell.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -48,7 +52,7 @@ function writeExec(path: string, body: string) {
 }
 
 /** Publish a fake release v<version> with every binary + a source archive. */
-function publishRelease(version: string, opts: { tamper?: string; omitFromSums?: string[] } = {}) {
+function publishRelease(version: string, opts: { tamper?: string; omitFromSums?: string[]; bunVersion?: string } = {}) {
   const dir = join(fixtures, `v${version}`);
   mkdirSync(dir, { recursive: true });
   for (const b of BINARIES) {
@@ -62,6 +66,7 @@ function publishRelease(version: string, opts: { tamper?: string; omitFromSums?:
   writeFileSync(join(src, "package.json"), JSON.stringify({ name: "@rrrtx/xr", version }, null, 2));
   writeFileSync(join(src, "src", "index.ts"), `console.log("xr ${version}");\n`);
   writeFileSync(join(src, "bun.lock"), "{}\n");
+  if (opts.bunVersion) writeFileSync(join(src, ".bun-version"), `${opts.bunVersion}\n`);
   const tar = Bun.spawnSync(["tar", "-czf", join(dir, "xr-source.tar.gz"), "-C", src, "."]);
   if (tar.exitCode !== 0) throw new Error(`tar failed: ${tar.stderr.toString()}`);
 
@@ -72,7 +77,7 @@ function publishRelease(version: string, opts: { tamper?: string; omitFromSums?:
   if (opts.tamper) writeFileSync(join(dir, opts.tamper), "#!/bin/sh\necho evil\n", { mode: 0o755 });
 }
 
-function run(args: string[], opts: { env?: Record<string, string>; noTerminal?: boolean } = {}) {
+function run(args: string[], opts: { env?: Record<string, string>; unset?: string[]; noTerminal?: boolean } = {}) {
   const env: Record<string, string> = {
     HOME: home,
     PATH: `${shims}:/usr/bin:/bin:/usr/sbin:/sbin`,
@@ -83,11 +88,14 @@ function run(args: string[], opts: { env?: Record<string, string>; noTerminal?: 
     TERM: "dumb",
     ...opts.env,
   };
+  for (const k of opts.unset ?? []) delete env[k];
   // Always detach from any controlling terminal so no prompt can block the test
   // run; `setsid` is Linux-only, elsewhere tests pass --yes or are skipped.
   const setsid = Bun.which("setsid");
   const cmd = setsid ? [setsid, "-w", "bash", INSTALL_SH, ...args] : ["bash", INSTALL_SH, ...args];
-  const r = Bun.spawnSync(cmd, { env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+  // cwd = the throwaway dir: a relative HOME (or any relative path) can never
+  // land in the repository, even if a regression stops install.sh refusing it.
+  const r = Bun.spawnSync(cmd, { env, cwd: work, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
   return {
     code: r.exitCode,
     out: r.stdout.toString() + r.stderr.toString(),
@@ -96,6 +104,7 @@ function run(args: string[], opts: { env?: Record<string, string>; noTerminal?: 
 }
 
 const target = () => join(home, ".xr-agent");
+const NOTHING = "Nothing was installed";
 const launcher = () => join(home, ".local", "bin", "xr");
 
 beforeEach(() => {
@@ -262,5 +271,165 @@ d("install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002)", () => {
     expect(r.out).toContain("No terminal to confirm on");
     expect(r.out).toContain("bash -s -- --yes");
     expect(existsSync(target())).toBe(false);
+  });
+});
+
+d("install.sh environment combinations (XR-LAUNCH-025)", () => {
+  test("default: no XR_INSTALL_DIR / XR_HOME → ~/.xr-agent, launcher exports the install dir", () => {
+    publishRelease(PINNED);
+    const r = run(["--yes"]);
+    expect(r.code).toBe(0);
+    expect(existsSync(join(target(), ".xr-install"))).toBe(true);
+    expect(readFileSync(launcher(), "utf8")).toContain(`export XR_INSTALL_DIR="${target()}"`);
+    expect(r.out).not.toContain("XR_HOME");
+  });
+
+  test("XR_HOME alone is the DATA home: program files still go to ~/.xr-agent, the data home is untouched", () => {
+    publishRelease(PINNED);
+    const data = join(work, "xr-data");
+    mkdirSync(data, { recursive: true });
+    writeFileSync(join(data, "config.json"), "{}");
+    const r = run(["--yes"], { env: { XR_HOME: data } });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("XR_HOME");
+    expect(r.out).toContain("XR_INSTALL_DIR");
+    expect(existsSync(join(target(), ".xr-install"))).toBe(true);
+    expect(existsSync(join(data, "dist"))).toBe(false);
+    expect(existsSync(join(data, ".xr-install"))).toBe(false);
+    expect(Bun.spawnSync(["ls", "-A", data]).stdout.toString().trim()).toBe("config.json");
+  });
+
+  test("XR_INSTALL_DIR chooses the install dir (with and without XR_HOME); ~/.xr-agent is never created", () => {
+    publishRelease(PINNED);
+    const dir = join(work, "opt", "xr");
+    const data = join(work, "xr-data");
+    const r = run(["--yes"], { env: { XR_INSTALL_DIR: `${dir}/`, XR_HOME: data } });
+    expect(r.code).toBe(0);
+    expect(readFileSync(join(dir, ".xr-install"), "utf8")).toContain("method=binary");
+    expect(existsSync(target())).toBe(false);
+    expect(existsSync(join(data, "dist"))).toBe(false);
+    const sh = readFileSync(launcher(), "utf8");
+    expect(sh).toContain(`export XR_INSTALL_DIR="${dir}"`);
+    expect(sh).toContain(`"${dir}/dist/`);
+    // The launcher really executes the binary from the custom dir.
+    expect(Bun.spawnSync([launcher(), "--version"]).stdout.toString()).toContain(`xr ${PINNED}`);
+  });
+
+  test("XR_INSTALL_DIR + --from-source installs the source tree there", () => {
+    publishRelease(PINNED);
+    const dir = join(work, "src-install");
+    const r = run(["--yes", "--from-source"], { env: { XR_INSTALL_DIR: dir } });
+    expect(r.code).toBe(0);
+    expect(existsSync(join(dir, "src", "index.ts"))).toBe(true);
+    expect(readFileSync(launcher(), "utf8")).toContain(`${dir}/src/index.ts`);
+  });
+
+  const refusals: Array<[string, () => Record<string, string>, RegExp]> = [
+    ["equals XR_HOME", () => ({ XR_INSTALL_DIR: join(work, "d"), XR_HOME: join(work, "d") }), /is XR's data home/],
+    ["equals the default data home ~/.xr", () => ({ XR_INSTALL_DIR: join(home, ".xr") }), /is XR's data home/],
+    ["inside the data home", () => ({ XR_INSTALL_DIR: join(work, "d", "app"), XR_HOME: join(work, "d") }), /inside XR's data home/],
+    ["contains the data home", () => ({ XR_INSTALL_DIR: work, XR_HOME: join(work, "d") }), /contains XR's data home/],
+    ["is HOME itself", () => ({ XR_INSTALL_DIR: `${home}/` }), /home directory itself/],
+    ["is /", () => ({ XR_INSTALL_DIR: "/" }), /Refusing to install into \//],
+    ["is relative", () => ({ XR_INSTALL_DIR: "rel/xr" }), /must be an absolute path/],
+    ["contains $ (launcher injection)", () => ({ XR_INSTALL_DIR: join(work, "a$(touch pwned)") }), /may not contain/],
+    ["contains a double quote", () => ({ XR_INSTALL_DIR: join(work, 'a"b') }), /may not contain/],
+  ];
+  for (const [label, env, msg] of refusals) {
+    test(`XR_INSTALL_DIR that ${label} is refused before any download`, () => {
+      publishRelease(PINNED);
+      const e = env();
+      const r = run(["--yes"], { env: e });
+      expect(r.code).not.toBe(0);
+      expect(r.out).toMatch(msg);
+      expect(r.out).toContain(NOTHING);
+      expect(r.urls).toEqual([]);
+      expect(existsSync(launcher())).toBe(false);
+      expect(existsSync(join(work, "pwned"))).toBe(false);
+      if (e.XR_INSTALL_DIR?.startsWith("/") && e.XR_INSTALL_DIR !== "/" && e.XR_INSTALL_DIR !== work && !e.XR_INSTALL_DIR.startsWith(home)) {
+        expect(existsSync(e.XR_INSTALL_DIR)).toBe(false);
+      }
+    });
+  }
+
+  test("a legacy install inside XR_HOME is reported and left untouched", () => {
+    publishRelease(PINNED);
+    const data = join(work, "legacy");
+    mkdirSync(join(data, "dist"), { recursive: true });
+    writeFileSync(join(data, ".xr-install"), "version=0.9.0\nmethod=binary\n");
+    writeFileSync(join(data, "xr.db"), "sqlite");
+    const r = run(["--yes"], { env: { XR_HOME: data } });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("An older installer put XR's program files inside the data home");
+    expect(readFileSync(join(data, ".xr-install"), "utf8")).toContain("version=0.9.0");
+    expect(readFileSync(join(data, "xr.db"), "utf8")).toBe("sqlite");
+    expect(readFileSync(join(target(), ".xr-install"), "utf8")).toContain(`version=${PINNED}`);
+  });
+
+  const homeCases: Array<[string, () => { env?: Record<string, string>; unset?: string[] }, RegExp]> = [
+    ["unset", () => ({ unset: ["HOME"] }), /HOME is not set/],
+    ["empty", () => ({ env: { HOME: "" } }), /HOME is not set/],
+    ["/", () => ({ env: { HOME: "/" } }), /HOME is "\/"/],
+    ["relative", () => ({ env: { HOME: "home" } }), /not an absolute path/],
+    ["missing", () => ({ env: { HOME: join(work, "nope") } }), /does not exist or is not a directory/],
+    ["a file", () => { writeFileSync(join(work, "f"), ""); return { env: { HOME: join(work, "f") } }; }, /does not exist or is not a directory/],
+  ];
+  for (const [label, opts, msg] of homeCases) {
+    test(`HOME ${label} → clear refusal, no download, nothing created`, () => {
+      publishRelease(PINNED);
+      const r = run(["--yes"], opts());
+      expect(r.code).not.toBe(0);
+      expect(r.out).toMatch(msg);
+      expect(r.out).not.toContain("unbound variable");
+      expect(r.urls).toEqual([]);
+      expect(existsSync("/.xr-agent")).toBe(false);
+      expect(existsSync(join(work, "home", ".xr-agent"))).toBe(false); // relative HOME resolves under cwd=work
+    });
+  }
+
+  const asUser = typeof process.getuid === "function" && process.getuid() !== 0 ? test : test.skip;
+  asUser("a read-only HOME is refused (root can write anywhere, so skipped as root)", () => {
+    publishRelease(PINNED);
+    chmodSync(home, 0o555);
+    try {
+      const r = run(["--yes"]);
+      expect(r.code).not.toBe(0);
+      expect(r.out).toContain("is not writable");
+      expect(r.urls).toEqual([]);
+    } finally {
+      chmodSync(home, 0o755);
+    }
+  });
+
+  test("the binary path never needs Bun (no bun on PATH at all)", () => {
+    publishRelease(PINNED);
+    rmSync(join(shims, "bun"));
+    const r = run(["--yes"]);
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain("needs Bun");
+    expect(r.urls.some((u) => u.includes("bun.sh"))).toBe(false);
+    expect(r.urls.some((u) => u.endsWith("/xr-source.tar.gz"))).toBe(false);
+  });
+
+  test("the source path uses the release's own .bun-version and warns on a mismatch", () => {
+    publishRelease(PINNED, { bunVersion: "1.4.2" });
+    const r = run(["--yes", "--from-source"]);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain("This release was built with Bun 1.4.2; you have Bun 1.3.0");
+    expect(readFileSync(fakeLog, "utf8")).toContain("bun install --frozen-lockfile --ignore-scripts");
+  });
+
+  test("every curl call is https-only for the request AND its redirects, with TLS >= 1.2", () => {
+    const code = readFileSync(INSTALL_SH, "utf8")
+      .split("\n")
+      .filter((l) => !/^\s*#/.test(l) && /\bcurl --/.test(l) && !/warn |die |log |echo /.test(l));
+    expect(code.length).toBeGreaterThanOrEqual(3);
+    for (const l of code) {
+      expect(l).toContain("--proto ");
+      expect(l).toContain("--proto-redir ");
+      expect(l).toContain("--tlsv1.2");
+    }
+    // A pinned Bun is installed with the release's version, never `latest` silently.
+    expect(readFileSync(INSTALL_SH, "utf8")).toContain('bash -s "bun-v$want"');
   });
 });

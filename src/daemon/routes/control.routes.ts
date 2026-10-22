@@ -95,15 +95,15 @@ export function controlRoutes(): DaemonRoute[] {
       id: "control.approve",
       path: "/api/control/approve",
       method: "POST",
-      handle: async ({ req, json, state }) => {
+      handle: async ({ req, json, state, actor }) => {
         try {
           const body = await req.json() as { id?: string; approved?: boolean };
           if (typeof body?.id !== "string" || typeof body?.approved !== "boolean") {
             return json({ error: "expected { id: string, approved: boolean }" }, 400);
           }
           bindApprovals(state.store);
-          const handled = approvals.answer(body.id, body.approved);
-          state.store.audit(`control.approve.${body.approved ? "granted" : "denied"}`, { id: body.id });
+          const handled = approvals.answer(body.id, body.approved, actor);
+          state.store.audit(`control.approve.${body.approved ? "granted" : "denied"}`, { id: body.id, by: actor ?? "anonymous" });
           return json({ ok: handled });
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
@@ -180,13 +180,13 @@ export function controlRoutes(): DaemonRoute[] {
       id: "control.pause",
       path: "/api/control/pause",
       method: "POST",
-      handle: async ({ req, json, state }) => {
+      handle: async ({ req, json, state, actor }) => {
         const body = (await req.json().catch(() => null)) as { paused?: unknown; stop?: unknown } | null;
         bindApprovals(state.store);
         if (body?.stop === true) {
           const pending = approvals.listRecords();
           let denied = 0;
-          for (const r of pending) if (approvals.answer(r.id, false)) denied++;
+          for (const r of pending) if (approvals.answer(r.id, false, actor)) denied++;
           const paused = setControlPause(true, "stopped from Control Room");
           state.store.audit("control.stop", { paused: true, denied });
           return json({ ok: true, paused, denied });

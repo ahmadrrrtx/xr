@@ -29,6 +29,8 @@ on:
   schedule:
     - cron: "17 3 * * *" # nightly
   workflow_dispatch:
+  # release.yml re-runs this on the tag commit before publishing (XR-LAUNCH-012).
+  workflow_call:
 
 permissions:
   contents: read
@@ -36,11 +38,13 @@ permissions:
 jobs:
   install-hygiene:
     name: Install hygiene (--ignore-scripts)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install with --ignore-scripts (no dependency scripts ever run)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Lockfile is authoritative (no drift)
@@ -48,28 +52,30 @@ jobs:
 
   secret-scan:
     name: Secret scan (gitleaks)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
       - name: Gitleaks (full history)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITLEAKS_LICENSE: ""
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   vuln-scan:
     name: Vulnerability scan (osv-scanner + bun audit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
       security-events: write # CodeQL upload-sarif posts findings to the security tab
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (ignore-scripts, frozen)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: OSV scanner (locked deps, checksum-pinned binary)
@@ -81,7 +87,7 @@ jobs:
           # Exits non-zero when vulnerabilities are found (the gate).
           /tmp/osv-scanner -r --format sarif --output-file osv-results.sarif .
       - name: Upload OSV SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         if: always()
         with:
           sarif_file: osv-results.sarif
@@ -90,11 +96,13 @@ jobs:
 
   license-scan:
     name: License scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (ignore-scripts, frozen)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: License check (forbidden/unknown fail the gate)
@@ -102,30 +110,34 @@ jobs:
 
   sbom:
     name: SBOM (CycloneDX) + drift guard
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Generate SBOM from the locked dependency set
         run: bun run scripts/sbom.ts --out sbom.cyclonedx.json
       - name: SBOM is valid CycloneDX with pinned hashes
         run: bun test test/supply-chain/supply-chain.test.ts
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: sbom
           path: sbom.cyclonedx.json
 
   tag-npm-invariant:
     name: tag ⇔ npm invariant (1.x line)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0 # need tags
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (ignore-scripts, frozen)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Assert 1.x git tags match 1.x npm versions
@@ -136,17 +148,24 @@ jobs:
 
   container-scan:
     name: Container image scan (trivy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
       security-events: write # CodeQL upload-sarif posts findings to the security tab
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Build the shipped image
         run: docker build -t xr:scan .
+      # XR-LAUNCH-020: the image must actually run XR and its file tools. The
+      # filesystem authority dlopens glibc's libc.so.6; on a musl base it fails
+      # closed and every read_file/write_file would be refused.
+      - name: Container smoke — xr --version + real file tools (glibc authority)
+        run: |
+          docker run --rm xr:scan --version
+          docker run --rm --entrypoint bun xr:scan run scripts/container-file-smoke.ts
       - name: Trivy image scan (high/critical gate)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: xr:scan
           format: sarif
@@ -155,7 +174,24 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
       - name: Upload trivy SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
         if: always()
         with:
           sarif_file: trivy-results.sarif
+
+  # XR-LAUNCH-012 (D7): the ONE check branch protection requires for this
+  # workflow (.github/required-checks.json). It fails unless every job it
+  # needs succeeded — a skipped or cancelled job is not a pass.
+  supply-chain-gate:
+    name: Supply Chain gate
+    if: always()
+    needs: [install-hygiene, secret-scan, vuln-scan, license-scan, sbom, tag-npm-invariant, container-scan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every required job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needs: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "::error::a required job ended '$r'"; exit 1; }; done

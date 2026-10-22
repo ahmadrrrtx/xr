@@ -67,7 +67,7 @@ export class DoctorCommand implements Command {
         for (const r of reports) checks.push({ id: `provider-${r.id}`, label: `Provider: ${r.id}`, state: r.ok ? "ok" : r.authOk ? "warn" : "fail", detail: r.detail });
       } catch(e){ checks.push({ id:"providers", label:"Provider health", state:"warn", detail:(e as Error).message });}
       checks.push({ id:"research", label:"Research engine", state:"ok", detail:`${researchCount} sessions` });
-      if (deep) { try { const { checkVoiceStack } = await import("../voice/index.ts"); for(const c of (await checkVoiceStack()).checks) checks.push({ id:c.id, label:c.label, state:c.state, detail:c.detail }); } catch(e){ checks.push({ id:"voice", label:"Voice stack", state:"warn", detail:(e as Error).message });} }
+      if (deep) { try { const { checkVoiceStack } = await import("../voice/index.ts"); for(const c of (await checkVoiceStack()).checks) checks.push({ id:c.id, label:c.label, state:c.state === "unknown" ? "warn" : c.state, detail:c.detail }); } catch(e){ checks.push({ id:"voice", label:"Voice stack", state:"warn", detail:(e as Error).message });} }
       checks.push({
         id: "memory",
         label: "Memory engine",
@@ -153,7 +153,7 @@ export class DoctorCommand implements Command {
     if (latestResearch) console.log(`  latest ......... ${C.dim(`${latestResearch.id} · ${latestResearch.status}`)}`);
 
     console.log(""); console.log(C.bold("Voice Stack"));
-    try { const { checkVoiceStack } = await import("../voice/index.ts"); const voice = await checkVoiceStack(); for (const c of voice.checks) { const status = c.state === "ok" ? C.green("✓") : c.state === "warn" ? C.amber("!") : C.red("✗"); console.log(`  ${c.label.padEnd(20)} ${status} ${C.dim(c.detail)}`); } } catch(e){ warn(`Voice health check failed: ${(e as Error).message}`); }
+    try { const { checkVoiceStack } = await import("../voice/index.ts"); const voice = await checkVoiceStack(); for (const c of voice.checks) { const status = c.state === "ok" ? C.green("✓") : c.state === "warn" ? C.amber("!") : c.state === "unknown" ? C.amber("?") : C.red("✗"); console.log(`  ${c.label.padEnd(20)} ${status} ${C.dim(c.detail)}`); } } catch(e){ warn(`Voice health check failed: ${(e as Error).message}`); }
 
     console.log(""); console.log(C.bold("Plugin Platform"));
     console.log(`  health ......... ${await pluginDoctorLine(store)}`);

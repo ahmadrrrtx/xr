@@ -45,6 +45,12 @@ export interface ApprovalRequest {
 export interface ControllerDeps {
   /** Returns null when the daemon is not reachable. */
   transport: () => ChatTransport | null;
+  /**
+   * XR-LAUNCH-034: re-read the token (e.g. after a daemon restart) and return a
+   * fresh transport, or null. Used once when the daemon rejects the token
+   * before the run starts.
+   */
+  reconnect?: () => Promise<ChatTransport | null>;
   mode: () => "ask" | "agent";
   editor: () => EditorSnapshot | null;
   /** Shows a modal and resolves true only for an explicit Approve. */
@@ -126,7 +132,7 @@ export class ChatController {
       return;
     }
 
-    const transport = this.deps.transport();
+    let transport = this.deps.transport();
     if (!transport) {
       this.systemNote("XR daemon is not running. XR must be running on your computer for chat to respond.");
       this.deps.publish({ type: "status", status: this.deps.status() });
@@ -164,18 +170,31 @@ export class ChatController {
     this.abort = controller;
     let finalText = "";
 
+    const request: ChatRequest = {
+      message: fullPrompt,
+      mode: this.deps.mode(),
+      history,
+      context: contextString(editor),
+      sessionId: "vscode",
+    };
     try {
-      const stream = transport.chat(
-        {
-          message: fullPrompt,
-          mode: this.deps.mode(),
-          history,
-          context: contextString(editor),
-          sessionId: "vscode",
-        },
-        controller.signal,
-      );
-      for await (const event of stream) {
+      let stream: AsyncIterator<ChatEvent>;
+      let first: IteratorResult<ChatEvent>;
+      try {
+        stream = transport.chat(request, controller.signal)[Symbol.asyncIterator]();
+        first = await stream.next();
+      } catch (err) {
+        // A 401/403 before any event means the daemon refused the request
+        // before starting a run (typically: it restarted with a new token), so
+        // re-reading the token and retrying once cannot duplicate work.
+        const rejected = err instanceof DaemonHttpError && (err.status === 401 || err.status === 403);
+        const fresh = rejected && this.deps.reconnect ? await this.deps.reconnect() : null;
+        if (!fresh) throw err;
+        transport = fresh;
+        stream = transport.chat(request, controller.signal)[Symbol.asyncIterator]();
+        first = await stream.next();
+      }
+      for await (const event of continueFrom(first, stream)) {
         if (controller.signal.aborted) break;
         switch (event.kind) {
           case "token":
@@ -203,12 +222,12 @@ export class ChatController {
             this.setActivity(reply, {
               id: event.id,
               kind: "tool",
-              text: event.ok ? `${event.tool} finished` : `${event.tool} failed${event.error ? `: ${event.error}` : ""}`,
+              text: event.ok ? `${event.tool} finished` : toolFailureText(event),
               state: event.ok ? "ok" : "error",
             });
             break;
           case "approval":
-            await this.handleApproval(transport, reply, event);
+            await this.handleApproval(transport!, reply, event);
             break;
           case "usage":
           case "error":
@@ -277,7 +296,8 @@ export class ChatController {
   private handleError(reply: ChatMessage, err: unknown): void {
     if (err instanceof DaemonHttpError) {
       if (err.status === 401 || err.status === 403) {
-        reply.error = "The daemon rejected the token. Run XR: Set daemon token.";
+        reply.error =
+          "The daemon rejected the token, and re-reading XR's token file did not help. Make sure `xr serve` runs as your user with the same XR_HOME, or run XR: Set daemon token.";
       } else if (err.status === 429) {
         reply.error = "XR is busy with another run for this workspace. Try again in a moment.";
       } else {
@@ -329,6 +349,29 @@ function selectionBlock(ed: EditorSnapshot): string {
 }
 
 /** Context string for the daemon. Instructions about the task, never the task itself. */
+/** Yield an already-read first result, then the rest of the iterator; closes it on early exit. */
+async function* continueFrom<T>(first: IteratorResult<T>, rest: AsyncIterator<T>): AsyncGenerator<T> {
+  try {
+    if (first.done) return;
+    yield first.value;
+    for (;;) {
+      const r = await rest.next();
+      if (r.done) return;
+      yield r.value;
+    }
+  } finally {
+    await rest.return?.();
+  }
+}
+
+/** XR-LAUNCH-024: "<tool> failed: <cause>" plus the stable reason code and next step when present. */
+export function toolFailureText(event: { tool: string; error?: string; reason?: string; next?: string }): string {
+  const cause = event.error ? `: ${event.error}` : "";
+  const code = event.reason ? ` [${event.reason}]` : "";
+  const next = event.next ? ` ${event.next}` : "";
+  return `${event.tool} failed${cause}${code}${next}`;
+}
+
 function contextString(ed: EditorSnapshot | null): string | undefined {
   if (!ed) return undefined;
   const parts = ["Client: VS Code extension."];

@@ -10,7 +10,7 @@ import { uninstallXR } from "../install/uninstall.ts";
 export class UninstallCommand implements Command {
   name = "uninstall";
   description = "remove XR: launcher + installation (--purge also removes all local data)";
-  usage = "xr uninstall [--keep-data|--purge] [--yes]";
+  usage = "xr uninstall [--keep-data|--purge] [--dry-run] [--yes]";
   async execute(_ctx: unknown): Promise<void> {
     await uninstallXR((_ctx as { args: string[] }).args ?? []);
   }

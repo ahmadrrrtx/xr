@@ -1,0 +1,176 @@
+// XR-LAUNCH-014 — every app command, in ONE place.
+//
+// `build.rs` includes this file and hands the list to tauri-build's app
+// manifest. That switches the app ACL on: a command is callable from a window
+// ONLY when that window's capability grants `allow-<command-with-dashes>`.
+// Grants live in `capabilities/ipc-*.json`, generated from each window's
+// actual frontend import graph by `bun run desktop:ipc-acl --write`.
+//
+// test/desktop/ipc-acl.test.ts pins this list == `generate_handler!` in
+// src/lib.rs. Adding a command: add it to both, then regenerate the grants.
+pub const APP_COMMANDS: &[&str] = &[
+    // commands::window
+    "minimize_window",
+    "toggle_maximize",
+    "close_window",
+    "get_platform",
+    // commands::system
+    "detect_system",
+    "detect_ollama",
+    // engine
+    "engine_link",
+    "engine_restart",
+    "engine_logs_tail",
+    // commands::ollama
+    "ollama_pull",
+    // commands::data_health
+    "db_health",
+    // commands::chat
+    "chat_list_sessions",
+    "chat_get_session",
+    "chat_create_session",
+    "chat_update_session_title",
+    "chat_update_session_model",
+    "chat_archive_session",
+    "chat_delete_session",
+    "chat_list_messages",
+    "chat_save_message",
+    "chat_delete_message",
+    // commands::workspaces
+    "list_workspaces",
+    "get_workspace",
+    "create_workspace",
+    "update_workspace",
+    "delete_workspace",
+    "duplicate_workspace",
+    "restore_workspace",
+    "reveal_in_finder",
+    "pick_folder",
+    "move_workspace_window",
+    "spawn_workspace_windows",
+    "git_available",
+    "clone_git_workspace",
+    "detect_stack",
+    "scaffold_workspace",
+    // commands::approvals
+    "load_rules",
+    "save_rules",
+    "send_os_notification",
+    // commands::settings
+    "settings_changed",
+    "get_settings",
+    "set_setting",
+    "keychain_get",
+    "keychain_set",
+    "keychain_delete",
+    "reveal_data_folder",
+    "reveal_path",
+    "get_data_dir",
+    "open_url",
+    "open_microphone_settings",
+    "storage_stats",
+    "clear_cache",
+    "export_all_data",
+    "import_all_data",
+    "reset_app",
+    "restart_app",
+    "set_devtools_enabled",
+    "get_autostart",
+    "set_autostart",
+    "test_provider_connection",
+    "ptt_shortcut_info",
+    "ptt_set_shortcut",
+    // commands::runs
+    "list_runs",
+    "cancel_run",
+    "bulk_cancel_runs",
+    "save_runs_export",
+    // shield
+    "get_shield_status",
+    "get_audit_log",
+    "append_audit",
+    "verify_audit_chain",
+    "run_health_check",
+    "set_security_policy",
+    "set_shield_paused",
+    "set_quarantine",
+    "save_shield_checks",
+    "revoke_all",
+    "list_approvals",
+    // budget
+    "budget_init",
+    "budget_overview",
+    "budget_check",
+    "budget_record",
+    "budget_events",
+    "budget_series",
+    "budget_breakdown",
+    "budget_update_settings",
+    "budget_set_paused",
+    "budget_reset_month",
+    "budget_clear",
+    "budget_export",
+    // commands::hud
+    "hud_set_shortcut",
+    "hud_show",
+    "hud_hide",
+    "hud_toggle",
+    "hud_navigate",
+    "hud_run_main_command",
+    "hud_notify_sessions_changed",
+    "hud_shortcut_info",
+    // commands::orb
+    "orb_show",
+    "orb_hide",
+    "orb_toggle",
+    "orb_open_main",
+    "orb_show_context_menu",
+    "orb_get_position",
+    "orb_set_position",
+    "orb_set_shortcut",
+    "orb_shortcut_info",
+    // commands::theater
+    "theater_open",
+    "theater_close",
+    "theater_toggle",
+    "theater_is_open",
+    "theater_focus_main",
+    "theater_set_always_on_top",
+    "theater_show_context_menu",
+    "theater_shortcut_info",
+    "theater_set_shortcut",
+    // events
+    "theme_changed",
+    // theme
+    "subscribe_os_theme",
+    // commands::shell
+    "shell_shortcut_inventory",
+    "shell_reset_shortcuts",
+    // tray
+    "tray_update_state",
+    // commands::screenshot
+    "screenshot_ask_info",
+    "screenshot_ask_set_shortcut",
+    "screenshot_ask_capture",
+    "screenshot_ask_discard",
+    "screenshot_ask_support",
+    // commands::recovery
+    "crash_state",
+    "crash_resolve",
+    "crash_start_without_engine",
+    "crash_attach_external",
+    "crash_detach_external",
+    "crash_report",
+    "crash_forget",
+    "crash_report_dir",
+    "crash_simulate",
+    // commands::updates
+    "updates_state",
+    "check_update",
+    "download_update",
+    "install_update",
+    "updates_set_channel",
+    "updates_set_auto_download",
+    "updates_skip_version",
+    "updates_clear_skip",
+];

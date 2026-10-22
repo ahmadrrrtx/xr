@@ -45,6 +45,7 @@ import type { ContextPackage, InjectionPackage } from "../context/types.ts";
 import { mintGrant } from "../capabilities/grant.ts";
 import { runAuthorized } from "../capabilities/authorize.ts";
 import { evaluateLoopGrant } from "../capabilities/loop-grant.ts";
+import { toolFailure, toolResultEvent } from "./tool-reasons.ts";
 
 export interface AgentDeps {
   provider: Provider;
@@ -1044,7 +1045,7 @@ export async function runAgentLoop(
         if (gated.gate.kind === "deny") {
           const msg = `tool "${call.tool}" blocked by capability policy: ${gated.gate.reason}`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
-          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: gated.gate.reason });
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, gated.gate.reason, "denied:policy") });
           messages.push({ role: "tool", name: call.tool, content: msg });
           continue;
         }
@@ -1059,10 +1060,9 @@ export async function runAgentLoop(
            */
           const msg = `tool "${call.tool}" is not available in ${mode} mode`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
-          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: msg });
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, msg, "invalid:unknown-tool") });
           messages.push({ role: "tool", name: call.tool, content: msg });
-          // Phase 06 — `tool.blocked` is the established contract; the
-          // `reason` records WHY (nonexistent tool = malformed, non-retryable).
+          // Phase 06 — `tool.blocked` contract; `reason` = WHY (unknown tool: malformed, non-retryable).
           auditStore.audit("tool.blocked", { tool: call.tool, mode, reason: "unknown_tool" }, sessionId);
           continue;
         }
@@ -1076,7 +1076,7 @@ export async function runAgentLoop(
         if (call.args === null || typeof call.args !== "object" || Array.isArray(call.args)) {
           const msg = `tool "${call.tool}" received invalid arguments (expected an object)`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
-          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: msg });
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, msg, "invalid:arguments") });
           messages.push({ role: "tool", name: call.tool, content: msg });
           auditStore.audit("tool.malformed_call", { tool: call.tool, reason: "invalid_arguments" }, sessionId);
           continue;
@@ -1094,7 +1094,7 @@ export async function runAgentLoop(
           const result = await runAuthorized(tool, callArgs, toolCtx, callGrant, { capabilityId: call.tool, runId });
           const tag = result.ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
           say(`  ${tag} ${result.output.split("\n")[0].slice(0, 100)}`);
-          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: result.ok, result: result.output });
+          deps.onStreamEvent?.(toolResultEvent(toolCallId, call.tool, result)); // XR-LAUNCH-024: failures carry error + reason + next
           sessionStore.addStep(`st_${randomUUID().slice(0, 8)}`, sessionId, stepIdx, "act", call.tool, {
             ok: result.ok,
             // Phase 6 · M-09 — the trace identity for this call, durable.
@@ -1120,7 +1120,7 @@ export async function runAgentLoop(
         } catch (e) {
           const msg = `tool error: ${(e as Error).message}`;
           say(`  \x1b[31m✗ ${msg}\x1b[0m`);
-          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: (e as Error).message });
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, (e as Error).message, "error:exception") });
           messages.push({ role: "tool", name: call.tool, content: msg });
           auditStore.audit("tool.error", { tool: call.tool, error: (e as Error).message }, sessionId);
           toolCtx.onToolUse?.({ tool: call.tool, ok: false, error: (e as Error).message });

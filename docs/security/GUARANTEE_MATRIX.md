@@ -37,7 +37,7 @@
 ## Honest limitations
 
 - A placement without a kernel boundary (in-process / restricted-process) is **not** isolation; it is policy + defense-in-depth.
-- `namespace_sandbox` may be bubblewrap **or** raw user namespaces; the raw-unshare fallback hides sensitive paths but does not pivot the root (documented in the backend's `describe()`).
+- `namespace_sandbox` may be bubblewrap **or** raw user namespaces. Since XR-LAUNCH-004 the raw-unshare fallback pivot_roots into a minimal root (system dirs + granted roots + private /tmp, read-only skeleton); every mount step is checked and a detect-time self-check must prove the confinement, otherwise Tier 2 is refused. The fallback does not apply the bwrap seccomp blocklist.
 - gVisor/Firecracker are selected only when the runtime is actually present; otherwise the next-strongest tier-adequate backend is used or the action fails closed.
-- macOS/Windows backends (Seatbelt/containers) are NOT validated in this phase — no claim is made for them; see KNOWN_LIMITATIONS.md.
+- macOS Seatbelt and Windows AppContainer mechanisms exist (XR-LAUNCH-003) but are **experimental, opt-in (`XR_OS_SANDBOX=experimental`) and not hardware-verified**; without the opt-in Tier 2 fails closed on those OSes. CI evidence: `os-sandbox.yml`. See KNOWN_LIMITATIONS.md.
 - `node:vm` is defense-in-depth inside the plugin worker, never a security boundary (T8).

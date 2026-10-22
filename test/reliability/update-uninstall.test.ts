@@ -20,6 +20,8 @@ import {
   performUninstall,
   resolveUninstallPaths,
   isRunningCheckout,
+  isUnsafeInstallDir,
+  resolveInstallDir,
 } from "../../src/install/uninstall.ts";
 import { rmrf } from "./helpers.ts";
 
@@ -260,6 +262,90 @@ describe("Phase 1 · uninstall", () => {
       expect(paths.launcher).toBe(join(dir, ".local", "bin", "xr"));
       expect(paths.installDir).toBe(join(dir, ".xr-agent"));
       expect(paths.dataHome).toBe(join(dir, ".xr"));
+    } finally {
+      await rmrf(dir);
+    }
+  });
+});
+
+// ── XR-LAUNCH-025: the install dir is XR_INSTALL_DIR, not XR_HOME ─────────
+describe("XR-LAUNCH-025 · uninstall finds the install dir the installer used", () => {
+  test("XR_INSTALL_DIR (exported by the launcher) wins; trailing separators are trimmed", () => {
+    expect(resolveInstallDir({ XR_INSTALL_DIR: "/opt/xr/", XR_HOME: "/d" } as NodeJS.ProcessEnv, "/h", () => true)).toBe("/opt/xr");
+  });
+  test("XR_HOME alone is the data home, not the install dir", () => {
+    expect(resolveInstallDir({ XR_HOME: "/d" } as NodeJS.ProcessEnv, "/h", () => false)).toBe(join("/h", ".xr-agent"));
+    const paths = resolveUninstallPaths({ HOME: "/h", XR_HOME: "/nonexistent-xr-data" } as NodeJS.ProcessEnv);
+    expect(paths.installDir).toBe(join("/h", ".xr-agent"));
+    expect(paths.dataHome).toBe("/nonexistent-xr-data");
+  });
+  test("a legacy install the old installer put inside XR_HOME is still found (marker file)", () => {
+    expect(resolveInstallDir({ XR_HOME: "/d" } as NodeJS.ProcessEnv, "/h", (p) => p === join("/d", ".xr-install"))).toBe("/d");
+  });
+  test("HOME, a root, or a parent of the data home is never an install dir to delete", () => {
+    expect(isUnsafeInstallDir("/", "/h/.xr", "/h", "linux")).toBe(true);
+    expect(isUnsafeInstallDir("/h/", "/h/.xr", "/h", "linux")).toBe(true);
+    expect(isUnsafeInstallDir("/srv", "/srv/xr-data", "/h", "linux")).toBe(true);
+    expect(isUnsafeInstallDir("C:\\", "C:\\Users\\a\\.xr", "C:\\Users\\a", "win32")).toBe(true);
+    expect(isUnsafeInstallDir("c:\\users\\A", "C:\\Users\\a\\.xr", "C:\\Users\\a", "win32")).toBe(true);
+    expect(isUnsafeInstallDir("/h/.xr-agent", "/h/.xr", "/h", "linux")).toBe(false);
+    expect(isUnsafeInstallDir("/h/.xr-agent-old", "/h/.xr-agent/x", "/h", "linux")).toBe(false);
+    // Legacy layout (install dir == data home) is handled by the keep-data rule, not refused here.
+    expect(isUnsafeInstallDir("/d", "/d", "/h", "linux")).toBe(false);
+  });
+
+  test("a custom XR_INSTALL_DIR is removed by --keep-data; ~/.xr-agent and the data home are untouched", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "xr-un-025-custom-"));
+    try {
+      const home = join(dir, "home");
+      const custom = join(dir, "opt", "xr");
+      mkdirSync(join(custom, "dist"), { recursive: true });
+      writeFileSync(join(custom, ".xr-install"), "version=1\n");
+      mkdirSync(join(home, ".xr"), { recursive: true });
+      writeFileSync(join(home, ".xr", "xr.db"), "sqlite");
+      mkdirSync(join(home, ".xr-agent"), { recursive: true });
+      writeFileSync(join(home, ".xr-agent", "keep.txt"), "x");
+      const paths = resolveUninstallPaths({ HOME: home, XR_INSTALL_DIR: custom } as NodeJS.ProcessEnv);
+      const summary = performUninstall({ mode: "keep-data", yes: true, packageRoot: join(dir, "runtime") }, paths);
+      expect(summary.installDirRemoved).toBe(true);
+      expect(existsSync(custom)).toBe(false);
+      expect(existsSync(join(home, ".xr-agent", "keep.txt"))).toBe(true);
+      expect(readFileSync(join(home, ".xr", "xr.db"), "utf8")).toBe("sqlite");
+    } finally {
+      await rmrf(dir);
+    }
+  });
+
+  test("a mis-set XR_INSTALL_DIR pointing at HOME is skipped even with --purge", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "xr-un-025-home-"));
+    try {
+      const home = join(dir, "home");
+      mkdirSync(join(home, "Documents"), { recursive: true });
+      writeFileSync(join(home, "Documents", "thesis.docx"), "precious");
+      const paths = resolveUninstallPaths({ HOME: home, XR_INSTALL_DIR: home } as NodeJS.ProcessEnv);
+      const summary = performUninstall({ mode: "purge", yes: true, packageRoot: join(dir, "runtime") }, paths);
+      expect(summary.installDirRemoved).toBe(false);
+      expect(summary.skippedInstallDir).toBe(home);
+      expect(readFileSync(join(home, "Documents", "thesis.docx"), "utf8")).toBe("precious");
+    } finally {
+      await rmrf(dir);
+    }
+  });
+
+  test("legacy layout (program files inside XR_HOME): --keep-data keeps the data home", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "xr-un-025-legacy-"));
+    try {
+      const home = join(dir, "home");
+      const data = join(dir, "data");
+      mkdirSync(join(data, "dist"), { recursive: true });
+      writeFileSync(join(data, ".xr-install"), "version=0.9.0\n");
+      writeFileSync(join(data, "xr.db"), "sqlite");
+      mkdirSync(home, { recursive: true });
+      const paths = resolveUninstallPaths({ HOME: home, XR_HOME: data } as NodeJS.ProcessEnv);
+      expect(paths.installDir).toBe(data);
+      const summary = performUninstall({ mode: "keep-data", yes: true, packageRoot: join(dir, "runtime") }, paths);
+      expect(summary.installDirRemoved).toBe(false);
+      expect(readFileSync(join(data, "xr.db"), "utf8")).toBe("sqlite");
     } finally {
       await rmrf(dir);
     }

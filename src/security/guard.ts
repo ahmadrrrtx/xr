@@ -26,11 +26,19 @@
  * and URLs are parsed with the WHATWG `URL` parser, then hosts are normalised
  * to a comparable form. Anything that cannot be canonicalised is DENIED
  * (Commandment 13 — fail closed).
+ *
+ * XR-LAUNCH-031 — for SHELL commands the secret-path check is advisory
+ * defence in depth. A command string is split into words (shell-words.ts:
+ * quote removal, operators, `NAME=`/`--flag=` values) and each word is
+ * checked on its canonical path; the raw command is never treated as one
+ * path. A shell can always compute a path a static check cannot see, so the
+ * boundary for shell commands is the OS sandbox, not this heuristic.
  */
 
 import { realpathSync } from "node:fs";
 import { isAbsolute, normalize, resolve as resolvePath, sep } from "node:path";
 import { homedir } from "node:os";
+import { shellPathCandidates } from "./shell-words.ts";
 
 export interface ScanResult {
   flagged: boolean;
@@ -109,6 +117,8 @@ export interface PolicyContext {
    * runtime at `127.0.0.1:11434`. Absent = raw IP literals are denied.
    */
   allowedHosts?: string[];
+  /** XR-LAUNCH-031 — the directory relative paths resolve against (default: process.cwd()). */
+  cwd?: string;
 }
 
 export type PolicyDecision =
@@ -279,20 +289,34 @@ function collectStrings(value: unknown, out: string[], depth = 0): void {
 /** Argument keys whose values are treated as filesystem paths. */
 const PATH_KEYS = /^(path|file|filepath|file_path|src|source|dest|destination|target|dir|directory|cwd|output|input)$/i;
 
-function collectPathCandidates(args: Record<string, unknown>, out: string[], depth = 0): void {
+/** XR-LAUNCH-031 — argument keys whose values are shell command lines. */
+const SHELL_KEYS = /^(cmd|command|script|shell)$/i;
+
+/**
+ * Path candidates from arbitrary arguments. Shell command lines (a SHELL_KEYS
+ * value, or any non-path string of a shell tool) are split into words first;
+ * every other string is kept as-is and also returned in `prose` for the
+ * free-text scan in checkAction.
+ */
+function collectPathCandidates(args: Record<string, unknown>, out: string[], prose: string[], shellTool: boolean, depth = 0): void {
   if (depth > 6) return;
   for (const [key, value] of Object.entries(args)) {
+    const shellLine = SHELL_KEYS.test(key) || (shellTool && !PATH_KEYS.test(key));
     if (typeof value === "string") {
-      if (PATH_KEYS.test(key) || /[\\/]/.test(value) || value.startsWith("~") || value.startsWith(".")) {
-        out.push(value);
+      if (shellLine) out.push(...shellPathCandidates(value));
+      else {
+        prose.push(value);
+        if (PATH_KEYS.test(key) || /[\\/]/.test(value) || value.startsWith("~") || value.startsWith(".")) out.push(value);
       }
     } else if (Array.isArray(value)) {
       for (const item of value) {
-        if (typeof item === "string") out.push(item);
-        else if (item && typeof item === "object") collectPathCandidates(item as Record<string, unknown>, out, depth + 1);
+        if (typeof item === "string") {
+          if (shellLine) out.push(...shellPathCandidates(item));
+          else (out.push(item), prose.push(item));
+        } else if (item && typeof item === "object") collectPathCandidates(item as Record<string, unknown>, out, prose, shellTool, depth + 1);
       }
     } else if (value && typeof value === "object") {
-      collectPathCandidates(value as Record<string, unknown>, out, depth + 1);
+      collectPathCandidates(value as Record<string, unknown>, out, prose, shellTool, depth + 1);
     }
   }
 }
@@ -372,27 +396,32 @@ export function checkAction(action: ActionCheck, ctx: PolicyContext): PolicyDeci
   }
 
   // ── 2. Secret / sensitive paths, decided on the canonical path. ───────────
+  // Shell command lines are split into words first (XR-LAUNCH-031, advisory).
+  const shellTool = action.tool === "shell" || /\bshell\b/i.test(action.tool);
   const pathCandidates: string[] = [];
-  collectPathCandidates(args, pathCandidates);
+  const prose: string[] = [];
+  collectPathCandidates(args, pathCandidates, prose, shellTool);
+  const cwd = ctx.cwd ?? process.cwd();
 
   for (const candidate of pathCandidates) {
     if (!candidate.trim()) continue;
-    const canonical = canonicalPath(candidate);
-    if (isSecretPath(canonical)) {
-      return { allowed: false, reason: `blocked: access to a secret/credential path (${canonical})` };
+    // Check the NUL-truncated form too: C file APIs stop at the first NUL.
+    for (const form of new Set([candidate, fullyDecode(candidate).split("\0")[0]!])) {
+      const canonical = canonicalPath(form, cwd);
+      if (isSecretPath(canonical)) return { allowed: false, reason: `blocked: access to a secret/credential path (${canonical})` };
     }
   }
 
-  // Shell commands embed their paths in a single string, so the decoded command
-  // text is scanned for secret targets as well — after decoding, not before.
-  const decodedArgs = fullyDecode(argsStr);
-  for (const token of decodedArgs.match(/[~./\w\\-]*[\\/][\w.\\/-]+/g) ?? []) {
-    if (isSecretPath(canonicalPath(token))) {
+  // Free text (not a shell line) can embed a path anywhere, so its decoded form
+  // is scanned for path-shaped tokens and bare key names — after decoding, not
+  // before. `.env.example`/`.sample`/`.template` are documentation, not secrets.
+  const decodedProse = fullyDecode(JSON.stringify(prose));
+  for (const token of decodedProse.match(/[~./\w\\-]*[\\/][\w.\\/-]+/g) ?? []) {
+    if (isSecretPath(canonicalPath(token, cwd))) {
       return { allowed: false, reason: `blocked: access to a secret/credential path (${token})` };
     }
-    // Catch bare references such as `cat id_ed25519` with no directory part.
   }
-  for (const token of decodedArgs.match(/\bid_(rsa|dsa|ecdsa|ed25519)(_sk)?\b|\.env\b|\bshadow\b/gi) ?? []) {
+  for (const token of decodedProse.match(/\bid_(rsa|dsa|ecdsa|ed25519)(_sk)?\b|\.env\b(?!\.(?:example|sample|template)\b)|\bshadow\b/gi) ?? []) {
     return { allowed: false, reason: `blocked: reference to secret material (${token})` };
   }
 

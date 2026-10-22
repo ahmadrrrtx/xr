@@ -37,17 +37,19 @@ jobs:
   # ── 0. Truth gate: a release is evidence-bound or it does not ship ─────────
   gates:
     name: Release gates (identity + claims + channels + unit floor)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0 # changelog generator needs history + tags
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       # desktop/ is an independent installation (own lockfile, by design);
@@ -78,14 +80,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: linux-x64, os: ubuntu-latest, targets: "linux-x64,linux-arm64", smoke: "linux-x64" }
+          - { name: linux-x64, os: ubuntu-24.04, targets: "linux-x64,linux-arm64", smoke: "linux-x64" }
           - { name: darwin, os: macos-latest, targets: "darwin-arm64,darwin-x64", smoke: "darwin-arm64" }
           - { name: windows, os: windows-latest, targets: "windows-x64,windows-arm64", smoke: "windows-x64" }
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Build targets + native smoke
@@ -101,7 +105,7 @@ jobs:
           Copy-Item dist/xr-windows-arm64.exe dist/zip/xr.exe
           Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-arm64.zip -Force
       - name: Upload canonical binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: binaries-${{ matrix.name }}
           path: |
@@ -111,7 +115,7 @@ jobs:
   # ── 2. Assemble the release: sums + SBOM + deb + changelog ────────────────
   assemble:
     name: Assemble (sums + SBOM + .deb + changelog)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [gates, build]
     permissions:
@@ -122,11 +126,13 @@ jobs:
       prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Resolve release version + channel
@@ -141,10 +147,12 @@ jobs:
           echo "value=$V" >> "$GITHUB_OUTPUT"
       - name: Prerelease channel detection (semver suffix → prerelease)
         id: meta
+        env:
+          V: ${{ steps.version.outputs.value }}
         run: |
-          if [[ "${{ steps.version.outputs.value }}" == *"-"* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+          if [[ "$V" == *"-"* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
       - name: Download canonical binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           path: dist
           pattern: binaries-*
@@ -198,7 +206,9 @@ jobs:
         # excludes them, but the published artifact is inspected rather than
         # trusted: a new directory can silently reintroduce 33k LOC of surface
         # into every user's install.
-        run: bun run scripts/consumer-smoke.ts --tarball "$(ls dist/rrrtx-xr-*.tgz | head -1)"
+        run: |
+          set -- dist/rrrtx-xr-*.tgz
+          bun run scripts/consumer-smoke.ts --tarball "$1"
       - name: Build the .deb channel artifact from the canonical linux-x64 binary
         run: bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out dist/xr_${{ steps.version.outputs.value }}_amd64.deb
       - name: Generate the changelog from conventional commits (evidence-bound)
@@ -218,7 +228,7 @@ jobs:
           echo "$SUBJECTS"
           echo "base64=$(printf '%s' "$SUBJECTS" | base64 -w0)" >> "$GITHUB_OUTPUT"
       - name: Upload release bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: release-bundle
           path: |
@@ -229,7 +239,7 @@ jobs:
   # ── 3. Keyless signing (public Rekor) ─────────────────────────────────────
   sign:
     name: cosign keyless sign (Rekor)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [assemble]
     permissions:
@@ -237,7 +247,7 @@ jobs:
       id-token: write # GitHub OIDC → Fulcio
     steps:
       - name: Download release bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: release-bundle
           path: bundle
@@ -259,7 +269,7 @@ jobs:
           test -f dist/SHA256SUMS
           ls -la dist
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Sign checksums + npm tarball + SBOM keylessly
         env:
           COSIGN_EXPERIMENTAL: "1"
@@ -280,7 +290,7 @@ jobs:
             --bundle SHA256SUMS.bundle \
             SHA256SUMS
       - name: Upload signed bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: signed-bundle
           path: |
@@ -292,14 +302,14 @@ jobs:
   release:
     name: GitHub Release (signed assets)
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [assemble, sign]
     permissions:
       contents: write
     steps:
       - name: Download signed bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: signed-bundle
           path: bundle
@@ -322,7 +332,7 @@ jobs:
           ' dist/CHANGELOG.md > RELEASE-NOTES.md || true
           test -s RELEASE-NOTES.md || echo "Release $V — see CHANGELOG.md" > RELEASE-NOTES.md
       - name: Publish release (prerelease channel honored)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: XR v${{ needs.assemble.outputs.version }}
           body_path: RELEASE-NOTES.md
@@ -341,9 +351,11 @@ jobs:
       # cosign bundles, SHA256SUMS + bundle, SBOM + bundle, SLSA intoto) and
       # fails this run loudly instead of letting a partial release stand.
       - name: Checkout (for the asset-completeness gate script)
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (asset-completeness gate)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Assert live release asset completeness (L-010)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -363,24 +375,42 @@ jobs:
       base64-subjects: ${{ needs.assemble.outputs.digests }}
       upload-assets: true
 
+  # ── 5b. XR-LAUNCH-012: the required PR checks re-run on the tag commit ─────
+  # Publishing (npm, GHCR) needs these AND the live asset-completeness check
+  # in `release` AND verify-release — a tag can no longer reach a registry
+  # with an incomplete release or a failing journey.
+  journey:
+    name: Clean-machine journey (tag)
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/journey.yml
+  supply-chain:
+    name: Supply chain (tag)
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: read
+      security-events: write # the called scans upload SARIF
+    uses: ./.github/workflows/supply-chain.yml
+
   # ── 6. npm channel (OIDC trusted publishing; dist-tag latest|beta) ────────
   publish-npm:
     name: Publish npm (trusted publishing, provenance)
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [assemble, sign]
+    needs: [assemble, sign, release, verify-release, journey, supply-chain]
     environment: npm-publish
     permissions:
       id-token: write # npm OIDC trusted publishing — no long-lived token
       contents: read
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       # package.json prepublishOnly is `bun run release:check && bun run claim-lint`.
       # Without bun on PATH, npm publish exits 127 (first v1.0.0-beta.1 miss).
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       # npm CLI does the PUBLISH (not bun): bun's publish does not implement
@@ -390,7 +420,7 @@ jobs:
       # NODE_AUTH_TOKEN is deliberately never set: an empty or present token
       # makes npm skip OIDC and fall back to token auth, which then 404s.
       - name: Setup Node (npm OIDC trusted publishing)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
@@ -429,29 +459,29 @@ jobs:
   publish-docker:
     name: Publish Docker (GHCR + cosign sign)
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [assemble, sign]
+    needs: [assemble, sign, release, verify-release, journey, supply-chain]
     permissions:
       contents: read
       packages: write
       id-token: write
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Image metadata (version channels; prereleases never move latest)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
@@ -461,7 +491,7 @@ jobs:
             type=raw,value=beta,enable=${{ needs.assemble.outputs.prerelease == 'true' }}
       - name: Build + push multi-arch image (SBOM + SLSA buildx attestations)
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -471,7 +501,7 @@ jobs:
           sbom: true
           provenance: mode=max
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Sign the pushed image digest keylessly (Rekor)
         env:
           COSIGN_EXPERIMENTAL: "1"
@@ -481,18 +511,20 @@ jobs:
   publish-channels:
     name: Stamp + publish channel manifests (homebrew/winget/scoop)
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [assemble, release]
     permissions:
       contents: write # attach stamped channel files to the GitHub Release
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Download signed bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: signed-bundle
           path: bundle
@@ -510,7 +542,7 @@ jobs:
         run: |
           cp -R dist/channels dist/channels-upload
       - name: Attach channel bundle to the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             dist/channels/**
@@ -525,20 +557,22 @@ jobs:
   verify-release:
     name: Verify signed artifacts (verify-release.ts)
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [assemble, sign]
     permissions:
       contents: read
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Download signed bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: signed-bundle
           path: bundle
@@ -551,12 +585,13 @@ jobs:
           fi
           test -f dist/SHA256SUMS
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: verify-release.ts against the signed npm tarball + SBOM + sums
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          ART="$(ls dist/rrrtx-xr-*.tgz | head -1)"
+          set -- dist/rrrtx-xr-*.tgz
+          ART="$1"
           bun run scripts/verify-release.ts \
             --artifact "$ART" \
             --sums dist/SHA256SUMS \
@@ -567,16 +602,18 @@ jobs:
   consumer-smoke:
     name: Consumer smoke (fresh npm install)
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: [publish-npm, assemble]
     permissions:
       contents: read
     steps:
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Smoke the just-published package in a clean XR_HOME

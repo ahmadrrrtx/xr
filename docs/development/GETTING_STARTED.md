@@ -144,7 +144,9 @@ xr serve          # local dashboard + chat — 127.0.0.1 only, token-authed
 
 ## 5. Restart and resume (durable by default)
 
-State lives under `~/.xr` (override with `XR_HOME`). Close and reopen the shell
+State lives under `~/.xr` (override with `XR_HOME`); the program files the
+installer placed live separately in `~/.xr-agent` (override with `XR_INSTALL_DIR`
+when installing). Close and reopen the shell
 and your session, audit chain, and any resumable task are still there. A failed
 task is reported as failed (never faked as complete) and multi-agent workflows
 can be resumed; honest failure mapping is pinned by `test/multi-agent-e2e.test.ts`.
@@ -152,9 +154,19 @@ can be resumed; honest failure mapping is pinned by `test/multi-agent-e2e.test.t
 ## 6. Uninstall (optional)
 
 ```bash
-xr uninstall --keep-data     # removes the launcher, keeps ~/.xr
+xr uninstall --keep-data     # removes the launcher and the install dir, keeps ~/.xr
 xr uninstall --purge         # removes everything, including your data
 ```
+
+Both modes ask before deleting anything (`--yes` skips the prompt). In `~/.profile`,
+`~/.bashrc`, `~/.zshrc` and the other shell startup files, uninstall removes only the
+block the installer added between `# >>> XR launcher >>>` and `# <<< XR launcher <<<`
+(plus the single legacy line older installers wrote). Nothing else in those files is
+touched — including your own `PATH` lines — so an install followed by an uninstall leaves
+them byte-for-byte as they were. If you edited inside the marked block, the whole block is
+removed; a block missing its end marker is left alone.
+
+npm / bun global installs are removed with `npm rm -g @rrrtx/xr` (or `bun rm -g @rrrtx/xr`).
 
 ---
 

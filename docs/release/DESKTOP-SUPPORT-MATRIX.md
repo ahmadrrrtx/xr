@@ -104,6 +104,9 @@ is operator-run — see `docs/release/UPDATER.md`.
 | Crash report: manual, redacted, ≤2 MB | implemented | `crash.rs` redaction tests (home path, bearer tokens, `sk-`/`ghp_`/`xai-`/`AKIA`, 48-hex engine token) and the report assembly test. |
 | Zero telemetry | **structural** | Nothing in `crash.rs` opens a socket; the report is a file the user mails. There is no upload path to disable. |
 | Single-instance handoff during recovery | implemented | Single-instance is registered first in `lib.rs` (W-3) and focuses the existing window; the recovery screen is a webview state, so focusing does not dismiss it. |
+| Per-window IPC allow-lists (XR-LAUNCH-014) | implemented; **not run in a built app here** | `build.rs` app command manifest + generated `capabilities/ipc-*.json` (`bun run desktop:ipc-acl --check` in CI). The HUD palette, Orb and Theater cannot call data import/export/reset, keychain, path-opening, policy, update or destructive commands. The WebDriver IPC smoke is wired but has not run. |
+| `reveal_path` scope, DevTools (XR-LAUNCH-014) | implemented | `reveal_path` opens only XR's own folders, canonicalized (7 tests in `reveal_policy.rs`); release builds drop the `devtools` feature. |
+| Import over a live database, damaged `xr.db` (XR-LAUNCH-021) | implemented | Import is validated and staged, applied at the next launch before any database opens, with backups and rollback; a damaged `xr.db` is moved aside instead of crashing (13 tests in `data_safety.rs`, `cargo test --lib` in CI). |
 
 ## OS chrome
 
@@ -126,6 +129,7 @@ is operator-run — see `docs/release/UPDATER.md`.
 | Linux `.deb` / `.rpm` / AppImage | CI (`tauri build`) | unchanged |
 | Linux **Flatpak** | metadata **validated**; build **not run here** | `packaging/flatpak/` + `docs/linux/PACKAGING.md`. Manifest targets the GNOME runtime (the one that ships webkit2gtk-4.1, which Tauri v2 needs) with a checksummed bun pin; AppStream + desktop entry validated in CI and offline by test. Snap remains deferred. |
 | Deep-link file association (`xr://`) | implemented | `bundle.fileAssociations` — carries the scheme into the Linux `.desktop` MimeType, Windows registry handlers and the MSIX protocol extension. |
+| `xr://` link reaches the running app (XR-LAUNCH-013) | implemented; **not verified on Windows or Linux desktops** | `tauri-plugin-single-instance` with its `deep-link` feature hands a second launch's URL to the running instance; cold starts read `getCurrent()`; AppImage/dev builds register the scheme at runtime. |
 
 ## What this phase could not verify, and why
 

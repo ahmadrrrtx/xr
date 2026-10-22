@@ -1,24 +1,26 @@
 #!/usr/bin/env bun
 /**
- * XR Phase 5 · Tauri updater key provisioning (operator-run, once).
+ * XR · Tauri updater key provisioning (operator-run, once). XR-LAUNCH-008.
  *
- *   bun run scripts/generate-updater-keys.ts            # generate, print both halves
- *   bun run scripts/generate-updater-keys.ts --apply    # also patch pubkey into tauri.conf.json
+ *   cd desktop && bunx tauri signer generate -w ~/.tauri/xr-updater.key   # set a password
+ *   bun run scripts/generate-updater-keys.ts --apply ~/.tauri/xr-updater.key.pub
  *
- * WHY MANUAL: the updater verifies artifacts against an Ed25519 pubkey baked
- * into tauri.conf.json at build time. The PRIVATE half must live ONLY in a
- * CI secret (TAURI_UPDATER_KEY) so release.yml can sign latest.json — it is
- * never written to the repo, never printed by CI, and this script never
- * stores it. Run it once on a trusted machine: commit the --apply pubkey
- * change, paste the private key into the repo secret, then delete the
- * terminal scrollback.
+ * The updater verifies MINISIGN signatures, so the key pair must come from
+ * `tauri signer generate`. (This script used to mint a raw Ed25519 PKCS#8 key
+ * and a raw 32-byte pubkey; `tauri build` cannot sign with the first and the
+ * updater cannot parse the second, so a "provisioned" build could never have
+ * updated.) This script never generates, reads or prints a private key: it
+ * validates the PUBLIC key file and writes it, the endpoint and
+ * createUpdaterArtifacts into tauri.conf.json.
  *
- * The pubkey emitted here is the base64 of the RAW 32-byte Ed25519 public
- * key (Tauri's expected format), extracted from the SPKI DER encoding.
+ * Then: store the private key file's content as the TAURI_UPDATER_KEY secret
+ * and its password as TAURI_UPDATER_KEY_PASSWORD, back the key up offline
+ * (two copies; losing it strands every installed copy — a launch gate), and
+ * follow docs/release/DESKTOP_SIGNING.md.
  */
-import { generateKeyPairSync } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { parsePublicKey } from "./verify-updater-signatures.ts";
 
 export const UPDATER_ENDPOINT = "https://github.com/ahmadrrrtx/xr/releases/latest/download/latest.json";
 
@@ -47,32 +49,26 @@ export function applyUpdaterConfig(conf: Record<string, unknown>, pubkey: string
   return out;
 }
 
-const SPKI_ED25519_PREFIX = "302a300506032b6570032100"; // 12-byte DER header before the raw key
-
 function main() {
-  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const spki = publicKey.export({ type: "spki", format: "der" }).toString("hex");
-  if (!spki.startsWith(SPKI_ED25519_PREFIX)) {
-    console.error("unexpected SPKI layout for ed25519 — aborting rather than emitting a bad pubkey");
+  const i = process.argv.indexOf("--apply");
+  const pubPath = i >= 0 ? process.argv[i + 1] : undefined;
+  if (!pubPath) {
+    console.log("1. cd desktop && bunx tauri signer generate -w ~/.tauri/xr-updater.key   (choose a password)");
+    console.log("2. bun run scripts/generate-updater-keys.ts --apply ~/.tauri/xr-updater.key.pub");
+    console.log("3. secrets: TAURI_UPDATER_KEY = content of xr-updater.key, TAURI_UPDATER_KEY_PASSWORD = its password");
+    console.log("4. back the private key up offline (two copies) — see docs/release/DESKTOP_SIGNING.md");
+    return;
+  }
+  const pubkey = readFileSync(pubPath, "utf8").trim();
+  if (/PRIVATE|secret key/i.test(Buffer.from(pubkey, "base64").toString("utf8"))) {
+    console.error("refusing: that file looks like a PRIVATE key. Pass the .pub file.");
     process.exit(1);
   }
-  const pubkey = Buffer.from(spki.slice(SPKI_ED25519_PREFIX.length), "hex").toString("base64");
-  const privPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
-
-  console.log("UPDATER PUBLIC KEY  (commit via --apply):");
-  console.log(`  ${pubkey}`);
-  console.log("");
-  console.log("UPDATER PRIVATE KEY (CI secret TAURI_UPDATER_KEY — never commit):");
-  console.log(privPem.trim());
-
-  if (process.argv.includes("--apply")) {
-    const confPath = join(import.meta.dir, "..", "desktop", "src-tauri", "tauri.conf.json");
-    const conf = JSON.parse(readFileSync(confPath, "utf8")) as Record<string, unknown>;
-    writeFileSync(confPath, JSON.stringify(applyUpdaterConfig(conf, pubkey), null, 2) + "\n", "utf8");
-    console.log(`\napplied pubkey + createUpdaterArtifacts to ${confPath} — commit this file; store the PRIVATE key as the repo secret.`);
-  } else {
-    console.log("\n(re-run with --apply to patch the pubkey into tauri.conf.json)");
-  }
+  parsePublicKey(pubkey); // throws unless it is a minisign Ed25519 public key
+  const confPath = join(import.meta.dir, "..", "desktop", "src-tauri", "tauri.conf.json");
+  const conf = JSON.parse(readFileSync(confPath, "utf8")) as Record<string, unknown>;
+  writeFileSync(confPath, JSON.stringify(applyUpdaterConfig(conf, pubkey), null, 2) + "\n", "utf8");
+  console.log(`applied the updater pubkey + createUpdaterArtifacts to ${confPath} — commit it.`);
 }
 
 if (import.meta.main) main();

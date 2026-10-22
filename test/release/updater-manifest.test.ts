@@ -143,11 +143,15 @@ describe("updater manifest dry-run", () => {
       bundle: Record<string, unknown>;
       plugins?: Record<string, unknown>;
     };
-    // createUpdaterArtifacts without plugins.updater makes `tauri build` refuse
-    // to run; plugins.updater without a real pubkey makes every check fail.
-    // Either half alone is a broken pipeline, so both arrive together via --apply.
+    // createUpdaterArtifacts arrives only via --apply. plugins.updater must still
+    // EXIST: lib.rs registers tauri-plugin-updater, whose Config has no serde
+    // default for `pubkey`, so an absent section aborts every launch with
+    // PluginInitialization("updater", "invalid type: null, expected struct Config").
+    // An empty key and no endpoints load the plugin but can fetch nothing.
     expect(conf.bundle.createUpdaterArtifacts).toBeUndefined();
-    expect(conf.plugins?.updater).toBeUndefined();
+    expect(readFileSync(new URL("../../desktop/src-tauri/src/lib.rs", import.meta.url), "utf8")).toContain("tauri_plugin_updater::Builder");
+    expect(conf.plugins?.updater).toEqual({ pubkey: "", endpoints: [] });
+    expect(applyUpdaterConfig(conf, "K") as { plugins: { updater: { pubkey: string } } }).toMatchObject({ plugins: { updater: { pubkey: "K" } } });
     expect(conf.bundle.targets).toContain("nsis");
     expect(conf.bundle.targets).toContain("msi");
     expect((conf.bundle.windows as { nsis: { installMode: string } }).nsis.installMode).toBe("currentUser");

@@ -20,11 +20,13 @@ permissions:
 jobs:
   consumer-smoke:
     name: Fresh npm install + hermetic task
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Consumer smoke (skip if no 1.x on npm yet)

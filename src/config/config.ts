@@ -11,8 +11,9 @@
 import { z } from "zod";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { getSecret, getSecretSyncCached, listFileSecrets } from "../security/secrets.ts";
+import { hardenDataHomeOnce } from "../storage/permissions.ts";
 import { envSecretCompatEnabled, hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
 import { PRESETS } from "../providers/presets.ts";
 import { migrate20to21 } from "./migrate-21.ts";
@@ -693,10 +694,12 @@ export type XRConfig = z.infer<typeof ConfigSchema>;
 export { ConfigSchema };
 
 export const XR_HOME = process.env.XR_HOME ?? join(homedir(), ".xr");
-const CONFIG_PATH = join(XR_HOME, "config.json");
+// XR-LAUNCH-012: config.json is resolved per call (a frozen import-time path made test files share one config).
+const currentHome = (): string => process.env.XR_HOME ?? join(homedir(), ".xr");
+const currentConfigPath = (): string => join(currentHome(), "config.json");
 
 function ensureHome(): void {
-  if (!existsSync(XR_HOME)) mkdirSync(XR_HOME, { recursive: true });
+  hardenDataHomeOnce(currentHome()); // XR-LAUNCH-016: create 0700 / tighten an existing home once per process
 }
 
 /** Ordered migrations: key = from-version, transforms raw object. */
@@ -1177,7 +1180,8 @@ export function loadConfig(): { config: XRConfig; warnings: string[] } {
 }
 
 function loadConfigInner(): { config: XRConfig; warnings: string[] } {
-  const cached = getCachedConfig<XRConfig>();
+  const CONFIG_PATH = currentConfigPath();
+  const cached = getCachedConfig<XRConfig>(CONFIG_PATH);
   if (cached) {
     // Secrets may still need a rare refresh; never block on OS keychain here.
     if (shouldLoadSecrets(false)) {
@@ -1193,7 +1197,7 @@ function loadConfigInner(): { config: XRConfig; warnings: string[] } {
 
   if (!existsSync(CONFIG_PATH)) {
     const config = ConfigSchema.parse({});
-    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 });
     setCachedConfig(config, warnings, CONFIG_PATH, "default");
     return { config, warnings };
   }
@@ -1216,7 +1220,7 @@ function loadConfigInner(): { config: XRConfig; warnings: string[] } {
     // Only rewrite disk when migration actually advanced the version or filled defaults.
     const needsWrite = (raw as { version?: unknown })?.version !== parsed.data.version;
     if (needsWrite) {
-      writeFileSync(CONFIG_PATH, JSON.stringify(parsed.data, null, 2));
+      writeFileSync(CONFIG_PATH, JSON.stringify(parsed.data, null, 2), { mode: 0o600 });
     }
     if (parsed.data.knowledge.injectionMode !== "context") warnings.push(`knowledge.injectionMode "${parsed.data.knowledge.injectionMode}" is deprecated (Phase 7) and will be removed in 2.0 — memory is injected as an unlabelled system message on this path. Set it to "context" (channel-separated, ACL-gated). See docs/privacy/MEMORY.md.`);
     setCachedConfig(parsed.data, warnings, CONFIG_PATH, "disk");
@@ -1245,7 +1249,7 @@ export function configCacheStats() {
 }
 
 export function configPath(): string {
-  return CONFIG_PATH;
+  return currentConfigPath();
 }
 
 /**
@@ -1291,7 +1295,8 @@ export function isMemoryEnabled(): boolean {
 export function saveConfig(config: XRConfig): void {
   ensureHome();
   const parsed = ConfigSchema.parse(config);
-  writeFileSync(CONFIG_PATH, JSON.stringify(parsed, null, 2));
+  const CONFIG_PATH = currentConfigPath();
+  writeFileSync(CONFIG_PATH, JSON.stringify(parsed, null, 2), { mode: 0o600 });
   setCachedConfig(parsed, [], CONFIG_PATH, "save");
 }
 
@@ -1324,7 +1329,7 @@ const PROVIDER_KEY_ENVS = [
  */
 function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
   // Phase 8 — ambient env hydration is gated (default OFF).
-  const envPath = join(XR_HOME, ".env");
+  const envPath = join(currentHome(), ".env");
   if (existsSync(envPath) && envSecretCompatEnabled()) {
     try { chmodSync(envPath, 0o600); } catch {}
     try {
@@ -1337,7 +1342,7 @@ function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
     } catch { /* ignore corrupt .env */ }
   }
 
-  for (const envName of PROVIDER_KEY_ENVS) {
+  for (const envName of envSecretCompatEnabled() ? PROVIDER_KEY_ENVS : []) { // XR-LAUNCH-015: else read lazily (one keychain read per key, when used)
     if (process.env[envName]) continue;
     // Prefer cached secret helper (process.env / memo / file) — no spawn.
     try {

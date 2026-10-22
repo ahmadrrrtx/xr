@@ -9,10 +9,25 @@ Nothing here is a capability claim. Historical 3.x / 4.x / 7.x tags are
 | Line | What it was | npm | git tags | Status |
 |---|---|---|---|---|
 | **0.2.x** | First published package | `0.2.0` on npm | none matching | historical |
-| **3.x** | Pre-rebaseline published line | `3.0.0`–`3.0.3`, `3.1.5` — **all five versions deprecated on npm (2026-09-08)** | `v3.0.0` | retired — the deprecation message points to the 1.x line |
+| **3.x** | Pre-rebaseline published line | `3.0.0`–`3.0.3`, `3.1.5` — **all five versions deprecated on npm (2026-09-08)** | `v3.0.0` | retired — but the message still says "install @rrrtx/xr@beta"; it must point to `@latest` (owner action, below) |
 | **4.x** | Internal line, not an npm channel | not on npm as 4.x | `v4.3.0`, `v4.5.0` | historical / out of band |
 | **7.x** | Pre-rebaseline source (7.1.0 = the 1.0.0 codebase) | **never published as 7.x** | `v7.0.0` (no `v7.1.0`) | historical / out of band |
 | **1.0.0** | Deliberate semver rebaseline of 7.1.0 ("Truth") | **`1.0.0-beta.1` on npm `beta`; `1.0.0` stable on npm `latest` (both 2026-09-08)** | `v1.0.0-beta.1`, `v1.0.0` | **current** — stable `1.0.0` is the production line; pre-releases continue on the `beta` dist-tag |
+
+## 3.x versions still outrank 1.x (XR-LAUNCH-023, owner action)
+
+Semver sorts `3.0.0`–`3.1.5` above `1.0.0`, so a range such as `npm i @rrrtx/xr@'>=1'` or
+"highest version" tooling picks an obsolete 3.x build. npm only allows unpublishing within its
+policy window, so the remedy is the deprecation message: it must send people to `@latest`. The
+2026-09-08 message says "install @rrrtx/xr@beta (1.0.0 line)", which now points at a
+pre-release. As of 2026-10-22 all five 3.x versions still carry that message.
+
+- `bun run npm:ghosts` — read-only probe: every version above the `latest` major must be
+  deprecated with a message that points to `@latest`. `bun run channel:live` runs the same check
+  for the npm channel (daily in `channel-live.yml`).
+- `bun run npm:ghosts -- --print-commands` — prints one `npm deprecate` command per version for
+  the package owner (needs publish rights; add `--otp=<code>` with 2FA). CI and agents never run
+  them.
 
 ## Dist-tags (operator, not CI)
 

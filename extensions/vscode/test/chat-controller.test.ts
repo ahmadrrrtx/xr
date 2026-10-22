@@ -221,7 +221,7 @@ test("401 maps to a token message and an unauthorized status", async () => {
     },
   });
   await controller.send("x");
-  assert.equal(controller.snapshot().messages[1].error, "The daemon rejected the token. Run XR: Set daemon token.");
+  assert.match(controller.snapshot().messages[1].error ?? "", /^The daemon rejected the token.*XR: Set daemon token\.$/);
   const status = [...published].reverse().find((m) => m.type === "status");
   assert.ok(status && status.type === "status" && status.status.state === "unauthorized");
 });

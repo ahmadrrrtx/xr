@@ -64,6 +64,32 @@ The coding entry currently supports `agent`. `xr --mode plan` and `xr --mode ask
 - Startup/preflight validation uses the existing global CLI structured JSON error document. Consumers should not treat a preflight refusal as a started run.
 - Usage errors exit 2 before cwd changes, stdin waits, kernel/wizard/provider activity for the preflighted options. Reaching a task limit is a different runtime outcome.
 
+### Tool failure reasons (XR-LAUNCH-024)
+
+A failed tool never surfaces as a bare `failed`. In `--json` mode the `tool` line with `"status":"error"` carries `output` (the tool's own message, the same text the model sees), `reason` (a stable code) and `next` (a short next step for a person). The terminal UI prints the message on the `✕` line and the code plus next step beneath it. The daemon chat stream's `tool_result` events carry the same `error`, `reason` and `next` fields.
+
+Codes are a stable API: new codes may be added, existing codes are never renamed or reused. They never contain paths, commands or secret material. Source of truth: `src/core/tool-reasons.ts`.
+
+- `denied:escape`: the path resolves outside the project root.
+- `denied:secret-path`: a secret/credential file (`.env`, private keys, token files) was read, moved or referenced by a shell command.
+- `denied:filesystem`: the filesystem authority refused the path (symlink, hard link, mount crossing, blocked path).
+- `denied:dangerous-command`: the shell guard refused a destructive command.
+- `denied:user`: the action was declined at the approval prompt (or by a configured deny rule).
+- `denied:policy`: a capability grant, loop policy or other guard rule blocked the tool.
+- `blocked:isolation-unavailable`: no verified sandbox is available and XR does not fall back to unsandboxed execution.
+- `blocked:integrity`: the execution-integrity gate refused an unverified binary.
+- `blocked:filesystem-unsupported`: file tools are unavailable on this platform (for example Alpine/musl).
+- `missing:file`: the file or folder does not exist.
+- `invalid:arguments`: the model sent malformed or incomplete arguments.
+- `invalid:unknown-tool`: the model asked for a tool that is not available in this mode.
+- `failed:stale`: the file changed while XR was working on it.
+- `failed:too-large`: the file or folder exceeds the tool limit.
+- `failed:binary`: the file is not UTF-8 text.
+- `failed:cancelled`: the step was cancelled.
+- `failed:command`: the shell command ran and exited non-zero.
+- `failed:tool`: any other tool-reported failure.
+- `error:exception`: the tool threw unexpectedly.
+
 ## Still not stable-release ready
 
 This contract patch does **not** repair:
@@ -80,5 +106,6 @@ Do not run untrusted repositories on the assumption that these boundaries are al
 
 - `test/cli/coder/tool-contract.test.ts`: actual file/shell tools crossing the coder policy; only isolated shell execution is stubbed, so no dangerous command runs.
 - `test/cli/coder/request-contract.test.ts`: strict parsed limits and programmatic preflight.
+- `test/cli/coder/tool-reasons.test.ts`: each denial class through the real agent loop and tools, rendered by the real `CoderSession` + `JsonUI`/`TtyUI`.
 - `test/e2e-blackbox/coder-contract.test.ts`: actual CLI subprocess, fresh HOME/workspace, real loopback-only provider, and filesystem/audit/output assertions. Includes an ordinary-write control to prevent “everything disabled” from passing as a fix.
 - Existing policy/session tests use production `{cmd}` approvals, not the old synthetic `{command}` shape.

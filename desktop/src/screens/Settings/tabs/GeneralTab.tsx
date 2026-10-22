@@ -459,9 +459,11 @@ export function GeneralTab() {
             onClick={() => {
               setExporting(true);
               void exportAllData()
-                .then((path) => {
-                  if (path) {
-                    toast.success('Data exported', { description: path });
+                .then((r) => {
+                  if (r.status === 'done') {
+                    toast.success('Data exported', { description: r.path });
+                  } else if (r.status === 'error') {
+                    toast.error('Export failed', { description: r.message });
                   } else {
                     toast('Export cancelled');
                   }
@@ -517,15 +519,23 @@ export function GeneralTab() {
         confirmLabel="Choose file…"
         onConfirm={() => {
           setImportOpen(false);
-          void importAllData().then((restored) => {
-            if (!restored) {
+          void importAllData().then((r) => {
+            if (r.status === 'cancelled') {
               toast('Import cancelled');
               return;
             }
-            toast.success('Data imported', {
-              description: 'Restart XR to apply the imported data.',
-              action: { label: 'Restart', onClick: () => void restartApp() },
+            if (r.status === 'error') {
+              // XR-LAUNCH-021: a damaged archive is an error, never a crash,
+              // and nothing was changed.
+              toast.error('Import failed — your data is unchanged', { description: r.message });
+              return;
+            }
+            // Staged and verified. It is applied while XR starts, before any
+            // database opens; the current data is kept as a backup.
+            toast.success('Import ready', {
+              description: 'XR restarts now to apply it. Your current data is kept as a backup.',
             });
+            setTimeout(() => void restartApp(), 1500);
           });
         }}
       />
@@ -539,7 +549,9 @@ export function GeneralTab() {
         busy={resetBusy}
         onConfirm={() => {
           setResetBusy(true);
-          void resetApp(true);
+          void resetApp(true).then((err) => {
+            if (err) toast.error('Reset failed', { description: err });
+          });
         }}
       />
     </div>

@@ -46,9 +46,12 @@ claiming otherwise is a false-claim defect.)
 XR enforces an in-process **policy gate** (canonical path/URL resolution, deny-by-default) on
 every platform, plus a risk-tier isolation lattice: on Linux, tool actions can be confined by
 bubblewrap namespaces; `gVisor` runs only with `runsc` + a runsc-capable container runtime and
-operator opt-in (row #3); the raw-`unshare` fallback is weaker than bubblewrap and the guarantee
-matrix says so (row #7); macOS and Windows isolation backends remain **unvalidated** and
-high-risk actions fail closed on those hosts (row #1); Firecracker/Kata microVMs are detection
+operator opt-in (row #3); the raw-`unshare` fallback now pivot_roots into a minimal root and
+refuses if any mount step fails, but has no seccomp filter (row #7, XR-LAUNCH-004); on macOS and
+Windows, agent shell commands need Docker/Podman or the **experimental, opt-in** Seatbelt /
+AppContainer sandbox (`XR_OS_SANDBOX=experimental`, not hardware-verified) and are otherwise
+**refused** (row #1, XR-LAUNCH-003); Windows ARM64 file tools fail closed on the CLI's Bun
+(XR-LAUNCH-005); Firecracker/Kata microVMs are detection
 hooks only (row #2). It is **not** VM/kernel confinement, and it degrades honestly by host
 (`xr env capabilities --json` probes the real backend). Do not run XR against untrusted content
 with credentials you cannot afford to lose.
@@ -191,7 +194,7 @@ sessions yet (exception E-1). The first-task ≥95% figure is an automated proxy
 fresh-machine attempts).
 
 ### The LOC ceiling is re-baselined and machine-stamped
-Row #20 (new since 1.0.0): **the <!-- XR:TREE-CEILING -->172,000<!-- /XR:TREE-CEILING -->-LOC
+Row #20 (new since 1.0.0): **the <!-- XR:TREE-CEILING -->174,500<!-- /XR:TREE-CEILING -->-LOC
 tree ceiling is a no-regrowth guard, not the plan's ≤110k target.**
 History: Phase 5 measured 154,426 → 131,050 LOC and set the gate at 135,000; Phase 7 raised it once, deliberately, to 136,000 for the memory policy layer; later phases raised it again — each time in a diff, with the reason beside `TREE_CEILING` in `scripts/size-gate.ts` — and the excerpt row, previously published at the Phase-5 value, went stale behind those raises. <!-- xr:numeric-history -->
 The present-tense figure is now stamped from the single

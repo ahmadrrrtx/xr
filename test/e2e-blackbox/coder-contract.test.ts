@@ -120,6 +120,18 @@ describe("coding CLI dry-run end to end", () => {
     } finally { await f.close(); }
   }, T);
 
+  test("XR-LAUNCH-024: a refused tool prints its cause, a stable reason and a next step in --json", async () => {
+    const f = await fixture("read_file", { path: "../outside-024.txt" });
+    try {
+      const r = await f.run([]);
+      expect(r.timedOut).toBe(false);
+      const failed = events(r).find((e) => e.type === "tool" && e.status === "error");
+      expect(failed).toMatchObject({ tool: "read_file", output: "path escapes the project root", reason: "denied:escape" });
+      expect(typeof failed?.next).toBe("string");
+      expect(r.stdout).not.toContain('"output":"failed"');
+    } finally { await f.close(); }
+  }, T);
+
   test("--dry-run=false does not disable ordinary explicit writes", async () => {
     const f = await fixture();
     try {

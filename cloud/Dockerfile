@@ -11,7 +11,7 @@
 # `Bun.file` at runtime, and the PGlite driver's WASM path is well-trodden there.
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM oven/bun:1.3.14-alpine AS builder
+FROM oven/bun:1.4.2-alpine AS builder
 
 WORKDIR /app
 
@@ -26,7 +26,7 @@ COPY scripts ./scripts
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM oven/bun:1.3.14-alpine AS runtime
+FROM oven/bun:1.4.2-alpine AS runtime
 
 WORKDIR /app
 

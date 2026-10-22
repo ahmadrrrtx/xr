@@ -81,7 +81,8 @@ export function applySecurityHeaders(res: Response, req: Request): Response {
   }
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", "DENY");
-  headers.set("referrer-policy", "no-referrer");
+  // Route-level wins (the sign-in page needs `same-origin`, see session-auth).
+  if (!headers.has("referrer-policy")) headers.set("referrer-policy", "no-referrer");
   headers.set("permissions-policy", isHtml ? DASHBOARD_PERMISSIONS_POLICY : API_PERMISSIONS_POLICY);
 
   if (isHtml) {

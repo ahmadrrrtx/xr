@@ -47,9 +47,13 @@ describe("9.17 retrieval latency (measured)", () => {
     const p50 = pct(samples, 50);
     const p95 = pct(samples, 95);
     const p99 = pct(samples, 99);
-    mkdirSync(join(process.cwd(), "benchmarks/memory-recall"), { recursive: true });
+    // XR-LAUNCH-033: never rewrite the tracked sample in benchmarks/. The
+    // measurement goes to XR_BENCH_OUT_DIR (kept, e.g. a CI artifact dir) or
+    // the suite-owned temp root (test/helpers/suite-tmp.ts deletes it).
+    const outDir = join(process.env.XR_BENCH_OUT_DIR || join(tmpdir(), "xr-bench"), "memory-recall");
+    mkdirSync(outDir, { recursive: true });
     writeFileSync(
-      join(process.cwd(), "benchmarks/memory-recall/suite-latency.json"),
+      join(outDir, "suite-latency.json"),
       JSON.stringify({ p50, p95, p99, n: samples.length, samples, bun: Bun.version, at: new Date().toISOString() }, null, 2),
     );
     expect(p95).toBeLessThan(250);

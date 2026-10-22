@@ -19,6 +19,8 @@ import { detectAllRuntimes, detectRuntime } from "../local/runtimes.ts";
 import { validateOllamaModelId } from "../local/registry.ts";
 import { knownProviders, PRESETS } from "../providers/factory.ts";
 import { preferredSecretBackend, setSecret } from "../security/secrets.ts";
+import { migrateFileSecretsToKeychain, secretStoreHealth } from "../security/secret-migration.ts";
+import { hardenDataHome } from "../storage/permissions.ts";
 import { summarizeHealthChecks, REQUIRED_HEALTH_CHECK_IDS } from "./baseline-status.ts";
 
 export type XROs = "windows" | "macos" | "linux" | "termux" | "unknown";
@@ -242,8 +244,8 @@ export async function probeHealth(opts: InstallOptions = {}): Promise<HealthChec
   checks.push({ id: "local-runtimes-detected", label: "Detected local runtimes", state: readyLocal === "none" ? "warn" : "ok", detail: readyLocal, remediation: readyLocal === "none" ? "Install/start Ollama, LM Studio, Jan, llama.cpp, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, or SGLang." : undefined });
   checks.push({ id: "local-model", label: "Local model", state: runtimeStatus.models.includes(selectedModel) ? "ok" : (localCfg.enabled ? "warn" : "skip"), detail: `${selectedRuntime}/${selectedModel}`, remediation: `Run xr models install ${selectedModel} or xr models set ${selectedRuntime} <model>.` });
 
-  const secretBackend = preferredSecretBackend();
-  checks.push({ id: "secrets", label: "Secret store", state: secretBackend === "file" ? "warn" : "ok", detail: secretBackend, remediation: secretBackend === "file" ? `Keys fall back to ${join(XR_HOME, ".env")} — AES-256-GCM sealed with a per-install key, chmod 600. Install OS secret tooling for the strongest storage.` : undefined });
+  // XR-LAUNCH-015: truthful probe — an OS store is reported only if its tool exists.
+  checks.push({ id: "secrets", label: "Secret store", ...secretStoreHealth() });
 
   const ffmpeg = commandExists("ffmpeg");
   const whisper = commandExists("whisper-cli") || commandExists("main") || existsSync(join(XR_HOME, "components", "whisper.cpp"));
@@ -353,6 +355,11 @@ export async function repairXR(args: string[] = []): Promise<void> {
   ok(`Config present: ${configPath()}`);
   const envFile = join(XR_HOME, ".env");
   if (existsSync(envFile)) { try { chmodSync(envFile, 0o600); ok("Secret fallback file permissions hardened."); } catch { warn("Could not chmod ~/.xr/.env on this platform."); } }
+  const perms = hardenDataHome(XR_HOME); // XR-LAUNCH-016
+  if (perms.changed.length) ok(`Data home tightened to owner-only: ${perms.changed.join(", ")} (logged to logs/permissions-migration.log).`);
+  const moved = await migrateFileSecretsToKeychain(); // XR-LAUNCH-015
+  if (moved.moved.length) ok(`Moved ${moved.moved.length} secret(s) into ${moved.backend}; the sealed backup is kept until the next successful run.`);
+  if (moved.failed.length) warn(`Kept in the file fallback (keychain refused): ${moved.failed.join(", ")}.`);
 
   const pm = packageManager();
   if (pm && (opts.yes || await approved(`Run ${pm} install to repair dependencies?`, false, opts))) {
@@ -365,28 +372,46 @@ export async function repairXR(args: string[] = []): Promise<void> {
 }
 
 export async function updateXR(args: string[] = []): Promise<void> {
-  const opts = parseOptions(args);
+  const { checkForUpdate, runningVersion } = await import("../update/check.ts");
+  if (args.includes("--check")) return checkForUpdate(args, rootDir);
   banner();
   console.log(C.bold("XR Update"));
   backupConfig("pre-update");
 
   // Phase 1 · T11 — atomic update with health canary + automatic rollback.
   // One contract across git-checkout, npm and compiled-binary layouts
-  // (see src/update/atomic-updater.ts). Phase 3 · T2: the binary layout
-  // downloads the platform binary from the release feed.
+  // (see src/update/atomic-updater.ts). The binary layout resolves the newest
+  // complete release and downloads only when it is newer (XR-LAUNCH-019).
   const { runAtomicUpdate } = await import("../update/atomic-updater.ts");
   const { detectChannel } = await import("../update/channels.ts");
-  const release = JSON.parse(readFileSync(join(rootDir, "release.manifest.json"), "utf8")) as {
-    identity?: { version?: string };
-    version?: string;
-  };
-  const version = release.identity?.version ?? release.version;
+  const version = await runningVersion(rootDir);
   // Phase 9 · T5 — say plainly which channel owns this install before updating.
   const channel = detectChannel({ platform: process.platform, exePath: process.execPath });
   if (channel.managed) {
     info(`Channel-managed install detected: ${channel.detail} — updating through ${channel.channel} (atomic + rollback per channel contract).`);
   }
-  const result = await runAtomicUpdate({ packageRoot: rootDir, version, channel: channel.managed ? channel : undefined });
+  const { standaloneBinary, latestCompleteRelease, installerCommand } = await import("../update/check.ts");
+  if (!channel.managed && standaloneBinary(rootDir)) {
+    // Installer-placed binary: never route it to npm (XR-LAUNCH-007); it has
+    // no package root to swap in place, so point at the verified installer.
+    const { describeUpdate } = await import("../update/npm-channel.ts");
+    const d = describeUpdate(version, await latestCompleteRelease());
+    if (d.updateAvailable) {
+      info(`${d.message.charAt(0).toUpperCase() + d.message.slice(1)}. This binary was installed by the XR installer; update it by re-running the installer (it verifies the release's SHA256SUMS before replacing anything):`);
+      console.log(`  ${installerCommand()}`);
+      process.exitCode = 1;
+    } else if (d.latest) ok(d.message.charAt(0).toUpperCase() + d.message.slice(1) + ".");
+    else {
+      warn(`Update not checked: ${d.message}.`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+  const result = await runAtomicUpdate({
+    packageRoot: rootDir,
+    currentVersion: version, // never a target: each layout resolves "latest" itself (XR-LAUNCH-019)
+    channel: channel.managed ? channel : undefined,
+  });
 
   if (result.ok) {
     ok(`Updated to ${result.activated}. Health canary passed; atomic swap complete.`);
@@ -395,16 +420,24 @@ export async function updateXR(args: string[] = []): Promise<void> {
     return;
   }
 
+  // "Nothing to do" is success, said precisely — never "already up to date"
+  // when the source could not be reached (XR-LAUNCH-007).
+  if (/^up to date|newer than the published/.test(result.reason)) {
+    ok(result.reason.charAt(0).toUpperCase() + result.reason.slice(1) + ".");
+    return;
+  }
+  if (result.reason.startsWith("already up to date or")) {
+    // The git layout cannot tell these apart (binary/npm layouts compare
+    // against the published version first); say both instead of "latest".
+    info(`Nothing installed: ${result.reason}. Run \`xr update --check\` to see the published version.`);
+    return;
+  }
   if (result.keptCurrent) {
     warn(`Update did not happen — stayed on ${result.keptCurrent}.`);
   }
   warn(`Update not applied: ${result.reason}`);
-  info("The previous version was left untouched (auto-rollback). Config backup is in ~/.xr/backups.");
-  if (result.reason.includes("already up to date")) {
-    ok("You are already on the latest version.");
-  } else {
-    process.exitCode = 1;
-  }
+  info(/nothing changed$/.test(result.reason) ? "Nothing was downloaded or changed." : "The previous version was left untouched (auto-rollback). Config backup is in ~/.xr/backups.");
+  process.exitCode = 1;
 }
 
 export async function resetXR(args: string[] = []): Promise<void> {

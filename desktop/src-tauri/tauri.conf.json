@@ -128,6 +128,10 @@
           "xr"
         ]
       }
+    },
+    "updater": {
+      "pubkey": "",
+      "endpoints": []
     }
   }
 }

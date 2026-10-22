@@ -49,6 +49,22 @@ export interface PlacementPolicyConfig {
    * rejected. Fail-closed everywhere (Art. IV.4 / IX.6).
    */
   readonly hardened?: boolean;
+  /** Host OS for remediation text (defaults to process.platform; tests override). */
+  readonly platform?: NodeJS.Platform;
+}
+
+/**
+ * XR-LAUNCH-003 — remediation must be possible on the host it is shown on.
+ * "Install bubblewrap" is Linux-only; macOS/Windows get their real options.
+ */
+export function tier2Remediation(platform: NodeJS.Platform): string {
+  if (platform === "darwin") {
+    return "macOS: high-risk actions (shell commands) need an isolated environment and will not run in-process. Start Docker Desktop or Podman, or opt in to the experimental Seatbelt sandbox with XR_OS_SANDBOX=experimental (not yet hardware-verified).";
+  }
+  if (platform === "win32") {
+    return "Windows: high-risk actions (shell commands) need an isolated environment and will not run in-process. Start Docker Desktop or Podman, or opt in to the experimental AppContainer sandbox with XR_OS_SANDBOX=experimental (x64; not yet hardware-verified).";
+  }
+  return "Install bubblewrap (e.g. `sudo apt install bubblewrap`) or allow unprivileged user namespaces, or install a container runtime, so high-risk actions can run isolated; high-risk work will not run in-process.";
 }
 
 /**
@@ -176,7 +192,7 @@ export function decidePlacementForTier(
     reason: `required isolation for ${tier} is unavailable on this host${config.hardened ? " (hardened mode)" : ""}`,
     remediation:
       tier === "tier2_isolated"
-        ? "Install bubblewrap (or a container runtime) so high-risk actions can run isolated; high-risk work will not run in-process."
+        ? tier2Remediation(config.platform ?? process.platform)
         : "Install a process/namespace sandbox, or set allowTier1InProcessFallback to accept a policy-only boundary.",
   };
 }

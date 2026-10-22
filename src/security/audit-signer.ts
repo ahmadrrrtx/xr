@@ -37,7 +37,7 @@ import {
   verify as cryptoVerify,
   type KeyObject,
 } from "node:crypto";
-import { getSecretSyncCached, setSecret } from "./secrets.ts";
+import { getSecretSyncCached, isSecretIndexed, setSecret } from "./secrets.ts";
 
 /** Secret name in the XR secret store (must match secrets' UPPER_SNAKE rule). */
 export const AUDIT_SIGNING_KEY_NAME = "XR_AUDIT_SIGN_KEY";
@@ -193,6 +193,10 @@ export function loadOrCreateAuditIdentity(): LoadedAuditIdentity | null {
       return null;
     }
   }
+  // XR-LAUNCH-015: the key is recorded as stored but unreadable right now (e.g.
+  // a locked keyring over SSH). Minting a new one would overwrite the anchor of
+  // the existing chain, so report "unavailable" instead.
+  if (isSecretIndexed(AUDIT_SIGNING_KEY_NAME)) return null;
   const id = generateAuditIdentity();
   try {
     storeAuditSigningKey(id.privateKeyB64);

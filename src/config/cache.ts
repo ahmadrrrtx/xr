@@ -47,8 +47,10 @@ export function configCacheTtlMs(): number {
   return DEFAULT_TTL_MS;
 }
 
-export function getCachedConfig<T = unknown>(): { config: T; warnings: string[]; loadedAt: number } | null {
+export function getCachedConfig<T = unknown>(path?: string): { config: T; warnings: string[]; loadedAt: number } | null {
   if (!holder) return null;
+  // A snapshot of a different config.json (XR_HOME changed) is never served.
+  if (path !== undefined && holder.path !== path) return null;
   if (Date.now() - holder.loadedAt > DEFAULT_TTL_MS) return null;
   hits++;
   return {

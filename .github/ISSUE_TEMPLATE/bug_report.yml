@@ -83,7 +83,7 @@ body:
     id: environment
     attributes:
       label: OS and runtime
-      placeholder: "Ubuntu 24.04, Bun 1.3.14, installed via install.sh"
+      placeholder: "Ubuntu 24.04, Bun 1.4.2, installed via install.sh"
     validations:
       required: true
 

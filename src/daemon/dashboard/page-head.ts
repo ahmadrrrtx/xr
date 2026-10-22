@@ -125,6 +125,8 @@ export const PAGE_HEAD = `<!DOCTYPE html>
         <button type="button" class="status-chip" id="chip-audit" data-xr-action="navigateTo('audit')" title="Audit chain status — activate to open audit log"><div class="dot" aria-hidden="true"></div><span id="chip-audit-label">Audit</span></button>
         <button type="button" class="status-chip" id="chip-budget" data-xr-action="navigateTo('budget')" title="Budget status — activate to open budget"><div class="dot" aria-hidden="true"></div><span id="chip-budget-label">Budget</span></button>
         <button type="button" class="btn xr-s-5" data-xr-action="openPalette()" aria-label="Open command palette (Ctrl+K)">⌘K</button>
+        <!-- XR-LAUNCH-027: revokes this browser's session (the API token is unaffected). -->
+        <form method="post" action="/auth/logout"><button type="submit" class="btn btn-ghost" title="Sign out of this browser">Sign out</button></form>
       </div>
     </header>
 

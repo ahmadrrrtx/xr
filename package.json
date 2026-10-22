@@ -15,7 +15,8 @@
     "README.md",
     "LICENSE",
     "install.sh",
-    "install.ps1"
+    "install.ps1",
+    "release.manifest.json"
   ],
   "scripts": {
     "start": "bun run src/index.ts",
@@ -39,11 +40,17 @@
     "channel:sync": "bun run scripts/channel-manifest.ts --write",
     "channel:check": "bun run scripts/channel-manifest.ts --check",
     "channel:live": "bun run scripts/channel-live-check.ts",
+    "npm:ghosts": "bun run scripts/npm-ghost-versions.ts",
     "channel:publish-verify": "bun run scripts/channel-publish-verify.ts",
     "changelog:generate": "bun run scripts/changelog.ts --write",
     "changelog:check": "bun run scripts/changelog.ts --check",
     "platform:parity:check": "bun run scripts/platform-parity.ts --validate",
     "claim-lint": "bun run scripts/claim-lint.ts",
+    "desktop:ipc-acl": "bun scripts/desktop-ipc-acl.ts",
+    "support-matrix": "bun run scripts/support-matrix.ts",
+    "ci:policy": "bun run scripts/ci-policy.ts",
+    "desktop:coverage": "bun run scripts/desktop-store-coverage.ts",
+    "journey:cli": "bun run scripts/journey/cli-journey.ts",
     "placeholder-lint": "bun run scripts/placeholder-lint.ts",
     "mutation:run": "bun run scripts/mutate.ts --threshold 0.6",
     "golden-path": "bun run scripts/golden-path.ts",
@@ -134,5 +141,5 @@
     "bun": ">=1.3.0",
     "node": ">=20"
   },
-  "packageManager": "bun@1.3.14"
+  "packageManager": "bun@1.4.2"
 }

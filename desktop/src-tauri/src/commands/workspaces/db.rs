@@ -21,16 +21,18 @@ pub struct WorkspaceDb {
 
 impl WorkspaceDb {
     pub fn init(app: &AppHandle) -> Self {
-        let dir = app
-            .path()
-            .app_data_dir()
-            .expect("tauri app_data_dir must resolve");
-        std::fs::create_dir_all(&dir).expect("create app data dir");
-        let path = dir.join("xr.db");
-        let conn = Connection::open(&path).expect("open xr.db");
-        conn.pragma_update(None, "journal_mode", "WAL")
-            .expect("enable WAL (shared with chat)");
-        conn.execute_batch(MIGRATIONS).expect("apply workspace DDL");
+        // XR-LAUNCH-021: no `.expect` — an unopenable xr.db is moved aside
+        // (or the session falls back to memory) and the user is told.
+        let dir = match app.path().app_data_dir() {
+            Ok(d) => d,
+            Err(e) => {
+                crate::commands::data_health::note(app, Some(format!("app data dir unavailable: {e}")));
+                std::env::temp_dir().join("xr-desktop-fallback")
+            }
+        };
+        let opened = crate::data_safety::open_shared_db(&dir, MIGRATIONS);
+        crate::commands::data_health::note(app, opened.notice);
+        let conn = opened.conn;
         WorkspaceDb {
             conn: Mutex::new(conn),
         }

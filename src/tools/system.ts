@@ -2,6 +2,7 @@
 import type { Tool, ToolResult } from "../core/types.ts";
 import { checkAction } from "../security/guard.ts";
 import { FilesystemAuthority, filesystemMessage, withFilesystem } from "../security/filesystem.ts";
+import { filesystemReason, guardDenialReason } from "../core/tool-reasons.ts";
 import { runCommand } from "../util/process.ts";
 import { shellTrustSpec } from "../runtime/trust/tool-support.ts";
 import { resolveShellCommandIdentity, decideExecIntegrity } from "../security/exec-integrity.ts";
@@ -16,7 +17,7 @@ export const listDirTool: Tool = {
       const entries = fs.list(typeof args.path === "string" ? args.path : ".");
       ctx.audit("list_dir", { path: String(args.path ?? "."), authority: fs.descriptor().id });
       return { ok: true, output: entries.map(e => e.name + (e.directory ? "/" : "")).join("\n") || "(empty)", data: { count: entries.length } };
-    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    } catch (e) { return { ok: false, output: filesystemMessage(e), reason: filesystemReason(e) }; }
     finally { if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };
@@ -30,13 +31,13 @@ export const deleteFileTool: Tool = {
       fs = ctx.filesystem ?? new FilesystemAuthority(ctx.cwd);
       pending = fs.prepare(args.path, "delete");
       const approved = await ctx.approve({ tool: "delete_file", args: { path: pending.path, filesystem: pending.identity }, reason: `delete ${pending.path}`, preview: pending.sensitive ? "(sensitive content withheld)" : pending.oldContent.slice(0, 3000) });
-      if (!approved) { ctx.audit("delete_file.denied", { path: pending.path }); return { ok: false, output: "delete denied" }; }
+      if (!approved) { ctx.audit("delete_file.denied", { path: pending.path }); return { ok: false, output: "delete denied", reason: "denied:user" }; }
       pending.validate();
       if (ctx.dryRun) { ctx.audit("delete_file.dryrun", { path: pending.path }); return { ok: true, output: `[dry-run] would delete ${pending.path}` }; }
       pending.commit();
       ctx.audit("delete_file.applied", { path: pending.path });
       return { ok: true, output: `deleted ${pending.path}` };
-    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    } catch (e) { return { ok: false, output: filesystemMessage(e), reason: filesystemReason(e) }; }
     finally { pending?.close(); if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };
@@ -76,10 +77,11 @@ export const shellTool: Tool = {
     const decision = checkAction({ tool: "shell", args: { cmd } }, {
       egressAllowlist: ctx.egressAllowlist ?? [],
       requireApproval: ["shell"],
+      cwd: ctx.cwd, // XR-LAUNCH-031: relative words resolve where the command runs
     });
     if (!decision.allowed) {
       ctx.audit("shell.blocked", { cmd, reason: decision.reason });
-      return { ok: false, output: `blocked: ${decision.reason}` };
+      return { ok: false, output: `blocked: ${decision.reason}`, reason: guardDenialReason(decision.reason) };
     }
     const approved = await ctx.approve({
       tool: "shell",
@@ -94,7 +96,7 @@ export const shellTool: Tool = {
     });
     if (!approved) {
       ctx.audit("shell.denied", { cmd });
-      return { ok: false, output: "shell denied" };
+      return { ok: false, output: "shell denied", reason: "denied:user" };
     }
     if (ctx.dryRun) {
       ctx.audit("shell.dryrun", { cmd });
@@ -118,7 +120,7 @@ export const shellTool: Tool = {
        */
       let filesystemAuthority;
       try { filesystemAuthority = ctx.filesystem?.descriptor() ?? withFilesystem(ctx.cwd, "model-tool", fs => fs.descriptor()); }
-      catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+      catch (e) { return { ok: false, output: filesystemMessage(e), reason: filesystemReason(e) }; }
       const { request, executable } = shellTrustSpec(cmd, ctx.cwd, {
         timeoutMs: 120_000,
         maxOutputBytes: 4 * 1024 * 1024,
@@ -128,7 +130,7 @@ export const shellTool: Tool = {
       const r = await ctx.runIsolated(request, executable);
       if (r.blocked) {
         ctx.audit("shell.isolated_blocked", { cmd, reason: r.reason });
-        return { ok: false, output: `blocked: ${r.reason ?? "isolation unavailable"}` };
+        return { ok: false, output: `blocked: ${r.reason ?? "isolation unavailable"}`, reason: "blocked:isolation-unavailable" };
       }
       const out = r.stdout + r.stderr;
       ctx.audit("shell.run_isolated", { cmd, exit: r.exitCode, placement: r.placement, verified: r.verified });
@@ -143,6 +145,7 @@ export const shellTool: Tool = {
       return {
         ok: false,
         output: "blocked: shell requires an isolated execution environment, but none is wired (hardened mode). Set XR_TRUST_HARDENED=0 only on hosts where this is explicitly accepted.",
+        reason: "blocked:isolation-unavailable",
       };
     }
     // Phase 07 · Enforcement on the host-authority (degraded) path: in
@@ -151,7 +154,7 @@ export const shellTool: Tool = {
     // and is governed by its own environment, so we do not deny there.
     if (execDecision.decision === "deny") {
       ctx.audit("shell.exec_integrity_denied", { cmd, reasons: execDecision.reasons });
-      return { ok: false, output: `blocked by execution-integrity gate (mode=enforce): ${execDecision.reasons.join("; ")}` };
+      return { ok: false, output: `blocked by execution-integrity gate (mode=enforce): ${execDecision.reasons.join("; ")}`, reason: "blocked:integrity" };
     }
     try {
       // Phase 06 · Step 18 — the run's AbortSignal reaches the subprocess: a
@@ -166,12 +169,12 @@ export const shellTool: Tool = {
       const out = proc.stdout + proc.stderr;
       if (proc.error === "cancelled") {
         ctx.audit("shell.cancelled", { cmd });
-        return { ok: false, output: out.slice(0, 4000) || "shell command cancelled" };
+        return { ok: false, output: out.slice(0, 4000) || "shell command cancelled", reason: "failed:cancelled" };
       }
       ctx.audit("shell.run", { cmd, exit: proc.status });
-      return { ok: proc.ok, output: out.slice(0, 4000) || `(exit ${proc.status})` };
+      return { ok: proc.ok, output: out.slice(0, 4000) || `(exit ${proc.status})`, ...(proc.ok ? {} : { reason: "failed:command" }) };
     } catch (e) {
-      return { ok: false, output: `shell error: ${(e as Error).message}` };
+      return { ok: false, output: `shell error: ${(e as Error).message}`, reason: "error:exception" };
     }
   },
 };

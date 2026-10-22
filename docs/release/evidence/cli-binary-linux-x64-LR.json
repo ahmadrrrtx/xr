@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "kind": "cli-journey",
+  "channel": "binary",
+  "target": "cli-binary-linux-x64",
+  "os": "linux",
+  "arch": "x64",
+  "version": "1.1.0",
+  "nextVersion": "1.1.1-journey.1",
+  "evidenceClass": "LR",
+  "commit": "14e0d4c5d294de09caa74ee5d68c625bc06b699a",
+  "dirty": false,
+  "runUrl": null,
+  "runner": "local",
+  "at": "2026-10-22T07:27:08.212Z",
+  "steps": [
+    {
+      "step": "build",
+      "status": "pass",
+      "detail": "xr-linux-x64 built for 1.1.0 and 1.1.1-journey.1",
+      "ms": 2395
+    },
+    {
+      "step": "package",
+      "status": "pass",
+      "detail": "SHA256SUMS written for v1.1.0 and v1.1.1-journey.1",
+      "ms": 213
+    },
+    {
+      "step": "install",
+      "status": "pass",
+      "detail": "install.sh v1.1.0 from http://127.0.0.1:42059",
+      "ms": 744
+    },
+    {
+      "step": "launch",
+      "status": "pass",
+      "detail": "v1.1.0 (Graphite)",
+      "ms": 326
+    },
+    {
+      "step": "agent",
+      "status": "pass",
+      "detail": "write_file applied in the workspace after 2 provider turn(s)",
+      "ms": 375
+    },
+    {
+      "step": "update",
+      "status": "pass",
+      "detail": "1.1.0 → 1.1.1-journey.1",
+      "ms": 1564
+    },
+    {
+      "step": "uninstall",
+      "status": "pass",
+      "detail": "launcher, install dir, data home removed; .profile/.bashrc/.zshrc byte-identical",
+      "ms": 303
+    }
+  ],
+  "result": "pass"
+}

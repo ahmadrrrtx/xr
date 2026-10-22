@@ -32,7 +32,7 @@ import type { Provider } from "../core/types.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
-import { setSecret, getSecret } from "../security/secrets.ts";
+import { setSecretAsync, getSecret } from "../security/secrets.ts";
 import { validateProviderUrl } from "../providers/provider-url-guard.ts";
 import { hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
 import type {
@@ -344,7 +344,8 @@ export class ProviderService implements LifecycleHook {
   }
 
   async storeKey(envName: string, value: string): Promise<string> {
-    const backend = setSecret(envName, value);
+    // XR-LAUNCH-015: keychain-first write without blocking the daemon's event loop.
+    const backend = await setSecretAsync(envName, value);
     // Phase 8 — ambient hydration is gated (default OFF). Durable write
     // always happens; process.env is mirrored only when compat is on.
     hydrateProviderEnv(envName, value);

@@ -8,11 +8,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
 import { makeHandler } from "../src/daemon/server.ts";
+import { BrowserSessions } from "../src/daemon/session-auth.ts";
 import { dashboardHtml } from "../src/daemon/dashboard.ts";
 
 let tmp: string;
 let store: Store;
 const TOKEN = "test-token-123";
+/** XR-LAUNCH-027 — a handler plus a real browser-session cookie (the token is never a cookie value). */
+function withSession() {
+  const browser = new BrowserSessions();
+  return { h: makeHandler(store, TOKEN, { browser }), SESSION: `xr_session=${browser.create()}` };
+}
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-daemon-"));
   process.env.XR_HOME = join(tmp, "home");
@@ -63,24 +69,28 @@ test("wrong token is rejected", async () => {
   expect((await h(bad)).status).toBe(401);
 });
 
-test("Phase 4 T5 — query token bootstraps a session cookie, then redirects to a token-free URL (one-time bootstrap)", async () => {
-  const h = makeHandler(store, TOKEN);
-  const res = await h(new Request(`http://127.0.0.1:7842/?token=${TOKEN}`));
+test("Phase 4 T5 / XR-LAUNCH-027 — a single-use bootstrap code mints a session cookie (not the token), then redirects to a code-free URL", async () => {
+  const browser = new BrowserSessions();
+  const h = makeHandler(store, TOKEN, { browser });
+  const code = browser.mintBootstrap();
+  const res = await h(new Request(`http://127.0.0.1:7842/?bootstrap=${code}`));
   expect(res.status).toBe(302);
   const cookie = res.headers.get("set-cookie") ?? "";
   expect(cookie).toContain("xr_session=");
   expect(cookie).toContain("HttpOnly");
   expect(cookie).toContain("SameSite=Strict");
+  expect(cookie).not.toContain(TOKEN);
   const location = res.headers.get("location") ?? "";
-  expect(location).not.toContain("token="); // token never lingers
+  expect(location).not.toContain("bootstrap="); // the code never lingers
   // The cookie now authenticates the dashboard.
-  const authed = await h(new Request("http://127.0.0.1:7842/", {
-    headers: { cookie: `xr_session=${TOKEN}` },
-  }));
+  const authed = await h(new Request("http://127.0.0.1:7842/", { headers: { cookie: cookie.split(";")[0]! } }));
   expect(authed.status).toBe(200);
   expect(authed.headers.get("content-type")).toContain("text/html");
-  // The query token is DEAD for mutating requests (CSRF guard).
-  const mut = await h(new Request(`http://127.0.0.1:7842/api/control/approve?token=${TOKEN}`, {
+  // The code is single-use, and ?token= is retired.
+  expect((await h(new Request(`http://127.0.0.1:7842/?bootstrap=${code}`))).status).toBe(401);
+  expect((await h(new Request(`http://127.0.0.1:7842/?token=${TOKEN}`))).status).toBe(401);
+  // A bootstrap code is DEAD for mutating requests (CSRF guard).
+  const mut = await h(new Request(`http://127.0.0.1:7842/api/control/approve?bootstrap=${browser.mintBootstrap()}`, {
     method: "POST",
     body: "{}",
   }));
@@ -88,9 +98,9 @@ test("Phase 4 T5 — query token bootstraps a session cookie, then redirects to 
 });
 
 test("Phase 4 T5 — strict CSP: no unsafe-inline, external dashboard assets", async () => {
-  const h = makeHandler(store, TOKEN);
+  const { h, SESSION } = withSession();
   const res = await h(new Request("http://127.0.0.1:7842/", {
-    headers: { cookie: `xr_session=${TOKEN}` },
+    headers: { cookie: SESSION },
   }));
   const csp = res.headers.get("content-security-policy") ?? "";
   expect(csp).toContain("script-src 'self'");
@@ -102,12 +112,12 @@ test("Phase 4 T5 — strict CSP: no unsafe-inline, external dashboard assets", a
   expect(html).not.toContain("style=\"");
   // external assets are served
   const js = await h(new Request("http://127.0.0.1:7842/assets/dashboard.js", {
-    headers: { cookie: `xr_session=${TOKEN}` },
+    headers: { cookie: SESSION },
   }));
   expect(js.status).toBe(200);
   expect(js.headers.get("content-type")).toContain("javascript");
   const css = await h(new Request("http://127.0.0.1:7842/assets/dashboard.css", {
-    headers: { cookie: `xr_session=${TOKEN}` },
+    headers: { cookie: SESSION },
   }));
   expect(css.status).toBe(200);
   // D-05 · brand images are external official renders: exact package bytes,
@@ -117,7 +127,7 @@ test("Phase 4 T5 — strict CSP: no unsafe-inline, external dashboard assets", a
     ["/assets/logo.png", "assets/logo.png"],
     ["/assets/avatar.png", "assets/avatar.png"],
   ] as const) {
-    const img = await h(new Request(`http://127.0.0.1:7842${route}`, { headers: { cookie: `xr_session=${TOKEN}` } }));
+    const img = await h(new Request(`http://127.0.0.1:7842${route}`, { headers: { cookie: SESSION } }));
     expect(img.status).toBe(200);
     expect(img.headers.get("content-type")).toBe("image/png");
     expect(img.headers.get("cache-control")).toContain("max-age=86400");
@@ -126,11 +136,11 @@ test("Phase 4 T5 — strict CSP: no unsafe-inline, external dashboard assets", a
 });
 
 test("Phase 4 T5 — cross-origin mutating request is refused (CSRF/Origin guard)", async () => {
-  const h = makeHandler(store, TOKEN);
+  const { h, SESSION } = withSession();
   const res = await h(new Request("http://127.0.0.1:7842/api/control/approve", {
     method: "POST",
     headers: {
-      cookie: `xr_session=${TOKEN}`,
+      cookie: SESSION,
       origin: "https://evil.example.com",
       "content-type": "application/json",
     },
@@ -141,7 +151,7 @@ test("Phase 4 T5 — cross-origin mutating request is refused (CSRF/Origin guard
   const ok = await h(new Request("http://127.0.0.1:7842/api/control/approve", {
     method: "POST",
     headers: {
-      cookie: `xr_session=${TOKEN}`,
+      cookie: SESSION,
       origin: "http://127.0.0.1:7842",
       "content-type": "application/json",
     },

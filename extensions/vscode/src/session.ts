@@ -8,13 +8,21 @@
  * The token is never written to disk by this extension. A token from a daemon
  * it started lives in memory for the session only. Stored tokens live in VS
  * Code's SecretStorage, which is backed by the OS keychain.
+ *
+ * XR-LAUNCH-034 — durable pairing without long-lived secrets: the daemon writes
+ * its current (per-start) token to `<XR home>/daemon/token`. Every refresh
+ * re-reads it, every token source is tried in order, and any 401/403 from a
+ * live request triggers an immediate refresh, so a daemon restart reconnects
+ * without re-pairing.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
 import * as os from "node:os";
 import * as vscode from "vscode";
 import { DaemonClient, DaemonHttpError } from "./daemon/client";
-import { describeSource, resolveToken } from "./daemon/token";
+import { resolveTokens } from "./daemon/token";
+import { connectWithTokens } from "./daemon/connect";
+import { describeTokenFileProblem, readDaemonTokenFile } from "./daemon/token-file";
 import { assertLoopbackDaemonUrl, DEFAULT_DAEMON_URL } from "./daemon/url";
 import type { DaemonStatus } from "./shared/protocol";
 
@@ -22,6 +30,8 @@ export const TOKEN_SECRET_KEY = "xr.daemonToken";
 const POLL_MS = 20000;
 const START_TIMEOUT_MS = 15000;
 const MAX_LOG_LINE = 500;
+/** At most one rejection-triggered refresh per window (inline suggestions can fire often). */
+const AUTH_REFRESH_MIN_MS = 2000;
 
 type Listener = (status: DaemonStatus) => void;
 
@@ -32,6 +42,7 @@ export class DaemonSession implements vscode.Disposable {
   private child: ChildProcess | undefined;
   private timer: NodeJS.Timeout | undefined;
   private refreshing: Promise<void> | null = null;
+  private lastAuthRefresh = 0;
   private readonly listeners = new Set<Listener>();
   private readonly output: vscode.OutputChannel;
 
@@ -65,6 +76,25 @@ export class DaemonSession implements vscode.Disposable {
     return this.current.state === "connected" ? this.client : null;
   }
 
+  /**
+   * Force a refresh (re-reading the token file) and return the client. Used
+   * after a request was rejected, e.g. because the daemon restarted with a new
+   * token. Returns null when no token is accepted.
+   */
+  async reconnect(): Promise<DaemonClient | null> {
+    await this.refresh();
+    return this.current.state === "connected" ? this.client : null;
+  }
+
+  /** A live request got 401/403: the daemon probably restarted. Re-read the token now. */
+  private onRejected(client: DaemonClient): void {
+    if (this.client !== client) return;
+    const now = Date.now();
+    if (now - this.lastAuthRefresh < AUTH_REFRESH_MIN_MS) return;
+    this.lastAuthRefresh = now;
+    void this.refresh();
+  }
+
   refresh(): Promise<void> {
     if (!this.refreshing) {
       this.refreshing = this.doRefresh().finally(() => {
@@ -85,54 +115,63 @@ export class DaemonSession implements vscode.Disposable {
       return;
     }
 
-    const token = await this.findToken(cfg.get<string>("token", ""));
-    const probe = new DaemonClient(origin, token?.token ?? "");
     let version: string | undefined;
     try {
-      version = (await probe.health()).version;
+      version = (await new DaemonClient(origin, "").health()).version;
     } catch {
       this.client = null;
       this.publish({ state: "offline", detail: "XR is not running on this computer." });
       return;
     }
 
-    if (!token) {
+    const { tokens, fileProblem } = await this.findTokens(cfg.get<string>("token", ""));
+    if (tokens.length === 0) {
       this.client = null;
       this.publish({
         state: "unauthorized",
         version,
-        detail: "No daemon token. Run XR: Set daemon token, or XR: Start XR from VS Code.",
+        detail: fileProblem ?? "No daemon token. Run XR: Start XR from VS Code, or XR: Set daemon token.",
       });
       return;
     }
 
-    try {
-      const [budget, providers] = await Promise.all([probe.budget(), probe.providers()]);
-      this.client = probe;
+    // Try every source in order; a rejected token falls through to the next.
+    const result = await connectWithTokens(tokens, (t) => new DaemonClient(origin, t));
+    if (result.kind === "connected") {
+      const bearer = result.token.token;
+      // Keep the existing client when the token is unchanged, so in-flight users see one object.
+      const keep = this.client && this.client.bearer === bearer ? this.client : null;
+      const live: DaemonClient = keep ?? new DaemonClient(origin, bearer, fetch, () => this.onRejected(live));
+      this.client = live;
       this.publish({
         state: "connected",
         version,
-        provider: providers.primary,
-        model: providers.model,
-        spendTodayUsd: budget.usage.dayUsd,
+        provider: result.providers.primary,
+        model: result.providers.model,
+        spendTodayUsd: result.budget.usage.dayUsd,
       });
-    } catch (err) {
-      this.client = null;
-      if (err instanceof DaemonHttpError && (err.status === 401 || err.status === 403)) {
-        this.publish({ state: "unauthorized", version, detail: `The daemon rejected the token (${describeSource(token.source)}).` });
-      } else {
-        this.publish({ state: "offline", version, detail: errorMessage(err) });
-      }
+      return;
     }
+    this.client = null;
+    if (result.kind === "error") {
+      this.publish({ state: "offline", version, detail: errorMessage(result.error) });
+      return;
+    }
+    const sources = result.kind === "rejected" ? result.sources.join(", ") : "none";
+    const hint = fileProblem ? ` ${fileProblem}` : "";
+    this.publish({ state: "unauthorized", version, detail: `The daemon rejected the token (${sources}).${hint}` });
   }
 
-  private async findToken(setting: string) {
-    return resolveToken({
+  private async findTokens(setting: string) {
+    const file = readDaemonTokenFile();
+    const tokens = resolveTokens({
       setting,
       environment: process.env.XR_DAEMON_TOKEN,
       session: this.sessionToken,
+      daemonFile: file.ok ? file.token : undefined,
       secretStorage: await this.secrets.get(TOKEN_SECRET_KEY),
     });
+    return { tokens, fileProblem: describeTokenFileProblem(file) };
   }
 
   private publish(status: DaemonStatus): void {
@@ -142,9 +181,11 @@ export class DaemonSession implements vscode.Disposable {
 
   /**
    * Start `xr serve` from VS Code when nothing is listening. The command is
-   * an application setting, so a repository cannot choose it. The printed
-   * token is kept in memory only, and log lines that mention a token are not
-   * written to the output channel.
+   * an application setting, so a repository cannot choose it. The daemon hides
+   * its token from the terminal and writes it to its owner-only token file,
+   * which the next refresh reads. (If the operator set XR_PRINT_TOKEN=1, a
+   * printed token is kept in memory only.) Log lines that mention a token are
+   * never written to the output channel.
    */
   async startDaemon(): Promise<boolean> {
     await this.refresh();
@@ -216,8 +257,10 @@ export class DaemonSession implements vscode.Disposable {
   }
 
   /**
-   * Dashboard URL on the configured loopback origin. The token is added only when
-   * one is already known, using the daemon's `?token=` bootstrap parameter.
+   * Dashboard URL on the configured loopback origin. When connected, the daemon
+   * mints a single-use sign-in link (XR-LAUNCH-027); otherwise, or if that fails
+   * (an older daemon), the plain URL opens the dashboard's sign-in page. The
+   * API token is never put in the URL.
    */
   async dashboardUrl(): Promise<string | null> {
     const cfg = vscode.workspace.getConfiguration("xr");
@@ -227,10 +270,13 @@ export class DaemonSession implements vscode.Disposable {
     } catch {
       return null;
     }
-    const token = await this.findToken(cfg.get<string>("token", ""));
-    const url = new URL("/", origin);
-    if (token) url.searchParams.set("token", token.token);
-    return url.toString();
+    const plain = new URL("/", origin).toString();
+    if (this.current.state !== "connected" || !this.client) return plain;
+    try {
+      return await this.client.bootstrapLink("/");
+    } catch {
+      return plain;
+    }
   }
 
   dispose(): void {

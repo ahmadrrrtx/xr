@@ -1,21 +1,21 @@
 # =============================================================================
 # XR R-6 (known-limitations register #11) — Provider canaries
 #
-# Every night, smoke every provider that is ACTUALLY configured in CI:
-#   · a preset with a repository secret key is probed live (its own health()
-#     call — the same one `xr doctor` uses) and a probe failure FAILS the job;
-#   · a preset without a secret is reported SKIP — never a fake pass.
-#     A sweep of ONLY skips fails the run (exit 2) unless
-#     XR_CANARY_ALLOW_EMPTY=1 (repo variable, audited skip). Coverage
-#     therefore scales exactly with the secrets the maintainer provisions;
-#     nothing is claimed beyond evidence.
+# NON-GATING (decision D7). Every night:
+#   · keyless leg (must pass): the canary harness probes the deterministic
+#     loopback fixture provider (scripts/canary-fixture.ts) — proves the
+#     harness without secrets or charges;
+#   · live leg: each preset with a repository secret is probed live (its own
+#     health() call — the same one `xr doctor` uses) and a probe failure fails
+#     the job; presets without a secret are SKIP, never a fake pass. With no
+#     secrets at all the live leg is an explicit audited skip
+#     (XR_CANARY_ALLOW_EMPTY=1 on that step only) instead of a red run.
 #
 # Activation: add any of the secrets listed in `env:` below (Settings →
-# Secrets and variables → Actions). Zero secrets = red unless
-# vars.XR_CANARY_ALLOW_EMPTY is "1"; one bad key = red job with the
-# provider and the HTTP detail.
+# Secrets and variables → Actions). Paid providers are never probed unless the
+# owner provisions their key.
 # =============================================================================
-name: Provider Canaries
+name: Provider Canaries (non-gating)
 
 on:
   schedule:
@@ -28,7 +28,7 @@ permissions:
 jobs:
   provider-canaries:
     name: Live provider smoke ({pass|fail|skip} per preset)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       # One entry per hosted preset.apiKeyEnv (16 hosted presets; bedrock's
@@ -36,7 +36,6 @@ jobs:
       # blank = SKIP row. XR_HOME is hermetic: nothing leaks between runs.
       XR_HOME: /tmp/xr-canary-home
       HOME: /tmp/xr-canary-home
-      XR_CANARY_ALLOW_EMPTY: ${{ vars.XR_CANARY_ALLOW_EMPTY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -54,24 +53,36 @@ jobs:
       PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Run provider canaries
+      # XR-LAUNCH-012: the harness is proven keylessly on every run, against
+      # the deterministic loopback fixture — this leg must be green.
+      - name: Canary harness vs the loopback fixture (keyless, must pass)
+        run: bun run scripts/canary-fixture.ts --json "$RUNNER_TEMP/provider-canaries-fixture.json"
+
+      # Live presets: only those whose secret is provisioned. With none, this is
+      # an explicit, audited skip (not a red run) — live canaries are
+      # non-gating and never incur charges without an owner-provided key.
+      - name: Live provider canaries (secrets-gated; audited skip when none)
+        env:
+          XR_CANARY_ALLOW_EMPTY: "1"
         run: bun run canary:providers --json "$RUNNER_TEMP/provider-canaries.json"
         # A configured provider failing its live probe = a red nightly.
         # Zero configured providers = exit 2 unless XR_CANARY_ALLOW_EMPTY=1.
 
       - name: Upload canary report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: provider-canaries
-          path: ${{ runner.temp }}/provider-canaries.json
+          path: ${{ runner.temp }}/provider-canaries*.json
           retention-days: 30
           if-no-files-found: ignore

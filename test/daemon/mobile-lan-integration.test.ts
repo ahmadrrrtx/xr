@@ -127,11 +127,14 @@ describe("Phase 2.4 · P1-1 — mobile LAN control path (real TLS serve())", () 
   });
 
   test("§15#10: bootstrap cookie is Secure iff the listener is LAN TLS", async () => {
-    const lan = await fetch(`${base}/?token=${TOKEN}`, { redirect: "manual" });
+    // XR-LAUNCH-027: links are single-use codes minted with the bearer token.
+    const mint = async (origin: string) =>
+      ((await (await fetch(`${origin}/auth/bootstrap`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` } })).json()) as { url: string }).url;
+    const lan = await fetch(await mint(base), { redirect: "manual" });
     expect(lan.status).toBe(302);
     expect(lan.headers.get("set-cookie") ?? "").toMatch(/Secure/);
     if (process.env.XR_IT_NO_LOOP !== "1") {
-      const loop = await fetch(`${loopBase}/?token=${TOKEN}`, { redirect: "manual" });
+      const loop = await fetch(await mint(loopBase), { redirect: "manual" });
       expect(loop.status).toBe(302);
       expect(loop.headers.get("set-cookie") ?? "").not.toMatch(/Secure/);
     }

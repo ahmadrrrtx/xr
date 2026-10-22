@@ -1,6 +1,6 @@
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { RouterProvider } from 'react-router-dom';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
 
 import { ApprovalModal } from '@/components/approvals/ApprovalModal';
@@ -19,6 +19,7 @@ import { ShellBridge } from '@/components/shell/ShellBridge';
 import { UpdateBanner } from '@/components/shell/UpdateBanner';
 import { UpdateModal } from '@/components/shell/UpdateModal';
 import { crashState, type RecoveryInfo } from '@/lib/shellApi';
+import { dbHealth } from '@/lib/settingsApi';
 import { attachUpdateEvents, useUpdateStore } from '@/stores/updateStore';
 
 const MIN_SPLASH_MS = 800;
@@ -89,6 +90,14 @@ export default function App() {
   // Phase 27 — tray state on launch, so the menu is right before anything moves.
   useEffect(() => {
     void useUpdateStore.getState().load();
+  }, []);
+
+  // XR-LAUNCH-021: tell the user what the startup data-safety pass did (a
+  // damaged database moved aside, an import applied). Stays until dismissed.
+  useEffect(() => {
+    void dbHealth().then((notices) => {
+      for (const n of notices) toast.warning('Your local data', { description: n, duration: Infinity });
+    });
   }, []);
 
   // Phase 22: the xr://oauth/callback listener lives at app root, so a browser return

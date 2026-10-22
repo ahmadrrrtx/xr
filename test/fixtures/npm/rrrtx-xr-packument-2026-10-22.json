@@ -1,0 +1,27 @@
+{
+  "name": "@rrrtx/xr",
+  "dist-tags": {
+    "latest": "1.0.0",
+    "beta": "1.0.0-beta.1"
+  },
+  "versions": {
+    "0.2.0": {},
+    "3.0.0": {
+      "deprecated": "superseded — the 3.x line is retired; install @rrrtx/xr@beta (1.0.0 line). See https://github.com/ahmadrrrtx/xr/blob/main/docs/HISTORY.md"
+    },
+    "3.0.1": {
+      "deprecated": "superseded — the 3.x line is retired; install @rrrtx/xr@beta (1.0.0 line). See https://github.com/ahmadrrrtx/xr/blob/main/docs/HISTORY.md"
+    },
+    "3.0.2": {
+      "deprecated": "superseded — the 3.x line is retired; install @rrrtx/xr@beta (1.0.0 line). See https://github.com/ahmadrrrtx/xr/blob/main/docs/HISTORY.md"
+    },
+    "3.0.3": {
+      "deprecated": "superseded — the 3.x line is retired; install @rrrtx/xr@beta (1.0.0 line). See https://github.com/ahmadrrrtx/xr/blob/main/docs/HISTORY.md"
+    },
+    "3.1.5": {
+      "deprecated": "superseded — the 3.x line is retired; install @rrrtx/xr@beta (1.0.0 line). See https://github.com/ahmadrrrtx/xr/blob/main/docs/HISTORY.md"
+    },
+    "1.0.0-beta.1": {},
+    "1.0.0": {}
+  }
+}

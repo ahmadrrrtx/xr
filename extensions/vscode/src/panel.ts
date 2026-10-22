@@ -38,6 +38,7 @@ export class XrChatView implements vscode.WebviewViewProvider, vscode.Disposable
     this.controller = new ChatController(
       {
         transport: () => session.transport,
+        reconnect: () => session.reconnect(),
         mode: readMode,
         editor: editorSnapshot,
         confirmApproval,

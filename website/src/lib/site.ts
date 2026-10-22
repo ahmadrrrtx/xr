@@ -26,6 +26,8 @@ export const site = {
   displayVersion: "1.1.0 (Graphite)",
   /** Version every install channel serves (release.manifest.json channels.publicVersion). */
   publicVersion: "1.0.0",
+  /** Release label (release.manifest.json identity.stability; decision D2). */
+  status: "Public beta",
   /** Bundled skills, mechanically counted from skills/ at stamp time. */
   skillCount: 65,
   nav: [

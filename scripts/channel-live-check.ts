@@ -14,7 +14,8 @@
  *                    "latest", carries SHA256SUMS (+ cosign bundle), the
  *                    source archive and every installer-mapped binary, all
  *                    listed in SHA256SUMS. Withdrawn tags are pre-release.
- *   npm              dist-tag `latest` == X; no withdrawn version published.
+ *   npm              dist-tag `latest` == X; no withdrawn version published;
+ *                    every version above the latest major deprecated → @latest (XR-LAUNCH-023).
  *   homebrew         <tap>/Formula/xr.rb declares X; every url/sha256 pair
  *                    matches the release's SHA256SUMS.
  *   winget           microsoft/winget-pkgs carries X for the package id with the
@@ -32,6 +33,7 @@
  */
 import { loadManifest, publicVersionOf, type ChannelId, type ReleaseManifest } from "./release-manifest.ts";
 import { parse as parseSums } from "./sums.ts";
+import { findGhostVersions, type Packument } from "./npm-ghost-versions.ts";
 
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -152,13 +154,16 @@ async function checkNpm(ctx: Ctx): Promise<ChannelResult> {
     headers: { accept: "application/json" },
   });
   if (res.status !== 200) return result("npm", [`registry returned HTTP ${res.status} for ${name}`], "");
-  const body = (await res.json()) as { "dist-tags"?: Record<string, string>; versions?: Record<string, unknown> };
+  const body = (await res.json()) as Packument;
   const latest = body["dist-tags"]?.latest;
   if (latest !== ctx.version) problems.push(`npm dist-tag latest is ${latest ?? "unset"}, expected ${ctx.version}`);
   if (!body.versions?.[ctx.version]) problems.push(`npm has no version ${ctx.version}`);
   for (const w of ctx.manifest.channels?.withdrawnTags ?? []) {
     if (body.versions?.[w.tag.slice(1)]) problems.push(`withdrawn ${w.tag} is published on npm`);
   }
+  // XR-LAUNCH-023: versions above the latest major must be deprecated → @latest
+  // (owner fix: `bun run npm:ghosts -- --print-commands`).
+  if (latest) for (const p of findGhostVersions(body, name).problems) problems.push(`${p} (owner: bun run npm:ghosts -- --print-commands)`);
   return result("npm", problems, `latest = ${ctx.version}`);
 }
 

@@ -28,7 +28,7 @@
 | Confused deputy via tool/plugin/MCP | High-risk classes run in a sandbox with no ambient authority; approval bound to exact action |
 | Path traversal / symlink escape | cwd must be within granted roots (realpath-checked); sensitive paths blocked; Tier-2 FS enforced by the OS, not path checks |
 | Access outside workspace root | `touchesOutsideWorkspace` escalates tier; granted roots only; host home absent in sandbox |
-| Secret path / env leakage | ambient env stripped; sensitive paths blocked; broker holds raw values in-memory only |
+| Secret path / env leakage | ambient env stripped; sensitive paths blocked by the filesystem authority for file tools, and by an advisory per-word check for shell commands (the sandbox is the shell boundary; XR-LAUNCH-031); broker holds raw values in-memory only |
 | Credential exfiltration via stdout/stderr/network | network = none in sandbox; `redact()` scrubs secrets from output; `assertClean()` guards persistence |
 | Unauthorized network destination | net namespace (none); Tier-2 allowlist not enforceable → blocked |
 | localhost / private-network access | `blockPrivateNetworks`; net ns removes the route entirely |

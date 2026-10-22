@@ -544,7 +544,8 @@ const dashPaths = [
 const DASH_SAMPLES = Math.min(DAEMON_SAMPLES, QUICK ? 3 : 7);
 for (let i = 0; i < DASH_SAMPLES; i++) {
   // HTML (cookie bootstrap once)
-  const boot = await fetch(`http://127.0.0.1:${lastPort}/?token=${lastToken}`, { redirect: "manual" });
+  const minted = await fetch(`http://127.0.0.1:${lastPort}/auth/bootstrap`, { method: "POST", headers: { authorization: `Bearer ${lastToken}` } }).then((r) => r.json() as Promise<{ url?: string }>).catch(() => ({ url: undefined }));
+  const boot = await fetch(minted.url ?? `http://127.0.0.1:${lastPort}/`, { redirect: "manual" });
   const cookie = (boot.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
   const tHtml0 = performance.now();
   const htmlRes = await fetch(`http://127.0.0.1:${lastPort}/`, {

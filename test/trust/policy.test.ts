@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { classifyRisk } from "../../src/runtime/trust/classify.ts";
-import { decidePlacement, type PlacementCapabilities } from "../../src/runtime/trust/policy.ts";
+import { decidePlacement, tier2Remediation, type PlacementCapabilities } from "../../src/runtime/trust/policy.ts";
 import type { TrustRequest } from "../../src/runtime/trust/types.ts";
 
 function caps(over: Partial<PlacementCapabilities> = {}): PlacementCapabilities {
@@ -65,7 +65,9 @@ describe("XR 4.2 policy-to-placement (fail closed)", () => {
     const d = decidePlacement(classify({ runsArbitraryCode: true }), caps({ namespaceSandbox: false, container: false }));
     expect(d.kind).toBe("blocked");
     expect(d.placement).toBe("in_process"); // requested fallback target, but NOT admitted
-    expect(d.remediation).toContain("bubblewrap");
+    // Remediation fits the host OS: bubblewrap on Linux, Seatbelt/AppContainer
+    // (plus Docker/Podman) on macOS/Windows.
+    expect(d.remediation).toBe(tier2Remediation(process.platform));
   });
 
   test("Tier 1 uses the restricted process when available", () => {

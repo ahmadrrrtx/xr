@@ -44,7 +44,7 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
     for (const t of ["linux-x64", "linux-arm64", "darwin-arm64", "darwin-x64", "windows-x64"]) {
       expect(workflow).toContain(t);
     }
-    expect(workflow).toContain("ubuntu-latest");
+    expect(workflow).toContain("ubuntu-24.04");
     expect(workflow).toContain("macos-latest");
     expect(workflow).toContain("windows-latest");
   });
@@ -61,12 +61,12 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
   test("cosign keyless signing covers SHA256SUMS + tarball + SBOM (public Rekor)", () => {
     expect(workflow).toContain("cosign sign-blob --yes SHA256SUMS --bundle SHA256SUMS.bundle");
     expect(workflow).toContain("sbom.cyclonedx.json");
-    expect(workflow).toContain("sigstore/cosign-installer@v3");
+    expect(workflow).toMatch(/sigstore\/cosign-installer@[0-9a-f]{40} # v3\b/); // SHA-pinned (XR-LAUNCH-012)
   });
 
   test("release assets include all artifacts + signatures; prereleases are honest", () => {
     expect(workflow).toContain("prerelease: ${{ needs.assemble.outputs.prerelease == 'true' }}");
-    expect(workflow).toContain("softprops/action-gh-release@v2");
+    expect(workflow).toMatch(/softprops\/action-gh-release@[0-9a-f]{40} # v2\b/); // SHA-pinned (XR-LAUNCH-012)
   });
 
   test("npm publishes under OIDC with dist-tags (stable → latest, beta → beta)", () => {
@@ -85,7 +85,7 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
     // Match the run line: explanatory comments may name the command.
     expect(workflow).not.toMatch(/^\s*bun publish /m);
     // OIDC trusted publishing needs npm >= 11.5.1 on Node >= 22.
-    expect(workflow).toContain("actions/setup-node@v4");
+    expect(workflow).toMatch(/actions\/setup-node@[0-9a-f]{40} # v\d+\b/); // SHA-pinned (XR-LAUNCH-012); major policed by ci:policy rule 7
     expect(workflow).toContain("npm install -g npm@latest");
     expect(workflow).toContain("id-token: write");
     // No long-lived npm token is consumed (trusted publishing). A set OR empty
@@ -120,7 +120,7 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
 
 describe("Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families", () => {
   test("a single matrix drives Linux + macOS + Windows", () => {
-    expect(crossPlatform).toContain("ubuntu-latest");
+    expect(crossPlatform).toContain("ubuntu-24.04");
     expect(crossPlatform).toContain("macos-latest");
     expect(crossPlatform).toContain("windows-latest");
   });
@@ -145,7 +145,7 @@ describe("Phase 9 · T6 — nightly beta install survey on 3 OS families", () =>
   test("survey jobs exist for all three OS families with the ≥0.99 gate", () => {
     expect(nightly).toContain("beta-install-survey");
     expect(nightly).toContain("--target=0.99");
-    for (const runner of ["ubuntu-latest", "macos-latest", "windows-latest"]) {
+    for (const runner of ["ubuntu-24.04", "macos-latest", "windows-latest"]) {
       expect(nightly).toContain(runner);
     }
     // evidence is uploaded per OS
@@ -198,8 +198,13 @@ describe("Phase 3 — artifact truth (release.yml + nightly + dockerfile)", () =
     expect(dockerfile).toContain("COPY plugins ./plugins");
   });
 
-  test("canaries fail closed on empty; ALLOW_EMPTY is a repo variable", () => {
-    expect(canaries).toContain("XR_CANARY_ALLOW_EMPTY: ${{ vars.XR_CANARY_ALLOW_EMPTY }}");
+  test("canaries: keyless fixture leg must pass; live leg is an audited skip without secrets (XR-LAUNCH-012)", () => {
+    expect(canaries).toContain("name: Provider Canaries (non-gating)");
+    expect(canaries).toContain("bun run scripts/canary-fixture.ts");
+    // The script still fails closed on an empty sweep; the workflow opts into
+    // the audited skip for the live leg only (owner decision, no paid calls).
+    expect(canaries).toMatch(/Live provider canaries[\s\S]*XR_CANARY_ALLOW_EMPTY: "1"/);
+    expect(canaries.indexOf("canary-fixture.ts")).toBeLessThan(canaries.indexOf("canary:providers --json"));
   });
 
   test("supply-chain runs the 1.x tag⇔npm invariant; weekly consumer-smoke skips if unpublished", () => {

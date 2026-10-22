@@ -87,7 +87,30 @@ export function getVoiceConfig(): VoiceSettings {
   return { ...defaultVoiceSettings(), ...getVoiceSettings() };
 }
 
-export async function checkVoiceStack(settings = getVoiceSettings()): Promise<{
+/**
+ * XR-LAUNCH-035 — a ✓ for STT/TTS means the backend was actually found: local
+ * binaries and the native library are probed; an HTTP endpoint is contacted
+ * only on loopback (1.5 s); cloud backends are never contacted (key presence
+ * only). Anything not probed is the neutral "unknown" state, shown as "?".
+ */
+async function probedState(backend: string | undefined, available: boolean | undefined, baseUrl: string | undefined, fetcher: typeof fetch = fetch): Promise<{ state: VoiceHealthCheck["state"]; note: string }> {
+  if (backend === undefined) return { state: "unknown", note: "" };
+  if (!available) return { state: "warn", note: "" };
+  if (backend === "groq" || backend === "openai") return { state: "unknown", note: " — cloud, not contacted" };
+  if (backend !== "http") return { state: "ok", note: "" };
+  let url: URL;
+  try { url = new URL(baseUrl ?? ""); } catch { return { state: "warn", note: " — invalid URL" }; }
+  if (!/^(localhost|127(\.\d{1,3}){3}|\[::1\])$/i.test(url.hostname)) return { state: "unknown", note: ` — not probed (${url.host} is not loopback)` };
+  try {
+    const res = await fetcher(`${url.origin}/`, { signal: AbortSignal.timeout(1500) });
+    return { state: "ok", note: ` — reachable (HTTP ${res.status})` };
+  } catch {
+    return { state: "warn", note: " — not reachable" };
+  }
+}
+
+/** `probe: false` (`xr voice status --no-probe`) skips the STT/TTS probes. */
+export async function checkVoiceStack(settings = getVoiceSettings(), opts: { probe?: boolean; fetcher?: typeof fetch } = {}): Promise<{
   stt: boolean;
   tts: boolean;
   wakeWord: boolean;
@@ -95,23 +118,28 @@ export async function checkVoiceStack(settings = getVoiceSettings()): Promise<{
   checks: VoiceHealthCheck[];
 }> {
   const hw = new VoiceHardware();
-  const stt = sttFromSettings(settings).describe();
-  const tts = ttsFromSettings(settings).describe();
+  const probe = opts.probe !== false;
+  const ttsEngine = ttsFromSettings(settings);
+  const stt = probe ? await sttFromSettings(settings).describeAsync() : undefined;
+  const tts = probe ? await ttsEngine.describeAsync() : undefined;
+  const sttP = await probedState(stt?.backend, stt?.available, stt?.baseUrl, opts.fetcher);
+  const ttsP = await probedState(tts?.engine, tts?.available, ttsEngine.endpoint, opts.fetcher);
+  const fix = (s: VoiceHealthCheck["state"], text: string) => (s === "ok" || s === "unknown" ? undefined : text);
   const checks: VoiceHealthCheck[] = [
     ...(await hw.health()),
     {
       id: "voice-stt",
       label: "Speech-to-text",
-      state: stt.available ? "ok" : "warn",
-      detail: `${stt.backend}: ${stt.detail}`,
-      remediation: stt.available ? undefined : "Install Whisper/whisper.cpp or configure a local OpenAI-compatible STT endpoint.",
+      state: sttP.state,
+      detail: stt ? `${stt.backend}: ${stt.detail}${sttP.note}` : "not probed (--no-probe)",
+      remediation: fix(sttP.state, "Install Whisper/whisper.cpp or configure a local OpenAI-compatible STT endpoint."),
     },
     {
       id: "voice-tts",
       label: "Text-to-speech",
-      state: tts.available ? "ok" : "warn",
-      detail: `${tts.engine}: ${tts.detail}`,
-      remediation: tts.available ? undefined : "Install Piper/Kokoro/espeak or configure XR_TTS_URL.",
+      state: ttsP.state,
+      detail: tts ? `${tts.engine}: ${tts.detail}${ttsP.note}` : "not probed (--no-probe)",
+      remediation: fix(ttsP.state, "Install Piper/Kokoro/espeak or configure XR_TTS_URL."),
     },
     {
       id: "voice-mode",
@@ -128,8 +156,8 @@ export async function checkVoiceStack(settings = getVoiceSettings()): Promise<{
       remediation: settings.alwaysListen ? "Always-listen should be opt-in only; use push-to-talk for safest default." : undefined,
     },
   ];
-  const details = checks.map((c) => `${c.label}: ${c.state === "ok" ? "✓" : c.state === "warn" ? "!" : "✗"} ${c.detail}`);
-  return { stt: stt.available, tts: tts.available, wakeWord: settings.mode === "wake-word" || settings.mode === "always-listen", details, checks };
+  const details = checks.map((c) => `${c.label}: ${c.state === "ok" ? "✓" : c.state === "warn" ? "!" : c.state === "unknown" ? "?" : "✗"} ${c.detail}`);
+  return { stt: sttP.state === "ok", tts: ttsP.state === "ok", wakeWord: settings.mode === "wake-word" || settings.mode === "always-listen", details, checks };
 }
 
 export function routeVoiceCommand(text: string): { action: string; args: string } | null {

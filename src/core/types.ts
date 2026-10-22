@@ -198,6 +198,8 @@ export interface ToolResult {
   output: string;
   /** Optional structured data. */
   data?: unknown;
+  /** XR-LAUNCH-024 — stable reason code when ok=false (see src/core/tool-reasons.ts). */
+  reason?: string;
 }
 
 /** A single tool call the model wants to make. */
@@ -339,6 +341,9 @@ export type ChatStreamEvent =
       ok: boolean;
       result?: string;
       error?: string;
+      /** XR-LAUNCH-024 — stable code + next step on failure (src/core/tool-reasons.ts). */
+      reason?: string;
+      next?: string;
     }
   | {
       type: "usage";

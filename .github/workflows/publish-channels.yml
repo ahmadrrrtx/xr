@@ -48,7 +48,7 @@ concurrency:
 jobs:
   verify:
     name: Verify signed channel files for v${{ inputs.version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       tap: ${{ steps.meta.outputs.tap }}
@@ -62,9 +62,11 @@ jobs:
         run: |
           [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must be a stable X.Y.Z (got '$V')"; exit 1; }
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Resolve channel identities from release.manifest.json
@@ -72,6 +74,7 @@ jobs:
         env:
           V: ${{ inputs.version }}
         run: |
+          # shellcheck disable=SC2016 # a single-quoted JavaScript program for bun -e
           bun -e '
             const m = JSON.parse(require("fs").readFileSync("release.manifest.json", "utf8"));
             const c = m.channels;
@@ -102,7 +105,7 @@ jobs:
             --pattern "$WINGET_ID.yaml" --pattern "$WINGET_ID.installer.yaml" --pattern "$WINGET_ID.locale.en-US.yaml"
           ls -la assets
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Verify the keyless signature over SHA256SUMS (fail closed)
         run: |
           cosign verify-blob \
@@ -115,7 +118,7 @@ jobs:
           V: ${{ inputs.version }}
         run: bun run scripts/channel-publish-verify.ts --version "$V" --dir assets --sums assets/SHA256SUMS --out publish
       - name: Upload verified channel files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: verified-channels
           path: publish
@@ -125,7 +128,7 @@ jobs:
     name: Homebrew tap → v${{ inputs.version }}
     needs: verify
     if: inputs.homebrew
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Require the tap token
@@ -134,7 +137,7 @@ jobs:
         run: |
           [ -n "$TAP_TOKEN" ] || { echo "::error::secret TAP_GITHUB_TOKEN is not set (fine-grained token, contents:write on ${{ needs.verify.outputs.tap }} only)"; exit 1; }
       - name: Download verified channel files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: verified-channels
           path: publish
@@ -190,7 +193,7 @@ jobs:
         run: |
           if (-not $env:WINGET_TOKEN) { Write-Error "secret WINGET_TOKEN is not set (classic PAT with public_repo; see docs/release/CHANNELS.md)"; exit 1 }
       - name: Download verified channel files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: verified-channels
           path: publish
@@ -213,16 +216,18 @@ jobs:
     name: Live channel report for v${{ inputs.version }}
     needs: [verify, homebrew, winget]
     if: always() && needs.verify.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # Report, not gate: a brand-new WinGet package stays pending until moderators
     # merge the community PR. The scheduled Channel Live workflow is the gate.
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: channel:live (WinGet stays pending until the community PR merges)

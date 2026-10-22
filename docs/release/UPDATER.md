@@ -36,22 +36,31 @@ other channel's manifest.
 
 ## Why manual provisioning
 
-The updater verifies every artifact against an Ed25519 pubkey baked into
-`tauri.conf.json` at build time. The matching private key signs `latest.json`
-assets in CI. Committing the private key would be a credential-in-repo
-violation, so the pair is created once by the operator:
+The updater verifies every artifact against a **minisign** (Ed25519) public
+key baked into `tauri.conf.json` at build time. The matching private key signs
+the installers in CI. Committing the private key would be a credential-in-repo
+violation, so the pair is created once by the operator.
+
+> **Fixed in XR-LAUNCH-008:** `generate-updater-keys.ts` used to mint a raw
+> Ed25519 PKCS#8 key and a raw 32-byte pubkey. `tauri build` cannot sign with the
+> first and the updater cannot parse the second, so a build "provisioned" that way
+> could never update. Keys now come from `tauri signer generate`.
 
 ## One-time setup (trusted machine)
 
-1. `bun run scripts/generate-updater-keys.ts --apply`
-   - prints the PRIVATE key (PKCS#8 PEM) to stdout — **never written anywhere**
+1. `cd desktop && bunx tauri signer generate -w ~/.tauri/xr-updater.key` — choose
+   a password. This writes `xr-updater.key` (private) and `xr-updater.key.pub`.
+2. `bun run scripts/generate-updater-keys.ts --apply ~/.tauri/xr-updater.key.pub`
+   - validates that the file is a minisign **public** key (it refuses a private key)
    - patches `plugins.updater` (pubkey + endpoint
      `…/releases/latest/download/latest.json`) AND `bundle.createUpdaterArtifacts:
      true` into `desktop/src-tauri/tauri.conf.json` — one step, because either
      half alone is a broken pipeline (see below)
-2. Commit the `tauri.conf.json` change.
-3. Store the printed private key as the repo secret `TAURI_UPDATER_KEY`
-   (Settings → Secrets → Actions). Delete the terminal scrollback.
+3. Commit the `tauri.conf.json` change.
+4. Secrets (Settings → Secrets → Actions): `TAURI_UPDATER_KEY` = the content of
+   `xr-updater.key`; `TAURI_UPDATER_KEY_PASSWORD` = its password.
+5. **Back the private key up offline, twice** (launch gate — losing it strands
+   every installed copy). See [DESKTOP_SIGNING.md](DESKTOP_SIGNING.md).
 
 ## What CI then does, automatically
 
@@ -103,8 +112,10 @@ installs. Both are pinned by `test/release/updater-manifest.test.ts`.
   runs the `#[cfg(windows)]` code's tests on a real Windows kernel.
 - `test/release/updater-manifest.test.ts` dry-runs the manifest assembler:
   platform-key mapping, repo asset URLs, and the empty-manifest honesty rule.
-- `scripts/generate-updater-keys.ts` format is pinned by the same test
-  (raw 32-byte Ed25519 pubkey extraction).
+- `test/release/desktop-signing.test.ts` verifies real `tauri signer` output
+  with `scripts/verify-updater-signatures.ts` (genuine passes; tampered payload,
+  altered trusted comment, foreign key, swapped URL and raw 32-byte keys fail).
+  The tag pipeline runs the same check before `latest.json` is published.
 
 ## Autostart + OS notifications
 

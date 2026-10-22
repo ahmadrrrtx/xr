@@ -4,6 +4,7 @@ import { readTrustRequest, workspaceWriteTrustRequest } from "../runtime/trust/t
 import { classifySensitiveWrite } from "../security/trust-handoff.ts";
 import { unifiedDiff } from "../util/unified-diff.ts";
 import { FilesystemAuthority, filesystemMessage } from "../security/filesystem.ts";
+import { filesystemReason } from "../core/tool-reasons.ts";
 
 export const readFileTool: Tool = {
   name: "read_file",
@@ -20,7 +21,7 @@ export const readFileTool: Tool = {
       ctx.audit("read_file", { path: snapshot.path, authority: fs.descriptor().id });
       const content = snapshot.content;
       return { ok: true, output: content.length > 4000 ? content.slice(0, 4000) + "\n…(truncated)" : content, data: { length: content.length } };
-    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    } catch (e) { return { ok: false, output: filesystemMessage(e), reason: filesystemReason(e) }; }
     finally { if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };
@@ -51,13 +52,13 @@ export const writeFileTool: Tool = {
         // The trusted terminal editor changes the proposal, not the host filesystem.
         replaceContent: edited => { content = edited; },
       });
-      if (!approved) { ctx.audit("write_file.denied", { path: pending.path }); return { ok: false, output: "write denied by user" }; }
+      if (!approved) { ctx.audit("write_file.denied", { path: pending.path }); return { ok: false, output: "write denied by user", reason: "denied:user" }; }
       pending.validate();
       if (ctx.dryRun) { ctx.audit("write_file.dryrun", { path: pending.path, bytes: content.length }); return { ok: true, output: `[dry-run] would write ${pending.path} (${content.length} bytes)` }; }
       pending.commit(content);
       ctx.audit("write_file.applied", { path: pending.path, bytes: content.length, authority: fs.descriptor().id });
       return { ok: true, output: `wrote ${pending.path} (${content.length} bytes)` };
-    } catch (e) { return { ok: false, output: filesystemMessage(e) }; }
+    } catch (e) { return { ok: false, output: filesystemMessage(e), reason: filesystemReason(e) }; }
     finally { pending?.close(); if (fs && fs !== ctx.filesystem) fs.close(); }
   },
 };

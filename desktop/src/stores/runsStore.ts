@@ -3,7 +3,8 @@
  * across every surface. One Zustand store, `RunSummary` rows keyed by id.
  *
  * Who writes here:
- *   - `seedMockHistory()` on first load (deterministic demo history)
+ *   - `seedMockHistory()` on first load — DEVELOPMENT BUILDS ONLY (XR-LAUNCH-009);
+ *     production shows real runs or the empty state, never scripted history
  *   - `runs/bridge.ts` projecting brainStore's live `Run`s (token ticks,
  *     approval waits, completion) and the Tauri `brain:run-update` /
  *     `run:cancelled` events from other windows
@@ -39,7 +40,6 @@ import {
   type SortState,
   type StatusFilter,
 } from '@/runs/core';
-import { seedMockHistory, seedStress } from '@/runs/seed';
 import { useEngineStore } from '@/stores/engineStore';
 import { startDemoRun } from '@/brain/demo';
 import { isEngineRunId, useBrainStore } from '@/stores/brainStore';
@@ -314,19 +314,34 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       // (bridged from brainStore); the scripted demo history only seeds a
       // window that has no engine link — never next to real runs.
       const engineUp = useEngineStore.getState().status === 'up';
+      // XR-LAUNCH-009: `import.meta.env.DEV` is the literal `false` in a
+      // production build, so this branch — and the seed module with its
+      // scripted titles/costs — is dropped from the shipped bundle (CI greps
+      // the build for seed content).
       let seeded: RunSummary[] = [];
-      if (mode === 'stress') seeded = seedStress(now);
-      else if (mode === 'default' && !engineUp) seeded = seedMockHistory(now);
+      if (
+        import.meta.env.DEV &&
+        (mode === 'stress' || (mode === 'default' && !engineUp))
+      ) {
+        const seed = await import('@/runs/seed');
+        seeded =
+          mode === 'stress' ? seed.seedStress(now) : seed.seedMockHistory(now);
+      }
 
       // Keep live rows (bridged from brainStore) and real engine runs
       // across a reseed.
       const keep: Record<string, RunSummary> = {};
       for (const r of Object.values(get().runs)) {
-        if (inProgress(r.status) || r.id.startsWith('mock-latest') || isEngineRunId(r.id))
+        if (
+          inProgress(r.status) ||
+          r.id.startsWith('mock-latest') ||
+          isEngineRunId(r.id)
+        )
           keep[r.id] = r;
       }
       for (const r of Object.values(useBrainStore.getState().runs)) {
-        if (r.source === 'engine' && !keep[r.id]) keep[r.id] = summaryFromRun(r, get().runs[r.id]);
+        if (r.source === 'engine' && !keep[r.id])
+          keep[r.id] = summaryFromRun(r, get().runs[r.id]);
       }
       const runs: Record<string, RunSummary> = {};
       for (const r of seeded) runs[r.id] = r;

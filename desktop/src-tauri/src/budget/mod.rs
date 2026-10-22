@@ -291,6 +291,10 @@ impl Inner {
     }
 
     fn seed_if_fresh(&mut self, now: i64) -> Result<(), String> {
+        // Demo history is a development aid — never in a release build.
+        if !crate::seed_purge::demo_data_enabled() {
+            return Ok(());
+        }
         let seeded = read_kv(&self.conn, KEY_SEEDED).map_err(|e| e.to_string())?;
         let version = seeded.and_then(|s| s.parse::<i64>().ok());
         if version == Some(SEED_VERSION) || !self.events.is_empty() {
@@ -602,19 +606,38 @@ impl BudgetDb {
     /// Open the shared xr.db (WAL, own connection) and apply the DDL. Seeding
     /// waits for `budget_init`, which carries the webview's UTC offset.
     pub fn init(app: &AppHandle) -> Self {
-        let dir = app
-            .path()
-            .app_data_dir()
-            .expect("tauri app_data_dir must resolve");
-        std::fs::create_dir_all(&dir).expect("create app data dir");
-        let conn = Connection::open(dir.join("xr.db")).expect("open xr.db");
-        conn.pragma_update(None, "journal_mode", "WAL")
-            .expect("enable WAL (shared with chat)");
-        BudgetDb::from_connection(conn).expect("apply budget DDL")
+        // XR-LAUNCH-021: recover instead of panicking on a damaged xr.db.
+        let dir = match app.path().app_data_dir() {
+            Ok(d) => d,
+            Err(e) => {
+                crate::commands::data_health::note(app, Some(format!("app data dir unavailable: {e}")));
+                std::env::temp_dir().join("xr-desktop-fallback")
+            }
+        };
+        let opened = crate::data_safety::open_shared_db(&dir, "");
+        crate::commands::data_health::note(app, opened.notice);
+        match BudgetDb::from_connection(opened.conn) {
+            Ok(db) => db,
+            Err(e) => {
+                crate::commands::data_health::note(
+                    app,
+                    Some(format!("budget tables could not be prepared ({e}); this session keeps budget data in memory only")),
+                );
+                BudgetDb::from_connection(
+                    rusqlite::Connection::open_in_memory().expect("in-memory sqlite always opens"),
+                )
+                .expect("budget DDL applies to an empty in-memory database")
+            }
+        }
     }
 
     pub fn from_connection(conn: Connection) -> rusqlite::Result<Self> {
         conn.execute_batch(DDL)?;
+        // XR-LAUNCH-009: release builds drop the demo spend rows an earlier
+        // build seeded (idempotent; matches `sp_seed_NNNN` ids only).
+        if !crate::seed_purge::demo_data_enabled() {
+            crate::seed_purge::purge_budget_seed(&conn)?;
+        }
         let settings = match read_kv(&conn, KEY_SETTINGS)? {
             Some(json) => serde_json::from_str::<Value>(&json)
                 .map(|v| coerce_settings(&v))

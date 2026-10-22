@@ -209,7 +209,7 @@ export function chatRoutes(): DaemonRoute[] {
                     break;
                   case "tool_result":
                     xrMetrics.chatToolCalls.inc({ tool: ev.tool, outcome: ev.ok ? "ok" : "error" });
-                    send({ type: "tool_result", id: ev.id, tool: ev.tool, ok: ev.ok, result: ev.result, error: ev.error });
+                    send({ type: "tool_result", id: ev.id, tool: ev.tool, ok: ev.ok, result: ev.result, error: ev.error, reason: ev.reason, next: ev.next });
                     break;
                   case "usage":
                     send({ type: "usage", usage: ev.usage });

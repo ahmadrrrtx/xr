@@ -12,7 +12,7 @@
     "repo": "https://github.com/ahmadrrrtx/xr",
     "homepage": "https://xr-gules.vercel.app",
     "npm": "https://www.npmjs.com/package/@rrrtx/xr",
-    "stability": "stable"
+    "stability": "public-beta"
   },
   "channels": {
     "comment": "Public release channels (launch-audit XR-LAUNCH-001/002; owner decisions D1 + D6, 2026-10-22). identity.version is the in-development line on main; publicVersion is what EVERY public install path serves today. The bootstrap installers are stamped from publicVersion (bun run release:stamp), and `bun run channel:live` asserts each claimed channel serves exactly publicVersion with bytes matching that release's signed SHA256SUMS. Promote publicVersion only after the new release's live channel check passes (docs/release/CHANNELS.md#public-version). withdrawnTags exist in git but were never published: their GitHub releases must be marked pre-release and npm must never carry them (scripts/tag-npm-invariant.ts).",

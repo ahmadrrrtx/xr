@@ -171,7 +171,7 @@ describe("T3 static — accessible authentication (3.3.8)", () => {
     expect(html).toContain('type="password"');
     expect(html).toContain('role="alert"');
     expect(html).toContain('aria-describedby="token-hint"');
-    expect(html).toContain("method=\"get\"");
+    expect(html).toContain('method="post" action="/auth/login"'); // XR-LAUNCH-018: token in the body, never the URL
     expect(html).toContain("paste is never blocked");
     expect(html).not.toContain("__TOKEN__");
     // Phase 31 · Bucket A follow-up (#6): the inline <style> must carry the nonce.
@@ -194,10 +194,10 @@ describe("T3 static — accessible authentication (3.3.8)", () => {
     expect(csp).toContain(`style-src 'nonce-${nonce}'`);
   });
 
-  test("the action URL is attribute-escaped and rooted", () => {
+  test("the return path (hidden next field) is attribute-escaped and rooted", () => {
     const nonce = generateCspNonce();
-    expect(authPageHtml('//evil.example" onclick="x', nonce)).toContain('action="/"');
-    expect(authPageHtml("/settings?x=1&y=2", nonce)).toContain('action="/settings?x=1&amp;y=2"');
+    expect(authPageHtml('//evil.example" onclick="x', nonce)).toContain('name="next" value="/"');
+    expect(authPageHtml("/settings?x=1&y=2", nonce)).toContain('name="next" value="/settings?x=1&amp;y=2"');
   });
 
   test("#6 — authPageHtml refuses to render without a nonce (fail-closed)", () => {

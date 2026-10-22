@@ -15,6 +15,7 @@ import type { AgentResult } from "../../core/agent.ts";
 import type { ApprovalRequest, ChatStreamEvent } from "../../core/types.ts";
 import type { AgentRunOverrides } from "../../services/agent-service.ts";
 import { FilesystemAuthority } from "../../security/filesystem.ts";
+import { toolFailure } from "../../core/tool-reasons.ts";
 import { unifiedDiff } from "../../util/unified-diff.ts";
 import type { ApproveFn, ConsentWrap } from "./consent.ts";
 import { classifyTool, decide, shellCommandOf, type ActionKind, type ApprovalMode, type PermissionRules } from "./permissions.ts";
@@ -199,7 +200,11 @@ export class CoderSession {
           if (cmd !== null) this.commands.push(cmd);
         }
         if (e.ok) this.ui.toolResult(e.id, tool, true, e.result ?? "");
-        else this.ui.toolResult(e.id, tool, false, e.error ?? "failed");
+        else {
+          // XR-LAUNCH-024: the tool's own message (never a bare "failed") + reason code + next step.
+          const f = toolFailure(tool, e.error ?? e.result ?? "", e.reason);
+          this.ui.toolResult(e.id, tool, false, f.error || "failed", { reason: f.reason, next: e.next ?? f.next });
+        }
         return;
       }
       default:

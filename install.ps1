@@ -12,6 +12,15 @@
 # installs from an unpinned branch, and a missing or unverifiable release stops
 # the install with nothing half-installed (launch audit XR-LAUNCH-002).
 #
+# Environment (launch audit XR-LAUNCH-025):
+#   XR_INSTALL_DIR  where XR's program files go (default <profile>\.xr-agent;
+#                   -TargetDirectory wins). Absolute; never the profile itself,
+#                   a drive root, or XR's data home.
+#   XR_HOME         XR's DATA home (config, databases, vault). The installer
+#                   never puts program files there.
+# The user profile (USERPROFILE / HOME) must exist; there is no fallback to the
+# current directory.
+#
 # ---------------------------------------------------------------------------
 # WHY THIS FILE HAS NO TOP-LEVEL param() BLOCK
 # ---------------------------------------------------------------------------
@@ -75,10 +84,74 @@ function Test-XrInteractive {
   catch { return $false }
 }
 
+# The user's profile directory, or $null when none is usable. XR-LAUNCH-025:
+# this used to fall back to the CURRENT directory, so an install from a shell
+# without a profile landed wherever the user happened to be standing.
 function Get-XrHomeDirectory {
-  if ($env:USERPROFILE) { return $env:USERPROFILE }
-  if (Test-Path Variable:\HOME) { $h = Get-Variable -Name HOME -ValueOnly; if ($h) { return $h } }
-  return (Get-Location).Path
+  $candidates = @($env:USERPROFILE)
+  if (Test-Path Variable:\HOME) { $candidates += (Get-Variable -Name HOME -ValueOnly) }
+  foreach ($h in $candidates) {
+    if ($h -and [IO.Path]::IsPathRooted($h) -and (Test-Path -LiteralPath $h -PathType Container)) { return $h.TrimEnd('\', '/') }
+  }
+  return $null
+}
+
+function Get-XrNormalPath {
+  param([string]$Path)
+  $full = [IO.Path]::GetFullPath($Path)
+  $root = [IO.Path]::GetPathRoot($full)
+  if ($full.Length -gt $root.Length) { $full = $full.TrimEnd('\', '/') }
+  return $full
+}
+
+# Launch audit XR-LAUNCH-025: resolve the install directory.
+# -TargetDirectory > $env:XR_INSTALL_DIR > <profile>\.xr-agent. XR_HOME is the
+# DATA home and no longer selects the install directory.
+function Resolve-XrInstallTarget {
+  param([string]$TargetDirectory)
+  $profileDir = Get-XrHomeDirectory
+  $dataHome = if ($env:XR_HOME) { $env:XR_HOME } elseif ($profileDir) { Join-Path $profileDir '.xr' } else { $null }
+  $chosen = $TargetDirectory
+  if (-not $chosen -and $env:XR_INSTALL_DIR) { $chosen = $env:XR_INSTALL_DIR }
+  if (-not $chosen) {
+    if (-not $profileDir) {
+      Stop-XrInstall 'No user profile directory found (USERPROFILE is unset or does not exist). Set USERPROFILE, or pass -TargetDirectory / set XR_INSTALL_DIR. Nothing was installed.'
+    }
+    $chosen = Join-Path $profileDir '.xr-agent'
+    if ($env:XR_HOME) {
+      Write-XrWarn "XR_HOME ($env:XR_HOME) is XR's data home; program files go to $chosen. Set XR_INSTALL_DIR or pass -TargetDirectory to choose the install directory."
+      if (Test-Path -LiteralPath (Join-Path $env:XR_HOME $XrInstallMarker)) {
+        Write-XrWarn "An older installer put XR's program files inside the data home ($env:XR_HOME). They are left untouched; remove src, node_modules, dist and bin-local there once this install works."
+      }
+    }
+  }
+  if ($chosen -match '["`$%\r\n]') {
+    Stop-XrInstall 'The install directory may not contain quotes, backticks, $, % or newlines. Nothing was installed.'
+  }
+  # Drive-relative paths (\foo) are rooted per .NET but resolve against the current drive.
+  $driveRelative = ([IO.Path]::DirectorySeparatorChar -eq '\') -and ($chosen -match '^[\\/](?![\\/])')
+  if (-not [IO.Path]::IsPathRooted($chosen) -or $driveRelative) {
+    Stop-XrInstall "The install directory ('$chosen') must be an absolute path such as C:\Tools\xr. Nothing was installed."
+  }
+  $target = Get-XrNormalPath $chosen
+  $cmp = { param($a, $b) [string]::Equals($a, $b, [StringComparison]::OrdinalIgnoreCase) }
+  if (& $cmp $target ([IO.Path]::GetPathRoot($target))) {
+    Stop-XrInstall "Refusing to install into a drive root ($target). Choose a dedicated directory. Nothing was installed."
+  }
+  if ($profileDir -and (& $cmp $target (Get-XrNormalPath $profileDir))) {
+    Stop-XrInstall "Refusing to install into your profile directory itself. Use a dedicated directory such as $(Join-Path $profileDir '.xr-agent'). Nothing was installed."
+  }
+  if ($dataHome) {
+    $data = Get-XrNormalPath $dataHome
+    $sep = [IO.Path]::DirectorySeparatorChar
+    if ((& $cmp $target $data) -or $target.StartsWith("$data$sep", [StringComparison]::OrdinalIgnoreCase)) {
+      Stop-XrInstall "The install directory ($target) is XR's data home or inside it ($data). Program files and data must stay separate; choose another directory. Nothing was installed."
+    }
+    if ($data.StartsWith("$target$sep", [StringComparison]::OrdinalIgnoreCase)) {
+      Stop-XrInstall "The install directory ($target) contains XR's data home ($data). Choose a dedicated directory. Nothing was installed."
+    }
+  }
+  return $target
 }
 
 function Confirm-XrAction {
@@ -92,8 +165,11 @@ function Confirm-XrAction {
 }
 
 function Update-XrSessionPath {
-  $bunBin = Join-Path (Get-XrHomeDirectory) '.bun\bin'
-  if (Test-Path $bunBin) { $env:Path = "$bunBin;$env:Path" }
+  $profileDir = Get-XrHomeDirectory
+  if ($profileDir) {
+    $bunBin = Join-Path $profileDir '.bun\bin'
+    if (Test-Path $bunBin) { $env:Path = "$bunBin;$env:Path" }
+  }
   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
   if ($userPath) { $env:Path = "$userPath;$env:Path" }
 }
@@ -111,6 +187,15 @@ function Test-XrVersionString {
 
 function Get-XrReleaseBase {
   param([string]$ReleaseVersion)
+  # Mirror / hermetic-test override (XR-LAUNCH-011 clean-machine journey). Only
+  # https:// or loopback http:// is accepted, and SHA256SUMS is still verified.
+  $override = "$env:XR_INSTALL_BASE_URL".TrimEnd('/')
+  if ($override) {
+    if ($override -notmatch '^https://\S+$' -and $override -notmatch '^http://(127\.0\.0\.1|localhost)(:\d+)?(/\S*)?$') {
+      Stop-XrInstall "XR_INSTALL_BASE_URL must be an https:// or loopback http:// URL. Nothing was installed."
+    }
+    return "$override/v$ReleaseVersion"
+  }
   return "https://github.com/$XrRepo/releases/download/v$ReleaseVersion"
 }
 
@@ -195,7 +280,10 @@ function Install-XrBinary {
   $createdTarget = -not (Test-Path -LiteralPath $TargetDirectory)
   $distDir = Join-Path $TargetDirectory 'dist'
   New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-  $partial = Join-Path $distDir ".$name.partial"
+  # Keep the binary's own extension LAST (.partial-xr-windows-x64.exe): Windows
+  # only executes a file whose extension is in PATHEXT, so a '.exe.partial'
+  # candidate could never pass the run check below.
+  $partial = Join-Path $distDir ".partial-$name"
   Move-Item -LiteralPath $staged -Destination $partial -Force
   $ran = $false
   try { & $partial --version 2>$null | Out-Null; $ran = ($LASTEXITCODE -eq 0) } catch { $ran = $false }
@@ -212,14 +300,20 @@ function Install-XrBinary {
   return $true
 }
 
+# Bun is only needed for the source install (the binary path never calls this).
+# -BunVersion = the Bun the release was built with (its .bun-version), if known.
 function Install-XrBunRuntime {
-  param([bool]$AssumeYes)
+  param([bool]$AssumeYes, [string]$BunVersion)
   Update-XrSessionPath
   if (Get-Command bun -ErrorAction SilentlyContinue) {
-    Write-XrOk "Bun $(bun --version)"
+    $have = "$(bun --version)".Trim()
+    Write-XrOk "Bun $have"
+    if ($BunVersion -and $have -ne $BunVersion) {
+      Write-XrWarn "This release was built with Bun $BunVersion; you have Bun $have. If the install fails, install Bun $BunVersion from https://bun.sh."
+    }
     return
   }
-  Write-XrWarn 'The source install needs Bun.'
+  if ($BunVersion) { Write-XrWarn "The source install needs Bun $BunVersion." } else { Write-XrWarn 'The source install needs Bun.' }
   Write-XrStep 'Bun install is user-level and downloads from https://bun.sh.'
   if (-not (Confirm-XrAction -Question 'Install Bun now?' -DefaultYes $true -AssumeYes $AssumeYes)) {
     Stop-XrInstall 'Bun is required for the source install. Install it from https://bun.sh and rerun this installer. Nothing was installed.'
@@ -227,7 +321,13 @@ function Install-XrBunRuntime {
   $bunScript = Join-Path ([IO.Path]::GetTempPath()) ("bun-install-" + [Guid]::NewGuid().ToString('n') + ".ps1")
   try {
     Invoke-WebRequest -Uri 'https://bun.sh/install.ps1' -OutFile $bunScript -UseBasicParsing -ErrorAction Stop
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $bunScript
+    if ($BunVersion) {
+      # Pinned to the release's Bun (XR-LAUNCH-025).
+      & powershell -NoProfile -ExecutionPolicy Bypass -File $bunScript -Version $BunVersion
+    } else {
+      Write-XrWarn 'This release does not record its Bun version; installing the latest Bun.'
+      & powershell -NoProfile -ExecutionPolicy Bypass -File $bunScript
+    }
   } finally {
     Remove-Item $bunScript -Force -ErrorAction SilentlyContinue
   }
@@ -257,7 +357,6 @@ function Install-XrSource {
   $actual = Get-XrSha256 -Path $archive
   if ($actual -ne $expect) { Stop-XrInstall "Integrity check FAILED for $asset (sha256 $actual != published $expect). Nothing was installed." }
   Write-XrOk 'Source archive verified'
-  Install-XrBunRuntime -AssumeYes $AssumeYes
 
   $parent = Split-Path $TargetDirectory -Parent
   if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
@@ -268,6 +367,14 @@ function Install-XrSource {
     if ($LASTEXITCODE -ne 0) { Stop-XrInstall "Could not unpack $asset (tar exit $LASTEXITCODE). Nothing was installed." }
     if (-not (Test-Path -LiteralPath (Join-Path $newTree 'src\index.ts'))) { Stop-XrInstall "Source archive v$ReleaseVersion has no src\index.ts. Nothing was installed." }
     if (-not (Test-Path -LiteralPath (Join-Path $newTree 'bun.lock'))) { Stop-XrInstall "Source archive v$ReleaseVersion has no bun.lock; refusing a non-reproducible install. Nothing was installed." }
+    # Use the Bun this release was built with (XR-LAUNCH-025).
+    $bunPin = ''
+    $bunVersionFile = Join-Path $newTree '.bun-version'
+    if (Test-Path -LiteralPath $bunVersionFile) {
+      $bunPin = (Get-Content -LiteralPath $bunVersionFile -Raw).Trim()
+      if ($bunPin -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { $bunPin = '' }
+    }
+    Install-XrBunRuntime -AssumeYes $AssumeYes -BunVersion $bunPin
     Install-XrDependencies -TargetDirectory $newTree
 
     if (Test-Path -LiteralPath $TargetDirectory) {
@@ -313,6 +420,25 @@ function Install-XrDependencies {
   Write-XrOk 'Dependencies installed'
 }
 
+# The raw user Path (HKCU\Environment, %VAR% entries unexpanded). [Environment]::Get/SetEnvironmentVariable
+# would expand every %VAR% entry and store REG_SZ, permanently flattening the user's Path.
+function Get-XrUserPathRaw {
+  if (-not (Test-XrOnWindows)) { return '' }
+  $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+  if (-not $k) { return '' }
+  try { return [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } finally { $k.Close() }
+}
+function Set-XrUserPathRaw([string]$Value) {
+  if (-not (Test-XrOnWindows)) { return }
+  $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+  try {
+    $kind = if ($null -ne $k.GetValue('Path') -and $k.GetValueKind('Path') -eq 'String') { 'String' } else { 'ExpandString' }
+    $k.SetValue('Path', $Value, [Microsoft.Win32.RegistryValueKind]$kind)
+  } finally { $k.Close() }
+  # A bare registry write notifies nobody; a scratch user-variable set/clear broadcasts WM_SETTINGCHANGE.
+  [Environment]::SetEnvironmentVariable('XR_PATH_BROADCAST', '1', 'User'); [Environment]::SetEnvironmentVariable('XR_PATH_BROADCAST', $null, 'User')
+}
+
 function Install-XrLauncher {
   param([string]$TargetDirectory)
   $binDir = Join-Path $TargetDirectory 'bin-local'
@@ -322,23 +448,27 @@ function Install-XrLauncher {
   $entry = Join-Path $TargetDirectory 'src\index.ts'
   $binary = Join-Path $TargetDirectory ("dist\" + (Get-XrBinaryName))
   # Phase 3 - T2: compiled binary first (default distribution path), Bun source fallback.
+  # XR_INSTALL_DIR tells `xr uninstall` / `xr update` where the program files live (XR-LAUNCH-025).
   $ps1Body = @(
+    "`$env:XR_INSTALL_DIR = '$($TargetDirectory.Replace("'", "''"))'",
     "if (Test-Path -LiteralPath `"$binary`") { & `"$binary`" @args; exit `$LASTEXITCODE }",
     "if (Test-Path -LiteralPath `"$entry`") { & bun run `"$entry`" @args; exit `$LASTEXITCODE }",
     "Write-Error 'xr: no XR install found at $TargetDirectory. Rerun the installer.'; exit 127"
   ) -join "`n"
   Set-Content -Path $ps1 -Encoding UTF8 -Value $ps1Body
-  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nif exist `"$binary`" (`r`n  `"$binary`" %*`r`n) else if exist `"$entry`" (`r`n  bun run `"$entry`" %*`r`n) else (`r`n  echo xr: no XR install found at $TargetDirectory. Rerun the installer. 1>&2`r`n  exit /b 127`r`n)`r`n"
+  # exit /b inside each parsed block: cmd.exe re-reads a batch file from disk, and `xr uninstall`
+  # deletes this file - so it must never go back to it (bare exit /b keeps xr's exit code).
+  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nsetlocal`r`nset `"XR_INSTALL_DIR=$TargetDirectory`"`r`nif exist `"$binary`" (`r`n  `"$binary`" %*`r`n  exit /b`r`n) else if exist `"$entry`" (`r`n  bun run `"$entry`" %*`r`n  exit /b`r`n) else (`r`n  echo xr: no XR install found at $TargetDirectory. Rerun the installer. 1>&2`r`n  exit /b 127`r`n)`r`n"
 
   # PATH hygiene: append only when genuinely absent, compare case-insensitively
   # and ignore trailing separators, and never write back a PATH we failed to
   # read (that would silently truncate the user's PATH).
-  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $userPath = Get-XrUserPathRaw
   $entries = @()
-  if ($userPath) { $entries = $userPath -split ';' | ForEach-Object { $_.TrimEnd('\') } }
+  if ($userPath) { $entries = $userPath -split ';' | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') } }
   if ($entries -notcontains $binDir.TrimEnd('\')) {
     $newPath = if ($userPath) { "$userPath;$binDir" } else { $binDir }
-    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+    Set-XrUserPathRaw $newPath
     $env:Path = "$env:Path;$binDir"
     Write-XrOk "Added XR launcher to user PATH: $binDir"
   } else {
@@ -357,7 +487,8 @@ function Invoke-XrInstall {
     # binding only validates a value that is actually supplied.
     [ValidateSet('minimal', 'local', 'byok', 'hybrid', 'full')]
     [string]$InstallMode,
-    # Install location. Defaults to $env:XR_HOME, else <user profile>\.xr-agent.
+    # Install location. Defaults to $env:XR_INSTALL_DIR, else <user profile>\.xr-agent
+    # ($env:XR_HOME is the DATA home and never receives program files; XR-LAUNCH-025).
     [string]$TargetDirectory,
     # Published release to install (default: the stamped public version; also $env:XR_INSTALL_VERSION).
     [string]$ReleaseVersion,
@@ -381,9 +512,7 @@ function Invoke-XrInstall {
     Write-XrWarn 'Could not enable TLS 1.2 explicitly; downloads may fail on older systems.'
   }
 
-  if (-not $TargetDirectory) {
-    $TargetDirectory = if ($env:XR_HOME) { $env:XR_HOME } else { Join-Path (Get-XrHomeDirectory) '.xr-agent' }
-  }
+  $TargetDirectory = Resolve-XrInstallTarget -TargetDirectory $TargetDirectory
   $installVersion = $Version
   if ($ReleaseVersion) { $installVersion = $ReleaseVersion } elseif ($env:XR_INSTALL_VERSION) { $installVersion = $env:XR_INSTALL_VERSION }
   $installVersion = $installVersion.TrimStart('v')
@@ -398,7 +527,7 @@ function Invoke-XrInstall {
   Write-XrStep "This downloads XR v$installVersion from GitHub Releases, verifies it against the release's SHA256SUMS, and creates an xr launcher."
   Write-XrStep 'Optional Ollama, voice, browser and desktop-control packs are handled later by xr install prompts.'
   if (-not (Test-XrTargetIsOurs -TargetDirectory $TargetDirectory)) {
-    Stop-XrInstall "$TargetDirectory exists and is not an XR install. Use -TargetDirectory or set XR_HOME. Nothing was changed."
+    Stop-XrInstall "$TargetDirectory exists and is not an XR install. Use -TargetDirectory or set XR_INSTALL_DIR. Nothing was changed."
   }
   if (-not (Confirm-XrAction -Question 'Continue?' -DefaultYes $true -AssumeYes $AssumeYes.IsPresent)) {
     Stop-XrInstall 'Cancelled by user.'

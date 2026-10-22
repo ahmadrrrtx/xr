@@ -249,7 +249,12 @@ export function PrivacyTab() {
         busy={busy}
         onConfirm={() => {
           setBusy(true);
-          void resetApp(true);
+          void resetApp(true).then((err) => {
+            if (err) {
+              toast.error('Reset failed', { description: err });
+              setBusy(false);
+            }
+          });
         }}
       />
     </div>

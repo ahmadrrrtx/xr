@@ -6,8 +6,9 @@
 #   1. typecheck     — bun run typecheck         (root program + desktop test program)
 #   2. test          — sharded into four lanes (core / security /
 #                      reliability-spawn / e2e-blackbox) with per-lane
-#                      timeouts, an one-retry quarantine for the known-flaky
-#                      egress timing test, and lane-precise pass counts in the
+#                      timeouts, NO retries (flaky files go to
+#                      test/quarantine.json + the non-blocking quarantine
+#                      lane), and lane-precise pass counts in the
 #                      job summary; the F-02/F-03 kill proofs run in an
 #                      ADVISORY lane (test / e2e-blackbox-proof) that is RED
 #                      on HEAD until Phase 1
@@ -31,7 +32,7 @@
 # manual runs via workflow_dispatch.
 #
 # Design notes:
-#   - Bun version is pinned by the `packageManager: bun@1.3.14` field in
+#   - Bun version is pinned by the `packageManager: bun@1.4.2` field in
 #     package.json and `.bun-version`; oven-sh/setup-bun reads package metadata
 #     as the single source of truth for CI toolchain setup.
 #   - Dependencies are installed with --frozen-lockfile --ignore-scripts: the
@@ -65,17 +66,19 @@ jobs:
   # ── 1. Static type safety ──────────────────────────────────────────────────
   typecheck:
     name: Typecheck (tsc --noEmit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Cache Bun global install cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -115,14 +118,16 @@ jobs:
   # claim-lint fails on any public claim without evidence.
   truth-gate:
     name: Truth gate (release:check + claim-lint)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       # No bun install needed: both scripts use only node builtins.
       - name: Verify every surface is stamped from release.manifest.json
@@ -131,17 +136,68 @@ jobs:
       - name: Verify no unsupported public claim
         run: bun run claim-lint
 
+      # XR-LAUNCH-022: the support matrix is generated from journey evidence;
+      # a hand edit or a stale block fails here.
+      - name: Support matrix is generated from evidence (not hand-edited)
+        run: bun run support-matrix --check
+
+      # XR-LAUNCH-012: workflow policy — SHA-pinned actions, .bun-version,
+      # required checks on every PR, no continue-on-error / paths: on required
+      # workflows, unexpired quarantine.
+      - name: CI policy (required checks, pins, quarantine expiry)
+        run: bun run ci:policy
+
+      # XR-LAUNCH-032: workflow lint — actionlint (expressions, runner labels,
+      # action inputs, job graph) with shellcheck over every run: block. Both
+      # binaries are version- and sha256-pinned, so the verdict cannot drift
+      # with whatever shellcheck the runner image happens to ship.
+      - name: Workflow lint (actionlint + shellcheck, pinned)
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          SHELLCHECK_VERSION: "0.11.0"
+          SHELLCHECK_SHA256: b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/wflint"; mkdir -p "$d"
+          curl -fsSLo "$d/actionlint.tgz" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  $d/actionlint.tgz" | sha256sum -c -
+          curl -fsSLo "$d/shellcheck.tgz" "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.gz"
+          echo "${SHELLCHECK_SHA256}  $d/shellcheck.tgz" | sha256sum -c -
+          tar -xzf "$d/actionlint.tgz" -C "$d" actionlint
+          tar -xzf "$d/shellcheck.tgz" -C "$d" "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          "$d/actionlint" -color -shellcheck="$d/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" -pyflakes=
+
+      # XR-LAUNCH-014: the per-window IPC capability files are generated from
+      # each window's import graph; a stale or hand-edited grant fails here.
+      - name: Desktop IPC allow-lists are generated (not hand-edited)
+        run: bun run desktop:ipc-acl --check
+
+      # The desktop frontend tests import the renderer's stores, whose deps
+      # (zustand, sonner, react) live in desktop/node_modules — a separate
+      # lockfile (desktop/bun.lock) from the root's.
+      - name: Install desktop dependencies (frozen lockfile)
+        working-directory: desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      # XR-LAUNCH-026: desktop frontend tests + the stores coverage ratchet
+      # (desktop/coverage-floor.json).
+      - name: Desktop frontend tests + stores coverage floor
+        run: bun run desktop:coverage
+
   # ── 3. Phase 0 source-derived baseline inventory ──────────────────────────
   baseline:
     name: Baseline inventory
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
@@ -156,17 +212,17 @@ jobs:
   # broken import or a render error. This job closes that gap.
   website:
     name: Website (typecheck + build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
         working-directory: website
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 20
           cache: npm
@@ -181,6 +237,38 @@ jobs:
       - name: Production build (static render of every route)
         run: npm run build
 
+  # XR-LAUNCH-034 — the VS Code extension's own typecheck, unit tests
+  # (token-file pairing, reconnect-on-401, chat retry) and a real .vsix package.
+  vscode-extension:
+    name: VS Code extension (typecheck + tests + package)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: extensions/vscode
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: extensions/vscode/package-lock.json
+
+      - name: Install dependencies (lockfile only, no install scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Package the .vsix (not published)
+        run: node esbuild.mjs && npx --no-install vsce package --no-dependencies -o xr-vscode-ci.vsix
+
   # ── 4. Test suite — sharded lanes (Phase 0 reconciliation) ────────────────
   # The matrix is sharded into four lanes so no runner hosts the whole suite
   # at once, each lane owns an explicit timeout, and a lane-local failure
@@ -190,12 +278,10 @@ jobs:
   #   test / core               every test the parity authority lists for the
   #                             OS, minus the lanes below (parity-suite-runner
   #                             still segments per-directory, guards
-  #                             RAN == EXPECTED, and retries crash-class exits
-  #                             once with a fresh process)
+  #                             RAN == EXPECTED; no retries — a crash-class
+  #                             exit fails the lane, isolation only diagnoses)
   #   test / security           security + trust + capability-boundary suites
-  #                             (the egress timing test ALSO gets the one-retry
-  #                             quarantine — see below; forbidden from hiding
-  #                             any other failure)
+  #                             (run once; no retry)
   #   test / reliability-spawn  spawn/crash/concurrency class (test/reliability/)
   #   test / e2e-blackbox       real-CLI capture suites in isolated XR_HOMEs
   #                             (the F-02/F-03 kill proofs run in
@@ -212,17 +298,19 @@ jobs:
   # (see CONTRIBUTING.md §Testing notes → suite environment requirements).
   test-core:
     name: test / core
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Cache Bun global install cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -232,7 +320,14 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Run test / core (parity-segmented, crash-class retry once)
+      # The desktop frontend tests import the renderer's stores, whose deps
+      # (zustand, sonner, react) live in desktop/node_modules — a separate
+      # lockfile (desktop/bun.lock) from the root's.
+      - name: Install desktop dependencies (frozen lockfile)
+        working-directory: desktop
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run test / core (parity-segmented, no retries)
         shell: bash
         timeout-minutes: 25
         # NOTE: the step shell defaults to `bash -e -o pipefail`, which aborts
@@ -254,17 +349,23 @@ jobs:
           cat /tmp/xr-lane-core.log
           exit ${rc}
 
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
+
   test-security:
     name: test / security
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Cache Bun global install cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -273,38 +374,18 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      # The egress "timeouts are enforced" test races two terminal handlers in
-      # `performPinnedRequest` (timer vs. socket-destroy error); under load the
-      # destroy error can win and the true timeout is mislabelled "connection
-      # error". Phase 0 made the test deterministic (label-tolerant doctrine
-      # assertion) — the one retry below is the plan-mandated quarantine for
-      # the residual race, and covers ONLY this file; every other failure in
-      # this lane is still a hard fail on first attempt.
-      - name: Egress timing test (one-retry quarantine, known flake)
-        shell: bash
-        timeout-minutes: 10
-        run: |
-          set +e
-          bun test test/security/egress-proxy.test.ts > /tmp/xr-egress.log 2>&1
-          rc=$?
-          if [ ${rc} -ne 0 ]; then
-            echo "::warning::egress-proxy suite failed first attempt (exit ${rc}) — one quarantine retry (known timing race; see test/security/egress-proxy.test.ts 'timeouts are enforced')"
-            bun test test/security/egress-proxy.test.ts > /tmp/xr-egress.log 2>&1
-            rc=$?
-          fi
-          set -e
-          PASS=$(grep -cE '\(pass\)' /tmp/xr-egress.log || true)
-          FAIL=$(grep -cE '\(fail\)' /tmp/xr-egress.log || true)
-          echo "| test / security (egress quarantine) | ${PASS} pass | ${FAIL} fail |" >> "${GITHUB_STEP_SUMMARY}"
-          cat /tmp/xr-egress.log
-          exit ${rc}
-
+      # XR-LAUNCH-012: the egress timing test used to get a one-retry
+      # "quarantine" here. Retries are gone (flaky policy): Phase 0 made it
+      # deterministic (0/12 failures in the Phase 3 local stress run), so it
+      # runs once, in the lane below, like every other file.
       - name: Security / trust / capability-boundary suites
         shell: bash
         timeout-minutes: 15
         run: |
           set +e
-          FILES=$(find test/security test/trust test/capabilities -name '*.test.ts' ! -name 'egress-proxy.test.ts' | sort)
+          FILES=$(find test/security test/trust test/capabilities -name '*.test.ts' | sort)
+          Q=$(bun run scripts/quarantine.ts --regex)
+          if [ -n "$Q" ]; then FILES=$(echo "$FILES" | grep -Ev "$Q"); fi
           # shellcheck disable=SC2086
           bun test ${FILES} test/security.test.ts test/trust.test.ts > /tmp/xr-lane-security.log 2>&1
           rc=$?
@@ -316,19 +397,25 @@ jobs:
           cat /tmp/xr-lane-security.log
           exit ${rc}
 
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
+
   # ── 5. Phase 1 reliability suite (concurrency, crash-injection, idempotency,
   #       migrations, RPO/RTO, golden path) — the spawn-heavy lane ──────────
   test-reliability-spawn:
     name: test / reliability-spawn
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Cache Bun global install cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -351,6 +438,10 @@ jobs:
           cat /tmp/xr-lane-reliability.log
           exit ${rc}
 
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
+
   # ── 5h. Phase 0 black-box harness: real-CLI capture suites ────────────────
   # Every test here spawns `bun run src/index.ts` in a REAL child process with
   # an isolated XR_HOME (test/e2e-blackbox/helpers.ts). Only the capture
@@ -358,15 +449,17 @@ jobs:
   # design and live in their own advisory job below.
   test-e2e-blackbox:
     name: test / e2e-blackbox
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Cache Bun global install cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -398,6 +491,10 @@ jobs:
           cat /tmp/xr-lane-e2e.log
           exit ${rc}
 
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
+
   # ── 5i. The Exit-Gate proof lane — RED on HEAD until Phase 1 ──────────────
   # Phase 0's deliverable is the HARNESS that proves F-02/F-03 on today's HEAD
   # ("a stream:true request answered with a non-SSE body exits 0 with zero
@@ -410,14 +507,16 @@ jobs:
   # only, filtered by their describe name.
   test-e2e-blackbox-proof:
     name: test / e2e-blackbox-proof (F-02/F-03 kill proofs)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Run kill proofs (RED on HEAD)
@@ -426,12 +525,11 @@ jobs:
         run: |
           set +e
           bun test test/e2e-blackbox/streaming-matrix.test.ts -t "kill proofs" > /tmp/xr-lane-proof.log 2>&1
-          rc=$?
           set -e
           PASS=$(grep -cE '\(pass\)' /tmp/xr-lane-proof.log || true)
           FAIL=$(grep -cE '\(fail\)' /tmp/xr-lane-proof.log || true)
           echo "| test / e2e-blackbox-proof (kill proofs) | ${PASS} pass | ${FAIL} fail |" >> "${GITHUB_STEP_SUMMARY}"
-          if [ ${FAIL} -gt 0 ]; then
+          if [ "${FAIL}" -gt 0 ]; then
             echo "::warning::Kill proofs are RED on HEAD (expected until Phase 1): $(grep -cE '\(fail\)' /tmp/xr-lane-proof.log) proof(s) failing — see streaming-matrix.test.ts"
           else
             echo "::notice::Kill proofs all GREEN — Phase 1 landed; adopt this lane into quality-gate and remove continue-on-error."
@@ -459,15 +557,17 @@ jobs:
   # optional dev dependency is unavailable.
   boundaries:
     name: Architecture (boundaries + size gate)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Cache Bun global install cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -486,13 +586,15 @@ jobs:
   # contract. All three regenerate from source and byte-compare.
   api-contract:
     name: API contract (schema + client + compat)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Generated OpenAPI artifact is in sync
@@ -508,13 +610,15 @@ jobs:
   # keyboard flows) — the manual half is recorded in docs/a11y/CONFORMANCE.md.
   a11y:
     name: Accessibility (axe + keyboard, WCAG 2.2 AA)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install Playwright chromium (headless)
@@ -527,13 +631,15 @@ jobs:
   # telemetry wiring present and gates wall time + CPU against the baseline.
   profiling:
     name: Profile gate (startup overhead)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Profile gate
@@ -542,13 +648,15 @@ jobs:
   # ── 6. Mutation gate on trust/execution/persistence/credential modules ───
   mutation-gate:
     name: Mutation gate (T8)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Mutation gate
@@ -567,15 +675,17 @@ jobs:
   # seeded-regression proof that the gate is not vacuous.
   perf-gate:
     name: Performance (budgets + regression gate)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Cache Bun global install cache
-        uses: actions/cache@v4
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -602,13 +712,15 @@ jobs:
   # ownership map must never drift from CODEOWNERS.
   unit-tier:
     name: DX (unit tier <5s + ownership map)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Ownership map is in sync with CODEOWNERS
@@ -620,12 +732,34 @@ jobs:
   # Runs even when a dependency fails (if: always()), then asserts every
   # upstream job succeeded. Mark "Quality Gate" as a required status check in
   # Settings → Branches so failing typecheck/tests/version-sync blocks merges.
+
+  # ── XR-LAUNCH-012 — quarantined flaky tests (NON-BLOCKING, advisory) ──────
+  # test/quarantine.json files are excluded from the gating lanes and run
+  # here; the lane is visible on every run but outside quality-gate's needs.
+  # Expiry is enforced inside the gate (truth-gate → `bun run ci:policy`).
+  quarantine:
+    name: test / quarantine (non-blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Run quarantined files (no retries)
+        run: bun run scripts/quarantine.ts --run
+
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [typecheck, truth-gate, baseline, website, test-core, test-security, test-reliability-spawn, test-e2e-blackbox, boundaries, mutation-gate, perf-gate, api-contract, a11y, profiling, unit-tier]
+    needs: [typecheck, truth-gate, baseline, website, vscode-extension, test-core, test-security, test-reliability-spawn, test-e2e-blackbox, boundaries, mutation-gate, perf-gate, api-contract, a11y, profiling, unit-tier]
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Verify all required jobs succeeded

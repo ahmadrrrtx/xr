@@ -146,7 +146,48 @@ export const THRESHOLD = 800;
 // land. Headroom is deliberate and small (~2,600). Returns core toward the
 // ceiling by moving the chat surfaces to a satellite; that stays the recorded
 // follow-up and 110k stays the direction of travel. Needs maintainer sign-off.
-export const TREE_CEILING = 172_000; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
+// Launch audit Phase 2A · 172,000 → 172,500 (2026-10-22): lifecycle truthfulness
+// fixes that cannot live in a satellite because they ARE the install surface:
+// src/update/npm-channel.ts + src/update/check.ts (`xr update` on npm/bun global
+// installs and `xr update --check`, XR-LAUNCH-007) and the marker-block rc
+// strip in src/install/uninstall.ts (XR-LAUNCH-006). Measured 172,318 against
+// ~171,964 at the Phase 1 commit (80007d7f): +354 net, of which 46 lines left
+// atomic-updater.ts with the broken npm plan. Headroom ~180. Needs maintainer
+// sign-off like every ceiling move.
+// Launch audit Phase 2B · 172,500 → 173,500 (2026-10-22): the shell/file
+// boundary, which is core trust surface and cannot move to a satellite:
+// the unshare fallback now pivot_roots into a minimal root with every mount
+// step checked and a detect-time self-check (XR-LAUNCH-004), the experimental
+// opt-in macOS Seatbelt and Windows AppContainer mechanisms
+// (src/runtime/trust/environment/{seatbelt,appcontainer}.ts, XR-LAUNCH-003)
+// and the Windows ARM64 FFI self-test in fs-native.ts (XR-LAUNCH-005).
+// Measured 173,010 (+692 over 2A). Headroom ~490. Needs maintainer sign-off
+// and the security review that 2B requires anyway.
+// Launch audit Phase 4B · 173,500 → 174,100 (2026-10-22): local data security,
+// which is core trust surface (every secret write and every data-home file
+// passes through it) and cannot move to a satellite: keychain-first storage
+// with stdin-only OS backends (src/security/secret-backends.ts, XR-LAUNCH-015),
+// the names-only index + file → keychain migration + keychain purge
+// (src/security/secret-migration.ts, XR-LAUNCH-015/017) and the owner-only
+// data home (src/storage/permissions.ts, XR-LAUNCH-016). No waived giant grew
+// (config.ts and daemon/server.ts edits are line-neutral). Measured 173,665
+// (+567 over 4A's 173,098). Headroom ~435. (Not 174,000: the stamped figure
+// would trip release.manifest.json's prohibited "74,000" star-count pattern.)
+// Needs maintainer sign-off.
+// Launch audit Phase 4C · 174,100 → 174,500 (2026-10-22): the CLI/daemon
+// hardening that 4C requires in core, measured per commit against 4B's 173,665:
+// the `xr serve` sign-in page, POST login and constant-time token checks
+// (src/daemon/session-auth.ts, auth-page.ts, XR-LAUNCH-018/027) and the
+// owner-only daemon token file the VS Code extension re-reads after a restart
+// (src/daemon/token-file.ts, XR-LAUNCH-018/034) +215; stable tool-failure
+// reason codes (src/core/tool-reasons.ts, XR-LAUNCH-024) +141; the updater's
+// latest-release comparison (src/update/release-feed.ts, XR-LAUNCH-019) +17;
+// uninstall following XR_INSTALL_DIR and refusing unsafe dirs
+// (src/install/uninstall.ts, XR-LAUNCH-025) +30. 020, 022, 023 and 034's
+// extension/CI work added nothing under src/. No waived giant grew
+// (daemon/server.ts shrank by 10). Measured 174,068 (+403). Headroom ~432.
+// Needs maintainer sign-off.
+export const TREE_CEILING = 174_500; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
 // the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
 // P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
 // the device registry (hashed session tokens, revocation, mobile-kind tag),

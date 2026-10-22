@@ -101,6 +101,7 @@ describe("daemon durable approval endpoints", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ approved: true, userId: "op-1" }),
         }),
+        actor: "browser:0123456789ab",
       }),
     );
     expect(res.status).toBe(200);
@@ -109,7 +110,8 @@ describe("daemon durable approval endpoints", () => {
     const outcome = await handle.outcome;
     expect(outcome.approved).toBe(true);
     expect(outcome.decidedBy?.channel).toBe("daemon");
-    expect(approvals.get(handle.id)?.decidedBy?.userId).toBe("op-1");
+    // XR-LAUNCH-030: the server-derived caller is recorded; the body userId is ignored.
+    expect(approvals.get(handle.id)?.decidedBy?.userId).toBe("browser:0123456789ab");
 
     // Decided records leave the pending list.
     const list = (await (await callHandle(listHandle, ctx())).json()) as { pending: unknown[] };

@@ -29,7 +29,15 @@ gate, your approval, a spend ceiling, and a hash-chained log you can verify offl
 
 **Version:** `1.1.0 (Graphite)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
-> **Status: Stable.** @rrrtx/xr is on the 1.0.0 production line: `latest` moves only on a stable tag, while pre-releases keep landing on the pre-release channel (npm `beta` dist-tag, GitHub pre-release). Check the [support matrix](docs/release/SUPPORT_MATRIX.md) and the [known-limitations register](docs/release/1.1.0/known-limitations.md) before adopting it for anything critical; feedback goes through the [issue tracker](https://github.com/ahmadrrrtx/xr/issues).
+> **Status: Public beta.** @rrrtx/xr is labelled beta until every launch gate in
+> [docs/release/launch-gates.json](docs/release/launch-gates.json) is green (decision D2; enforced by
+> `bun run claim-lint`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)
+> and the [known-limitations register](docs/release/1.1.0/known-limitations.md) before relying on it
+> for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on `PATH`;
+> the installer binaries do not. Desktop app builds are not code-signed yet. On macOS and Windows the
+> agent's shell commands need Docker/Podman (or the experimental `XR_OS_SANDBOX=experimental` sandbox)
+> and are refused otherwise; never approve commands in a repository you do not trust. Feedback goes
+> through the [beta loop](docs/release/BETA.md).
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
@@ -117,7 +125,22 @@ by `bun run channel:live`; see [`docs/release/CHANNELS.md`](docs/release/CHANNEL
 release's checksum-verified source archive, which needs Bun. Pin a release with
 `… | bash -s -- --version=1.0.0` (PowerShell: `-ReleaseVersion 1.0.0` when running the file).
 The installers never fall back to an unreleased branch: if the release or its checksums are
-missing, they stop and install nothing.
+missing, they stop and install nothing. Windows ARM64 is **unverified**: XR's file tools need
+`bun:ffi`, which the pinned Bun disables on native Windows ARM64, so they refuse to run there
+for now ([support matrix](docs/release/SUPPORT_MATRIX.md)). Alpine/musl source installs are
+limited the same way: the file tools load glibc's `libc.so.6` and refuse to run without it.
+The Docker image is Debian-based (glibc) for that reason. **Linux arm64** (including the
+`linux/arm64` image) is limited too: XR installs and runs, but the file tools fail closed
+(`blocked:filesystem-unsupported`), so reading and writing workspace files needs Linux x64,
+macOS or Windows x64 for now. Its CI journeys are reported, not gating.
+
+Where things go: the installers put XR's program files in `~/.xr-agent` (Windows:
+`%USERPROFILE%\.xr-agent`); set `XR_INSTALL_DIR` to an absolute path to choose another
+directory. `XR_HOME` is XR's **data** home (config, databases, vault; default `~/.xr`) and never
+receives program files. Installers before this change used `XR_HOME` as the install directory
+when it was set; a re-run leaves those files where they are and tells you how to remove them.
+The installers refuse to run without a real, writable home directory (`HOME=/` or unset stops
+them), and they refuse an install directory that is your home, a drive root, or the data home.
 
 Per-platform support tiers: [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
@@ -330,7 +353,7 @@ Alongside the boundary, two mechanisms constrain cost and supply chain:
 | Mechanism | Where | What it enforces |
 |---|---|---|
 | Budget governor | `src/cost/governor.ts` | USD + token ceilings per task, checked before and during steps |
-| Secrets at rest | `src/config/config.ts` | OS keychain where available; else AES-256-GCM sealed file (auto-migrates plaintext); redacted from all status output |
+| Secrets at rest | `src/security/secrets.ts` | OS keychain where available; else AES-256-GCM sealed file (auto-migrates plaintext); redacted from all status output |
 | Plugin trust | `src/plugins/` | Manifest permissions, tree hashes, static scan, health checks, disable/remove |
 | Prompt injection | `src/core/agent.ts` | Tool output is treated as untrusted **data**, never as instructions |
 
@@ -359,7 +382,7 @@ flowchart LR
     T["git tag v*<br/><small>release.manifest.json<br/>stamps identity on 6 surfaces</small>"] --> B["CI build<br/><small>one canonical build<br/>6 targets + source</small>"]
     B --> A["Assemble<br/><small>SHA256SUMS · CycloneDX SBOM<br/>.deb · channel manifests</small>"]
     A --> SIG["cosign keyless sign<br/><small>Rekor + Fulcio<br/>SLSA3 provenance (slsa-framework)</small>"]
-    SIG --> GH["GitHub Release<br/><small>signed binaries + bundles<br/>prerelease flag per semver</small>"]
+    SIG --> GH["GitHub Release<br/><small>signed checksums for binaries<br/>desktop bundles unsigned (for now)<br/>prerelease flag per semver</small>"]
     SIG --> NPM["npm publish<br/><small>OIDC trusted publishing<br/>npm provenance attestation</small>"]
     SIG --> DK["GHCR + Docker Hub<br/><small>cosign-signed images</small>"]
     GH --> V["Verify (anyone, offline-ish)<br/><small>cosign verify-blob · sigstore check<br/>docs/release/VERIFYING_RELEASES.md</small>"]
@@ -500,7 +523,7 @@ See [`docs/business-os-extension.md`](docs/business-os-extension.md) and the
 |---|---|
 | 🛰 **Always alive** | Tray keeps the engine, shortcuts and approvals badge working when the window closes; menu shows today's spend and pending approvals in the platform's own idiom. |
 | ⌨️ **Global, honestly** | HUD, push-to-talk and screenshot-a-region-and-ask work while unfocused; chords fall back when the OS owns them, and the Settings screen shows what the machine actually holds. |
-| 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart; no release key → refuses to update rather than updating unverified. |
+| 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart; no release key → refuses to update rather than updating unverified. **Not provisioned yet:** current desktop builds have no update feed ([signing runbook](docs/release/DESKTOP_SIGNING.md)). |
 | 🧯 **Truthful crash recovery** | Marker-file detection; cut-off runs are marked `killed`, never "completed"; optional redacted report you choose to send. No telemetry anywhere. |
 | 🪟 **Native where it counts** | macOS HIG application menu, Windows MSIX with deep links + toast activation, Linux Flathub-ready Flatpak. |
 
@@ -520,8 +543,13 @@ sessions refused at `/files`, `/terminal`, `/git`, `/mcp` (403), Web Push sealed
 key only the paired phone holds, honest offline outbox. Wire format and threat model:
 [`docs/mobile/PWA.md`](docs/mobile/PWA.md) · [`docs/mobile/SECURITY.md`](docs/mobile/SECURITY.md).
 
-**Versus Code surface** (`extensions/vscode/`): the agent inside your editor, same governed
-pipeline.
+**VS Code extension** (`extensions/vscode/`, preview — install the `.vsix` from [GitHub Releases](https://github.com/ahmadrrrtx/xr/releases)): the agent inside your editor, same governed pipeline.
+It is not yet listed on the Visual Studio Marketplace or Open VSX. Install with
+`code --install-extension xr-vscode-<version>.vsix`; a `.vsix` is attached to a release only once
+the owner-run `publish-vscode` workflow has run for it, otherwise build one with
+`cd extensions/vscode && npm ci && npm run build:vsix`. It pairs with the local daemon by
+re-reading `xr serve`'s owner-only token file (`~/.xr/daemon/token`), so a daemon restart
+reconnects without pasting a new token.
 
 **Scripting:** `xr doctor --json` is the stable machine-readable entrypoint (redacted config,
 provider readiness, `summary.runnable`; secrets never printed). Exit codes:
@@ -559,10 +587,10 @@ XR's differentiator is that its claims are checked by machines on every PR.
 
 | Gate | What it pins |
 |---|---|
-| `bun test` + parity suite | **4,461 pass / 19 skip / 0 fail across 411 files** (root `bun test` scope; measured on the Linux lane with bun 1.4.3 at `ec672fe`, 2026-10-17 — see [docs/release/TEST-BASELINE.json](docs/release/TEST-BASELINE.json); refresh step: [RELEASING.md §1g](docs/release/RELEASING.md)); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
+| `bun test` + parity suite | **4,972 pass / 29 skip / 0 fail across 450 files** (root `bun test` scope; measured locally on Linux x64 with bun 1.4.2 at `a2b6a735`, 2026-10-22 — see [docs/release/TEST-BASELINE.json](docs/release/TEST-BASELINE.json); refresh step: [RELEASING.md §1g](docs/release/RELEASING.md)); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
-| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a <!-- XR:TREE-CEILING -->172,000<!-- /XR:TREE-CEILING -->-LOC ceiling on the whole tree** |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a <!-- XR:TREE-CEILING -->174,500<!-- /XR:TREE-CEILING -->-LOC ceiling on the whole tree** |
 | `claim-lint` constitution gate | every `Article N` cited anywhere in `src/`, `test/`, `scripts/`, `.github/` exists in [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) |
 | `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
 | `channel:check` | channel configs match the release manifest |
@@ -612,11 +640,19 @@ Phase 5 removed cannot quietly grow back.
 
 ## Uninstall & data
 
-`xr uninstall` removes the binary, PATH entry and data directory, with explicit flags for what to
-keep; the exact matrix is in [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md).
-Updates follow the channel you installed from (`brew upgrade xr`,
-`winget upgrade ahmadrrrtx.XR`, `apt-get install --only-upgrade xr`, or `xr update` for
-binary/npm/git layouts) and are atomic with an automatic rollback path.
+`xr uninstall` removes the binary, the PATH block the installer added and (with `--purge`) the data
+directory; the exact matrix is in [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md).
+In shell startup files it removes only the marked `# >>> XR launcher >>>` … `# <<< XR launcher <<<`
+block the installer wrote (and the single line older installers wrote); every other line,
+including your own `PATH` edits, is left byte-for-byte as it was.
+
+Updates follow the channel you installed from (`brew upgrade xr`, `winget upgrade ahmadrrrtx.XR`,
+`apt-get install --only-upgrade xr`, `scoop update xr`). `xr update --check` shows the running and
+published versions without changing anything. `xr update` on a binary or git install swaps
+atomically with a health canary and automatic rollback; on an npm/bun global install it delegates to
+`npm i -g` / `bun add -g`, verifies the installed version and re-installs the previous version if the
+check fails. **npm users on 1.0.0:** that release's `xr update` cannot update itself (it looks for a
+file the npm package did not ship) — run `npm i -g @rrrtx/xr@latest` once.
 
 ---
 

@@ -26,6 +26,12 @@
  *   7. DOC LINKS          — every relative link in the published docs resolves
  *                           in this tree; a deliberately pending target carries
  *                           an inline `xr:link-pending` reason (Phase 1.3).
+ *   8. STATUS LABEL       — "Public beta" until docs/release/launch-gates.json is
+ *                           all green; no stable-production wording meanwhile
+ *                           (launch audit XR-LAUNCH-010, decision D2).
+ *   9. CHANNEL CLAIMS     — the README install table maps to claimed channels;
+ *                           with `--live`, a row marked live must pass
+ *                           `channel:live` against the real registries.
  *
  * Gates 6–7 live in this scanner rather than as manifest claims: the manifest
  * stamps file *identities*, while these rules police prose in hand-written
@@ -34,6 +40,7 @@
  *
  *   bun run scripts/claim-lint.ts            # lint the repository
  *   bun run scripts/claim-lint.ts --json     # machine-readable report
+ *   bun run scripts/claim-lint.ts --live     # + compare README channel claims with live registries (network)
  *
  * Fails closed: an unreadable surface or an unparseable manifest is a failure,
  * never a pass (Commandment 13).
@@ -43,9 +50,10 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ROOT, loadManifest, evaluateSurfaces, countSkills, type ReleaseManifest } from "./release-manifest.ts";
 import { TREE_CEILING } from "./size-gate.ts";
+import { compareTableWithLive, lintChannelTable, lintStatusLabel, lintVscodeListing, parseInstallTable } from "./launch-claims.ts";
 
 export interface Violation {
-  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution" | "numeric-claim" | "doc-link";
+  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution" | "numeric-claim" | "doc-link" | "status-label" | "channel-claim" | "vscode-listing";
   file: string;
   line: number;
   text: string;
@@ -444,7 +452,7 @@ export function scanNumericClaims(
   const out: Violation[] = [];
   const comma = formattedCeiling();
   const k = `${Math.round(TREE_CEILING / 1000)}K`;
-  const rel = relative(ROOT, file);
+  const rel = relative(ROOT, file).replace(/\\/g, "/"); // POSIX on every OS
   // Marker values must equal TREE_CEILING even on history-exempt lines.
   for (const m of text.matchAll(TREE_CEILING_MARKER)) {
     if (m[1] !== comma) {
@@ -549,6 +557,33 @@ export function scanNumericClaims(
       }
     }
   }
+  // XR-LAUNCH-022: per-OS test-file counts have ONE source — `bun run
+  // platform:parity:check` over test/platform/exclusions.json. Hand-copied
+  // counts in the support matrix prose went stale ("239 files" while the
+  // suite had 443), so the narrative must point at the source, not copy it.
+  if (rel === "docs/release/SUPPORT_MATRIX.md") {
+    const lines = stripFences(text).split("\n");
+    let generated = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      if (line.includes("<!-- BEGIN GENERATED")) generated = true;
+      if (line.includes("<!-- END GENERATED")) {
+        generated = false;
+        continue;
+      }
+      if (generated || HISTORY_EXEMPT.test(line)) continue;
+      const m = line.match(/\b\d[\d,]*\s+(?:test\s+|documented\s+)?(?:files?|exclusions?)\b/i);
+      if (m) {
+        out.push({
+          gate: "numeric-claim",
+          file: rel,
+          line: i + 1,
+          text: m[0],
+          reason: "test-file counts in the support matrix come from `bun run platform:parity:check` and test/platform/exclusions.json — reference them instead of copying a number (XR-LAUNCH-022)",
+        });
+      }
+    }
+  }
   return out;
 }
 
@@ -559,7 +594,7 @@ export function scanNumericClaims(
  */
 export function scanDocLinks(text: string, file: string): Violation[] {
   const out: Violation[] = [];
-  const rel = relative(ROOT, file);
+  const rel = relative(ROOT, file).replace(/\\/g, "/"); // POSIX on every OS
   const lines = stripFences(text).split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -610,7 +645,25 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const violations = [...lintRepository(manifest), ...lintConstitution(), ...lintDocsIntegrity()];
+  const violations: Violation[] = [
+    ...lintRepository(manifest),
+    ...lintConstitution(),
+    ...lintDocsIntegrity(),
+    ...lintStatusLabel(manifest, ROOT),
+    ...lintChannelTable(manifest, ROOT),
+    ...lintVscodeListing(ROOT),
+  ];
+  const notes: string[] = [];
+  if (process.argv.includes("--live")) {
+    // Gate 9, live half: what the README promises vs what the registries serve.
+    const { runLiveChecks } = await import("./channel-live-check.ts");
+    const results = await runLiveChecks(manifest, { ghToken: process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN });
+    const rows = parseInstallTable(readFileSync(join(ROOT, "README.md"), "utf8"));
+    const cmp = compareTableWithLive(rows, results);
+    violations.push(...cmp.violations);
+    notes.push(...cmp.stalePending);
+  }
+  for (const n of notes) console.error(`[claim-lint] note: ${n}`);
 
   if (json) {
     console.log(JSON.stringify({ ok: violations.length === 0, count: violations.length, violations }, null, 2));

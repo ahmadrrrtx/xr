@@ -12,7 +12,7 @@
 # This workflow can never go green by accident: every assertion in the probe
 # script is a measured fact (exit codes, TCP/HTTP answers, directory contents).
 
-name: Real-Device Matrix
+name: Real-Device Matrix (non-gating)
 
 on:
   workflow_run:
@@ -35,27 +35,35 @@ concurrency:
 
 jobs:
   matrix:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # workflow_run fires for fork PRs too: only install bundles built from this
+    # repository's own branches (zizmor dangerous-triggers, audit 032).
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { runner: ubuntu-22.04, os: linux }
-          - { runner: macos-latest, os: macos }
-          - { runner: windows-latest, os: windows }
+          # `slug` is the artifact suffix desktop-app.yml's bundle job uploads
+          # (xr-desktop-<slug>). The old xr-desktop-<runner> name never existed,
+          # which is why every run failed with "artifact not found" (XR-LAUNCH-012).
+          - { runner: ubuntu-22.04, os: linux, slug: linux-x64 }
+          - { runner: macos-latest, os: macos, slug: darwin-arm64 }
+          - { runner: windows-latest, os: windows, slug: windows-x64 }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Resolve source run
         id: src
         shell: bash
+        env:
+          RUN: ${{ github.event.workflow_run.id || github.event.inputs.run_id }}
         run: |
-          RUN="${{ github.event.workflow_run.id || github.event.inputs.run_id }}"
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Install engine deps (probe script runtime)
         run: bun install --frozen-lockfile --ignore-scripts
@@ -77,9 +85,9 @@ jobs:
             librsvg2-2
 
       - name: Download this OS's bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: xr-desktop-${{ matrix.runner }}
+          name: xr-desktop-${{ matrix.slug }}
           path: rdm-bundles
           run-id: ${{ steps.src.outputs.run }}
           # v4 needs these three together to read out of a *different* run;
@@ -93,7 +101,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p rdm-prev && cd rdm-prev
-          curl -sL "${{ vars.RDM_PREV_URL }}/xr-desktop-${{ matrix.runner }}.zip" -o prev.zip
+          curl -sL "${{ vars.RDM_PREV_URL }}/xr-desktop-${{ matrix.slug }}.zip" -o prev.zip
           unzip -q prev.zip && rm prev.zip
 
       - name: Run the real-device probe (installed + upgraded)

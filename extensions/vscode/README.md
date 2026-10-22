@@ -8,11 +8,17 @@ XR must be running on your computer for the extension to respond. The extension 
 
 ## Install
 
-From a packaged build:
+**Preview.** The extension is not yet listed on the Visual Studio Marketplace or Open VSX. Install the `.vsix` attached to a [GitHub release](https://github.com/ahmadrrrtx/xr/releases) (added by the owner-run `publish-vscode` workflow), and check it against the `.sha256` file next to it:
+
+```sh
+code --install-extension xr-vscode-0.2.0.vsix
+```
+
+Or build it yourself:
 
 ```sh
 cd extensions/vscode
-npm install
+npm ci
 npm run build:vsix        # typecheck, unit tests, bundle, package
 code --install-extension xr-vscode-0.2.0.vsix
 ```
@@ -21,19 +27,26 @@ Development: open `extensions/vscode` in VS Code and press F5, or run `npm run w
 
 ## Connect to the daemon
 
-1. Start XR with `xr serve`. It prints a token once. The token is random per start.
-2. In VS Code, run **XR: Set daemon token** and paste it. It is stored in the OS keychain through VS Code's secret storage.
+Usually nothing to do:
 
-Other ways to supply the token, in precedence order:
+1. Start XR with `xr serve` (or run **XR: Start XR** from VS Code).
+2. The extension reads the running daemon's token from `~/.xr/daemon/token` (or `$XR_HOME/daemon/token`) and connects.
+
+The token is random per daemon start. `xr serve` hides it from the terminal and writes the current one to that file (owner-only, removed on shutdown). The extension re-reads the file on every status refresh and immediately when the daemon rejects a token, so **a daemon restart reconnects on its own, without re-pairing**. A chat message sent right after a restart is retried once with the new token; a run that already started is never retried.
+
+The file is used only if it is a regular file (not a symlink) and, on macOS and Linux, owned by you and not readable by other users. Otherwise it is ignored and the panel says why.
+
+Other token sources, in precedence order. When the daemon rejects one, the next is tried:
 
 | Source | Notes |
 | --- | --- |
 | `xr.token` setting | Application scope only. Never read from a workspace or repository. |
 | `XR_DAEMON_TOKEN` environment variable | Read when VS Code starts. |
-| **XR: Start XR** | Starts `xr serve` from VS Code. The printed token is kept in memory for that session and is never written to disk. |
-| Secret storage | Filled by **XR: Set daemon token**. Remove it with **XR: Forget stored daemon token**. |
+| **XR: Start XR** | Starts `xr serve` from VS Code. A token printed by the daemon (only with `XR_PRINT_TOKEN=1`) is kept in memory for that session. |
+| Daemon token file | `~/.xr/daemon/token`, written by the running daemon. |
+| Secret storage | Filled by **XR: Set daemon token**. Remove it with **XR: Forget stored daemon token**. Needed only when VS Code cannot read the token file, for example when the daemon runs as another user or with a different `XR_HOME`. |
 
-The extension does not read a token file from disk. The daemon writes none.
+The extension itself never writes a token to disk.
 
 If the daemon is not running, the panel says so and offers **Start XR**. A daemon that VS Code started stops when VS Code closes. A daemon you started yourself keeps running.
 
@@ -65,7 +78,7 @@ If the daemon is not running, the panel says so and offers **Start XR**. A daemo
 - The daemon URL must resolve to a loopback address. Other hosts are refused before any request, so the token is never sent elsewhere.
 - Model output is rendered as React elements. Nothing is inserted as HTML. Links open only for http(s).
 - File references from answers open only when they resolve to a file inside a workspace folder. Absolute paths and `..` escapes are refused.
-- Tokens are never logged. Log lines from `xr serve` that mention a token are hidden in the **XR daemon** output channel.
+- Tokens are never logged. Log lines from `xr serve` that mention a token are hidden in the **XR daemon** output channel. Status messages name only the token *source*, never the value.
 
 ## Limits
 

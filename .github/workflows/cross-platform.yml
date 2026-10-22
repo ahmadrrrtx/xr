@@ -50,15 +50,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { osName: "Linux (reference)", runsOn: ubuntu-latest, bunOs: linux }
+          - { osName: "Linux (reference)", runsOn: ubuntu-24.04, bunOs: linux }
           - { osName: "macOS", runsOn: macos-latest, bunOs: darwin }
           - { osName: "Windows", runsOn: windows-latest, bunOs: win32 }
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      # test/desktop/frontend-stores imports the renderer stores; their deps
+      # live in desktop/node_modules (separate lockfile: desktop/bun.lock).
+      - name: Install desktop dependencies
+        working-directory: desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Exclusion manifest validates (no silent skips)
         run: bun run scripts/platform-parity.ts --validate
@@ -154,3 +161,20 @@ jobs:
         env:
           HOME: /tmp/xr-cross-${{ matrix.bunOs }}-home
           XR_HOME: /tmp/xr-cross-${{ matrix.bunOs }}-data
+
+  # XR-LAUNCH-012 (D7): the ONE check branch protection requires for this
+  # workflow (.github/required-checks.json). It fails unless every job it
+  # needs succeeded — a skipped or cancelled job is not a pass.
+  cross-platform-gate:
+    name: Cross-Platform gate
+    if: always()
+    needs: [parity]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every required job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needs: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "::error::a required job ended '$r'"; exit 1; }; done
