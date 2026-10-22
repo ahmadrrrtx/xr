@@ -87,6 +87,11 @@ process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER ??= "1";
 // A test that exercises a probe itself sets XR_NETWORK_PROBES back explicitly.
 process.env.XR_NETWORK_PROBES ??= "off";
 
+// XR-LAUNCH-015: secrets now go to the OS keychain first. The suite must never
+// write a developer's real Keychain / Secret Service / DPAPI store, so the
+// file backend is forced; secret tests inject a mocked OS backend explicitly.
+process.env.XR_SECRET_BACKEND ??= "file";
+
 if (KEEP) {
   console.log(`[suite-tmp] XR_TEST_TMP_KEEP=1 — suite temp root kept at ${root}`);
 } else {

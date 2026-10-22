@@ -51,6 +51,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/services/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/skills/` | @ahmadrrrtx | explicit entry |
 | `src/state/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `src/storage/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/telegram/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/templates/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/tools/` | @ahmadrrrtx | explicit entry |
@@ -135,6 +136,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/skills.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/skills/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/state/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/storage/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/supply-chain/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/telegram.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/telegram/` | @ahmadrrrtx | default (@ahmadrrrtx) |

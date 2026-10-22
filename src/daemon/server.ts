@@ -10,6 +10,7 @@ import { setDesktopGrantRegistry } from "../control/files.ts";
 import { existsSync } from "node:fs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { hydrateSecretsAsync, loadConfig } from "../config/config.ts";
+import { prepareDaemonSecrets } from "../security/secret-migration.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
 import { XRShieldService } from "../hygiene/scanner.ts";
 import type { Store } from "../state/workspace-store.ts";
@@ -749,8 +750,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const workspaceManager = new WorkspaceManager();
   const store = opts.store ?? workspaceManager.getStore(workspaceManager.getActiveId());
 
-  // Prefetch secrets into process.env without blocking the first health check.
-  void hydrateSecretsAsync().catch(() => {});
+  await prepareDaemonSecrets(hydrateSecretsAsync); // XR-LAUNCH-015: warm keychain secrets (bounded) before serving; migrate in background
 
   // Phase 01 — probe hardware + runtimes in the BACKGROUND so the first
   // dashboard load hits warm caches instead of paying 3.5 s + N×2.5 s of

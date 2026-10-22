@@ -19,6 +19,8 @@ import { detectAllRuntimes, detectRuntime } from "../local/runtimes.ts";
 import { validateOllamaModelId } from "../local/registry.ts";
 import { knownProviders, PRESETS } from "../providers/factory.ts";
 import { preferredSecretBackend, setSecret } from "../security/secrets.ts";
+import { migrateFileSecretsToKeychain, secretStoreHealth } from "../security/secret-migration.ts";
+import { hardenDataHome } from "../storage/permissions.ts";
 import { summarizeHealthChecks, REQUIRED_HEALTH_CHECK_IDS } from "./baseline-status.ts";
 
 export type XROs = "windows" | "macos" | "linux" | "termux" | "unknown";
@@ -242,8 +244,8 @@ export async function probeHealth(opts: InstallOptions = {}): Promise<HealthChec
   checks.push({ id: "local-runtimes-detected", label: "Detected local runtimes", state: readyLocal === "none" ? "warn" : "ok", detail: readyLocal, remediation: readyLocal === "none" ? "Install/start Ollama, LM Studio, Jan, llama.cpp, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, or SGLang." : undefined });
   checks.push({ id: "local-model", label: "Local model", state: runtimeStatus.models.includes(selectedModel) ? "ok" : (localCfg.enabled ? "warn" : "skip"), detail: `${selectedRuntime}/${selectedModel}`, remediation: `Run xr models install ${selectedModel} or xr models set ${selectedRuntime} <model>.` });
 
-  const secretBackend = preferredSecretBackend();
-  checks.push({ id: "secrets", label: "Secret store", state: secretBackend === "file" ? "warn" : "ok", detail: secretBackend, remediation: secretBackend === "file" ? `Keys fall back to ${join(XR_HOME, ".env")} — AES-256-GCM sealed with a per-install key, chmod 600. Install OS secret tooling for the strongest storage.` : undefined });
+  // XR-LAUNCH-015: truthful probe — an OS store is reported only if its tool exists.
+  checks.push({ id: "secrets", label: "Secret store", ...secretStoreHealth() });
 
   const ffmpeg = commandExists("ffmpeg");
   const whisper = commandExists("whisper-cli") || commandExists("main") || existsSync(join(XR_HOME, "components", "whisper.cpp"));
@@ -353,6 +355,11 @@ export async function repairXR(args: string[] = []): Promise<void> {
   ok(`Config present: ${configPath()}`);
   const envFile = join(XR_HOME, ".env");
   if (existsSync(envFile)) { try { chmodSync(envFile, 0o600); ok("Secret fallback file permissions hardened."); } catch { warn("Could not chmod ~/.xr/.env on this platform."); } }
+  const perms = hardenDataHome(XR_HOME); // XR-LAUNCH-016
+  if (perms.changed.length) ok(`Data home tightened to owner-only: ${perms.changed.join(", ")} (logged to logs/permissions-migration.log).`);
+  const moved = await migrateFileSecretsToKeychain(); // XR-LAUNCH-015
+  if (moved.moved.length) ok(`Moved ${moved.moved.length} secret(s) into ${moved.backend}; the sealed backup is kept until the next successful run.`);
+  if (moved.failed.length) warn(`Kept in the file fallback (keychain refused): ${moved.failed.join(", ")}.`);
 
   const pm = packageManager();
   if (pm && (opts.yes || await approved(`Run ${pm} install to repair dependencies?`, false, opts))) {

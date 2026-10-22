@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-22T07:22:40.246Z",
+  "generatedAt": "2026-10-22T08:30:53.945Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -55,8 +55,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 756,
-    "testFiles": 436,
+    "sourceFiles": 759,
+    "testFiles": 439,
     "cliCommands": 44,
     "daemonRoutes": 305,
     "providers": 26,
@@ -83,7 +83,7 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 1576
+      "bytes": 1702
     },
     {
       "path": ".gitleaksignore",
@@ -95,7 +95,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 151431
+      "bytes": 156610
     },
     {
       "path": "CODEOWNERS",
@@ -151,7 +151,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 40658
+      "bytes": 40661
     },
     {
       "path": "SECURITY.md",
@@ -179,7 +179,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 6867
+      "bytes": 6924
     },
     {
       "path": "release.manifest.json",
@@ -780,7 +780,9 @@
     "src/security/guard.ts",
     "src/security/lab.ts",
     "src/security/private-ip.ts",
+    "src/security/secret-backends.ts",
     "src/security/secret-broker.ts",
+    "src/security/secret-migration.ts",
     "src/security/secrets.ts",
     "src/security/shield.ts",
     "src/security/tool-output.ts",
@@ -856,6 +858,7 @@
     "src/state/ui-state.ts",
     "src/state/workspace-store.ts",
     "src/state/write-gate.ts",
+    "src/storage/permissions.ts",
     "src/telegram/attachments.ts",
     "src/telegram/auth.ts",
     "src/telegram/bot.ts",
@@ -1080,6 +1083,7 @@
     "test/desktop/flatpak-metainfo.test.ts",
     "test/desktop/frontend-stores.test.ts",
     "test/desktop/integrations-core.test.ts",
+    "test/desktop/ipc-acl.test.ts",
     "test/desktop/memory-core.test.ts",
     "test/desktop/msix-assets.test.ts",
     "test/desktop/orb-core.test.ts",
@@ -1313,6 +1317,7 @@
     "test/security/phase31-bucket-b.test.ts",
     "test/security/phase31-bucket-c.test.ts",
     "test/security/phase31-bucket-e.test.ts",
+    "test/security/secret-keychain.test.ts",
     "test/security/secrets.test.ts",
     "test/security/shield.test.ts",
     "test/security/tool-output-framing.test.ts",
@@ -1335,6 +1340,7 @@
     "test/state/migration-lock-self-deadlock.test.ts",
     "test/state/ui-state.test.ts",
     "test/state/workspace-store.test.ts",
+    "test/storage/permissions.test.ts",
     "test/supply-chain/supply-chain.test.ts",
     "test/telegram.test.ts",
     "test/telegram/phase24.test.ts",

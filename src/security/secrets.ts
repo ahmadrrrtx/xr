@@ -2,14 +2,19 @@
  * XR — local secret storage helpers.
  *
  * Security rules:
- * - Raw keys are never printed.
- * - OS-backed storage is preferred when available.
- * - File fallback is explicit, user-readable, and chmod 600 where supported.
+ * - Raw keys are never printed, and never placed on a child's argv.
+ * - XR-LAUNCH-015: the OS store is the PRIMARY store. A write goes to the OS
+ *   backend first and is verified by read-back; the file fallback is written
+ *   ONLY when that fails (or when the user opts in with XR_SECRET_BACKEND=file),
+ *   and the fallback is announced once on stderr. XR_SECRET_BACKEND=keychain
+ *   refuses the fallback entirely (strict mode).
+ * - A names-only index (~/.xr/secrets/index.json, 0600) records which backend
+ *   holds each name, so sync readers know when a one-time OS read is warranted.
  *
- * Backends:
- * - macOS: Keychain via `security`
- * - Linux: Secret Service via `secret-tool` when installed
- * - Windows: user/machine-bound DPAPI via PowerShell ConvertFrom-SecureString
+ * Backends (src/security/secret-backends.ts):
+ * - macOS: Keychain via `security -i` (command + value on stdin)
+ * - Linux: Secret Service via `secret-tool` (value on stdin) when installed
+ * - Windows: user/machine-bound DPAPI via PowerShell (value on stdin)
  * - Fallback: ~/.xr/.env — AES-256-GCM ENCRYPTED AT REST (launch hardening,
  *   audit discrepancy D-1). See "File fallback encryption" below.
  *
@@ -25,18 +30,20 @@
  *   XR could have shipped.
  *
  * Performance:
- * - getSecretSyncCached never spawns (env + in-memory memo + file only)
- * - getSecretAsync uses non-blocking subprocess for OS backends
- * - getSecret remains for CLI write paths; may spawn once on cold miss
+ * - getSecretSyncCached: env → memo → (indexed OS name: ONE memoized read) →
+ *   file. The daemon disables the sync OS read and warms the memo instead.
+ * - getSecretAsync uses non-blocking subprocesses for OS backends.
  */
-import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { homedir, platform } from "node:os";
+import { homedir } from "node:os";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { commandExists, runCommand } from "../util/process.ts";
 import { envSecretCompatEnabled } from "./env-compat.ts";
+import { detectOsBackend, osBackendFor, type OsBackendId, type OsSecretBackend } from "./secret-backends.ts";
 
-export type SecretBackend = "macos-keychain" | "linux-secret-service" | "windows-dpapi" | "file";
+export type SecretBackend = OsBackendId | "file";
+/** XR_SECRET_BACKEND: auto (default, OS first) · file (opt-in) · keychain (strict, no fallback). */
+export type SecretBackendMode = "auto" | "file" | "keychain";
 
 /** XR_HOME is resolved lazily per call so long-lived processes (and tests
  *  setting process.env.XR_HOME per case) see the right root. */
@@ -48,6 +55,9 @@ const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{1,80}$/;
 
 /** In-memory secret memo — never re-probes OS keychain after a successful read. */
 const secretMemo = new Map<string, string>();
+/** Names whose one-time sync OS read came back empty (cleared by any write). */
+const negativeMemo = new Set<string>();
+let syncOsReads = true;
 
 function assertSafeName(name: string): void {
   if (!SECRET_NAME_RE.test(name)) throw new Error(`unsafe secret name: ${name}`);
@@ -57,38 +67,53 @@ function assertSafeValue(value: string): void {
   if (!value || /[\r\n\0]/.test(value)) throw new Error("secret value is empty or contains an unsafe newline/null byte");
 }
 
-function powershellCandidates(): string[] {
-  return process.platform === "win32" ? ["pwsh", "powershell"] : [];
+export function secretBackendMode(env: NodeJS.ProcessEnv = process.env): SecretBackendMode {
+  const v = (env.XR_SECRET_BACKEND ?? "").trim().toLowerCase();
+  return v === "file" ? "file" : v === "keychain" ? "keychain" : "auto";
+}
+
+let osOverride: OsSecretBackend | null | undefined;
+let osCache: { key: string; backend: OsSecretBackend | null } | undefined;
+
+/** Test seam: inject a mocked OS backend (null = none; undefined = real detection). */
+export function __setOsBackendForTests(backend: OsSecretBackend | null | undefined): void {
+  osOverride = backend;
+  osCache = undefined;
+  fallbackWarned = false;
+  syncOsReads = true;
+  clearSecretMemo();
+}
+
+/** The OS backend writes go to, or null (file mode / no usable OS store). Spawn-free. */
+export function activeOsBackend(): OsSecretBackend | null {
+  if (secretBackendMode() === "file") return null;
+  if (osOverride !== undefined) return osOverride;
+  const key = `${process.platform}|${process.env.PATH ?? ""}`;
+  if (!osCache || osCache.key !== key) {
+    const id = detectOsBackend();
+    osCache = { key, backend: id ? osBackendFor(id, secretDir) : null };
+  }
+  return osCache.backend;
+}
+
+/** Truthful backend for new writes (doctor/status): the tool must actually exist. */
+export function preferredSecretBackend(): SecretBackend {
+  return activeOsBackend()?.id ?? "file";
 }
 
 export async function preferredSecretBackendAsync(): Promise<SecretBackend> {
-  if (platform() === "darwin" && (await commandExists("security"))) return "macos-keychain";
-  if (platform() === "linux" && (await commandExists("secret-tool"))) return "linux-secret-service";
-  if (platform() === "win32") {
-    for (const ps of powershellCandidates()) {
-      if (await commandExists(ps)) return "windows-dpapi";
-    }
-  }
-  return "file";
-}
-
-/** Sync backend preference using only env/platform heuristics (no spawn). */
-export function preferredSecretBackend(): SecretBackend {
-  if (platform() === "darwin") return "macos-keychain";
-  if (platform() === "linux") return "linux-secret-service";
-  if (platform() === "win32") return "windows-dpapi";
-  return "file";
+  return preferredSecretBackend();
 }
 
 function envPath(): string {
   const home = xrHome();
-  if (!existsSync(home)) mkdirSync(home, { recursive: true });
+  if (!existsSync(home)) mkdirSync(home, { recursive: true, mode: 0o700 });
   return join(home, ".env");
 }
 
 function secretDir(): string {
   const dir = join(xrHome(), "secrets");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
   try { chmodSync(dir, 0o700); } catch {}
   return dir;
 }
@@ -208,60 +233,6 @@ function writeEnvEntries(entries: Map<string, string>, corruptRaw: string[] = []
   try { chmodSync(path, 0o600); } catch {}
 }
 
-function windowsSecretPath(name: string): string {
-  assertSafeName(name);
-  return join(secretDir(), `${name}.dpapi`);
-}
-
-async function setWindowsSecretAsync(name: string, value: string): Promise<boolean> {
-  let ps: string | undefined;
-  for (const c of powershellCandidates()) {
-    if (await commandExists(c)) { ps = c; break; }
-  }
-  if (!ps) return false;
-  const script = `
-$ErrorActionPreference = 'Stop'
-$path = $env:XR_SECRET_PATH
-$value = $env:XR_SECRET_VALUE
-$secure = ConvertTo-SecureString -String $value -AsPlainText -Force
-$encrypted = ConvertFrom-SecureString -SecureString $secure
-Set-Content -LiteralPath $path -Value $encrypted -NoNewline
-`;
-  const res = await runCommand(ps, ["-NoProfile", "-NonInteractive", "-Command", script], {
-    env: { ...process.env, XR_SECRET_PATH: windowsSecretPath(name), XR_SECRET_VALUE: value },
-    timeoutMs: 10_000,
-    stdio: "ignore",
-  });
-  return res.ok;
-}
-
-async function getWindowsSecretAsync(name: string): Promise<string | undefined> {
-  let ps: string | undefined;
-  for (const c of powershellCandidates()) {
-    if (await commandExists(c)) { ps = c; break; }
-  }
-  const path = windowsSecretPath(name);
-  if (!ps || !existsSync(path)) return undefined;
-  const script = `
-$ErrorActionPreference = 'Stop'
-$encrypted = Get-Content -LiteralPath $env:XR_SECRET_PATH -Raw
-$secure = ConvertTo-SecureString -String $encrypted
-$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
-finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-`;
-  const res = await runCommand(ps, ["-NoProfile", "-NonInteractive", "-Command", script], {
-    env: { ...process.env, XR_SECRET_PATH: path },
-    timeoutMs: 10_000,
-  });
-  const value = res.ok ? res.stdout.trim() : "";
-  return value || undefined;
-}
-
-function removeWindowsSecret(name: string): void {
-  try { rmSync(windowsSecretPath(name), { force: true }); } catch {}
-}
-
 function setFileSecret(name: string, value: string): void {
   assertSafeName(name);
   assertSafeValue(value);
@@ -297,164 +268,231 @@ function removeFileSecret(name: string): void {
   secretMemo.delete(name);
 }
 
-/**
- * Non-blocking secret write for daemon / async CLI paths.
- */
+// ── Names-only index (XR-LAUNCH-015) ─────────────────────────────────────────
+
+export interface SecretIndex {
+  version: 1;
+  /** name → backend holding it. Never values. */
+  entries: Record<string, SecretBackend>;
+  /** True once the keychain migration enumerated the OS store for legacy names. */
+  discovered?: boolean;
+  /** Pre-migration backup of ~/.xr/.env, deleted by the next successful run. */
+  pendingBackup?: { path: string; names: string[]; at: string };
+}
+
+const BACKENDS: readonly SecretBackend[] = ["macos-keychain", "linux-secret-service", "windows-dpapi", "file"];
+
+function indexPath(): string {
+  return join(xrHome(), "secrets", "index.json");
+}
+
+export function readSecretIndex(): SecretIndex {
+  const empty: SecretIndex = { version: 1, entries: {} };
+  try {
+    if (!existsSync(indexPath())) return empty;
+    const raw = JSON.parse(readFileSync(indexPath(), "utf8")) as Partial<SecretIndex>;
+    const entries: Record<string, SecretBackend> = {};
+    for (const [k, v] of Object.entries(raw.entries ?? {})) {
+      if (SECRET_NAME_RE.test(k) && BACKENDS.includes(v as SecretBackend)) entries[k] = v as SecretBackend;
+    }
+    return { ...raw, version: 1, entries };
+  } catch {
+    return empty;
+  }
+}
+
+export function writeSecretIndex(index: SecretIndex): void {
+  secretDir();
+  writeFileSync(indexPath(), JSON.stringify(index, null, 2) + "\n", { mode: 0o600 });
+  try { chmodSync(indexPath(), 0o600); } catch {}
+}
+
+function indexSet(name: string, backend: SecretBackend | null): void {
+  const index = readSecretIndex();
+  if ((index.entries[name] ?? null) === backend) return;
+  if (backend) index.entries[name] = backend;
+  else delete index.entries[name];
+  writeSecretIndex(index);
+}
+
+/** True when the index records `name` (in any backend) — "exists but may be unreadable". */
+export function isSecretIndexed(name: string): boolean {
+  return name in readSecretIndex().entries;
+}
+
+// ── Write / read API ────────────────────────────────────────────────────────
+
+let fallbackWarned = false;
+
+function remember(name: string, value: string): void {
+  secretMemo.set(name, value);
+  negativeMemo.delete(name);
+  if (envSecretCompatEnabled()) process.env[name] = value;
+}
+
+/** Remove a stale file copy (no-op when the file never held `name`). */
+export function dropFileSecret(name: string): void {
+  assertSafeName(name);
+  if (!existsSync(join(xrHome(), ".env"))) return;
+  const { entries, corruptRaw } = readEnvEntries();
+  if (entries.has(name) || corruptRaw.some((l) => l.startsWith(`${name}=`))) removeFileSecret(name);
+}
+
+function committedToOs(os: OsSecretBackend, name: string, value: string): SecretBackend {
+  dropFileSecret(name);
+  indexSet(name, os.id);
+  remember(name, value);
+  return os.id;
+}
+
+function fileFallback(name: string, value: string, os: OsSecretBackend | null): SecretBackend {
+  const mode = secretBackendMode();
+  if (mode === "keychain") {
+    throw new Error(
+      `XR_SECRET_BACKEND=keychain: ${os ? `the OS keychain (${os.id}) rejected ${name}` : "no OS keychain is available"}; refusing the file fallback`,
+    );
+  }
+  if (mode === "auto" && !fallbackWarned) {
+    fallbackWarned = true;
+    const why = os ? `the OS keychain (${os.id}) rejected the write` : "no OS keychain was found (macOS Keychain, Linux secret-tool, Windows PowerShell)";
+    console.error(
+      `⚠ XR: ${why}; secrets are being stored in the encrypted file fallback (~/.xr/.env, key in ~/.xr/secrets). ` +
+        "Set XR_SECRET_BACKEND=file to choose this silently, or XR_SECRET_BACKEND=keychain to refuse it.",
+    );
+  }
+  setFileSecret(name, value);
+  indexSet(name, "file");
+  remember(name, value);
+  return "file";
+}
+
+/** Non-blocking write: OS store first (verified by read-back), file only on failure. */
 export async function setSecretAsync(name: string, value: string): Promise<SecretBackend> {
   assertSafeName(name);
   assertSafeValue(value);
-  const backend = await preferredSecretBackendAsync();
-  if (backend === "macos-keychain") {
-    const res = await runCommand("security", ["add-generic-password", "-a", name, "-s", "xr", "-w", value, "-U"], {
-      timeoutMs: 8000,
-      stdio: "ignore",
-    });
-    if (res.ok) {
-      secretMemo.set(name, value);
-      if (envSecretCompatEnabled()) process.env[name] = value;
-      return backend;
-    }
+  const os = activeOsBackend();
+  if (os) {
+    let ok = false;
+    try { ok = (await os.set(name, value)) && (await os.get(name)) === value; } catch { ok = false; }
+    if (ok) return committedToOs(os, name, value);
   }
-  if (backend === "linux-secret-service") {
-    const res = await runCommand("secret-tool", ["store", "--label", `XR ${name}`, "application", "xr", "name", name], {
-      input: value,
-      timeoutMs: 8000,
-      stdio: "ignore",
-    });
-    if (res.ok) {
-      secretMemo.set(name, value);
-      if (envSecretCompatEnabled()) process.env[name] = value;
-      return backend;
-    }
-  }
-  if (backend === "windows-dpapi" && (await setWindowsSecretAsync(name, value))) {
-    secretMemo.set(name, value);
-    if (envSecretCompatEnabled()) process.env[name] = value;
-    return backend;
-  }
-  setFileSecret(name, value);
-  secretMemo.set(name, value); // mirror OS-backend paths: memo always = latest written value
-  if (envSecretCompatEnabled()) process.env[name] = value;
-  return "file";
+  return fileFallback(name, value, os);
 }
 
-/** CLI-compatible sync write — uses async under the hood only when Bun allows; falls back to file. */
+/** Sync write for CLI paths: same contract as setSecretAsync (bounded spawnSync). */
 export function setSecret(name: string, value: string): SecretBackend {
   assertSafeName(name);
   assertSafeValue(value);
-  // Prefer file for sync path reliability; OS backends are best-effort fire-and-forget.
-  const backend = preferredSecretBackend();
-  if (backend === "macos-keychain" || backend === "linux-secret-service" || backend === "windows-dpapi") {
-    // Schedule async OS store without blocking; always persist file as durable fallback.
-    void setSecretAsync(name, value).catch(() => {});
+  const os = activeOsBackend();
+  if (os) {
+    let ok = false;
+    try { ok = os.setSync(name, value) && os.getSync(name) === value; } catch { ok = false; }
+    if (ok) return committedToOs(os, name, value);
   }
-  setFileSecret(name, value);
-  // Phase 2 · F-24 — the write path obeys the same compat gate as reads:
-  // with XR_SECRETS_ENV_COMPAT off, the durable store is updated but the
-  // key is never mirrored into process.env.
-  if (envSecretCompatEnabled()) process.env[name] = value;
-  return "file";
+  return fileFallback(name, value, os);
 }
 
-/**
- * Hot-path secret read: process.env → memo → file only. Never spawns.
- */
-export function getSecretSyncCached(name: string): string | undefined {
-  assertSafeName(name);
-  // Phase 2 · F-24 — ambient env is only part of the read path while compat
-  // is on; with XR_SECRETS_ENV_COMPAT off, the durable backends are the only
-  // authority (the 2.0 posture the broker seam is headed for).
+/** env (compat) → memo → file. Never spawns. */
+function cachedOnly(name: string): string | undefined {
+  // Phase 2 · F-24 — ambient env is only part of the read path while compat is on.
   if (envSecretCompatEnabled() && process.env[name]) return process.env[name];
   if (secretMemo.has(name)) return secretMemo.get(name);
-  const file = getFileSecret(name);
-  if (file) {
-    secretMemo.set(name, file);
-    // Phase 2 · F-24 — ambient hydration is compat-gated: with
-    // XR_SECRETS_ENV_COMPAT off, the value is memoized (never re-read from
-    // disk) but deliberately NOT mirrored into process.env.
-    if (envSecretCompatEnabled()) process.env[name] = file;
-    return file;
-  }
   return undefined;
 }
 
-/**
- * Async OS-aware secret read for daemon startup / explicit key fetch.
- */
-export async function getSecretAsync(name: string): Promise<string | undefined> {
-  assertSafeName(name);
-  const quick = getSecretSyncCached(name);
-  if (quick) return quick;
-
-  const backend = await preferredSecretBackendAsync();
-  if (backend === "macos-keychain") {
-    const res = await runCommand("security", ["find-generic-password", "-a", name, "-s", "xr", "-w"], {
-      timeoutMs: 5000,
-    });
-    if (res.ok && res.stdout.trim()) {
-      const v = res.stdout.trim();
-      secretMemo.set(name, v);
-      if (envSecretCompatEnabled()) process.env[name] = v;
-      return v;
-    }
-  }
-  if (backend === "linux-secret-service") {
-    const res = await runCommand("secret-tool", ["lookup", "application", "xr", "name", name], {
-      timeoutMs: 5000,
-    });
-    if (res.ok && res.stdout.trim()) {
-      const v = res.stdout.trim();
-      secretMemo.set(name, v);
-      if (envSecretCompatEnabled()) process.env[name] = v;
-      return v;
-    }
-  }
-  if (backend === "windows-dpapi") {
-    const v = await getWindowsSecretAsync(name);
-    if (v) {
-      secretMemo.set(name, v);
-      if (envSecretCompatEnabled()) process.env[name] = v;
-      return v;
-    }
-  }
-  return getFileSecret(name);
+function fromFile(name: string): string | undefined {
+  const file = getFileSecret(name);
+  if (file) remember(name, file);
+  return file;
 }
 
 /**
- * Legacy sync getSecret. Uses cache first; on cold miss may return file only
- * to avoid blocking the event loop with OS keychain probes during daemon work.
- * For OS backends call getSecretAsync explicitly.
+ * Hot-path read: env → memo → one memoized OS read for names the index places
+ * in the OS store → file. Spawns at most once per name per process, and never
+ * in the daemon (disableSyncOsSecretReads + warmSecretCache).
  */
+export function getSecretSyncCached(name: string): string | undefined {
+  assertSafeName(name);
+  const quick = cachedOnly(name);
+  if (quick) return quick;
+  const os = syncOsReads && !negativeMemo.has(name) ? activeOsBackend() : null;
+  if (os && readSecretIndex().entries[name] === os.id) {
+    let v: string | undefined;
+    try { v = os.getSync(name); } catch { v = undefined; }
+    if (v) { remember(name, v); return v; }
+    negativeMemo.add(name);
+  }
+  return fromFile(name);
+}
+
+/** Async OS-aware read for daemon startup / explicit key fetch. */
+export async function getSecretAsync(name: string): Promise<string | undefined> {
+  assertSafeName(name);
+  const quick = cachedOnly(name);
+  if (quick) return quick;
+  const os = activeOsBackend();
+  if (os) {
+    const index = readSecretIndex();
+    // Before the migration has enumerated the OS store, an unindexed name may
+    // still be a legacy keychain-only entry, so it is probed.
+    if (index.entries[name] === os.id || (!(name in index.entries) && !index.discovered)) {
+      const v = await os.get(name).catch(() => undefined);
+      if (v) { remember(name, v); return v; }
+    }
+  }
+  return fromFile(name);
+}
+
+/** Legacy alias of getSecretSyncCached. */
 export function getSecret(name: string): string | undefined {
   return getSecretSyncCached(name);
 }
 
+/** Daemon: never block the event loop on a sync keychain read (memo is warmed instead). */
+export function disableSyncOsSecretReads(): void {
+  syncOsReads = false;
+}
+
+/** Load every OS-held indexed name (plus `extra`) into the memo. Returns the count loaded. */
+export async function warmSecretCache(extra: readonly string[] = []): Promise<number> {
+  const os = activeOsBackend();
+  if (!os) return 0;
+  const index = readSecretIndex();
+  const names = new Set([...Object.keys(index.entries).filter((n) => index.entries[n] === os.id), ...extra]);
+  let loaded = 0;
+  for (const name of names) {
+    if (!SECRET_NAME_RE.test(name) || secretMemo.has(name)) continue;
+    const v = await os.get(name).catch(() => undefined);
+    if (v) { remember(name, v); loaded++; } else negativeMemo.add(name);
+  }
+  return loaded;
+}
+
+function forget(name: string): void {
+  removeFileSecret(name);
+  indexSet(name, null);
+  secretMemo.delete(name);
+  negativeMemo.delete(name);
+  delete process.env[name];
+}
+
 export async function removeSecretAsync(name: string): Promise<SecretBackend> {
   assertSafeName(name);
-  const backend = await preferredSecretBackendAsync();
-  if (backend === "macos-keychain") {
-    await runCommand("security", ["delete-generic-password", "-a", name, "-s", "xr"], { timeoutMs: 5000, stdio: "ignore" });
-  } else if (backend === "linux-secret-service") {
-    await runCommand("secret-tool", ["clear", "application", "xr", "name", name], { timeoutMs: 5000, stdio: "ignore" });
-  } else if (backend === "windows-dpapi") {
-    removeWindowsSecret(name);
-  }
-  removeFileSecret(name);
-  secretMemo.delete(name);
-  delete process.env[name];
-  return backend;
+  const os = activeOsBackend();
+  if (os) await os.remove(name).catch(() => false);
+  forget(name);
+  return os?.id ?? "file";
 }
 
 export function removeSecret(name: string): SecretBackend {
   assertSafeName(name);
-  const backend = preferredSecretBackend();
-  void removeSecretAsync(name).catch(() => {});
-  removeFileSecret(name);
-  secretMemo.delete(name);
-  delete process.env[name];
-  return backend;
+  const os = activeOsBackend();
+  if (os) { try { os.removeSync(name); } catch {} }
+  forget(name);
+  return os?.id ?? "file";
 }
 
 export function clearSecretMemo(): void {
   secretMemo.clear();
+  negativeMemo.clear();
 }

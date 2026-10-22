@@ -4,7 +4,8 @@
  *   xr uninstall --keep-data   remove launcher, install dir, PATH entries;
  *                              keep the data home (~/.xr by default)
  *   xr uninstall --purge       additionally remove the data home (config,
- *                              databases, vault, memory, backups)
+ *                              databases, vault, memory, backups) AND every
+ *                              XR entry in the OS keychain (XR-LAUNCH-017)
  *
  * Filesystem effects are asserted per mode by
  * `test/reliability/update-uninstall.test.ts`. Deletion is user-confirmed
@@ -12,6 +13,7 @@
  */
 
 import { homedir } from "node:os";
+import { purgeXrSecrets, type SecretPurgeReport } from "../security/secret-migration.ts";
 import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
@@ -320,6 +322,20 @@ export function performUninstall(
   };
 }
 
+/**
+ * XR-LAUNCH-017 — purge order: OS-keychain entries are deleted FIRST (the
+ * names index lives in the data home), then the filesystem uninstall runs.
+ * keep-data never touches the keychain.
+ */
+export async function purgeThenUninstall(
+  args: Parameters<typeof performUninstall>[0],
+  paths: UninstallPaths = resolveUninstallPaths(),
+  purgeSecrets: () => Promise<SecretPurgeReport> = purgeXrSecrets,
+): Promise<{ summary: UninstallSummary; secrets: SecretPurgeReport | null }> {
+  const secrets = args.mode === "purge" ? await purgeSecrets().catch((): SecretPurgeReport => ({ backend: null, removed: [], failed: [], skipped: "keychain purge failed to run" })) : null;
+  return { summary: performUninstall(args, paths), secrets };
+}
+
 /** CLI-facing uninstall (confirmation + human output). */
 export async function uninstallXR(args: string[] = []): Promise<void> {
   const mode: UninstallMode = args.includes("--purge") ? "purge" : "keep-data";
@@ -357,7 +373,7 @@ export async function uninstallXR(args: string[] = []): Promise<void> {
   const { fileURLToPath } = await import("node:url");
   const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
-  const summary = performUninstall({ mode, yes, packageRoot }, paths);
+  const { summary, secrets } = await purgeThenUninstall({ mode, yes, packageRoot }, paths);
 
   // eslint-disable-next-line no-console
   console.log("\nUninstall complete:");
@@ -367,6 +383,12 @@ export async function uninstallXR(args: string[] = []): Promise<void> {
   console.log(`  install dir removed:  ${summary.installDirRemoved}`);
   // eslint-disable-next-line no-console
   console.log(`  data home removed:    ${summary.dataHomeRemoved}`);
+  if (secrets) {
+    // eslint-disable-next-line no-console
+    console.log(secrets.backend ? `  keychain entries removed (${secrets.backend}): ${secrets.removed.length}` : `  keychain: not checked — ${secrets.skipped}`);
+    // eslint-disable-next-line no-console
+    if (secrets.failed.length) console.warn(`  Could not remove from the keychain: ${secrets.failed.join(", ")} — delete them manually (service "xr").`);
+  }
   if (summary.skippedInstallDir || summary.skippedDataHome) {
     // eslint-disable-next-line no-console
     console.warn(

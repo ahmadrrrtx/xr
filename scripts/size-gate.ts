@@ -163,7 +163,18 @@ export const THRESHOLD = 800;
 // and the Windows ARM64 FFI self-test in fs-native.ts (XR-LAUNCH-005).
 // Measured 173,010 (+692 over 2A). Headroom ~490. Needs maintainer sign-off
 // and the security review that 2B requires anyway.
-export const TREE_CEILING = 173_500; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
+// Launch audit Phase 4B · 173,500 → 174,100 (2026-10-22): local data security,
+// which is core trust surface (every secret write and every data-home file
+// passes through it) and cannot move to a satellite: keychain-first storage
+// with stdin-only OS backends (src/security/secret-backends.ts, XR-LAUNCH-015),
+// the names-only index + file → keychain migration + keychain purge
+// (src/security/secret-migration.ts, XR-LAUNCH-015/017) and the owner-only
+// data home (src/storage/permissions.ts, XR-LAUNCH-016). No waived giant grew
+// (config.ts and daemon/server.ts edits are line-neutral). Measured 173,665
+// (+567 over 4A's 173,098). Headroom ~435. (Not 174,000: the stamped figure
+// would trip release.manifest.json's prohibited "74,000" star-count pattern.)
+// Needs maintainer sign-off.
+export const TREE_CEILING = 174_100; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
 // the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
 // P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
 // the device registry (hashed session tokens, revocation, mobile-kind tag),

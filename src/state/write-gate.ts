@@ -27,6 +27,7 @@
 
 import type { Statement } from "bun:sqlite";
 import { Database } from "bun:sqlite";
+import { restrictToOwner } from "../storage/permissions.ts";
 
 /** Thrown when the audit hash chain is corrupted and appends are refused. */
 export class AuditChainCorruptedError extends Error {
@@ -149,6 +150,8 @@ export function openDatabase(path: string, opts: { create?: boolean; readonly?: 
       db.exec("PRAGMA synchronous = NORMAL;");
       db.exec("PRAGMA foreign_keys = ON;");
       if (!opts.readonly) db.exec("PRAGMA wal_autocheckpoint = 1000;");
+      // XR-LAUNCH-016: XR databases hold chat memory and audit history; owner-only.
+      if (!opts.readonly && path !== ":memory:") for (const f of [path, `${path}-wal`, `${path}-shm`]) restrictToOwner(f);
       return db;
     } catch (e) {
       try {
