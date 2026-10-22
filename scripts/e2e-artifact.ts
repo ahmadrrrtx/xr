@@ -53,6 +53,11 @@ const tarball = pack.stdout.trim().split("\n").pop()?.trim() ?? "";
 check("tarball-produced", tarball.endsWith(".tgz"), tarball);
 
 // ── 2. Install the artifact ───────────────────────────────────────────────
+// Give the install dir its own package.json: without one, npm walks UP to the
+// nearest ancestor with a package.json/node_modules (e.g. a project that
+// happens to contain $TMPDIR) and installs there, so the artifact never lands
+// in installDir and every later check fails for an environmental reason.
+writeFileSync(join(installDir, "package.json"), JSON.stringify({ name: "xr-e2e-artifact-root", private: true }, null, 2) + "\n");
 const npmInstall = spawnSync("npm", ["install", "--no-audit", "--no-fund", join(tarballDir, tarball)], {
   cwd: installDir, env, encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"],
 });
