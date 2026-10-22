@@ -155,6 +155,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/apply-branch-protection.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/assert-clean-tree.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/audit-deps.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/baseline-inventory.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/benchmark-ttft.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

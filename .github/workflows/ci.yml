@@ -314,6 +314,10 @@ jobs:
           cat /tmp/xr-lane-core.log
           exit ${rc}
 
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
+
   test-security:
     name: test / security
     runs-on: ubuntu-latest
@@ -358,6 +362,10 @@ jobs:
           cat /tmp/xr-lane-security.log
           exit ${rc}
 
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
+
   # ── 5. Phase 1 reliability suite (concurrency, crash-injection, idempotency,
   #       migrations, RPO/RTO, golden path) — the spawn-heavy lane ──────────
   test-reliability-spawn:
@@ -394,6 +402,10 @@ jobs:
           echo "| test / reliability-spawn | ${PASS} pass | ${FAIL} fail | ${SKIP} skip |" >> "${GITHUB_STEP_SUMMARY}"
           cat /tmp/xr-lane-reliability.log
           exit ${rc}
+
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
 
   # ── 5h. Phase 0 black-box harness: real-CLI capture suites ────────────────
   # Every test here spawns `bun run src/index.ts` in a REAL child process with
@@ -443,6 +455,10 @@ jobs:
           echo "| test / e2e-blackbox (capture) | ${PASS} pass | ${FAIL} fail | ${SKIP} skip |" >> "${GITHUB_STEP_SUMMARY}"
           cat /tmp/xr-lane-e2e.log
           exit ${rc}
+
+      - name: Tests left the checkout clean (XR-LAUNCH-033)
+        if: ${{ !cancelled() }}
+        run: bash scripts/assert-clean-tree.sh
 
   # ── 5i. The Exit-Gate proof lane — RED on HEAD until Phase 1 ──────────────
   # Phase 0's deliverable is the HARNESS that proves F-02/F-03 on today's HEAD
