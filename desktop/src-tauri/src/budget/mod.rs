@@ -291,6 +291,10 @@ impl Inner {
     }
 
     fn seed_if_fresh(&mut self, now: i64) -> Result<(), String> {
+        // Demo history is a development aid — never in a release build.
+        if !crate::seed_purge::demo_data_enabled() {
+            return Ok(());
+        }
         let seeded = read_kv(&self.conn, KEY_SEEDED).map_err(|e| e.to_string())?;
         let version = seeded.and_then(|s| s.parse::<i64>().ok());
         if version == Some(SEED_VERSION) || !self.events.is_empty() {
@@ -615,6 +619,11 @@ impl BudgetDb {
 
     pub fn from_connection(conn: Connection) -> rusqlite::Result<Self> {
         conn.execute_batch(DDL)?;
+        // XR-LAUNCH-009: release builds drop the demo spend rows an earlier
+        // build seeded (idempotent; matches `sp_seed_NNNN` ids only).
+        if !crate::seed_purge::demo_data_enabled() {
+            crate::seed_purge::purge_budget_seed(&conn)?;
+        }
         let settings = match read_kv(&conn, KEY_SETTINGS)? {
             Some(json) => serde_json::from_str::<Value>(&json)
                 .map(|v| coerce_settings(&v))

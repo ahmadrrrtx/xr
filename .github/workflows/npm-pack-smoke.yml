@@ -1,0 +1,51 @@
+# =============================================================================
+# Launch audit XR-LAUNCH-007 — the PACKED npm artifact works, per OS.
+#
+# `npm pack` → `npm install -g <tarball> --prefix <scratch>` → the package ships
+# release.manifest.json → `xr --version` → `xr update --check` exits 0 and
+# reports the running version (scripts/npm-pack-smoke.ts). This is the path a
+# user on `npm i -g @rrrtx/xr` takes; 1.0.0 crashed on it (ENOENT on
+# release.manifest.json, missing from package.json `files`).
+# =============================================================================
+name: npm Pack Smoke
+
+on:
+  pull_request:
+    paths:
+      - package.json
+      - bin/**
+      - src/update/**
+      - src/install/**
+      - src/cli/**
+      - release.manifest.json
+      - scripts/npm-pack-smoke.ts
+      - .github/workflows/npm-pack-smoke.yml
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: npm pack + global install + xr update --check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (the package launcher is `#!/usr/bin/env bun`)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - name: Setup Node (npm)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Packed-tarball smoke (scratch prefix; never the runner's global npm)
+        run: bun run scripts/npm-pack-smoke.ts

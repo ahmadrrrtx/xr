@@ -166,6 +166,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/consumer-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-brand-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/desktop-seed-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-sink-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/fetch-v2-assets.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -182,6 +183,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/golden-path.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/guarantee-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/hot-path-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/launch-claims.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/license-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/make-preview.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/make-updater-manifest.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -189,6 +191,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/measure-trust-perf.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/memory-recall-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/mutate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/npm-pack-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ownership-map.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/parity-suite-runner.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/perf-baseline.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

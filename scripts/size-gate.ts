@@ -146,7 +146,15 @@ export const THRESHOLD = 800;
 // land. Headroom is deliberate and small (~2,600). Returns core toward the
 // ceiling by moving the chat surfaces to a satellite; that stays the recorded
 // follow-up and 110k stays the direction of travel. Needs maintainer sign-off.
-export const TREE_CEILING = 172_000; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
+// Launch audit Phase 2A · 172,000 → 172,500 (2026-10-22): lifecycle truthfulness
+// fixes that cannot live in a satellite because they ARE the install surface:
+// src/update/npm-channel.ts + src/update/check.ts (`xr update` on npm/bun global
+// installs and `xr update --check`, XR-LAUNCH-007) and the marker-block rc
+// strip in src/install/uninstall.ts (XR-LAUNCH-006). Measured 172,318 against
+// ~171,964 at the Phase 1 commit (80007d7f): +354 net, of which 46 lines left
+// atomic-updater.ts with the broken npm plan. Headroom ~180. Needs maintainer
+// sign-off like every ceiling move.
+export const TREE_CEILING = 172_500; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
 // the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
 // P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
 // the device registry (hashed session tokens, revocation, mobile-kind tag),

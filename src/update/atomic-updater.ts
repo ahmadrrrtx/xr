@@ -346,50 +346,9 @@ export interface NpmUpdateOptions {
   npm?: string;
 }
 
-export function createNpmUpdatePlan(opts: NpmUpdateOptions = {}): UpdatePlan<string> | null {
-  const packageName = opts.packageName ?? "@rrrtx/xr";
-  const npm = opts.npm ?? "npm";
-  const canary = opts.canary ?? ((root) => runHealthCanary(root));
-
-  const run = (args: string[]) =>
-    spawnSync(npm, args, { encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"] });
-
-  const current = run(["view", `${packageName}@installed`, "version"]).stdout.trim();
-  const candidate = run(["view", packageName, "version"]).stdout.trim();
-  if (!current || !candidate || current === candidate) return null;
-
-  const staged = join(tmpdir(), `xr-npm-${randomUUID().slice(0, 8)}`);
-
-  return {
-    current,
-    candidate,
-    install: async (v: string) => {
-      mkdirSync(staged, { recursive: true });
-      const pack = run(["pack", `${packageName}@${v}`, "--pack-destination", staged]);
-      if (pack.status !== 0) throw new Error(`npm pack failed`);
-      const tarball = readdirSync(staged).find((f) => f.endsWith(".tgz"));
-      if (!tarball) throw new Error("no tarball produced");
-      const extract = spawnSync("tar", ["-xzf", join(staged, tarball), "-C", staged], {
-        encoding: "utf8",
-        timeout: 120_000,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      if (extract.status !== 0) throw new Error("tarball extraction failed");
-    },
-    selfTest: async () => canary(join(staged, "package")).healthy,
-    activate: async (v: string) => {
-      const install = run(["install", "-g", `${packageName}@${v}`]);
-      if (install.status !== 0) throw new Error("global install failed");
-    },
-    discard: async () => {
-      try {
-        rmSync(staged, { recursive: true, force: true });
-      } catch {
-        /* best-effort */
-      }
-    },
-  };
-}
+// createNpmUpdatePlan (removed, XR-LAUNCH-007): it queried the invalid spec
+// `@rrrtx/xr@installed` and canaried with repo-only scripts, so it could never
+// produce a working update. The npm/bun layout is handled by ./npm-channel.ts.
 
 // ── Facade used by `xr update` ────────────────────────────────────────────
 
@@ -405,6 +364,12 @@ export async function runAtomicUpdate(opts: {
   channelRun?: (cmd: string[]) => { ok: boolean; error?: string };
   /** Phase 9 · T5 — canary override for channel-managed updates (tests inject). */
   channelCanary?: () => { healthy: boolean; reason?: string };
+  /** XR-LAUNCH-007 — the running package's version (CORE_VERSION). */
+  currentVersion?: string;
+  /** XR-LAUNCH-007 — npm/bun global layout: registry + runner overrides (tests inject). */
+  npmChannel?: Partial<Pick<import("./npm-channel.ts").NpmPlanOptions, "run" | "manager">> & {
+    fetcher?: import("./npm-channel.ts").RegistryFetcher;
+  };
 }): Promise<UpdateResult<string>> {
   // Phase 9 · T5 — channel-managed installs (Homebrew/Scoop/WinGet/apt/npm?)
   // update through their own package manager under the same atomic contract.
@@ -456,8 +421,23 @@ export async function runAtomicUpdate(opts: {
     plan = createGitUpdatePlan({ packageRoot: opts.packageRoot, ...opts.git });
     noPlanReason = "already up to date or fetch failed";
   } else {
-    plan = createNpmUpdatePlan(opts.npm);
-    noPlanReason = "already up to date or registry unreachable";
+    // XR-LAUNCH-007: delegate to the package manager that owns the install.
+    const { fetchRegistryLatest, createNpmChannelPlan, describeUpdate } = await import("./npm-channel.ts");
+    const { CORE_VERSION } = await import("../core/version.ts");
+    const current = opts.currentVersion ?? CORE_VERSION;
+    const latest = await fetchRegistryLatest(undefined, opts.npmChannel?.fetcher);
+    if (!latest) {
+      return { ok: false, keptCurrent: current, reason: "npm registry unreachable — nothing changed" };
+    }
+    plan = createNpmChannelPlan({
+      packageRoot: opts.packageRoot,
+      currentVersion: current,
+      latest,
+      ...(opts.npmChannel?.run ? { run: opts.npmChannel.run } : {}),
+      ...(opts.npmChannel?.manager ? { manager: opts.npmChannel.manager } : {}),
+    });
+    noPlanReason = describeUpdate(current, latest.version).message;
+    if (!plan) return { ok: false, keptCurrent: current, reason: noPlanReason };
   }
 
   if (!plan) {

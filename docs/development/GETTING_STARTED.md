@@ -156,6 +156,16 @@ xr uninstall --keep-data     # removes the launcher, keeps ~/.xr
 xr uninstall --purge         # removes everything, including your data
 ```
 
+Both modes ask before deleting anything (`--yes` skips the prompt). In `~/.profile`,
+`~/.bashrc`, `~/.zshrc` and the other shell startup files, uninstall removes only the
+block the installer added between `# >>> XR launcher >>>` and `# <<< XR launcher <<<`
+(plus the single legacy line older installers wrote). Nothing else in those files is
+touched — including your own `PATH` lines — so an install followed by an uninstall leaves
+them byte-for-byte as they were. If you edited inside the marked block, the whole block is
+removed; a block missing its end marker is left alone.
+
+npm / bun global installs are removed with `npm rm -g @rrrtx/xr` (or `bun rm -g @rrrtx/xr`).
+
 ---
 
 ## Know before you rely on it

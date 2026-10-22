@@ -20,6 +20,8 @@ on:
       - install.sh
       - install.ps1
       - scripts/channel-live-check.ts
+      - scripts/launch-claims.ts
+      - README.md
       - .github/workflows/channel-live.yml
   workflow_dispatch:
     inputs:
@@ -53,6 +55,13 @@ jobs:
           else
             bun run scripts/channel-live-check.ts
           fi
+      # XR-LAUNCH-010 — the README install table must not call a failing channel
+      # "live". Runs even when channel:live failed, so both reds are visible.
+      - name: README channel claims match the live registries
+        if: ${{ always() && inputs.version == '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run scripts/claim-lint.ts --live
 
   installer-smoke:
     name: install.sh from main installs the public version (${{ matrix.os }})

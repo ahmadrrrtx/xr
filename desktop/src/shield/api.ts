@@ -12,7 +12,11 @@ import { APP_VERSION } from '@/lib/appMeta';
 import { isTauri } from '@/lib/tauri';
 import { chainEntry, newAuditId, verifyChain } from '@/shield/core';
 import { sha256Hex } from '@/shield/hash';
-import { buildSeedChain, seedQuarantine } from '@/shield/seed';
+import {
+  purgeSeedQuarantine,
+  rechainWithoutSeed,
+  SEED_PURGE_VERSION,
+} from '@/lib/seedPurge';
 import {
   CHECK_LABEL,
   DEFAULT_POLICY,
@@ -68,6 +72,7 @@ const LS = {
   quarantine: 'xr.shield.quarantine',
   checks: 'xr.shield.checks',
   audit: 'xr.shield.audit',
+  seedPurged: 'xr.shield.seedPurged',
 } as const;
 
 const AUDIT_CAP = 2000;
@@ -148,11 +153,28 @@ class BrowserBackend implements ShieldBackend {
         const parsed = Array.isArray(stored)
           ? stored.map(coerceEntry).filter((e): e is AuditEntry => e !== null)
           : [];
-        const entries =
-          parsed.length > 0
-            ? parsed
-            : await buildSeedChain(Date.now(), sha256Hex);
-        if (parsed.length === 0) writeJSON(LS.audit, entries);
+        let entries = parsed;
+        if (import.meta.env.DEV) {
+          // Demo audit chain: development builds only (XR-LAUNCH-009).
+          if (parsed.length === 0) {
+            const { buildSeedChain } = await import('@/shield/seed');
+            entries = await buildSeedChain(Date.now(), sha256Hex);
+            writeJSON(LS.audit, entries);
+          }
+        } else if (readJSON<number>(LS.seedPurged) !== SEED_PURGE_VERSION) {
+          // One-time cleanup of the demo chain an earlier build wrote.
+          const purged = await rechainWithoutSeed(parsed, sha256Hex);
+          if (purged.removed > 0) {
+            entries = purged.entries;
+            writeJSON(LS.audit, entries);
+          }
+          const q = readJSON<QuarantinedSkill[]>(LS.quarantine);
+          if (Array.isArray(q)) {
+            const pq = purgeSeedQuarantine(q);
+            if (pq.removed > 0) writeJSON(LS.quarantine, pq.kept);
+          }
+          writeJSON(LS.seedPurged, SEED_PURGE_VERSION);
+        }
         this.audit = entries;
         return entries;
       })();
@@ -166,14 +188,19 @@ class BrowserBackend implements ShieldBackend {
   }
 
   async load(): Promise<ShieldPersisted> {
+    await this.chain(); // runs the one-time seed cleanup before reading state
     const saved = readJSON<{ at: number; checks: HealthCheck[] }>(LS.checks);
-    const quarantine = readJSON<QuarantinedSkill[]>(LS.quarantine);
+    const stored = readJSON<QuarantinedSkill[]>(LS.quarantine);
+    let quarantine: QuarantinedSkill[] = Array.isArray(stored) ? stored : [];
+    if (import.meta.env.DEV && !Array.isArray(stored)) {
+      // Demo quarantine list: development builds only (XR-LAUNCH-009).
+      const { seedQuarantine } = await import('@/shield/seed');
+      quarantine = seedQuarantine(Date.now());
+    }
     return {
       policy: coercePolicy(readJSON<unknown>(LS.policy)),
       paused: readJSON<boolean>(LS.paused) === true,
-      quarantine: Array.isArray(quarantine)
-        ? quarantine
-        : seedQuarantine(Date.now()),
+      quarantine,
       lastCheckedAt: saved?.at ?? null,
       lastChecks: Array.isArray(saved?.checks) ? saved.checks : [],
     };

@@ -6,6 +6,10 @@ channel appears here only with the exact CI evidence that validates it.
 status says so — silently degrading at action time is a defect, report it via
 the [false-claim template](../../.github/ISSUE_TEMPLATE/false_claim.yml).
 
+**Release label: Public beta** (owner decision D2, 2026-10-22). The label stays
+until every gate in [launch-gates.json](launch-gates.json) is green with evidence;
+`bun run claim-lint` enforces it on the README, this page and the website.
+
 ## Platform tiers (agent runtime)
 
 | Platform | Tier | Validated by | Evidence |
@@ -43,7 +47,7 @@ by any channel. "Live status" is what `bun run channel:live` reported on
 | Bootstrap installer `install.sh` | Linux x64/arm64 · macOS arm64/x64 · WSL; Termux/musl via verified source | ✅ live | pinned release, `SHA256SUMS`-verified, fails closed with nothing installed (`test/release/installer-behavior.test.ts`, 11 behaviour cases); clean-HOME install of the real v1.0.0 verified on Linux x64 (sandbox, 2026-10-22); macOS clean-HOME smoke in `channel-live.yml` (**added, first CI run pending**) | re-run the installer / `xr update` |
 | Bootstrap installer `install.ps1` | Windows x64 (PowerShell 5.1/7+) | ✅ live | pinned release, `Get-FileHash` against `SHA256SUMS`, fails closed; pwsh 7.4 parse + function tests on Linux (`installer-powershell.test.ts`); Windows clean-profile smoke in `channel-live.yml` (**added, first CI run pending**) | re-run the installer / `xr update` |
 | GitHub release binary | linux-x64/arm64, darwin-arm64/x64, windows-x64 | ⚠️ assets live; `v1.1.0` must be marked pre-release (owner action) so `v1.0.0` is "Latest" | 9 required assets + signed `SHA256SUMS` (`channel:live`); release-matrix native smoke | `xr update` — atomic swap, sha256-verified, canary + auto-rollback |
-| npm (`@rrrtx/xr`) | any OS with **Bun ≥ 1.3** on `PATH` (the package's launcher is `#!/usr/bin/env bun`) | ✅ live (`latest` = 1.0.0) | release workflow publish with OIDC provenance; artifact E2E (`test/reliability/artifact-e2e.test.ts`) | `npm i -g @rrrtx/xr@latest` / pinned `@<prev>` (delegated) |
+| npm (`@rrrtx/xr`) | any OS with **Bun ≥ 1.3** on `PATH` (the package's launcher is `#!/usr/bin/env bun`) | ✅ live (`latest` = 1.0.0) | release workflow publish with OIDC provenance; artifact E2E (`test/reliability/artifact-e2e.test.ts`) | `xr update` (from the next release on): registry check, delegated `npm i -g` / `bun add -g`, installed version verified, previous version re-installed on mismatch; `xr update --check` reports only. **1.0.0's own `xr update` fails on npm installs** — run `npm i -g @rrrtx/xr@latest` once. Packed-tarball smoke: `npm-pack-smoke` job (Linux/macOS/Windows) |
 | Docker (`ghcr.io/ahmadrrrtx/xr`) | linux/amd64+arm64 | ✅ live (`:1.0.0` == `:latest`) | image build + trivy scan every PR; cosign-signed digest at release | bare-version tags (`:1.0.0`, `:1.0`, `:latest`) — there is no `v`-prefixed tag |
 | Scoop (release asset `xr.json`) | Windows x64 | ✅ live | manifest hash = signed `SHA256SUMS` (`channel:live`); weekly real install of the public version (`channel-install.yml`) | `scoop update xr` / `scoop install xr@<prev>` |
 | .deb (release asset) | Debian/Ubuntu x64 | ✅ live | **real `dpkg -i` install, `md5sums` verify, smoke, and `dpkg -r` removal on every PR**; weekly real install of the public version | `apt-get install --only-upgrade xr` / pinned downgrade (delegated) |
@@ -70,6 +74,14 @@ needs the GNOME runtime and, for Flathub, vendored sources — is wired to
 `workflow_dispatch` in `.github/workflows/desktop-app.yml`. It has not been built
 or installed in this repository's CI yet, and is recorded that way in
 [DESKTOP-SUPPORT-MATRIX.md](DESKTOP-SUPPORT-MATRIX.md) rather than here.
+
+## Uninstall
+
+`xr uninstall` removes only the marked `# >>> XR launcher >>>` … `# <<< XR launcher <<<`
+block the installer appended to shell startup files (plus the legacy single line
+from older installers). Ubuntu-default `.profile`, `.bashrc` and `.zshrc` fixtures
+are byte-identical after install → uninstall (`test/reliability/uninstall-rc.test.ts`,
+Linux; the macOS lane runs the same suite in `cross-platform.yml`).
 
 ## Support contract
 

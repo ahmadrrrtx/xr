@@ -19,9 +19,10 @@
  * State (policy, pause flag, quarantine list, last checks) lives in
  * `shield.json` via the store plugin — the same pattern as approvals.rs.
  *
- * Seed: on an empty table the 204-entry deterministic history from
- * src/shield/seed.ts is inserted (same PRNG, same tables), so a fresh native
- * install and the browser preview show the same log.
+ * Seed (DEBUG BUILDS ONLY — XR-LAUNCH-009): on an empty table the 204-entry
+ * deterministic demo history from src/shield/seed.ts is inserted (same PRNG,
+ * same tables). Release builds never seed; they remove demo rows an earlier
+ * build wrote (see crate::seed_purge) and start with an empty, honest log.
  */
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -672,8 +673,42 @@ impl ShieldDb {
         let db = ShieldDb {
             conn: Mutex::new(conn),
         };
-        db.seed_if_empty(now_ms())?;
+        if crate::seed_purge::demo_data_enabled() {
+            db.seed_if_empty(now_ms())?;
+        } else {
+            db.purge_seed(now_ms())?;
+        }
         Ok(db)
+    }
+
+    /// XR-LAUNCH-009: remove the demo chain an earlier build seeded and
+    /// re-link the real entries (idempotent; no-op on a clean table).
+    fn purge_seed(&self, now: i64) -> rusqlite::Result<usize> {
+        let mut conn = self.conn.lock().map_err(|_| rusqlite::Error::InvalidQuery)?;
+        crate::seed_purge::purge_shield_seed(
+            &mut conn,
+            DDL,
+            |r| {
+                sha256_hex(&canonical_of(&AuditEntry {
+                    id: r.id.clone(),
+                    ts: r.ts,
+                    actor: r.actor.clone(),
+                    skill: r.skill.clone(),
+                    action: r.action.clone(),
+                    resource: r.resource.clone(),
+                    decision: r.decision.clone(),
+                    rule_id: r.rule_id.clone(),
+                    risk: r.risk.clone(),
+                    cost_usd: r.cost_usd,
+                    signature: None,
+                    prev_hash: r.prev_hash.clone(),
+                    hash: String::new(),
+                    detail: r.detail.clone(),
+                }))
+            },
+            new_audit_id(),
+            now,
+        )
     }
 
     fn seed_if_empty(&self, now: i64) -> rusqlite::Result<usize> {
@@ -901,14 +936,29 @@ pub fn get_shield_status<R: Runtime>(app: AppHandle<R>) -> Result<ShieldPersiste
     let store = shield_store(&app)?;
     let policy = coerce_policy(read_key::<R, SecurityPolicy>(store.as_ref(), KEY_POLICY).unwrap_or_default());
     let paused = read_key::<R, bool>(store.as_ref(), KEY_PAUSED).unwrap_or(false);
+    let demo = crate::seed_purge::demo_data_enabled();
     let quarantine = match read_key::<R, Vec<QuarantinedSkill>>(store.as_ref(), KEY_QUARANTINE) {
-        Some(list) => list,
-        None => {
+        Some(list) if demo => list,
+        Some(list) => {
+            // XR-LAUNCH-009: drop the demo skills an earlier build seeded.
+            let kept: Vec<QuarantinedSkill> = list
+                .iter()
+                .filter(|q| !crate::seed_purge::is_seed_quarantine(&q.id, &q.version, &q.source))
+                .cloned()
+                .collect();
+            if kept.len() != list.len() {
+                let _ = write_key(store.as_ref(), KEY_QUARANTINE, &kept);
+            }
+            kept
+        }
+        // Demo quarantine list: debug builds only. Release starts empty.
+        None if demo => {
             let list = seed_quarantine(now_ms());
             // Best effort: the UI still gets the list if the save fails.
             let _ = write_key(store.as_ref(), KEY_QUARANTINE, &list);
             list
         }
+        None => Vec::new(),
     };
     let saved = read_key::<R, SavedChecks>(store.as_ref(), KEY_CHECKS);
     Ok(ShieldPersisted {

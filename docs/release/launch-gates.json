@@ -1,0 +1,18 @@
+{
+  "comment": "Release-label gate (launch audit XR-LAUNCH-010, owner decision D2, 2026-10-22). XR is labelled \"Public beta\" until every gate below is \"green\". `bun run claim-lint` refuses identity.stability = \"stable\" while any gate is not green, and refuses stable-production wording (\"Status: Stable\", \"production-ready\", \"generally available\") on public surfaces while the label is not stable. A gate turns green only with evidence (CI run URL, hardware report or re-audit verdict) in its `evidence` field. Statuses: open | in-progress | fixed-unverified | green.",
+  "gates": [
+    { "id": "XR-LAUNCH-001", "title": "One canonical public version on every claimed channel", "status": "fixed-unverified", "evidence": "Phase 1 commit 80007d7f; channel:live 2026-10-22: github-releases, homebrew, winget fail (owner actions pending)" },
+    { "id": "XR-LAUNCH-002", "title": "Bootstrap installers install a verified release, never main", "status": "fixed-unverified", "evidence": "Phase 1 commit 80007d7f; Linux clean-HOME verified; macOS/Windows CI added, not yet run" },
+    { "id": "XR-LAUNCH-003", "title": "Shell confinement on macOS/Windows (D3: native sandboxes)", "status": "open", "evidence": "" },
+    { "id": "XR-LAUNCH-004", "title": "unshare fallback confines the filesystem or refuses", "status": "open", "evidence": "" },
+    { "id": "XR-LAUNCH-005", "title": "Windows ARM64 file authority (D4)", "status": "open", "evidence": "" },
+    { "id": "XR-LAUNCH-006", "title": "Uninstall removes only the rc block XR wrote", "status": "fixed-unverified", "evidence": "Phase 2A: test/reliability/uninstall-rc.test.ts (Linux); macOS CI lane pending" },
+    { "id": "XR-LAUNCH-007", "title": "xr update works on npm installs", "status": "fixed-unverified", "evidence": "Phase 2A: npm pack + scratch-prefix global install + xr update --check exit 0 (Linux); 3-OS CI job pending" },
+    { "id": "XR-LAUNCH-008", "title": "Desktop signing, notarization and signed updater", "status": "open", "evidence": "" },
+    { "id": "XR-LAUNCH-009", "title": "No demo data on the production desktop path", "status": "fixed-unverified", "evidence": "Phase 2A: desktop-seed-gate on the production vite build; Rust purge unit-tested standalone; full cargo test in desktop-app.yml pending" },
+    { "id": "XR-LAUNCH-010", "title": "Public claims match the label and the live channels", "status": "fixed-unverified", "evidence": "Phase 2A: claim-lint status-label + channel-claim gates; `claim-lint --live` in channel-live.yml" },
+    { "id": "XR-LAUNCH-011", "title": "Hardware evidence for every claimed desktop target", "status": "open", "evidence": "" },
+    { "id": "XR-LAUNCH-012", "title": "Release gates are blocking, green and test reality", "status": "open", "evidence": "" },
+    { "id": "PHASE-3-REAUDIT", "title": "Fresh launch re-review after Phase 3", "status": "open", "evidence": "" }
+  ]
+}

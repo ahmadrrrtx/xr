@@ -7,6 +7,8 @@
  * detection, theme events, single-instance focus, and a minimal tray.
  */
 mod budget;
+/// XR-LAUNCH-009: demo data is debug-only; cleanup of rows older builds seeded.
+mod seed_purge;
 /// Screenshot-and-ask capture, per platform (Phase 27).
 mod capture;
 mod commands;

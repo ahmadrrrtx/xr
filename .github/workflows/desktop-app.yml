@@ -119,6 +119,13 @@ jobs:
         run: |
           bunx tsc --noEmit
           bunx eslint .
+      # XR-LAUNCH-009 — the production renderer must carry no demo data. Seed
+      # generators sit behind `import.meta.env.DEV`; this builds the real
+      # production bundle and greps it for content only the seeds produce.
+      - name: Production renderer build has no demo data (XR-LAUNCH-009)
+        run: |
+          (cd desktop && bunx vite build --outDir "$RUNNER_TEMP/desktop-dist")
+          bun run scripts/desktop-seed-gate.ts "$RUNNER_TEMP/desktop-dist"
 
   # ── Windows runtime proof ────────────────────────────────────────────────────
   # Everything under `#[cfg(windows)]` (W-1 CREATE_NO_WINDOW, W-2 job-object

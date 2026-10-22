@@ -365,7 +365,8 @@ export async function repairXR(args: string[] = []): Promise<void> {
 }
 
 export async function updateXR(args: string[] = []): Promise<void> {
-  const opts = parseOptions(args);
+  const { checkForUpdate, runningVersion } = await import("../update/check.ts");
+  if (args.includes("--check")) return checkForUpdate(args, rootDir);
   banner();
   console.log(C.bold("XR Update"));
   backupConfig("pre-update");
@@ -376,17 +377,35 @@ export async function updateXR(args: string[] = []): Promise<void> {
   // downloads the platform binary from the release feed.
   const { runAtomicUpdate } = await import("../update/atomic-updater.ts");
   const { detectChannel } = await import("../update/channels.ts");
-  const release = JSON.parse(readFileSync(join(rootDir, "release.manifest.json"), "utf8")) as {
-    identity?: { version?: string };
-    version?: string;
-  };
-  const version = release.identity?.version ?? release.version;
+  const version = await runningVersion(rootDir);
   // Phase 9 · T5 — say plainly which channel owns this install before updating.
   const channel = detectChannel({ platform: process.platform, exePath: process.execPath });
   if (channel.managed) {
     info(`Channel-managed install detected: ${channel.detail} — updating through ${channel.channel} (atomic + rollback per channel contract).`);
   }
-  const result = await runAtomicUpdate({ packageRoot: rootDir, version, channel: channel.managed ? channel : undefined });
+  const { standaloneBinary, latestCompleteRelease, installerCommand } = await import("../update/check.ts");
+  if (!channel.managed && standaloneBinary(rootDir)) {
+    // Installer-placed binary: never route it to npm (XR-LAUNCH-007); its
+    // in-place swap is XR-LAUNCH-019, so point at the verified installer.
+    const { describeUpdate } = await import("../update/npm-channel.ts");
+    const d = describeUpdate(version, await latestCompleteRelease());
+    if (d.updateAvailable) {
+      info(`${d.message.charAt(0).toUpperCase() + d.message.slice(1)}. This binary was installed by the XR installer; update it by re-running the installer (it verifies the release's SHA256SUMS before replacing anything):`);
+      console.log(`  ${installerCommand()}`);
+      process.exitCode = 1;
+    } else if (d.latest) ok(d.message.charAt(0).toUpperCase() + d.message.slice(1) + ".");
+    else {
+      warn(`Update not checked: ${d.message}.`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+  const result = await runAtomicUpdate({
+    packageRoot: rootDir,
+    version,
+    currentVersion: version,
+    channel: channel.managed ? channel : undefined,
+  });
 
   if (result.ok) {
     ok(`Updated to ${result.activated}. Health canary passed; atomic swap complete.`);
@@ -395,16 +414,24 @@ export async function updateXR(args: string[] = []): Promise<void> {
     return;
   }
 
+  // "Nothing to do" is success, said precisely — never "already up to date"
+  // when the source could not be reached (XR-LAUNCH-007).
+  if (/^up to date|newer than the published/.test(result.reason)) {
+    ok(result.reason.charAt(0).toUpperCase() + result.reason.slice(1) + ".");
+    return;
+  }
+  if (result.reason.startsWith("already up to date or")) {
+    // git/binary layouts cannot yet tell these apart (update architecture is
+    // XR-LAUNCH-019); say both instead of claiming "latest".
+    info(`Nothing installed: ${result.reason}. Run \`xr update --check\` to see the published version.`);
+    return;
+  }
   if (result.keptCurrent) {
     warn(`Update did not happen — stayed on ${result.keptCurrent}.`);
   }
   warn(`Update not applied: ${result.reason}`);
   info("The previous version was left untouched (auto-rollback). Config backup is in ~/.xr/backups.");
-  if (result.reason.includes("already up to date")) {
-    ok("You are already on the latest version.");
-  } else {
-    process.exitCode = 1;
-  }
+  process.exitCode = 1;
 }
 
 export async function resetXR(args: string[] = []): Promise<void> {

@@ -341,6 +341,13 @@ export function versionInfo(): VersionInfo {
  * update, not a regeneration: only the release-owned scalars are rewritten, and
  * `skillCount` is inserted/updated so the site can render a true scale number.
  */
+/** Human label for identity.stability (README, website). */
+export const STATUS_LABEL: Record<NonNullable<ReleaseIdentity["stability"]>, string> = {
+  "public-beta": "Public beta",
+  "developer-preview": "Developer preview",
+  stable: "Stable",
+};
+
 export function stampSiteTs(
   current: string,
   id: ReleaseIdentity,
@@ -377,6 +384,18 @@ export function stampSiteTs(
     );
   }
 
+  // XR-LAUNCH-010 / D2: the release label the site shows next to the version.
+  const label = STATUS_LABEL[id.stability ?? "stable"];
+  const statusRe = /^(\s*)status:\s*"[^"]*",/m;
+  if (statusRe.test(out)) {
+    out = out.replace(statusRe, `$1status: ${JSON.stringify(label)},`);
+  } else {
+    out = out.replace(
+      /^(\s*)publicVersion:\s*"[^"]*",/m,
+      `$&\n$1/** Release label (release.manifest.json identity.stability; decision D2). */\n$1status: ${JSON.stringify(label)},`,
+    );
+  }
+
   const skillRe = /^(\s*)skillCount:\s*\d+,/m;
   if (skillRe.test(out)) {
     out = out.replace(skillRe, `$1skillCount: ${skillCount},`);
@@ -398,7 +417,7 @@ export const README_END = "<!-- XR:RELEASE-IDENTITY:END -->";
 export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number, publicVersion: string = id.version): string {
   const stabilityLine =
     id.stability === "public-beta"
-      ? `\n\n> **Status: Public Beta.** ${id.name} is honestly labeled beta software: install and use it,\n> expect the documented golden path to work on the validated platforms, and check the\n> [support matrix](docs/release/SUPPORT_MATRIX.md) and\n> [known-limitations register](docs/release/${id.version}/known-limitations.md) before adopting it\n> for anything critical. \`v*-beta.*\` tags land on the prerelease channel (npm \`beta\` dist-tag,\n> GitHub prerelease) for early adopters; feedback goes through the\n> [beta loop](docs/release/BETA.md).`
+      ? `\n\n> **Status: Public beta.** ${id.name} is labelled beta until every launch gate in\n> [docs/release/launch-gates.json](docs/release/launch-gates.json) is green (decision D2; enforced by\n> \`bun run claim-lint\`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)\n> and the [known-limitations register](docs/release/${id.version}/known-limitations.md) before relying on it\n> for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on \`PATH\`;\n> the installer binaries do not. Desktop app builds are not code-signed yet. Feedback goes through the\n> [beta loop](docs/release/BETA.md).`
       : id.stability === "developer-preview"
         ? `\n\n> **Status: Developer Preview.** APIs and behavior may change without a deprecation cycle.`
         : `\n\n> **Status: Stable.** ${id.name} is on the 1.0.0 production line: \`latest\` moves only on a stable tag, while pre-releases keep landing on the pre-release channel (npm \`beta\` dist-tag, GitHub pre-release). Check the [support matrix](docs/release/SUPPORT_MATRIX.md) and the [known-limitations register](docs/release/${id.version}/known-limitations.md) before adopting it for anything critical; feedback goes through the [issue tracker](https://github.com/ahmadrrrtx/xr/issues).`;

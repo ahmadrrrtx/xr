@@ -29,7 +29,10 @@ import {
 } from './core';
 import { round6 } from './models';
 import { DAY_MS, localDayStart, type Period } from './period';
-import { seedEvents, SEED_VERSION } from './seed';
+import { purgeSeedSpend, SEED_PURGE_VERSION } from '@/lib/seedPurge';
+
+/** Version of the demo spend seed (dev builds only; see `init`). */
+const SEED_VERSION = 1;
 import {
   DEFAULT_BUDGET_SETTINGS,
   type BreakdownBy,
@@ -101,6 +104,7 @@ const LS = {
   settings: 'xr.budget.settings',
   events: 'xr.budget.events',
   seeded: 'xr.budget.seeded',
+  seedPurged: 'xr.budget.seedPurged',
 } as const;
 
 const EVENT_CAP = 5000;
@@ -315,11 +319,25 @@ class BrowserBackend implements BudgetBackend {
   async init(tzOffsetMin: number): Promise<BudgetOverview> {
     this.tz = tzOffsetMin;
     this.invalidate();
-    const seeded = readJSON<number>(LS.seeded);
-    if (seeded !== SEED_VERSION && this.events.length === 0) {
-      this.events = seedEvents(Date.now(), tzOffsetMin);
-      writeJSON(LS.seeded, SEED_VERSION);
-      this.persist();
+    if (import.meta.env.DEV) {
+      // Demo spend history: development builds only (XR-LAUNCH-009). The
+      // branch and the seed module are absent from production bundles.
+      const seeded = readJSON<number>(LS.seeded);
+      if (seeded !== SEED_VERSION && this.events.length === 0) {
+        const { seedEvents } = await import('./seed');
+        this.events = seedEvents(Date.now(), tzOffsetMin);
+        writeJSON(LS.seeded, SEED_VERSION);
+        this.persist();
+      }
+    } else if (readJSON<number>(LS.seedPurged) !== SEED_PURGE_VERSION) {
+      // One-time cleanup of demo rows an earlier build wrote.
+      const { kept, removed } = purgeSeedSpend(this.events);
+      if (removed > 0) {
+        this.events = kept;
+        this.invalidate();
+        this.persist();
+      }
+      writeJSON(LS.seedPurged, SEED_PURGE_VERSION);
     }
     return this.overviewNow();
   }

@@ -712,12 +712,15 @@ export const CATALOG: CatalogEntry[] = [
   {
     name: "update",
     description: "check for updates and install with rollback guard",
-    usage: "xr update [--yes]",
+    usage: "xr update [--check] [--json] [--yes]",
     group: "system",
     glyph: "running",
     aliases: ["upgrade"],
     needsKernel: true,
-    examples: [{ cmd: "xr update", description: "update XR" }],
+    examples: [
+      { cmd: "xr update --check", description: "show the running and published versions; change nothing" },
+      { cmd: "xr update", description: "update XR" },
+    ],
     related: ["doctor", "version"],
     topics: ["update", "system"],
   },

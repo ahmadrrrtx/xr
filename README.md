@@ -29,7 +29,13 @@ gate, your approval, a spend ceiling, and a hash-chained log you can verify offl
 
 **Version:** `1.1.0 (Graphite)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
-> **Status: Stable.** @rrrtx/xr is on the 1.0.0 production line: `latest` moves only on a stable tag, while pre-releases keep landing on the pre-release channel (npm `beta` dist-tag, GitHub pre-release). Check the [support matrix](docs/release/SUPPORT_MATRIX.md) and the [known-limitations register](docs/release/1.1.0/known-limitations.md) before adopting it for anything critical; feedback goes through the [issue tracker](https://github.com/ahmadrrrtx/xr/issues).
+> **Status: Public beta.** @rrrtx/xr is labelled beta until every launch gate in
+> [docs/release/launch-gates.json](docs/release/launch-gates.json) is green (decision D2; enforced by
+> `bun run claim-lint`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)
+> and the [known-limitations register](docs/release/1.1.0/known-limitations.md) before relying on it
+> for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on `PATH`;
+> the installer binaries do not. Desktop app builds are not code-signed yet. Feedback goes through the
+> [beta loop](docs/release/BETA.md).
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
@@ -562,7 +568,7 @@ XR's differentiator is that its claims are checked by machines on every PR.
 | `bun test` + parity suite | **4,461 pass / 19 skip / 0 fail across 411 files** (root `bun test` scope; measured on the Linux lane with bun 1.4.3 at `ec672fe`, 2026-10-17 — see [docs/release/TEST-BASELINE.json](docs/release/TEST-BASELINE.json); refresh step: [RELEASING.md §1g](docs/release/RELEASING.md)); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
-| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a <!-- XR:TREE-CEILING -->172,000<!-- /XR:TREE-CEILING -->-LOC ceiling on the whole tree** |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a <!-- XR:TREE-CEILING -->172,500<!-- /XR:TREE-CEILING -->-LOC ceiling on the whole tree** |
 | `claim-lint` constitution gate | every `Article N` cited anywhere in `src/`, `test/`, `scripts/`, `.github/` exists in [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) |
 | `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
 | `channel:check` | channel configs match the release manifest |
@@ -612,11 +618,19 @@ Phase 5 removed cannot quietly grow back.
 
 ## Uninstall & data
 
-`xr uninstall` removes the binary, PATH entry and data directory, with explicit flags for what to
-keep; the exact matrix is in [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md).
-Updates follow the channel you installed from (`brew upgrade xr`,
-`winget upgrade ahmadrrrtx.XR`, `apt-get install --only-upgrade xr`, or `xr update` for
-binary/npm/git layouts) and are atomic with an automatic rollback path.
+`xr uninstall` removes the binary, the PATH block the installer added and (with `--purge`) the data
+directory; the exact matrix is in [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md).
+In shell startup files it removes only the marked `# >>> XR launcher >>>` … `# <<< XR launcher <<<`
+block the installer wrote (and the single line older installers wrote); every other line,
+including your own `PATH` edits, is left byte-for-byte as it was.
+
+Updates follow the channel you installed from (`brew upgrade xr`, `winget upgrade ahmadrrrtx.XR`,
+`apt-get install --only-upgrade xr`, `scoop update xr`). `xr update --check` shows the running and
+published versions without changing anything. `xr update` on a binary or git install swaps
+atomically with a health canary and automatic rollback; on an npm/bun global install it delegates to
+`npm i -g` / `bun add -g`, verifies the installed version and re-installs the previous version if the
+check fails. **npm users on 1.0.0:** that release's `xr update` cannot update itself (it looks for a
+file the npm package did not ship) — run `npm i -g @rrrtx/xr@latest` once.
 
 ---
 

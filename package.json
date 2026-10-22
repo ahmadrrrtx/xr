@@ -15,7 +15,8 @@
     "README.md",
     "LICENSE",
     "install.sh",
-    "install.ps1"
+    "install.ps1",
+    "release.manifest.json"
   ],
   "scripts": {
     "start": "bun run src/index.ts",

@@ -344,8 +344,11 @@ EOF
     if [ "$YES" != "1" ] && tty_source >/dev/null && prompt_yes "Add $bin_dir to PATH in $rc?" y; then
       touch "$rc"
       if ! grep -q "XR launcher" "$rc" 2>/dev/null; then
+        # Marker-delimited so `xr uninstall` removes exactly these lines and
+        # nothing else (launch audit XR-LAUNCH-006). Keep in sync with
+        # RC_BLOCK in src/install/uninstall.ts.
         # shellcheck disable=SC2016  # literal $HOME/$PATH are meant to expand when the rc file runs
-        printf '\n# XR launcher\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
+        printf '\n# >>> XR launcher >>> (added by the XR installer; removed by `xr uninstall`)\nexport PATH="$HOME/.local/bin:$PATH"\n# <<< XR launcher <<<\n' >> "$rc"
       fi
       ok "PATH updated. Restart your terminal or run: source $rc"
     else

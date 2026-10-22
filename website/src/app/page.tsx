@@ -43,7 +43,7 @@ function Hero() {
               className="inline-flex items-center gap-2 text-xs text-zinc-300 glass px-3 py-1.5 rounded-full hover:border-white/20 transition-colors"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-              XR {site.publicVersion} is available · {site.version} in development
+              XR {site.publicVersion} · {site.status} · {site.version} in development
               <ArrowRight className="h-3 w-3 text-zinc-400" />
             </Link>
             <h1 className="mt-6 text-[44px] sm:text-6xl lg:text-[76px] leading-[1.02] font-semibold tracking-tight text-gradient">

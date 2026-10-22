@@ -53,19 +53,87 @@ export function isRunningCheckout(target: string, packageRoot: string): boolean 
   return a === b;
 }
 
-/** Remove the "XR launcher" PATH block from shell rc files. Returns files touched. */
+/**
+ * Launch audit XR-LAUNCH-006 — the PATH block XR writes into shell rc files.
+ *
+ * Current installers write a marker-delimited block; every installer before
+ * that appended exactly LEGACY_RC_BLOCK. Uninstall removes ONLY those exact
+ * bytes. The old implementation dropped every line containing
+ * `.local/bin:$PATH`, which deleted the body of Ubuntu's default ~/.profile
+ * `if [ -d "$HOME/.local/bin" ] ; then PATH="$HOME/.local/bin:$PATH"; fi`
+ * stanza and left a shell syntax error behind.
+ */
+export const RC_BLOCK_BEGIN = "# >>> XR launcher >>> (added by the XR installer; removed by `xr uninstall`)";
+export const RC_BLOCK_END = "# <<< XR launcher <<<";
+export const RC_BLOCK_BODY = 'export PATH="$HOME/.local/bin:$PATH"';
+/** Exactly what install.sh appends (leading newline included). Keep in sync with install.sh. */
+export const RC_BLOCK = `\n${RC_BLOCK_BEGIN}\n${RC_BLOCK_BODY}\n${RC_BLOCK_END}\n`;
+/** Exactly what every pre-1.0.1 install.sh appended: printf '\n# XR launcher\nexport PATH=...\n'. */
+export const LEGACY_RC_BLOCK = `\n# XR launcher\n${RC_BLOCK_BODY}\n`;
+
+/**
+ * Remove XR's PATH block(s) from rc-file content. Pure. Returns the new
+ * content (unchanged when there is nothing of XR's in it).
+ *
+ * Order of preference, each removing only bytes XR wrote:
+ *  1. the exact current block (with its leading newline);
+ *  2. a marker-delimited block whose body the user edited — BEGIN..END lines;
+ *  3. the exact legacy two-line block (with its leading newline), or the same
+ *     two lines at the very start of the file.
+ * Anything else — including unrelated `.local/bin` PATH lines — is left alone.
+ */
+export function stripXrRcBlock(content: string): string {
+  let out = content;
+  // CRLF files: operate on the same bytes with \r\n.
+  const eol = out.includes("\r\n") ? "\r\n" : "\n";
+  const norm = (s: string) => (eol === "\n" ? s : s.replace(/\n/g, "\r\n"));
+
+  for (;;) {
+    const exact = norm(RC_BLOCK);
+    const i = out.indexOf(exact);
+    if (i === -1) break;
+    out = out.slice(0, i) + out.slice(i + exact.length);
+  }
+  // Edited marker block: remove from the BEGIN line through the END line.
+  for (;;) {
+    const b = out.indexOf(RC_BLOCK_BEGIN);
+    if (b === -1) break;
+    const e = out.indexOf(RC_BLOCK_END, b);
+    if (e === -1) break; // unterminated: do not guess, leave it
+    let start = out.lastIndexOf("\n", b - 1) + 1; // beginning of the BEGIN line
+    let end = out.indexOf("\n", e);
+    end = end === -1 ? out.length : end + 1;
+    // Also take the single blank line the installer put in front, if present.
+    if (start >= eol.length && out.slice(start - eol.length, start) === eol) start -= eol.length;
+    out = out.slice(0, start) + out.slice(end);
+  }
+  for (;;) {
+    const legacy = norm(LEGACY_RC_BLOCK);
+    const i = out.indexOf(legacy);
+    if (i !== -1) {
+      out = out.slice(0, i) + out.slice(i + legacy.length);
+      continue;
+    }
+    const atStart = legacy.slice(eol.length);
+    if (out.startsWith(atStart)) {
+      out = out.slice(atStart.length);
+      continue;
+    }
+    break;
+  }
+  return out;
+}
+
+/** Remove XR's PATH block from shell rc files. Returns the files touched. */
 export function removePathEntries(paths: UninstallPaths): string[] {
   const touched: string[] = [];
   for (const rc of paths.rcFiles) {
     if (!existsSync(rc)) continue;
     try {
       const before = readFileSync(rc, "utf8");
-      const lines = before.split("\n");
-      const kept = lines.filter(
-        (l) => !l.includes("XR launcher") && !l.includes(".local/bin:$PATH"),
-      );
-      if (kept.length !== lines.length) {
-        writeFileSync(rc, kept.join("\n"), "utf8");
+      const after = stripXrRcBlock(before);
+      if (after !== before) {
+        writeFileSync(rc, after, "utf8");
         touched.push(rc);
       }
     } catch {
@@ -287,7 +355,9 @@ function confirm(question: string): Promise<boolean> {
       process.platform === "win32"
         ? ["-Command", "Read-Host"]
         : ["-c", "read -r answer && echo \"$answer\""],
-      { stdio: "inherit", encoding: "utf8" },
+      // stdout MUST be piped: with "inherit" child.stdout is null, the answer was
+      // always empty and every interactive uninstall printed "Cancelled."
+      { stdio: ["inherit", "pipe", "inherit"], encoding: "utf8" },
     );
     const answer = (child.stdout ?? "").trim().toLowerCase();
     resolvePromise(answer === "y" || answer === "yes");
