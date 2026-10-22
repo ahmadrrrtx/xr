@@ -3,13 +3,13 @@
   "steps": ["build", "package", "install", "launch", "agent", "update", "uninstall"],
   "targets": [
     { "id": "cli-npm-linux-x64", "surface": "npm CLI", "label": "Linux x64" },
-    { "id": "cli-npm-linux-arm64", "surface": "npm CLI", "label": "Linux arm64" },
+    { "id": "cli-npm-linux-arm64", "gating": false, "note": "non-gating (owner decision 2026-10-22): file tools fail closed on Linux arm64 (blocked:filesystem-unsupported); reported only", "surface": "npm CLI", "label": "Linux arm64" },
     { "id": "cli-npm-darwin-arm64", "surface": "npm CLI", "label": "macOS arm64" },
     { "id": "cli-npm-darwin-x64", "surface": "npm CLI", "label": "macOS x64" },
     { "id": "cli-npm-windows-x64", "surface": "npm CLI", "label": "Windows x64" },
     { "id": "cli-npm-windows-arm64", "surface": "npm CLI", "label": "Windows ARM64", "gating": false, "note": "non-gating (D4/D7): runs on windows-11-arm, reported only" },
     { "id": "cli-binary-linux-x64", "surface": "Installer binary", "label": "Linux x64" },
-    { "id": "cli-binary-linux-arm64", "surface": "Installer binary", "label": "Linux arm64" },
+    { "id": "cli-binary-linux-arm64", "gating": false, "note": "non-gating (owner decision 2026-10-22): file tools fail closed on Linux arm64 (blocked:filesystem-unsupported); reported only", "surface": "Installer binary", "label": "Linux arm64" },
     { "id": "cli-binary-darwin-arm64", "surface": "Installer binary", "label": "macOS arm64" },
     { "id": "cli-binary-darwin-x64", "surface": "Installer binary", "label": "macOS x64" },
     { "id": "cli-binary-windows-x64", "surface": "Installer binary", "label": "Windows x64" },
@@ -33,7 +33,7 @@
     { "id": "desktop-darwin-arm64", "surface": "Desktop", "label": "macOS arm64 (dmg)", "descopes": { "update": "desktop auto-update needs the XR-LAUNCH-008 updater signing key (owner-provisioned)" } },
     { "id": "desktop-darwin-x64", "surface": "Desktop", "label": "macOS x64 (dmg)", "descopes": { "update": "desktop auto-update needs the XR-LAUNCH-008 updater signing key (owner-provisioned)" } },
     { "id": "docker-linux-x64", "surface": "Docker/GHCR", "label": "linux/amd64", "descopes": { "update": "containers are updated by pulling a new tag; no in-place update path" } },
-    { "id": "docker-linux-arm64", "surface": "Docker/GHCR", "label": "linux/arm64", "descopes": { "update": "containers are updated by pulling a new tag; no in-place update path" } },
+    { "id": "docker-linux-arm64", "gating": false, "note": "non-gating (owner decision 2026-10-22): file tools fail closed on Linux arm64 (blocked:filesystem-unsupported); reported only", "surface": "Docker/GHCR", "label": "linux/arm64", "descopes": { "update": "containers are updated by pulling a new tag; no in-place update path" } },
     {
       "id": "vscode-extension", "surface": "VS Code extension", "label": "Marketplace / VSIX",
       "descopes": { "*": "no Phase 3 journey (proposed de-scope, owner to confirm); not to be advertised until it has its own journey" }

@@ -129,7 +129,10 @@ missing, they stop and install nothing. Windows ARM64 is **unverified**: XR's fi
 `bun:ffi`, which the pinned Bun disables on native Windows ARM64, so they refuse to run there
 for now ([support matrix](docs/release/SUPPORT_MATRIX.md)). Alpine/musl source installs are
 limited the same way: the file tools load glibc's `libc.so.6` and refuse to run without it.
-The Docker image is Debian-based (glibc) for that reason.
+The Docker image is Debian-based (glibc) for that reason. **Linux arm64** (including the
+`linux/arm64` image) is limited too: XR installs and runs, but the file tools fail closed
+(`blocked:filesystem-unsupported`), so reading and writing workspace files needs Linux x64,
+macOS or Windows x64 for now. Its CI journeys are reported, not gating.
 
 Where things go: the installers put XR's program files in `~/.xr-agent` (Windows:
 `%USERPROFILE%\.xr-agent`); set `XR_INSTALL_DIR` to an absolute path to choose another

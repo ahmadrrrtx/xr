@@ -27,7 +27,7 @@ export const TOOL_REASONS = {
   "denied:policy": "A capability policy blocked this tool for this run. Check the workspace or agent policy, or use a mode that allows it.",
   "blocked:isolation-unavailable": "No verified sandbox is available for this command, and XR does not fall back to running it unsandboxed. Run `xr doctor` to see the sandbox status.",
   "blocked:integrity": "The execution-integrity gate refused a binary it could not verify. Check the command, or review XR_EXEC_INTEGRITY.",
-  "blocked:filesystem-unsupported": "File tools are not available on this platform (they need glibc Linux, macOS or Windows x64). See docs/release/SUPPORT_MATRIX.md.",
+  "blocked:filesystem-unsupported": "File tools are not available on this platform (they need glibc Linux x64, macOS or Windows x64; Linux arm64 is not supported yet). See docs/release/SUPPORT_MATRIX.md.",
   "missing:file": "The file or folder does not exist. Check the path; it is relative to the working directory.",
   "invalid:arguments": "The model sent incomplete or malformed arguments. Retry; if it repeats, try another model.",
   "invalid:unknown-tool": "The model asked for a tool that is not available in this mode. Retry, or switch to a mode that has it.",

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Known limitations
+
+- **Linux arm64 (launch CI, 2026-10-22):** the CLI and the `linux/arm64` image install and run, but the file tools fail closed (`blocked:filesystem-unsupported`). Reading and writing workspace files needs Linux x64, macOS or Windows x64 for now. The Linux arm64 npm, binary and Docker journey legs are reported in the support matrix but no longer gate a merge. The refusal message now says so instead of implying any glibc Linux works.
+
 ### Changed
 
 - **daemon (contract change):** `--lan` is now flag-only — the `XR_DAEMON_LAN` env var is removed; LAN mode is too loud to switch on implicitly. The operator-set `XR_DAEMON_TOKEN` is honored by the shipping daemon (wins over the generated token without being ever printed) so scripts/harnesses can drive `xr serve --lan`, where the banner deliberately shows the certificate fingerprint and pairing URL but no token material.

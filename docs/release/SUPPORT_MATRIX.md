@@ -28,13 +28,13 @@ Regenerate with `bun run support-matrix` after copying journey evidence into `do
 | Surface | Target | Build | Package | Install | Launch | Core-agent smoke | Update | Uninstall | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
 | npm CLI | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5 |
-| npm CLI | Linux arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| npm CLI | Linux arm64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows ARM64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5 |
-| Installer binary | Linux arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | Linux arm64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | Windows x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
@@ -46,7 +46,7 @@ Regenerate with `bun run support-matrix` after copying journey evidence into `do
 | Desktop | macOS arm64 (dmg) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [2] | ⏳ | — |
 | Desktop | macOS x64 (dmg) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [2] | ⏳ | — |
 | Docker/GHCR | linux/amd64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [7] | ⏳ | — |
-| Docker/GHCR | linux/arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [7] | ⏳ | — |
+| Docker/GHCR | linux/arm64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [7] | ⏳ | — |
 | VS Code extension | Marketplace / VSIX | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | — |
 
 [1] no compiled windows-arm64 release asset; install.ps1 installs the verified source archive there — use the npm CLI row (decision D4)  
@@ -58,7 +58,7 @@ Regenerate with `bun run support-matrix` after copying journey evidence into `do
 [7] containers are updated by pulling a new tag; no in-place update path  
 [8] no Phase 3 journey (proposed de-scope, owner to confirm); not to be advertised until it has its own journey  
 
-Launch gate (`--require-complete`): **incomplete** — 94 gating cell(s) without evidence or failing.
+Launch gate (`--require-complete`): **incomplete** — 74 gating cell(s) without evidence or failing.
 
 <!-- END GENERATED: journey matrix -->
 
@@ -67,7 +67,7 @@ Launch gate (`--require-complete`): **incomplete** — 94 gating cell(s) without
 | Platform | Tier | Validated by | Evidence |
 |---|---|---|---|
 | Linux x64 (glibc) | **Tier 1 — primary** | full unit suite (every test file), typecheck, golden path, nightly golden path, first-task survey, deb install test, binary smoke | `ci.yml`, `cross-platform.yml`, `nightly.yml`, `channel-install.yml` |
-| Linux arm64 | Tier 2 | canonical build cross-compiles + container path linux/arm64; full-suite parity pending a native arm runner | `release.yml` matrix (build-only, smoke skipped — recorded) |
+| Linux arm64 | Tier 2 · **file tools unsupported (non-gating)** | canonical build cross-compiles + container path linux/arm64; full-suite parity pending a native arm runner. The CLI installs and runs, but the file authority fails closed on the hosted arm64 runners (`blocked:filesystem-unsupported`, first journey run 2026-10-22), so workspace file reads/writes need Linux x64, macOS or Windows x64 for now. The npm, binary and Docker linux/arm64 journey legs are reported, not gating (owner decision 2026-10-22). | `release.yml` matrix (build-only, smoke skipped — recorded), `journey.yml` (`ubuntu-24.04-arm`, docker arm64; non-gating) |
 | macOS arm64 | **Tier 1** | typecheck + full unit suite (the same files as Linux) + golden path on every push/PR; binary build + native smoke in release matrix | `cross-platform.yml`, `release.yml` |
 | macOS x64 (Intel) | Tier 2 | canonical build cross-compiles; native smoke unavailable on arm64 runners (recorded honestly) | `release.yml` |
 | Windows x64 | **Tier 1*** | typecheck + unit suite (every file except the Windows exclusions below, each with a reason) + golden path on every push/PR; binary build + native smoke; winget/scoop manifest binding tests | `cross-platform.yml`, `channel-install.yml`, `test/platform/exclusions.json` |

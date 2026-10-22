@@ -47,7 +47,9 @@ pub struct OpenOutcome {
     pub conn: Connection,
     /// User-facing notice when recovery happened (None on a clean open).
     pub notice: Option<String>,
-    /// True when the shell fell back to an in-memory database.
+    /// True when the shell fell back to an in-memory database. Callers
+    /// surface the fallback through `notice`; this flag is the tests' signal.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub in_memory: bool,
 }
 

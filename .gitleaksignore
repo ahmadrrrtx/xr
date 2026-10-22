@@ -70,3 +70,10 @@ b801543e27ca7a7740cf1393f051a98f665c8974:HANDOFF_PHASE_2.1.md:generic-api-key:33
 19af69dbe24ad236cf796f082fed3c75d4321816:XR_FIX_TRACKER.md:generic-api-key:31
 # Historical: the wording-fix commit itself carried the quote (see above).
 fa0593a0d27dbd879b893fc0f57ab6dadfeb7705:.gitleaksignore:generic-api-key:64
+
+# Launch-audit remediation (2026-10-22): deterministic fake bearer tokens in
+# test fixtures (sequential hex / "tokA_"/"tokB_" counting patterns). They
+# authenticate to nothing; the daemon mints a random per-`xr serve` token.
+efa5b218068e40d9afe08fc681d688f69d025668:test/daemon/session-auth.test.ts:generic-api-key:25
+8c3fd4e3fb4b6b4ce1da2ea43832e4227a02db3a:extensions/vscode/test/durable-pairing.test.ts:generic-api-key:21
+8c3fd4e3fb4b6b4ce1da2ea43832e4227a02db3a:extensions/vscode/test/durable-pairing.test.ts:generic-api-key:22

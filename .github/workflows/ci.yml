@@ -119,7 +119,7 @@ jobs:
   truth-gate:
     name: Truth gate (release:check + claim-lint)
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -172,6 +172,13 @@ jobs:
       # each window's import graph; a stale or hand-edited grant fails here.
       - name: Desktop IPC allow-lists are generated (not hand-edited)
         run: bun run desktop:ipc-acl --check
+
+      # The desktop frontend tests import the renderer's stores, whose deps
+      # (zustand, sonner, react) live in desktop/node_modules — a separate
+      # lockfile (desktop/bun.lock) from the root's.
+      - name: Install desktop dependencies (frozen lockfile)
+        working-directory: desktop
+        run: bun install --frozen-lockfile --ignore-scripts
 
       # XR-LAUNCH-026: desktop frontend tests + the stores coverage ratchet
       # (desktop/coverage-floor.json).
@@ -311,6 +318,13 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      # The desktop frontend tests import the renderer's stores, whose deps
+      # (zustand, sonner, react) live in desktop/node_modules — a separate
+      # lockfile (desktop/bun.lock) from the root's.
+      - name: Install desktop dependencies (frozen lockfile)
+        working-directory: desktop
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run test / core (parity-segmented, no retries)

@@ -45,7 +45,10 @@ jobs:
     timeout-minutes: 40
     # Windows ARM64 is reported, not gating (D4/D7): its result is in the
     # evidence and the support matrix, but it cannot block a merge.
-    continue-on-error: ${{ matrix.runsOn == 'windows-11-arm' }}
+    # Linux ARM64 is reported, not gating (owner decision, 2026-10-22): the
+    # file authority fails closed there (blocked:filesystem-unsupported) —
+    # disclosed in SUPPORT_MATRIX.md and the CHANGELOG.
+    continue-on-error: ${{ matrix.runsOn == 'windows-11-arm' || matrix.runsOn == 'ubuntu-24.04-arm' }}
     strategy:
       fail-fast: false
       matrix:
@@ -98,6 +101,9 @@ jobs:
     name: Docker image journey (linux/${{ matrix.arch }})
     runs-on: ${{ matrix.runsOn }}
     timeout-minutes: 40
+    # linux/arm64 is reported, not gating (same Linux ARM64 file-authority
+    # limitation as the cli job; disclosed in SUPPORT_MATRIX.md).
+    continue-on-error: ${{ matrix.arch == 'arm64' }}
     strategy:
       fail-fast: false
       matrix:

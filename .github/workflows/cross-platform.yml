@@ -62,6 +62,11 @@ jobs:
           bun-version-file: .bun-version
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      # test/desktop/frontend-stores imports the renderer stores; their deps
+      # live in desktop/node_modules (separate lockfile: desktop/bun.lock).
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Exclusion manifest validates (no silent skips)
         run: bun run scripts/platform-parity.ts --validate
       - name: Typecheck
