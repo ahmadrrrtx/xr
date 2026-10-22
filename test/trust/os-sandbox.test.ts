@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tier2Remediation } from "../../src/runtime/trust/policy.ts";
-import { NamespaceSandboxBackend, osSandboxOptIn } from "../../src/runtime/trust/environment/namespace.ts";
+import { NamespaceSandboxBackend, nativeSelfCheckDiagnostic, osSandboxOptIn } from "../../src/runtime/trust/environment/namespace.ts";
 import { seatbeltArgv, seatbeltProfile } from "../../src/runtime/trust/environment/seatbelt.ts";
 import { quoteWindowsArg } from "../../src/runtime/trust/environment/appcontainer.ts";
 
@@ -97,22 +97,30 @@ describe.if(smoke)(`native sandbox smoke (${process.platform})`, () => {
       { grant: { fs: { writableRoots: [ws], readOnlyRoots: [], blockedPaths: [] }, net: { mode: "none", allowlist: [] } }, envInject: {} } as never,
     );
   const shell = (cmd: string) => run(win ? ["cmd.exe", "/d", "/c", cmd] : ["/bin/sh", "-c", cmd]);
+  // Print a failing run BEFORE asserting (a thrown expect hides everything else).
+  const shown = async (label: string, p: Promise<{ ok: boolean }>) => {
+    const r = await p;
+    if (!r.ok) console.error(`[os-sandbox] ${label} failed: ${JSON.stringify(r).slice(0, 2000)}`);
+    return r as Awaited<ReturnType<typeof run>>;
+  };
 
   test("the mechanism is detected (self-check passed)", async () => {
-    expect(await backend.detect()).toBe(true);
+    const ok = await backend.detect();
+    if (!ok) console.error(`[os-sandbox] self-check failed: ${nativeSelfCheckDiagnostic()}`);
+    expect(ok).toBe(true);
     expect(backend.activeMechanism).toBe(win ? "appcontainer" : "seatbelt");
   });
   test("echo works", async () => {
-    const r = await shell("echo hello");
+    const r = await shown("echo", shell("echo hello"));
     expect(r.ok).toBe(true);
     expect(r.stdout).toContain("hello");
   });
   test("git status works in the workspace", async () => {
-    const r = await run(["git", "status", "--porcelain"]);
+    const r = await shown("git status", run(["git", "status", "--porcelain"]));
     expect(r.ok).toBe(true);
   });
   test("in-workspace write succeeds", async () => {
-    const r = await shell(win ? "echo inside> inside.txt" : "echo inside > inside.txt");
+    const r = await shown("in-workspace write", shell(win ? "echo inside> inside.txt" : "echo inside > inside.txt"));
     expect(r.ok).toBe(true);
     expect(readFileSync(join(ws, "inside.txt"), "utf8")).toContain("inside");
   });

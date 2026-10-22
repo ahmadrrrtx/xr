@@ -16,7 +16,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { INSTALLER_RC_BLOCK, binaryAsset, hostSlug, nextVersion } from "../../scripts/journey/cli-journey.ts";
 import { FIXTURE_CONTENT, FIXTURE_FILE, startFixtureProvider, startFixtureServer, type Running } from "../../scripts/journey/fixtures.ts";
 import { endpointOverride, npmRegistry } from "../../src/update/npm-channel.ts";
@@ -149,7 +149,9 @@ describe("journey fixtures", () => {
     mkdirSync(pkgDir, { recursive: true });
     writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ name: "@rrrtx/xr", version: "1.2.3", bin: { xr: "bin/xr" }, dependencies: { zod: "^3.0.0" } }));
     const tgz = join(root, "xr-1.2.3.tgz");
-    expect(Bun.spawnSync(["tar", "-czf", tgz, "-C", join(pkgDir, ".."), "package"]).exitCode).toBe(0);
+    // Relative paths only: Git-for-Windows' GNU tar reads `C:\…` as host:path.
+    const pkgParent = join(pkgDir, "..");
+    expect(Bun.spawnSync(["tar", "-czf", relative(pkgParent, tgz), "package"], { cwd: pkgParent }).exitCode).toBe(0);
     const srv = await serve(startFixtureServer({ root, releases: [{ version: "1.2.3" }], npm: { name: "@rrrtx/xr", tarballs: { "1.2.3": tgz }, latest: "1.2.3" } }));
     const rel = (await (await fetch(`${srv.url}/releases.json`)).json()) as Array<{ tag_name: string; assets: Array<{ name: string }> }>;
     expect(rel[0]!.tag_name).toBe("v1.2.3");

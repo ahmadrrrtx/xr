@@ -22,10 +22,12 @@ import { realpathSync } from "node:fs";
 
 export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 
-/** Read-only system and toolchain roots (contents). */
+/** Read-only system and toolchain roots (contents). /usr/bin/git & co. are
+ * xcrun shims: they read the xcode-select link, then the selected Xcode —
+ * matched by REAL path, and /Applications/Xcode.app is often a symlink. */
 const SYSTEM_READ_ROOTS = [
   "/usr", "/bin", "/sbin", "/System", "/Library", "/private/etc", "/private/var/db/timezone",
-  "/opt/homebrew", "/usr/local", "/Applications/Xcode.app", "/dev",
+  "/private/var/db/xcode_select_link", "/opt/homebrew", "/usr/local", "/Applications", "/dev",
 ];
 
 export const SEATBELT_PATH = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin";

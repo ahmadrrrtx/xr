@@ -18,7 +18,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { join, normalize, sep } from "node:path";
+import { basename, dirname, join, normalize, sep } from "node:path";
 import type { AddressInfo } from "node:net";
 
 export const FIXTURE_MODEL = "journey-model";
@@ -134,7 +134,8 @@ export async function startFixtureServer(opts: { root: string; releases?: Releas
   let base = "";
   const manifests: Record<string, Record<string, Record<string, string>>> = {};
   for (const [v, file] of Object.entries(opts.npm?.tarballs ?? {})) {
-    const p = spawnSync("tar", ["-xzOf", file, "package/package.json"], { encoding: "utf8" });
+    // cwd + bare file name: Git-for-Windows' GNU tar reads `C:\…` as host:path.
+    const p = spawnSync("tar", ["-xzOf", basename(file), "package/package.json"], { encoding: "utf8", cwd: dirname(file) });
     if (p.status !== 0) throw new Error(`cannot read package.json from ${file}: ${p.stderr}`);
     manifests[v] = JSON.parse(p.stdout);
   }

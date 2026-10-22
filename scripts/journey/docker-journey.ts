@@ -85,7 +85,11 @@ export async function runDockerJourney(evidenceClass: "CI" | "LR"): Promise<Jour
         const data = join(work, "data"), ws = join(work, "ws");
         mkdirSync(ws, { recursive: true });
         writeFixtureConfig(data, provider.url);
-        const r = await sh(["docker", "run", "--rm", "--network", "host", "-e", "XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER=1", "-e", "CI=1", "-e", "NO_COLOR=1", "-v", `${data}:/data`, "-v", `${ws}:/ws`, tag, "--cwd", "/ws", "--provider", FIXTURE_PROVIDER, "--model", FIXTURE_MODEL, "--json", "Write the journey proof file."], { timeoutMs: 180_000 });
+        // Run as the host user (the common `--user $(id -u):$(id -g)` pattern for
+        // a bind-mounted workspace): as root, the proof file came back root-owned
+        // and unreadable to the runner (EACCES). XR_HOME=/data is host-owned.
+        const asHost = process.getuid && process.getgid ? ["--user", `${process.getuid()}:${process.getgid()}`, "-e", "HOME=/tmp"] : [];
+        const r = await sh(["docker", "run", "--rm", ...asHost, "--network", "host", "-e", "XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER=1", "-e", "CI=1", "-e", "NO_COLOR=1", "-v", `${data}:/data`, "-v", `${ws}:/ws`, tag, "--cwd", "/ws", "--provider", FIXTURE_PROVIDER, "--model", FIXTURE_MODEL, "--json", "Write the journey proof file."], { timeoutMs: 180_000 });
         const proof = join(ws, FIXTURE_FILE);
         need(existsSync(proof) && readFileSync(proof, "utf8") === FIXTURE_CONTENT, `proof file not written in the container (exit ${r.status}): ${tail(r.out)}`);
         need(r.status === 0, `container exit ${r.status}: ${tail(r.out)}`);

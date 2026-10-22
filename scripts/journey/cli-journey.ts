@@ -34,7 +34,7 @@
 import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { FIXTURE_CONTENT, FIXTURE_FILE, FIXTURE_MODEL, FIXTURE_PROVIDER, startFixtureProvider, startFixtureServer, writeFixtureConfig, type Running } from "./fixtures.ts";
 
@@ -206,7 +206,8 @@ export async function runJourney(opts: { channel: "binary" | "npm"; evidenceClas
           return `SHA256SUMS written for v${N} and v${N1}`;
         }
         for (const v of [N, N1]) {
-          const list = (await sh(["tar", "-tzf", artifacts[v]!])).out;
+          // cwd + bare file name: Git-for-Windows' GNU tar reads `C:\…` as host:path.
+          const list = (await sh(["tar", "-tzf", basename(artifacts[v]!)], { cwd: dirname(artifacts[v]!) })).out;
           need(/package\/release\.manifest\.json/.test(list) && /package\/bin\/xr/.test(list), `tarball ${v} lacks release.manifest.json or bin/xr`);
         }
         return "tarballs carry bin/xr and release.manifest.json";

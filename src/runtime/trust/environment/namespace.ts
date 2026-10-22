@@ -460,6 +460,12 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
  * Prove a native mechanism on this host before offering it: a throwaway
  * workspace must be writable and a sibling file must be unreadable from inside.
  */
+let selfCheckWhy = "";
+/** Why the last native self-check failed ("" after a pass) — surfaced by the CI smoke. */
+export const nativeSelfCheckDiagnostic = (): string => selfCheckWhy;
+const why = (m: string, probe: boolean, r: { exitCode: number | null; stdout: string; stderr: string; spawnError?: string }) =>
+  `${m}: probe=${probe} exit=${r.exitCode} spawnError=${r.spawnError ?? ""} stdout=${r.stdout.slice(-300)} stderr=${r.stderr.slice(-300)}`;
+
 async function nativeSelfCheck(mechanism: "seatbelt" | "appcontainer"): Promise<boolean> {
   const { mkdirSync, writeFileSync, existsSync: exists } = await import("node:fs");
   const base = mkdtempSync(join(tmpdir(), "xr-os-selfcheck-"));
@@ -478,7 +484,9 @@ async function nativeSelfCheck(mechanism: "seatbelt" | "appcontainer"): Promise<
         timeoutMs: 10_000,
         maxOutputBytes: 8192,
       });
-      return exists(join(ws, "probe.txt")) && r.exitCode !== 0 && !r.stdout.includes("XR-SELFCHECK-SECRET");
+      const ok = exists(join(ws, "probe.txt")) && r.exitCode !== 0 && !r.stdout.includes("XR-SELFCHECK-SECRET");
+      selfCheckWhy = ok ? "" : why(mechanism, exists(join(ws, "probe.txt")), r);
+      return ok;
     }
     const { runInAppContainer } = await import("./appcontainer.ts");
     const r = await runInAppContainer({
@@ -489,8 +497,11 @@ async function nativeSelfCheck(mechanism: "seatbelt" | "appcontainer"): Promise<
       timeoutMs: 10_000,
       maxOutputBytes: 8192,
     });
-    return exists(join(ws, "probe.txt")) && !r.stdout.includes("XR-SELFCHECK-SECRET");
-  } catch {
+    const ok = exists(join(ws, "probe.txt")) && !r.stdout.includes("XR-SELFCHECK-SECRET");
+    selfCheckWhy = ok ? "" : why(mechanism, exists(join(ws, "probe.txt")), r);
+    return ok;
+  } catch (e) {
+    selfCheckWhy = `${mechanism}: threw ${e instanceof Error ? e.message : String(e)}`;
     return false;
   } finally {
     rmSync(base, { recursive: true, force: true });
