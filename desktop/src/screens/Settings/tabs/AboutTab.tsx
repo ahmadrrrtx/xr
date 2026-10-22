@@ -100,20 +100,23 @@ export function AboutTab() {
 
       {/* ── Advanced ── */}
       <SettingsSection title="Advanced">
-        <SettingRow
-          label="Enable developer tools"
-          htmlFor="xr-devtools"
-          description="For debugging and bug reports. Off by default."
-        >
-          <Toggle
-            id="xr-devtools"
-            checked={about.devtools}
-            onCheckedChange={(v) => {
-              update('about', { devtools: v });
-              void setDevtoolsEnabled(v);
-            }}
-          />
-        </SettingRow>
+        {/* XR-LAUNCH-014: the inspector only exists in development builds. */}
+        {import.meta.env.DEV && (
+          <SettingRow
+            label="Enable developer tools"
+            htmlFor="xr-devtools"
+            description="For debugging and bug reports. Development builds only."
+          >
+            <Toggle
+              id="xr-devtools"
+              checked={about.devtools}
+              onCheckedChange={(v) => {
+                update('about', { devtools: v });
+                void setDevtoolsEnabled(v);
+              }}
+            />
+          </SettingRow>
+        )}
         <SettingRow
           label="Open data folder"
           description="Settings, conversations and rules live here."

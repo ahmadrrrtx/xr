@@ -172,8 +172,10 @@ describe("chat store", () => {
 describe("deep links — xr://oauth/callback listener (XR-LAUNCH-013)", () => {
   type Handler = (urls: string[]) => void;
   const handlers: Handler[] = [];
+  let launchUrls: string[] | null = null;
   mock.module("@tauri-apps/plugin-deep-link", () => ({
     onOpenUrl: async (h: Handler) => { handlers.push(h); return () => {}; },
+    getCurrent: async () => launchUrls,
   }));
   // A fresh module instance per scenario (the listener is once-per-session).
   let n = 0;
@@ -207,5 +209,22 @@ describe("deep links — xr://oauth/callback listener (XR-LAUNCH-013)", () => {
       { kind: "success", code: "abc", state: "s1" },
       { kind: "denied", state: "s2" },
     ]);
+  });
+
+  test("cold start: the launch URL is delivered once, even if it also arrives as an event", async () => {
+    handlers.length = 0;
+    setTauri(true);
+    launchUrls = ["xr://oauth/callback?code=cold&state=s9"];
+    const m = await fresh();
+    const seen: unknown[] = [];
+    await m.registerOAuthCallbackListener((cb) => seen.push(cb));
+    expect(seen).toEqual([{ kind: "success", code: "cold", state: "s9" }]);
+    // The single-instance forward of the same URL must not run the exchange twice.
+    handlers[0]!(["xr://oauth/callback?code=cold&state=s9", "xr://oauth/callback?code=warm&state=s10"]);
+    expect(seen).toEqual([
+      { kind: "success", code: "cold", state: "s9" },
+      { kind: "success", code: "warm", state: "s10" },
+    ]);
+    launchUrls = null;
   });
 });

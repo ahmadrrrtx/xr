@@ -10,6 +10,42 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
   return tauriInvoke<T>(command, args);
 }
 
+/**
+ * XR-LAUNCH-014: data import/export/reset and devtools are granted to the
+ * MAIN window only (src-tauri/capabilities/*-commands.json). Workspace windows
+ * run the same bundle, so say why instead of failing silently.
+ */
+export const MAIN_WINDOW_ONLY_MESSAGE = 'Open the main XR window to do this.';
+
+async function notMainWindow(): Promise<boolean> {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    return getCurrentWindow().label !== 'main';
+  } catch {
+    return false;
+  }
+}
+
+/** Import / export outcome — errors are shown, never swallowed (XR-LAUNCH-021). */
+export type DataTransferResult =
+  | { status: 'done'; path?: string }
+  | { status: 'cancelled' }
+  | { status: 'error'; message: string };
+
+/**
+ * XR-LAUNCH-021: notices from this launch's data-safety pass — a damaged
+ * database moved aside, an in-memory fallback, an import applied or rolled
+ * back. Empty on a clean start; never throws.
+ */
+export async function dbHealth(): Promise<string[]> {
+  if (!isTauri() || (await notMainWindow())) return []; // shown once, in the main window
+  try {
+    return await invoke<string[]>('db_health');
+  } catch {
+    return [];
+  }
+}
+
 /* ── Cross-window broadcast ─────────────────────────────────────────── */
 
 /** Tell the Rust host a settings group changed (broadcast to HUD + Orb). */
@@ -122,31 +158,42 @@ export async function clearCache(): Promise<number> {
 }
 
 /** Zip the data dir; returns the chosen destination path or null (cancel). */
-export async function exportAllData(): Promise<string | null> {
-  if (!isTauri()) return null;
+export async function exportAllData(): Promise<DataTransferResult> {
+  if (!isTauri()) return { status: 'cancelled' };
+  if (await notMainWindow()) return { status: 'error', message: MAIN_WINDOW_ONLY_MESSAGE };
   try {
-    return await invoke<string | null>('export_all_data');
-  } catch {
-    return null;
+    const path = await invoke<string | null>('export_all_data');
+    return path ? { status: 'done', path } : { status: 'cancelled' };
+  } catch (e) {
+    return { status: 'error', message: String(e) };
   }
 }
 
-/** Pick a previously exported zip and restore it. True = restored. */
-export async function importAllData(): Promise<boolean> {
-  if (!isTauri()) return false;
+/**
+ * Pick a previously exported zip. `done` = validated and staged; XR must
+ * restart to apply it (the swap happens before any database opens). A damaged
+ * archive is an `error` and nothing was changed.
+ */
+export async function importAllData(): Promise<DataTransferResult> {
+  if (!isTauri()) return { status: 'cancelled' };
+  if (await notMainWindow()) return { status: 'error', message: MAIN_WINDOW_ONLY_MESSAGE };
   try {
-    return await invoke<boolean>('import_all_data');
-  } catch {
-    return false;
+    return (await invoke<boolean>('import_all_data')) ? { status: 'done' } : { status: 'cancelled' };
+  } catch (e) {
+    return { status: 'error', message: String(e) };
   }
 }
 
 /* ── Destructive / lifecycle ────────────────────────────────────────── */
 
 /** Wipe settings (and optionally conversations) then restart. Never returns. */
-export async function resetApp(wipeConversations: boolean): Promise<void> {
-  if (!isTauri()) return;
-  await invoke('reset_app', { wipeConversations }).catch(() => undefined);
+export async function resetApp(wipeConversations: boolean): Promise<string | null> {
+  if (!isTauri()) return null;
+  if (await notMainWindow()) return MAIN_WINDOW_ONLY_MESSAGE;
+  return invoke('reset_app', { wipeConversations }).then(
+    () => null,
+    (e: unknown) => String(e),
+  );
 }
 
 export async function restartApp(): Promise<void> {

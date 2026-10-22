@@ -147,6 +147,11 @@ jobs:
       - name: CI policy (required checks, pins, quarantine expiry)
         run: bun run ci:policy
 
+      # XR-LAUNCH-014: the per-window IPC capability files are generated from
+      # each window's import graph; a stale or hand-edited grant fails here.
+      - name: Desktop IPC allow-lists are generated (not hand-edited)
+        run: bun run desktop:ipc-acl --check
+
       # XR-LAUNCH-026: desktop frontend tests + the stores coverage ratchet
       # (desktop/coverage-floor.json).
       - name: Desktop frontend tests + stores coverage floor

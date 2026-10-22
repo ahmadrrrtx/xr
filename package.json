@@ -45,6 +45,7 @@
     "changelog:check": "bun run scripts/changelog.ts --check",
     "platform:parity:check": "bun run scripts/platform-parity.ts --validate",
     "claim-lint": "bun run scripts/claim-lint.ts",
+    "desktop:ipc-acl": "bun scripts/desktop-ipc-acl.ts",
     "support-matrix": "bun run scripts/support-matrix.ts",
     "ci:policy": "bun run scripts/ci-policy.ts",
     "desktop:coverage": "bun run scripts/desktop-store-coverage.ts",

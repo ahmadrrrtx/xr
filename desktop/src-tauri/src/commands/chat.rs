@@ -17,12 +17,16 @@ pub struct ChatDb(pub Mutex<Connection>);
 /// Called once from the Tauri setup hook.
 pub fn init(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let dir = app.path().app_data_dir()?;
-    std::fs::create_dir_all(&dir)?;
-    let conn = Connection::open(dir.join("xr.db"))?;
-    conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.pragma_update(None, "foreign_keys", "ON")?;
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS sessions (
+    // XR-LAUNCH-021: a damaged/unopenable xr.db is recovered, never a crash.
+    let opened = crate::data_safety::open_shared_db(&dir, CHAT_DDL);
+    crate::commands::data_health::note(app.handle(), opened.notice);
+    let conn = opened.conn;
+    let _ = conn.pragma_update(None, "foreign_keys", "ON");
+    app.manage(ChatDb(Mutex::new(conn)));
+    Ok(())
+}
+
+const CHAT_DDL: &str = "CREATE TABLE IF NOT EXISTS sessions (
             id         TEXT PRIMARY KEY,
             title      TEXT NOT NULL DEFAULT 'New chat',
             model      TEXT,
@@ -40,11 +44,7 @@ pub fn init(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             tool_calls  TEXT,
             created_at  INTEGER NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at DESC);",
-    )?;
-    app.manage(ChatDb(Mutex::new(conn)));
-    Ok(())
-}
+        CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at DESC);";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

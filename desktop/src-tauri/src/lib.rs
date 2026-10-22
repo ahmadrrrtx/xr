@@ -12,6 +12,8 @@ mod seed_purge;
 /// Screenshot-and-ask capture, per platform (Phase 27).
 mod capture;
 mod commands;
+/// XR-LAUNCH-021: WAL-safe export/import + damaged-DB recovery (pure, tested).
+mod data_safety;
 /// Phase 14 — engine sidecar lifecycle (spawn, pair, restart, stderr tail).
 mod engine;
 /// Banner parsing / bounded stderr tail / probe cache (pure std, unit-tested).
@@ -21,6 +23,8 @@ mod events;
 mod crash;
 /// Native menus — the macOS application menu (Phase 27).
 pub mod menus;
+/// XR-LAUNCH-014: `reveal_path` is limited to XR-owned folders (pure, tested).
+mod reveal_policy;
 mod shield;
 /// OS appearance bridge: `xr-os-theme` (Phase 27).
 mod theme;
@@ -58,6 +62,10 @@ pub fn run() {
 
     // Single instance must be registered first: a second launch hands its
     // argv to the running shell and exits — we focus the existing window.
+    // XR-LAUNCH-013: built with the plugin's `deep-link` feature, so on
+    // Windows/Linux (where an `xr://` link launches a NEW process) the URL in
+    // that argv is forwarded to the deep-link plugin of THIS instance and the
+    // frontend's `onOpenUrl` listener receives the OAuth callback.
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(
         |app, _argv, _cwd| {
@@ -91,6 +99,21 @@ pub fn run() {
             // decorations (real traffic lights), Windows and Linux drop them
             // because they draw their own caption buttons.
             apply_platform_chrome(app.handle());
+
+            // XR-LAUNCH-013 — installers (NSIS/MSI/deb/rpm) register `xr://`
+            // at install time. An AppImage (and a dev build) is never
+            // installed, so register the configured schemes for this exe at
+            // runtime; failure only means the browser cannot hand back.
+            #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let unpackaged = std::env::var_os("APPIMAGE").is_some() || cfg!(debug_assertions);
+                if unpackaged {
+                    if let Err(e) = app.deep_link().register_all() {
+                        eprintln!("[xr] deep-link scheme registration failed: {e}");
+                    }
+                }
+            }
 
             // Phase 27 — recovery gate. Read the dirty flag BEFORE touching
             // the engine: "start without the local engine" has to be honoured
@@ -170,6 +193,15 @@ pub fn run() {
                 });
             }
 
+            // XR-LAUNCH-021 — BEFORE any connection to xr.db is opened: apply
+            // a staged import (atomic swap with backup + rollback), then the
+            // integrity preflight (a damaged file is moved aside, not fatal).
+            match app.path().app_data_dir() {
+                Ok(data_dir) => commands::data_health::startup(app.handle(), &data_dir),
+                Err(_) => {
+                    app.manage(commands::data_health::DataHealth::default());
+                }
+            }
             commands::chat::init(app)?;
             // Phase 10 — workspaces: same xr.db (WAL), own connection + DDL,
             // plus the in-memory window-bounds map used by multi-window spawn.
@@ -229,6 +261,7 @@ pub fn run() {
             engine::engine_restart,
             engine::engine_logs_tail,
             commands::ollama::ollama_pull,
+            commands::data_health::db_health,
             commands::chat::chat_list_sessions,
             commands::chat::chat_get_session,
             commands::chat::chat_create_session,

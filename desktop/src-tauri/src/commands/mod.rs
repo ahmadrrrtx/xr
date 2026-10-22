@@ -1,5 +1,7 @@
 pub mod approvals;
 pub mod chat;
+/// XR-LAUNCH-021: startup data-safety notices (recovery, staged import).
+pub mod data_health;
 pub mod hud;
 pub mod ollama;
 #[cfg(desktop)]

@@ -120,13 +120,57 @@ async function webdriverSmoke(app: string): Promise<string> {
       }
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
       const port = await waitForEngineHealth(60_000);
-      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}`;
+      const acl = await ipcAclSmoke(wd, sid);
+      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${acl}`;
     } finally {
       await wd("DELETE", `/session/${sid}`).catch(() => undefined);
     }
   } finally {
     driver.kill();
   }
+}
+
+/**
+ * XR-LAUNCH-014 capability smoke (rollback = restore capabilities/*.json).
+ * Positive control: the main window may call `db_health`. Negative: a
+ * command no window is granted is refused in main, and privileged commands
+ * are refused in the HUD/Orb windows. Every probed privileged command takes
+ * required arguments and is sent with none, so even a broken ACL can only
+ * produce an argument error — never a dialog, a reset or a keychain read.
+ */
+export async function ipcAclSmoke(wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string): Promise<string> {
+  const probe = async (cmd: string) =>
+    String(
+      await wd("POST", `/session/${sid}/execute/async`, {
+        script:
+          "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke(arguments[0], {}).then(() => done('ok'), (e) => done('rejected: ' + String(e && e.message ? e.message : e)));",
+        args: [cmd],
+      }),
+    );
+  const denied = (r: string) => /not allowed/i.test(r);
+  const main = await probe("db_health");
+  if (main !== "ok") throw new Error(`IPC ACL: main window could not call db_health (${main})`);
+  const unlisted = await probe("get_settings");
+  if (!denied(unlisted)) throw new Error(`IPC ACL: get_settings (granted to no window) was not refused in main: ${unlisted}`);
+  const PRIVILEGED_PROBES = ["keychain_get", "reveal_path", "set_devtools_enabled", "reset_app"];
+  const checked: string[] = [];
+  const handles = (await wd("GET", `/session/${sid}/window/handles`)) as string[];
+  const original = String(await wd("GET", `/session/${sid}/window`));
+  for (const h of handles) {
+    await wd("POST", `/session/${sid}/window`, { handle: h });
+    const path = String(await wd("POST", `/session/${sid}/execute/sync`, { script: "return location.pathname", args: [] }));
+    const label = path.endsWith("/hud.html") ? "hud" : path.endsWith("/orb.html") ? "orb" : path.endsWith("/theater.html") ? "theater" : null;
+    if (!label) continue;
+    for (const cmd of PRIVILEGED_PROBES) {
+      const r = await probe(cmd);
+      if (!denied(r)) throw new Error(`IPC ACL: ${label} window was not refused ${cmd}: ${r}`);
+    }
+    checked.push(label);
+  }
+  await wd("POST", `/session/${sid}/window`, { handle: original });
+  return checked.length
+    ? `IPC ACL: main allowed db_health, refused get_settings; ${checked.join("+")} refused ${PRIVILEGED_PROBES.join("/")}`
+    : `IPC ACL: main allowed db_health, refused get_settings; no secondary window handle exposed by the driver (per-window grants pinned by test/desktop/ipc-acl.test.ts)`;
 }
 
 export async function runDesktopJourney(opts: { slug: string; bundles: string; webdriver: boolean; evidenceClass: "CI" | "LR" }): Promise<JourneyEvidence> {

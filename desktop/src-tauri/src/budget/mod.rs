@@ -606,15 +606,29 @@ impl BudgetDb {
     /// Open the shared xr.db (WAL, own connection) and apply the DDL. Seeding
     /// waits for `budget_init`, which carries the webview's UTC offset.
     pub fn init(app: &AppHandle) -> Self {
-        let dir = app
-            .path()
-            .app_data_dir()
-            .expect("tauri app_data_dir must resolve");
-        std::fs::create_dir_all(&dir).expect("create app data dir");
-        let conn = Connection::open(dir.join("xr.db")).expect("open xr.db");
-        conn.pragma_update(None, "journal_mode", "WAL")
-            .expect("enable WAL (shared with chat)");
-        BudgetDb::from_connection(conn).expect("apply budget DDL")
+        // XR-LAUNCH-021: recover instead of panicking on a damaged xr.db.
+        let dir = match app.path().app_data_dir() {
+            Ok(d) => d,
+            Err(e) => {
+                crate::commands::data_health::note(app, Some(format!("app data dir unavailable: {e}")));
+                std::env::temp_dir().join("xr-desktop-fallback")
+            }
+        };
+        let opened = crate::data_safety::open_shared_db(&dir, "");
+        crate::commands::data_health::note(app, opened.notice);
+        match BudgetDb::from_connection(opened.conn) {
+            Ok(db) => db,
+            Err(e) => {
+                crate::commands::data_health::note(
+                    app,
+                    Some(format!("budget tables could not be prepared ({e}); this session keeps budget data in memory only")),
+                );
+                BudgetDb::from_connection(
+                    rusqlite::Connection::open_in_memory().expect("in-memory sqlite always opens"),
+                )
+                .expect("budget DDL applies to an empty in-memory database")
+            }
+        }
     }
 
     pub fn from_connection(conn: Connection) -> rusqlite::Result<Self> {

@@ -217,13 +217,31 @@ pub fn get_data_dir(app: AppHandle) -> Result<String, String> {
     Ok(app_data_dir(&app)?.display().to_string())
 }
 
-/// Reveal a path: directories open in the file manager, files open in their
-/// default application (settings.json → text editor).
+/// XR-owned roots `reveal_path` may open (XR-LAUNCH-014).
+fn reveal_roots(app: &AppHandle) -> Vec<PathBuf> {
+    let p = app.path();
+    let mut roots: Vec<PathBuf> = [p.app_data_dir(), p.app_config_dir(), p.app_log_dir(), p.app_cache_dir()]
+        .into_iter()
+        .flatten()
+        .collect();
+    roots.push(crate::crash::xr_home());
+    roots
+}
+
+/// Reveal a path XR owns: directories open in the file manager, inert
+/// documents (settings.json, logs) in their default application, anything
+/// else is selected in its folder — never launched. Paths outside the XR
+/// roots are refused (XR-LAUNCH-014; policy in `reveal_policy.rs`).
 #[tauri::command]
 pub fn reveal_path(app: AppHandle, path: String) -> Result<(), String> {
-    app.opener()
-        .open_path(path, None::<&str>)
-        .map_err(|e| e.to_string())
+    use crate::reveal_policy::{decide, RevealAction};
+    match decide(&path, &reveal_roots(&app))? {
+        RevealAction::OpenDir(p) | RevealAction::OpenFile(p) => app
+            .opener()
+            .open_path(p.to_string_lossy(), None::<&str>)
+            .map_err(|e| e.to_string()),
+        RevealAction::RevealInDir(p) => app.opener().reveal_item_in_dir(p).map_err(|e| e.to_string()),
+    }
 }
 
 /// The OS deep link for the microphone privacy pane, if the platform has one.
@@ -346,36 +364,6 @@ pub fn clear_cache(app: AppHandle) -> Result<u64, String> {
 
 // ─── Export / import (zip) ──────────────────────────────────────────────────
 
-fn zip_dir(src: &Path, dest: &Path) -> Result<(), String> {
-    let file = std::fs::File::create(dest).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipWriter::new(file);
-    let options: zip::write::SimpleFileOptions = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
-    let mut stack = vec![src.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        let entries = std::fs::read_dir(&dir).map_err(|e| e.to_string())?;
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Ok(name) = path.strip_prefix(src) else {
-                continue;
-            };
-            if name.as_os_str().is_empty() {
-                continue;
-            }
-            if path.is_dir() {
-                stack.push(path);
-            } else {
-                zip.start_file(name.to_string_lossy(), options)
-                    .map_err(|e| e.to_string())?;
-                let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
-                std::io::Write::write_all(&mut zip, &bytes).map_err(|e| e.to_string())?;
-            }
-        }
-    }
-    zip.finish().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 /// Save-dialog → zip of the whole app data dir. Sync command: dialogs must
 /// stay off the main thread, and commands run on the worker pool.
 #[tauri::command]
@@ -391,7 +379,9 @@ pub fn export_all_data(app: AppHandle) -> Result<Option<String>, String> {
         return Ok(None); // user cancelled
     };
     let dest = path.into_path().map_err(|e| e.to_string())?;
-    zip_dir(&data, &dest)?;
+    // XR-LAUNCH-021: databases are snapshotted (`VACUUM INTO`) so rows still
+    // in the WAL are included; live -wal/-shm files are never zipped.
+    crate::data_safety::write_export(&data, &dest)?;
     // Reveal the result next to where the user saved it.
     if let Some(parent) = dest.parent() {
         let _ = app.opener().open_path(parent.to_string_lossy(), None::<&str>);
@@ -399,7 +389,15 @@ pub fn export_all_data(app: AppHandle) -> Result<Option<String>, String> {
     Ok(Some(dest.display().to_string()))
 }
 
-/// Open-dialog → unzip over the app data dir. The UI confirms before calling.
+/// Open-dialog → validate + stage the export; applied at the next launch.
+/// The UI confirms before calling and restarts XR when this returns true.
+///
+/// XR-LAUNCH-021: the archive is NEVER unzipped over the live data dir (that
+/// tore the WAL of the open database). `stage_import` validates every entry
+/// and every database (`integrity_check`) into `<data>/.pending-import/`; a
+/// damaged archive returns an error and the live data is untouched. The swap
+/// happens in the setup hook before any connection opens, keeping the
+/// previous data in `<data>/.import-backup-<ts>/`.
 #[tauri::command]
 pub fn import_all_data(app: AppHandle) -> Result<bool, String> {
     let data = app_data_dir(&app)?;
@@ -412,9 +410,7 @@ pub fn import_all_data(app: AppHandle) -> Result<bool, String> {
         return Ok(false); // user cancelled
     };
     let zip_path = path.into_path().map_err(|e| e.to_string())?;
-    let file = std::fs::File::open(&zip_path).map_err(|e| e.to_string())?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    archive.extract(&data).map_err(|e| e.to_string())?;
+    crate::data_safety::stage_import(&zip_path, &data)?;
     Ok(true)
 }
 
@@ -456,16 +452,27 @@ pub fn restart_app(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// XR-LAUNCH-014: the web inspector exists in debug builds only (the tauri
+/// `devtools` feature is off), so a release build cannot be talked into
+/// opening it from the webview.
 #[tauri::command]
 pub fn set_devtools_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    if let Some(main) = app.get_webview_window("main") {
-        if enabled {
-            main.open_devtools();
-        } else {
-            main.close_devtools();
+    #[cfg(debug_assertions)]
+    {
+        if let Some(main) = app.get_webview_window("main") {
+            if enabled {
+                main.open_devtools();
+            } else {
+                main.close_devtools();
+            }
         }
+        Ok(())
     }
-    Ok(())
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = (app, enabled);
+        Err("Developer tools are only available in development builds.".into())
+    }
 }
 
 // ─── Autostart ──────────────────────────────────────────────────────────────
