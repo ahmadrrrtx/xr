@@ -216,7 +216,10 @@ describe("Phase 01 — runtime detection", () => {
     await detectAllRuntimes();
     const elapsed = Date.now() - started;
     expect(elapsed).toBeLessThan(100);
-  });
+    // The warm-up above is a COLD detection (blackholed ports, bounded by the
+    // probe timeouts); only the second call is measured. The budget must cover
+    // the cold call, like the neighbouring tests (XR-LAUNCH-012).
+  }, 20_000);
 
   test("concurrent callers are deduplicated onto ONE detection", async () => {
     if (!blackhole) return;

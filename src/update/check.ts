@@ -78,7 +78,9 @@ export async function latestCompleteRelease(
 ): Promise<string | null> {
   const { compareSemver } = await import("../skills/semver.ts");
   try {
-    const res = await fetcher("https://api.github.com/repos/ahmadrrrtx/xr/releases?per_page=20", {
+    const { endpointOverride } = await import("./npm-channel.ts");
+    const api = endpointOverride(process.env.XR_UPDATE_RELEASES_URL) ?? "https://api.github.com/repos/ahmadrrrtx/xr/releases?per_page=20";
+    const res = await fetcher(api, {
       headers: { accept: "application/vnd.github+json", "user-agent": "xr-update-check" },
     });
     if (!res.ok) return null;

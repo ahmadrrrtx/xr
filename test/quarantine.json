@@ -1,0 +1,13 @@
+{
+  "$comment": "XR-LAUNCH-012 flaky-test policy (owner decision): NO retries in gating jobs. A flaky test FILE is listed here with an owner, a tracking issue (GitHub issue URL or launch finding id) and an expiry date (YYYY-MM-DD, at most 45 days out). Listed files are excluded from the gating lanes and run in the non-blocking `quarantine` job of ci.yml; `bun run ci:policy` fails the Quality Gate once an entry expires, so a quarantine is a deadline, not a hiding place. Remove the entry when the file has been green in the quarantine job for 10 consecutive main runs.",
+  "entries": [
+    {
+      "file": "test/daemon/phase2b.test.ts",
+      "owner": "@ahmadrrrtx",
+      "issue": "XR-LAUNCH-012",
+      "added": "2026-10-22",
+      "expires": "2026-12-01",
+      "reason": "approval round-trip timed out on Cross-Platform Linux under load; not reproducible locally (0/25, then 0/15 after the fix). Suspected cause: real-network daemon probes stretching responses past bun's 5 s budget. Phase 3 mitigation: XR_NETWORK_PROBES=off in the test preload, and waitForApproval now races the request with a 4 s deadline and a diagnostic message, so a recurrence names its cause. Stays quarantined until 10 consecutive green main runs."
+    }
+  ]
+}

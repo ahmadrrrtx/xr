@@ -55,9 +55,11 @@ jobs:
           - { osName: "Windows", runsOn: windows-latest, bunOs: win32 }
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Exclusion manifest validates (no silent skips)
@@ -154,3 +156,20 @@ jobs:
         env:
           HOME: /tmp/xr-cross-${{ matrix.bunOs }}-home
           XR_HOME: /tmp/xr-cross-${{ matrix.bunOs }}-data
+
+  # XR-LAUNCH-012 (D7): the ONE check branch protection requires for this
+  # workflow (.github/required-checks.json). It fails unless every job it
+  # needs succeeded — a skipped or cancelled job is not a pass.
+  cross-platform-gate:
+    name: Cross-Platform gate
+    if: always()
+    needs: [parity]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every required job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needs: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || { echo "::error::a required job ended '$r'"; exit 1; }; done

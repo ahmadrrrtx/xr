@@ -12,7 +12,7 @@
 # This workflow can never go green by accident: every assertion in the probe
 # script is a measured fact (exit codes, TCP/HTTP answers, directory contents).
 
-name: Real-Device Matrix
+name: Real-Device Matrix (non-gating)
 
 on:
   workflow_run:
@@ -40,13 +40,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: ubuntu-22.04, os: linux }
-          - { runner: macos-latest, os: macos }
-          - { runner: windows-latest, os: windows }
+          # `slug` is the artifact suffix desktop-app.yml's bundle job uploads
+          # (xr-desktop-<slug>). The old xr-desktop-<runner> name never existed,
+          # which is why every run failed with "artifact not found" (XR-LAUNCH-012).
+          - { runner: ubuntu-22.04, os: linux, slug: linux-x64 }
+          - { runner: macos-latest, os: macos, slug: darwin-arm64 }
+          - { runner: windows-latest, os: windows, slug: windows-x64 }
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Resolve source run
         id: src
@@ -55,7 +58,9 @@ jobs:
           RUN="${{ github.event.workflow_run.id || github.event.inputs.run_id }}"
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Install engine deps (probe script runtime)
         run: bun install --frozen-lockfile --ignore-scripts
@@ -77,9 +82,9 @@ jobs:
             librsvg2-2
 
       - name: Download this OS's bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: xr-desktop-${{ matrix.runner }}
+          name: xr-desktop-${{ matrix.slug }}
           path: rdm-bundles
           run-id: ${{ steps.src.outputs.run }}
           # v4 needs these three together to read out of a *different* run;
@@ -93,7 +98,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p rdm-prev && cd rdm-prev
-          curl -sL "${{ vars.RDM_PREV_URL }}/xr-desktop-${{ matrix.runner }}.zip" -o prev.zip
+          curl -sL "${{ vars.RDM_PREV_URL }}/xr-desktop-${{ matrix.slug }}.zip" -o prev.zip
           unzip -q prev.zip && rm prev.zip
 
       - name: Run the real-device probe (installed + upgraded)

@@ -23,6 +23,18 @@ import type { UpdatePlan } from "./selfheal.ts";
 export const NPM_PACKAGE = "@rrrtx/xr";
 export const NPM_REGISTRY = "https://registry.npmjs.org";
 
+/** An endpoint override is honored only for https or loopback http (XR-LAUNCH-011 journeys, mirrors). */
+export function endpointOverride(value: string | undefined): string | null {
+  const v = (value ?? "").trim().replace(/\/+$/, "");
+  return /^https:\/\/\S+$/.test(v) || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/\S*)?$/.test(v) ? v : null;
+}
+
+/** The registry `npm install -g` will use (npm's own env var), so check and install agree. */
+export function npmRegistry(env: Record<string, string | undefined> = process.env): string {
+  // npm's own precedence for a scoped package: `@scope:registry`, then `registry`.
+  return endpointOverride(env["npm_config_@rrrtx:registry"] ?? env.npm_config_registry ?? env.NPM_CONFIG_REGISTRY) ?? NPM_REGISTRY;
+}
+
 export type GlobalManager = "npm" | "bun";
 
 export type RegistryFetcher = (url: string) => Promise<{ status: number; json: () => Promise<unknown> }>;
@@ -55,7 +67,7 @@ export async function fetchRegistryLatest(
 ): Promise<RegistryRelease | null> {
   let res: Awaited<ReturnType<RegistryFetcher>>;
   try {
-    res = await fetcher(`${NPM_REGISTRY}/${pkg.replace("/", "%2F")}`);
+    res = await fetcher(`${npmRegistry()}/${pkg.replace("/", "%2F")}`);
   } catch {
     return null;
   }

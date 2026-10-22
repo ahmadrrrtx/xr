@@ -260,7 +260,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     samples,
     leakTrend: leak,
     leakDetail,
-    note: "Full nightly soak is scheduled in .github/workflows/soak.yml (24h). Local run validates the harness and produces a trend baseline.",
+    note: "Nightly soak is scheduled in .github/workflows/soak.yml (5h, non-gating; hosted jobs cap at 6h). Local run validates the harness and produces a trend baseline.",
   };
 
   if (o.json) { mkdirSync(dirname(o.json), { recursive: true }); writeFileSync(o.json, JSON.stringify(report, null, 2)); }

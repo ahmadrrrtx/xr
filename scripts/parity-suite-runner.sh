@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# XR — per-directory segmented test runner with crash-class retry.
+# XR — per-directory segmented test runner (no retries; crash-class retry only with XR_PARITY_ALLOW_CRASH_RETRY=1).
 #
 # Replaces the inline loop in .github/workflows/cross-platform.yml "Full unit
 # suite" step. Behaviour is identical to the inline version EXCEPT for one
@@ -59,6 +59,13 @@ fi
 FILES=$(bun run scripts/platform-parity.ts --os "$OS" --args)
 if [ -n "$EXCLUDE" ]; then
   FILES=$(echo "$FILES" | tr ' ' '\n' | grep -Ev "$EXCLUDE" | tr '\n' ' ')
+fi
+# XR-LAUNCH-012: quarantined files (test/quarantine.json — owner, issue,
+# expiry) leave the gating lanes and run in ci.yml's non-blocking job.
+QUARANTINE=$(bun run scripts/quarantine.ts --regex)
+if [ -n "$QUARANTINE" ]; then
+  echo "quarantined (non-gating, see test/quarantine.json): $(bun run scripts/quarantine.ts --files)"
+  FILES=$(echo "$FILES" | tr ' ' '\n' | grep -Ev "$QUARANTINE" | tr '\n' ' ')
 fi
 EXPECTED=$(echo "$FILES" | wc -w)
 echo "running $EXPECTED test files (per-directory segments, one computation authority)"
@@ -139,8 +146,18 @@ run_segment() {
 
   # Crash-class detection: no per-test failures AND no non-zero fail summary.
   # `tr -d '\r'` normalizes Windows CRLF so the summary regex matches.
+  # XR-LAUNCH-012 flaky policy: NO retries in gating lanes. A crash-class exit
+  # fails the segment; the file-by-file isolation below still runs, for
+  # DIAGNOSIS only (it names the culprit, it cannot turn the lane green).
+  # XR_PARITY_ALLOW_CRASH_RETRY=1 restores the old retry for manual lab runs.
+  if [ "${XR_PARITY_ALLOW_CRASH_RETRY:-0}" != "1" ] && ! grep -qE '\(fail\)' "$out" && ! tr -d '\r' <"$out" | grep -qE '^[[:space:]]*[1-9][0-9]*[[:space:]]+fail$'; then
+    echo "::error::$label exit code ${code} with 0 test failures (crash/teardown/hang class) — no retries (flaky policy, docs/ci/CI.md); isolating file-by-file for diagnosis"
+    cat "$out"
+    isolate_segment "$seg" "$out" "$label"
+    return 1
+  fi
   if ! grep -qE '\(fail\)' "$out" && ! tr -d '\r' <"$out" | grep -qE '^[[:space:]]*[1-9][0-9]*[[:space:]]+fail$'; then
-    echo "::warning::$label exit code ${code} with 0 test failures (bun process crash/teardown/hang class) — retrying once with a fresh process"
+    echo "::warning::$label exit code ${code} with 0 test failures (bun process crash/teardown/hang class) — retrying once with a fresh process (XR_PARITY_ALLOW_CRASH_RETRY=1)"
     cat "$out"
     run_bun_test "$seg" "$out"
     code=$?

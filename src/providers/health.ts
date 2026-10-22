@@ -126,6 +126,15 @@ function effectiveBaseUrl(config: XRConfig, id: string): string {
   return String(raw).replace(/\/$/, "");
 }
 
+function isLoopbackUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.replace(/^\[|\]$/g, "");
+    return host === "localhost" || host === "::1" || /^127\./.test(host);
+  } catch {
+    return false;
+  }
+}
+
 function cacheKey(config: XRConfig, id: string, model?: string): string {
   return `${id}|${model ?? ""}|${effectiveBaseUrl(config, id)}`;
 }
@@ -219,6 +228,13 @@ export class ProviderHealthChecker {
         authOk: false,
         timestamp,
       };
+    }
+
+    // XR_NETWORK_PROBES=off (test preload, XR-LAUNCH-012): never dial an
+    // off-machine provider from a health probe. Loopback endpoints (local
+    // runtimes, test stubs) are still probed for real.
+    if (/^(0|off|false|no)$/i.test(process.env.XR_NETWORK_PROBES ?? "") && !isLoopbackUrl(effectiveBaseUrl(this.config, id))) {
+      return { id, ok: false, detail: "network probes disabled (XR_NETWORK_PROBES=off)", authOk, modelAvailable: false, timestamp };
     }
 
     try {

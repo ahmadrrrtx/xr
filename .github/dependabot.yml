@@ -1,0 +1,14 @@
+# XR-LAUNCH-012: every third-party action is pinned to a commit SHA (with the
+# tag in a comment, enforced by scripts/ci-policy.ts). Dependabot keeps those
+# pins moving — a SHA pin nobody updates is a slowly rotting pin.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"

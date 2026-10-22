@@ -92,6 +92,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/helpers/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/integrations/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/intelligence/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/journey/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-retrieve-authority.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-semantic.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-stage6.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -115,6 +116,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/plugins/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/polish.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/providers/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/quarantine.json` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/release/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/reliability.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/reliability/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -150,17 +152,20 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/whatsapp/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/apply-branch-protection.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/audit-deps.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/baseline-inventory.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/benchmark-ttft.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/beta-install-survey.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/build-deb.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/build-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/canary-fixture.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/changelog.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/channel-live-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/channel-manifest.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/channel-publish-verify.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ci-capability-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/ci-policy.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/claim-lint.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/compile-sidecar.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/consumer-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -169,6 +174,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/desktop-seed-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-signing-plan.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-sink-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/desktop-store-coverage.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/fetch-v2-assets.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/first-task-survey.ts` | @ahmadrrrtx | explicit entry |
@@ -184,6 +190,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/golden-path.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/guarantee-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/hot-path-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/journey/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/launch-claims.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/license-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/make-preview.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -207,6 +214,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/provider-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/quarantine.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/real-device-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-assets-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -217,6 +225,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/smoke-sidecar.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/soak.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/support-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sus.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/tag-npm-invariant.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/typecheck-preflight.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

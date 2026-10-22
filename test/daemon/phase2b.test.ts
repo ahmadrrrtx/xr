@@ -49,17 +49,53 @@ const req = (p: string, init?: { method?: string; body?: unknown }) =>
     body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
 
-/** Poll the durable approvals endpoint until a pending request for `tool` appears. */
-async function waitForApproval(tool: string, timeoutMs = 10_000): Promise<{ id: string; reason?: string }> {
-  const deadline = Date.now() + timeoutMs;
+/**
+ * Poll the durable approvals endpoint until a pending request for `tool`
+ * appears (XR-LAUNCH-012 hardening).
+ *
+ * The old helper polled for 10 s — longer than bun's 5 s per-test budget — so a
+ * slow or failed request surfaced as an opaque test timeout. Now:
+ *  · the deadline (4 s) is inside the test budget, so it always fails with OUR
+ *    message;
+ *  · it races the originating request: if that request settles before any
+ *    approval is raised (a 4xx/5xx, a throw), it fails at once with its status
+ *    and body instead of waiting out the deadline;
+ *  · the failure message carries what WAS pending and how many polls ran.
+ */
+async function waitForApproval(
+  tool: string,
+  origin: Promise<Response>,
+  timeoutMs = 4_000,
+): Promise<{ id: string; reason?: string }> {
+  const started = Date.now();
+  let settled: string | undefined;
+  origin.then(
+    async (r) => {
+      // An SSE response (terminal.run) legitimately resolves BEFORE the
+      // approval is decided — only a plain response settling early is a failure.
+      if ((r.headers.get("content-type") ?? "").includes("text/event-stream") && r.ok) return;
+      settled = `settled first with HTTP ${r.status}: ${(await r.clone().text()).slice(0, 300)}`;
+    },
+    (e) => { settled = `rejected first: ${(e as Error)?.message ?? String(e)}`; },
+  );
+  let polls = 0;
+  let lastPending: unknown[] = [];
   for (;;) {
+    polls++;
     const res = await h(req("/api/v1/approvals"));
     const body: any = await res.json();
     const pending: any[] = body.pending ?? [];
+    lastPending = pending.map((r) => ({ tool: r.tool, surface: r.surface }));
     const hit = pending.find((r) => r.tool === tool);
     if (hit) return hit;
-    if (Date.now() > deadline) throw new Error(`no pending approval for ${tool} within ${timeoutMs}ms`);
-    await new Promise((r) => setTimeout(r, 50));
+    const elapsed = Date.now() - started;
+    if (settled !== undefined || elapsed > timeoutMs) {
+      throw new Error(
+        `no pending ${tool} approval after ${elapsed} ms / ${polls} polls; ` +
+        `request ${settled ?? "still in flight"}; pending=${JSON.stringify(lastPending)}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 25));
   }
 }
 
@@ -103,6 +139,14 @@ describe("Phase 2B · T-1 — files.write is approval-gated and scope-enforced",
     expect(String(body.error)).toContain("escapes");
   });
 
+  test("the approval wait fails fast with the request's own status (no opaque timeout)", async () => {
+    const started = Date.now();
+    const post = h(req("/api/v1/files/write", { method: "POST", body: { path: "../escape.txt", content: "x" } }));
+    const err = await waitForApproval("write_file", post).then(() => null, (e: Error) => e.message);
+    expect(err).toMatch(/settled first with HTTP 4\d\d/);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
   test("rejects oversized content (413) without an approval", async () => {
     const res = await h(req("/api/v1/files/write", { method: "POST", body: { path: "big.txt", content: "a".repeat(1024 * 1024 + 10) } }));
     expect(res.status).toBe(413);
@@ -112,7 +156,7 @@ describe("Phase 2B · T-1 — files.write is approval-gated and scope-enforced",
     const target = join(projectDir, "notes.txt");
     const before = readFileSync(target, "utf8");
     const post = h(req("/api/v1/files/write", { method: "POST", body: { path: "notes.txt", content: "edited by desktop\n" } }));
-    const approval = await waitForApproval("write_file");
+    const approval = await waitForApproval("write_file", post);
     // Still original while the decision is outstanding.
     expect(readFileSync(target, "utf8")).toBe(before);
     expect(approval.reason ?? "").toContain("notes.txt");
@@ -130,7 +174,7 @@ describe("Phase 2B · T-1 — files.write is approval-gated and scope-enforced",
     const target = join(projectDir, "notes.txt");
     const before = readFileSync(target, "utf8");
     const post = h(req("/api/v1/files/write", { method: "POST", body: { path: "notes.txt", content: "should never land\n" } }));
-    const approval = await waitForApproval("write_file");
+    const approval = await waitForApproval("write_file", post);
     await decide(approval.id, false);
     const result: any = await (await post).json();
     expect(result.applied).toBe(false);
@@ -151,7 +195,7 @@ describe("Phase 2B · T-1 — files.write is approval-gated and scope-enforced",
 
   test("creates new files (and parent dirs) only after approval", async () => {
     const post = h(req("/api/v1/files/write", { method: "POST", body: { path: "gen/report.md", content: "# report\n" } }));
-    const approval = await waitForApproval("write_file");
+    const approval = await waitForApproval("write_file", post);
     await decide(approval.id, true);
     const result: any = await (await post).json();
     expect(result.applied).toBe(true);
@@ -181,7 +225,7 @@ describe("Phase 2B · T-2 — terminal.run is policy-first, approval-gated, stre
     const res = await post;
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
-    const approval = await waitForApproval("shell");
+    const approval = await waitForApproval("shell", post);
     expect(approval.reason ?? "").toContain("echo p2b-hello");
     await decide(approval.id, true);
     const events = await readSse(res);
@@ -202,7 +246,7 @@ describe("Phase 2B · T-2 — terminal.run is policy-first, approval-gated, stre
   test("denial streams a denied status and never spawns anything", async () => {
     const post = h(req("/api/v1/terminal/run", { method: "POST", body: { cmd: "touch should-not-exist" } }));
     const res = await post;
-    const approval = await waitForApproval("shell");
+    const approval = await waitForApproval("shell", post);
     await decide(approval.id, false);
     const events = await readSse(res);
     const denied = events.find((e) => e.type === "status" && (e.status === "denied" || e.status === "timed_out"));

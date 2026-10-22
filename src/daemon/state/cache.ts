@@ -24,8 +24,11 @@ import { TtlCache } from "../../util/ttl-cache.ts";
 const INTERNET_TTL_MS = 15_000;
 const internetCache = new TtlCache<boolean>({ ttlMs: INTERNET_TTL_MS, maxEntries: 2 });
 
-/** Best-effort reachability probe; never blocks or throws. Cached 15 s. */
+/** Best-effort reachability probe; never blocks or throws. Cached 15 s.
+ *  XR_NETWORK_PROBES=off (set by the test preload, XR-LAUNCH-012) reports
+ *  "offline" without dialing out, so hermetic runs never wait on the network. */
 export async function checkInternetCached(): Promise<boolean> {
+  if (/^(0|off|false|no)$/i.test(process.env.XR_NETWORK_PROBES ?? "")) return false;
   const hit = internetCache.get("default");
   if (hit) return hit.value;
   try {

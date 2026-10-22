@@ -1,5 +1,11 @@
 # =============================================================================
-# XR Phase 10 · Step 3 — 24h soak (nightly for the certification window)
+# XR Phase 10 · Step 3 — nightly soak (NON-GATING, decision D7)
+#
+# XR-LAUNCH-012: the job used to request a 24h run with a 25h timeout, but a
+# GitHub-hosted job is capped at 6h, so EVERY run was cancelled and produced no
+# report. The nightly window is now 5h (300 min, under a 330-min job timeout),
+# and dispatch input is clamped to that ceiling; longer endurance evidence is
+# the accumulation of nightly reports (trend), as below.
 #
 # Every audit noted the absence of soak/load evidence. This runs the real CLI as
 # a pool of concurrent task runs against the deterministic in-tree stub provider
@@ -16,17 +22,17 @@
 # Local / dispatch validation: use workflow_dispatch with inputs.minutes to run a
 # short bounded soak (e.g. 2 minutes) to prove the harness on a runner.
 # =============================================================================
-name: Soak
+name: Soak (non-gating)
 
 on:
   schedule:
-    - cron: "17 5 * * *" # 05:17 UTC daily (24h soak: runs to ~05:15 next day)
+    - cron: "17 5 * * *" # 05:17 UTC daily (5h soak)
   workflow_dispatch:
     inputs:
       minutes:
-        description: "Bounded soak duration in minutes (dispatch smoke only)"
+        description: "Bounded soak duration in minutes (max 300: hosted jobs stop at 6h)"
         required: false
-        default: "1440"
+        default: "300"
       concurrency:
         description: "Concurrent task processes"
         required: false
@@ -37,15 +43,17 @@ permissions:
 
 jobs:
   soak:
-    name: 24h soak (concurrent tasks vs stub provider)
+    name: 5h soak (concurrent tasks vs stub provider)
     runs-on: ubuntu-latest
-    timeout-minutes: 1500 # 25h ceiling for the 24h run
+    timeout-minutes: 330 # under the 360-min hosted-runner cap, so the report is always written
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Bun (packageManager-pinned)
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
@@ -53,10 +61,11 @@ jobs:
       - name: Run soak
         env:
           # dispatch smoke overrides the default full 24h window
-          SOAK_MIN: ${{ github.event.inputs.minutes || '1440' }}
+          SOAK_MIN: ${{ github.event.inputs.minutes || '300' }}
           SOAK_CONCURRENCY: ${{ github.event.inputs.concurrency || '4' }}
         run: |
           DATE=$(date -u +%Y%m%dT%H%M%SZ)
+          if [ "$SOAK_MIN" -gt 300 ]; then echo "::warning::minutes=$SOAK_MIN exceeds the 300-min hosted ceiling — clamped"; SOAK_MIN=300; fi
           bun run soak \
             --minutes "$SOAK_MIN" \
             --concurrency "$SOAK_CONCURRENCY" \
@@ -66,7 +75,7 @@ jobs:
 
       - name: Upload soak report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: soak-report
           path: soak-*.json

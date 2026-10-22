@@ -111,6 +111,15 @@ function Test-XrVersionString {
 
 function Get-XrReleaseBase {
   param([string]$ReleaseVersion)
+  # Mirror / hermetic-test override (XR-LAUNCH-011 clean-machine journey). Only
+  # https:// or loopback http:// is accepted, and SHA256SUMS is still verified.
+  $override = "$env:XR_INSTALL_BASE_URL".TrimEnd('/')
+  if ($override) {
+    if ($override -notmatch '^https://\S+$' -and $override -notmatch '^http://(127\.0\.0\.1|localhost)(:\d+)?(/\S*)?$') {
+      Stop-XrInstall "XR_INSTALL_BASE_URL must be an https:// or loopback http:// URL. Nothing was installed."
+    }
+    return "$override/v$ReleaseVersion"
+  }
   return "https://github.com/$XrRepo/releases/download/v$ReleaseVersion"
 }
 

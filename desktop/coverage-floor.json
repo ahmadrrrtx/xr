@@ -1,0 +1,8 @@
+{
+  "$comment": "XR-LAUNCH-026: line-coverage floors (percent) for desktop/src/stores, enforced by scripts/desktop-store-coverage.ts in ci.yml. A ratchet — raise with --update after adding tests; never lower a floor to make CI pass.",
+  "stores": {
+    "desktop/src/stores/runsStore.ts": 23,
+    "desktop/src/stores/settingsStore.ts": 96,
+    "desktop/src/stores/chatStore.ts": 19
+  }
+}

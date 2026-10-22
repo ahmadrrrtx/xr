@@ -45,6 +45,10 @@
     "changelog:check": "bun run scripts/changelog.ts --check",
     "platform:parity:check": "bun run scripts/platform-parity.ts --validate",
     "claim-lint": "bun run scripts/claim-lint.ts",
+    "support-matrix": "bun run scripts/support-matrix.ts",
+    "ci:policy": "bun run scripts/ci-policy.ts",
+    "desktop:coverage": "bun run scripts/desktop-store-coverage.ts",
+    "journey:cli": "bun run scripts/journey/cli-journey.ts",
     "placeholder-lint": "bun run scripts/placeholder-lint.ts",
     "mutation:run": "bun run scripts/mutate.ts --threshold 0.6",
     "golden-path": "bun run scripts/golden-path.ts",
@@ -135,5 +139,5 @@
     "bun": ">=1.3.0",
     "node": ">=20"
   },
-  "packageManager": "bun@1.3.14"
+  "packageManager": "bun@1.4.2"
 }

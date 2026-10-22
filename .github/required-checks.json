@@ -1,0 +1,28 @@
+{
+  "$comment": "XR-LAUNCH-012 (decision D7). The status checks branch protection must require on `main`. Each is one aggregate gate job (name = check context) that fails unless every job of its workflow succeeded. scripts/ci-policy.ts validates this file against the workflows; scripts/apply-branch-protection.sh prints the owner-run `gh api` command. Changing this list is an owner decision — update docs/ci/REQUIRED_CHECKS.md with it.",
+  "branch": "main",
+  "required": [
+    { "workflow": "ci.yml", "job": "quality-gate", "context": "Quality Gate", "covers": "typecheck, truth gate, unit/security/reliability/e2e suites, size + boundaries, perf, a11y, API contract, support-matrix + CI policy" },
+    { "workflow": "cross-platform.yml", "job": "cross-platform-gate", "context": "Cross-Platform gate", "covers": "full parity suite + golden path on Linux, macOS, Windows" },
+    { "workflow": "supply-chain.yml", "job": "supply-chain-gate", "context": "Supply Chain gate", "covers": "install hygiene, gitleaks, osv + bun audit, licenses, SBOM drift, tag⇔npm invariant, trivy" },
+    { "workflow": "npm-pack-smoke.yml", "job": "npm-pack-smoke-gate", "context": "npm Pack Smoke gate", "covers": "packed tarball global install + update --check on Linux, macOS, Windows" },
+    { "workflow": "desktop-app.yml", "job": "desktop-gate", "context": "Desktop gate (bundles + latest.json + journey)", "covers": "cargo check/clippy/test, bundles per OS, latest.json assemble + verify, desktop clean-machine journey, Flatpak metadata" },
+    { "workflow": "journey.yml", "job": "journey-gate", "context": "Clean-Machine Journey gate", "covers": "CLI binary + npm journeys on every hosted target, Docker image journey" }
+  ],
+  "advisoryJobs": [
+    { "workflow": "ci.yml", "job": "quarantine", "reason": "runs test/quarantine.json files (flaky policy); expiry is enforced inside the gate by ci:policy" },
+    { "workflow": "ci.yml", "job": "test-e2e-blackbox-proof", "reason": "Exit-Gate proof lane, RED by design until the F-02/F-03 fix lands; outside quality-gate's needs" }
+  ],
+  "nonGatingLegs": [
+    { "workflow": "journey.yml", "job": "cli", "leg": "windows-11-arm", "reason": "Windows ARM64 reported only (D4/D7)" },
+    { "workflow": "desktop-app.yml", "job": "bundle", "leg": "windows-arm64", "reason": "Windows ARM64 reported only (D4/D7)" },
+    { "workflow": "desktop-app.yml", "job": "journey", "leg": "windows-arm64", "reason": "Windows ARM64 reported only (D4/D7)" }
+  ],
+  "nonGating": [
+    { "workflow": "provider-canaries.yml", "reason": "live providers need owner secrets; the keyless fixture leg proves the harness" },
+    { "workflow": "real-device-matrix.yml", "reason": "physical-device evidence, owner-run" },
+    { "workflow": "soak.yml", "reason": "multi-hour endurance run, scheduled" },
+    { "workflow": "os-sandbox.yml", "reason": "experimental native sandboxes (D3), security review pending" },
+    { "workflow": "windows-arm64.yml", "reason": "Windows ARM64 is unverified without hardware (D4)" }
+  ]
+}

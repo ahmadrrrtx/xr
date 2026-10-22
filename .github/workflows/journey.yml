@@ -1,0 +1,156 @@
+# =============================================================================
+# XR-LAUNCH-011 — Clean-Machine Journey (REQUIRED check, decision D7)
+#
+# On every claimed hosted target, from a fresh runner and a scratch HOME:
+#
+#   build → package → install → launch → core-agent smoke → update → uninstall
+#
+#   CLI  (scripts/journey/cli-journey.ts), two channels per target:
+#     binary  the real install.sh / install.ps1 against a loopback release
+#             server (XR_INSTALL_BASE_URL), then `xr update --check` sees a
+#             synthetic N+1 and the installer upgrades to it
+#     npm     `npm i -g` of the packed tarball, then `xr update` through a
+#             loopback registry scoped to @rrrtx
+#   Docker (scripts/journey/docker-journey.ts): build, serve health, agent run
+#             inside the container, image + volume removal
+#   Desktop: the `journey` job in desktop-app.yml (needs the bundles).
+#
+# The agent smoke drives a deterministic loopback provider (no API keys, no
+# paid calls). Every leg uploads a JSON evidence record; scripts/support-matrix.ts
+# turns those into docs/release/SUPPORT_MATRIX.md.
+#
+# No `paths:` filter: a required check must report on every PR.
+# =============================================================================
+name: Clean-Machine Journey
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: journey-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  cli:
+    name: CLI journey — ${{ matrix.channel }} on ${{ matrix.runsOn }}
+    runs-on: ${{ matrix.runsOn }}
+    timeout-minutes: 40
+    # Windows ARM64 is reported, not gating (D4/D7): its result is in the
+    # evidence and the support matrix, but it cannot block a merge.
+    continue-on-error: ${{ matrix.runsOn == 'windows-11-arm' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runsOn: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15, macos-15-intel, windows-latest, windows-11-arm]
+        channel: [binary, npm]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Bun
+        if: matrix.runsOn != 'windows-11-arm'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      # setup-bun installs the x64 build on Windows ARM (emulated); the journey
+      # must prove the native arm64 runtime, so install it checksum-verified.
+      - name: Install native bun-windows-aarch64 (windows-11-arm)
+        if: matrix.runsOn == 'windows-11-arm'
+        run: |
+          set -euo pipefail
+          ver="$(tr -d ' \r\n' < .bun-version)"
+          base="https://github.com/oven-sh/bun/releases/download/bun-v${ver}"
+          mkdir -p "$RUNNER_TEMP/bun" && cd "$RUNNER_TEMP/bun"
+          curl -fsSL -o bun.zip "$base/bun-windows-aarch64.zip"
+          curl -fsSL -o SHASUMS256.txt "$base/SHASUMS256.txt"
+          want="$(grep ' bun-windows-aarch64.zip$' SHASUMS256.txt | cut -d' ' -f1)"
+          got="$(sha256sum bun.zip | cut -d' ' -f1)"
+          [ -n "$want" ] && [ "$want" = "$got" ] || { echo "::error::bun-windows-aarch64.zip checksum mismatch"; exit 1; }
+          unzip -q bun.zip
+          echo "$RUNNER_TEMP/bun/bun-windows-aarch64" >> "$GITHUB_PATH"
+      - name: Setup Node (npm channel)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Journey
+        run: bun run scripts/journey/cli-journey.ts --channel ${{ matrix.channel }} --evidence "evidence/cli-${{ matrix.channel }}-${{ matrix.runsOn }}.json"
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: journey-evidence-cli-${{ matrix.channel }}-${{ matrix.runsOn }}
+          path: evidence/*.json
+          if-no-files-found: warn
+
+  docker:
+    name: Docker image journey (linux/${{ matrix.arch }})
+    runs-on: ${{ matrix.runsOn }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runsOn: ubuntu-24.04 }
+          - { arch: arm64, runsOn: ubuntu-24.04-arm }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Journey
+        run: bun run scripts/journey/docker-journey.ts --evidence "evidence/docker-${{ matrix.arch }}.json"
+      - name: Upload journey evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: journey-evidence-docker-${{ matrix.arch }}
+          path: evidence/*.json
+          if-no-files-found: warn
+
+  # The ONE required check for this workflow (.github/required-checks.json).
+  journey-gate:
+    name: Clean-Machine Journey gate
+    needs: [cli, docker]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Download journey evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: journey-evidence-*
+          path: evidence
+          merge-multiple: true
+      - name: Render the matrix (summary + artifact; the committed doc is refreshed by the owner)
+        run: |
+          bun run scripts/support-matrix.ts --evidence evidence --out "$RUNNER_TEMP/SUPPORT_MATRIX.md"
+          cat "$RUNNER_TEMP/SUPPORT_MATRIX.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload rendered matrix
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: support-matrix
+          path: ${{ runner.temp }}/SUPPORT_MATRIX.md
+      - name: Fail unless every gating journey passed
+        if: needs.cli.result != 'success' || needs.docker.result != 'success'
+        run: |
+          echo "::error::cli=${{ needs.cli.result }} docker=${{ needs.docker.result }}"
+          exit 1

@@ -62,9 +62,11 @@ jobs:
         run: |
           [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must be a stable X.Y.Z (got '$V')"; exit 1; }
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Resolve channel identities from release.manifest.json
@@ -102,7 +104,7 @@ jobs:
             --pattern "$WINGET_ID.yaml" --pattern "$WINGET_ID.installer.yaml" --pattern "$WINGET_ID.locale.en-US.yaml"
           ls -la assets
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
       - name: Verify the keyless signature over SHA256SUMS (fail closed)
         run: |
           cosign verify-blob \
@@ -115,7 +117,7 @@ jobs:
           V: ${{ inputs.version }}
         run: bun run scripts/channel-publish-verify.ts --version "$V" --dir assets --sums assets/SHA256SUMS --out publish
       - name: Upload verified channel files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verified-channels
           path: publish
@@ -134,7 +136,7 @@ jobs:
         run: |
           [ -n "$TAP_TOKEN" ] || { echo "::error::secret TAP_GITHUB_TOKEN is not set (fine-grained token, contents:write on ${{ needs.verify.outputs.tap }} only)"; exit 1; }
       - name: Download verified channel files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: verified-channels
           path: publish
@@ -190,7 +192,7 @@ jobs:
         run: |
           if (-not $env:WINGET_TOKEN) { Write-Error "secret WINGET_TOKEN is not set (classic PAT with public_repo; see docs/release/CHANNELS.md)"; exit 1 }
       - name: Download verified channel files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: verified-channels
           path: publish
@@ -220,9 +222,11 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: channel:live (WinGet stays pending until the community PR merges)

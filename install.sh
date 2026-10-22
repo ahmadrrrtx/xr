@@ -79,6 +79,16 @@ if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
   die "Invalid version \"$VERSION\". Use a published release such as --version=1.0.0."
 fi
 BASE="https://github.com/$REPO/releases/download/v$VERSION"
+# Mirror / hermetic-test override (XR-LAUNCH-011 clean-machine journey). Only
+# https:// or loopback http:// is accepted, and SHA256SUMS is still verified.
+CURL_PROTO="=https"
+if [ -n "${XR_INSTALL_BASE_URL:-}" ]; then
+  case "${XR_INSTALL_BASE_URL%/}" in
+    https://*) BASE="${XR_INSTALL_BASE_URL%/}/v$VERSION" ;;
+    http://127.0.0.1|http://127.0.0.1:*|http://127.0.0.1/*|http://localhost|http://localhost:*|http://localhost/*) BASE="${XR_INSTALL_BASE_URL%/}/v$VERSION"; CURL_PROTO="=https,http" ;;
+    *) die "XR_INSTALL_BASE_URL must be an https:// or loopback http:// URL. Nothing was installed." ;;
+  esac
+fi
 
 # Where to read answers from. `curl … | bash` makes stdin the script pipe, so
 # reading stdin would never reach the user (and the old installer silently
@@ -149,7 +159,8 @@ cleanup(){
 trap cleanup EXIT
 
 download(){
-  curl --proto '=https' --tlsv1.2 -fsSL --retry 2 --connect-timeout 20 "$1" -o "$2"
+  # https only; plain http solely for a loopback XR_INSTALL_BASE_URL (test fixtures).
+  curl --proto "$CURL_PROTO" --tlsv1.2 -fsSL --retry 2 --connect-timeout 20 "$1" -o "$2"
 }
 
 sha256_of(){

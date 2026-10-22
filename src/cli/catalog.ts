@@ -725,6 +725,19 @@ export const CATALOG: CatalogEntry[] = [
     topics: ["update", "system"],
   },
   {
+    // XR-LAUNCH-011: without this entry `xr uninstall …` fell through to the
+    // agent as a task prompt; the clean-machine journey caught it.
+    name: "uninstall",
+    description: "remove the launcher and installation (--purge also removes local data)",
+    usage: "xr uninstall [--keep-data|--purge] [--yes]",
+    group: "system",
+    glyph: "warning",
+    needsKernel: false,
+    examples: [{ cmd: "xr uninstall", description: "remove XR, keep your data" }, { cmd: "xr uninstall --purge --yes", description: "remove XR and all local data" }],
+    related: ["update", "reset"],
+    topics: ["uninstall", "system"],
+  },
+  {
     name: "repair",
     description: "repair config, permissions, and dependencies safely",
     usage: "xr repair [--yes] [--network]",

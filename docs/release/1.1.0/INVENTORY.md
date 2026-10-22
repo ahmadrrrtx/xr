@@ -1,14 +1,14 @@
 # XR 1.1.0 Repository Inventory
 
-Generated: 2026-10-21T06:57:37.554Z
+Generated: 2026-10-22T07:22:40.246Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 752 |
-| Test files | 422 |
-| CLI commands | 43 |
+| Source files | 756 |
+| Test files | 436 |
+| CLI commands | 44 |
 | Daemon routes | 305 |
 | Providers | 26 |
 | Local runtimes | 11 |
@@ -62,7 +62,8 @@ Generated: 2026-10-21T06:57:37.554Z
 - `enterprise` (trust, supported) — xr enterprise  ·  see: bun add -g @rrrtx/xr-enterprise
 - `doctor` (system, supported) — xr doctor [--network] [--json] [--perf]
 - `status` (system, supported) — xr status [--json] [--network]
-- `update` (system, supported) — xr update [--yes]
+- `update` (system, supported) — xr update [--check] [--json] [--yes]
+- `uninstall` (system, supported) — xr uninstall [--keep-data|--purge] [--yes]
 - `repair` (system, supported) — xr repair [--yes] [--network]
 - `reset` (system, supported) — xr reset [--hard] [--yes]
 - `install` (system, supported) — xr install [--mode minimal|local|byok|hybrid|full] [--yes]

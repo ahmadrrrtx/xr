@@ -107,7 +107,9 @@ describe("install.ps1 — security posture", () => {
   test("every remote download uses HTTPS", () => {
     const urls = ps1Code.match(/https?:\/\/[^\s"')]+/g) ?? [];
     expect(urls.length).toBeGreaterThan(0);
-    for (const url of urls) expect(url.startsWith("https://")).toBe(true);
+    // The one http:// token allowed is the loopback-only validator of the
+    // XR_INSTALL_BASE_URL test-mirror override (a regex, never a download).
+    for (const url of urls.filter((u) => !u.startsWith("http://(127\\.0\\.0\\.1|localhost"))) expect(url.startsWith("https://")).toBe(true);
   });
 
   test("does not pipe downloaded content into Invoke-Expression", () => {
@@ -242,6 +244,18 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     expect(out).toContain("DEFINED=True");
     expect(out).toContain("REJECTED=True");
   }, PS_SPAWN_TEST_TIMEOUT_MS);
+
+  test("XR_INSTALL_BASE_URL: https / loopback mirrors are used, anything else stops the install (XR-LAUNCH-011)", () => {
+    const probe = (url: string) =>
+      run(
+        `$env:OS='Windows_NT'; . ./install.ps1 *> $null; $env:XR_INSTALL_BASE_URL='${url}'; ` +
+          `try { Write-Output ("BASE=" + (Get-XrReleaseBase -ReleaseVersion 1.2.3)) } catch { Write-Output "STOPPED=True" }`,
+      ).out;
+    expect(probe("http://127.0.0.1:4000/")).toContain("BASE=http://127.0.0.1:4000/v1.2.3");
+    expect(probe("https://mirror.example/xr")).toContain("BASE=https://mirror.example/xr/v1.2.3");
+    expect(probe("http://example.com")).toContain("STOPPED=True");
+    expect(probe("")).toContain("BASE=https://github.com/ahmadrrrtx/xr/releases/download/v1.2.3");
+  }, PS_SPAWN_TEST_TIMEOUT_MS * 4);
 
   test("a valid -InstallMode binds without a validation error", () => {
     const { out } = run(

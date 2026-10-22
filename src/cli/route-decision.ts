@@ -99,6 +99,7 @@ const REGISTRY_NAME: Record<string, string> = {
   upgrade: "update",
   repair: "repair",
   reset: "reset",
+  uninstall: "uninstall",
   install: "install",
   onboarding: "onboarding",
   setup: "onboarding",

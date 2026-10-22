@@ -37,9 +37,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Build canonical linux binary + .deb
@@ -76,9 +78,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Build windows-arm64 + zip
@@ -90,7 +94,7 @@ jobs:
           test -f dist/xr-windows-arm64.zip
           rm -rf dist/zip
       - name: Upload arm64 canonical artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: xr-windows-arm64-zip
           if-no-files-found: error
@@ -119,9 +123,11 @@ jobs:
           - { name: Windows-winget-scoop, os: windows-latest, targets: "windows-x64", channels: "winget,scoop" }
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Build the canonical binary set this lane validates
@@ -153,7 +159,7 @@ jobs:
       # extract the bun-windows-aarch64 baseline — verified twice on this PR).
       - name: Fetch the windows-arm64 canonical artifacts
         if: matrix.name == 'Windows-winget-scoop'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: xr-windows-arm64-zip
           path: dist
@@ -216,9 +222,11 @@ jobs:
           - { os: windows-latest, channel: scoop }
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
       - name: Resolve the public version's release assets
         # The PUBLIC version (release.manifest.json channels.publicVersion), not
         # GitHub's "latest": v1.1.0 was "latest" with no CLI assets, so this job

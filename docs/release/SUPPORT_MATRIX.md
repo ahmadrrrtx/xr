@@ -6,9 +6,61 @@ channel appears here only with the exact CI evidence that validates it.
 status says so — silently degrading at action time is a defect, report it via
 the [false-claim template](../../.github/ISSUE_TEMPLATE/false_claim.yml).
 
+**Generated section (XR-LAUNCH-011/022):** the *Launch journeys* table below is
+rendered by `scripts/support-matrix.ts` from clean-machine journey evidence
+(`docs/release/evidence/*.json`, CI artifacts `journey-evidence-*`) and the
+claimed-target list `docs/release/support-targets.json`; the Quality Gate fails
+if it is edited by hand or stale. The narrative tables after it describe the
+CI lanes per platform; where they disagree, the generated table wins.
+
 **Release label: Public beta** (owner decision D2, 2026-10-22). The label stays
 until every gate in [launch-gates.json](launch-gates.json) is green with evidence;
 `bun run claim-lint` enforces it on the README, this page and the website.
+
+
+<!-- BEGIN GENERATED: journey matrix (scripts/support-matrix.ts) — do not edit by hand -->
+
+## Launch journeys — generated from gate evidence
+
+One row per claimed target (ledger §2.1). ✅ = a journey record passed that step (**CI** = hosted-runner run, **LR** = local run on real hardware); ➖ = explicitly de-scoped (reason below); ⏳ = no evidence yet; ❌ = the latest evidence failed. ¹ = non-gating (reported only, decision D7).
+Regenerate with `bun run support-matrix` after copying journey evidence into `docs/release/evidence/`; CI checks this block is current (`--check`).
+
+| Surface | Target | Build | Package | Install | Launch | Core-agent smoke | Update | Uninstall | Evidence |
+|---|---|---|---|---|---|---|---|---|---|
+| npm CLI | Linux x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| npm CLI | Linux arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| npm CLI | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| npm CLI | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| npm CLI | Windows x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| npm CLI | Windows ARM64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | Linux x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | Linux arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | Windows x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | Windows ARM64 ¹ | ➖ [1] | ➖ [1] | ➖ [1] | ➖ [1] | ➖ [1] | ➖ [1] | ➖ [1] | — |
+| Desktop | Linux x64 (.deb) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [2] | ⏳ | — |
+| Desktop | Linux x64 (AppImage, .rpm) | ⏳ | ⏳ | ➖ [3] | ➖ [4] | ➖ [5] | ➖ [2] | ➖ [6] | — |
+| Desktop | Windows x64 (NSIS) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [2] | ⏳ | — |
+| Desktop | Windows ARM64 (NSIS) ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [2] | ⏳ | — |
+| Desktop | macOS arm64 (dmg) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [2] | ⏳ | — |
+| Desktop | macOS x64 (dmg) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [2] | ⏳ | — |
+| Docker/GHCR | linux/amd64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [7] | ⏳ | — |
+| Docker/GHCR | linux/arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ➖ [7] | ⏳ | — |
+| VS Code extension | Marketplace / VSIX | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | ➖ [8] | — |
+
+[1] no compiled windows-arm64 release asset; install.ps1 installs the verified source archive there — use the npm CLI row (decision D4)  
+[2] desktop auto-update needs the XR-LAUNCH-008 updater signing key (owner-provisioned)  
+[3] the journey installs the .deb flavour; AppImage/.rpm Build/Package evidence is the desktop journey's -appimage record (artifact presence + sha256)  
+[4] same binary as the .deb row; not separately launched  
+[5] same engine sidecar as the .deb row  
+[6] not separately exercised (see install)  
+[7] containers are updated by pulling a new tag; no in-place update path  
+[8] no Phase 3 journey (proposed de-scope, owner to confirm); not to be advertised until it has its own journey  
+
+Launch gate (`--require-complete`): **incomplete** — 108 gating cell(s) without evidence or failing.
+
+<!-- END GENERATED: journey matrix -->
 
 ## Platform tiers (agent runtime)
 
@@ -19,7 +71,7 @@ until every gate in [launch-gates.json](launch-gates.json) is green with evidenc
 | macOS arm64 | **Tier 1** | typecheck + full unit suite (239 files, POSIX-compatible) + golden path on every push/PR; binary build + native smoke in release matrix | `cross-platform.yml`, `release.yml` |
 | macOS x64 (Intel) | Tier 2 | canonical build cross-compiles; native smoke unavailable on arm64 runners (recorded honestly) | `release.yml` |
 | Windows x64 | **Tier 1*** | typecheck + unit suite (234 files; 5 documented exclusions with reasons) + golden path on every push/PR; binary build + native smoke; winget/scoop manifest binding tests | `cross-platform.yml`, `channel-install.yml`, `test/platform/exclusions.json` |
-| Windows ARM64 | **unverified** | file authority accepts arm64 (same LLP64 layouts as x64) behind a once-per-process FFI self-test that fails closed; **Bun 1.3.14 (the pinned CLI runtime) disables `bun:ffi` on native windows-aarch64** (oven-sh/bun#28055, fixed by #33696), so CLI file tools report `unsupported` there until the pin is raised; the desktop sidecar is compiled with Bun 1.4.2, which should carry the fix — unverified until the lane is green. No hardware run. | `windows-arm64.yml` (`windows-11-arm`, native Bun, not a required check) |
+| Windows ARM64 | **unverified (non-gating)** | file authority accepts arm64 (same LLP64 layouts as x64) behind a once-per-process FFI self-test that fails closed. The CLI runtime pin is now **Bun 1.4.2** (decision D4), the first line that ships oven-sh/bun#33696 (`bun:ffi` on native windows-aarch64) — so file tools should work natively, but this is unverified until `windows-arm64.yml` and the Windows ARM64 journey legs are green. No hardware run; reported, never gating (D7). | `windows-arm64.yml`, `journey.yml` (`windows-11-arm`, native Bun) |
 | Termux (Android) | Tier 3 | installer path only (community) | `install.sh` termux branch |
 
 \* The full-parity Windows/macOS jobs are introduced by Phase 9; the first green

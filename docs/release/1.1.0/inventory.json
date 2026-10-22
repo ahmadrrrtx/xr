@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-21T06:57:37.554Z",
+  "generatedAt": "2026-10-22T07:22:40.246Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
@@ -18,7 +18,7 @@
   "package": {
     "name": "@rrrtx/xr",
     "version": "1.1.0",
-    "packageManager": "bun@1.3.14",
+    "packageManager": "bun@1.4.2",
     "engines": {
       "bun": ">=1.3.0",
       "node": ">=20"
@@ -50,13 +50,14 @@
       "README.md",
       "LICENSE",
       "install.sh",
-      "install.ps1"
+      "install.ps1",
+      "release.manifest.json"
     ]
   },
   "counts": {
-    "sourceFiles": 752,
-    "testFiles": 422,
-    "cliCommands": 43,
+    "sourceFiles": 756,
+    "testFiles": 436,
+    "cliCommands": 44,
     "daemonRoutes": 305,
     "providers": 26,
     "localRuntimes": 11,
@@ -66,7 +67,7 @@
   "rootFiles": [
     {
       "path": ".bun-version",
-      "bytes": 7
+      "bytes": 6
     },
     {
       "path": ".dependency-cruiser.cjs",
@@ -94,7 +95,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 139771
+      "bytes": 151431
     },
     {
       "path": "CODEOWNERS",
@@ -106,11 +107,11 @@
     },
     {
       "path": "CONTRIBUTING.md",
-      "bytes": 14812
+      "bytes": 14999
     },
     {
       "path": "Dockerfile",
-      "bytes": 1747
+      "bytes": 1820
     },
     {
       "path": "LICENSE",
@@ -150,7 +151,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 37909
+      "bytes": 40658
     },
     {
       "path": "SECURITY.md",
@@ -170,19 +171,19 @@
     },
     {
       "path": "install.ps1",
-      "bytes": 17292
+      "bytes": 24583
     },
     {
       "path": "install.sh",
-      "bytes": 10061
+      "bytes": 17101
     },
     {
       "path": "package.json",
-      "bytes": 6465
+      "bytes": 6867
     },
     {
       "path": "release.manifest.json",
-      "bytes": 15842
+      "bytes": 17566
     },
     {
       "path": "tsconfig.json",
@@ -746,6 +747,7 @@
     "src/runtime/trust/authority.ts",
     "src/runtime/trust/classify.ts",
     "src/runtime/trust/credentials.ts",
+    "src/runtime/trust/environment/appcontainer.ts",
     "src/runtime/trust/environment/backend.ts",
     "src/runtime/trust/environment/container.ts",
     "src/runtime/trust/environment/firecracker.ts",
@@ -754,6 +756,7 @@
     "src/runtime/trust/environment/manager.ts",
     "src/runtime/trust/environment/namespace.ts",
     "src/runtime/trust/environment/restricted-process.ts",
+    "src/runtime/trust/environment/seatbelt.ts",
     "src/runtime/trust/filesystem.ts",
     "src/runtime/trust/index.ts",
     "src/runtime/trust/isolated-spawn.ts",
@@ -899,6 +902,8 @@
     "src/ui/tokens.ts",
     "src/update/atomic-updater.ts",
     "src/update/channels.ts",
+    "src/update/check.ts",
+    "src/update/npm-channel.ts",
     "src/update/selfheal.ts",
     "src/util/child-channel.ts",
     "src/util/concurrency.ts",
@@ -993,6 +998,7 @@
     "test/cli/coder/session-guard.test.ts",
     "test/cli/coder/tool-contract.test.ts",
     "test/cli/coder/workspace.test.ts",
+    "test/cli/command-routing.test.ts",
     "test/cli/unknown-flags.test.ts",
     "test/cloud/license.test.ts",
     "test/cloud/routes.test.ts",
@@ -1072,6 +1078,7 @@
     "test/desktop/builder-core.test.ts",
     "test/desktop/engine-wire.test.ts",
     "test/desktop/flatpak-metainfo.test.ts",
+    "test/desktop/frontend-stores.test.ts",
     "test/desktop/integrations-core.test.ts",
     "test/desktop/memory-core.test.ts",
     "test/desktop/msix-assets.test.ts",
@@ -1080,6 +1087,7 @@
     "test/desktop/research-core.test.ts",
     "test/desktop/research-reduce.test.ts",
     "test/desktop/runs-core.test.ts",
+    "test/desktop/seed-purge.test.ts",
     "test/desktop/settings-core.test.ts",
     "test/desktop/shield-core.test.ts",
     "test/desktop/sidecar-targets.test.ts",
@@ -1142,6 +1150,7 @@
     "test/intelligence/routing-v5.test.ts",
     "test/intelligence/service-v5.test.ts",
     "test/intelligence/stream-wrappers.test.ts",
+    "test/journey/journey.test.ts",
     "test/memory-retrieve-authority.test.ts",
     "test/memory-semantic.test.ts",
     "test/memory-stage6.test.ts",
@@ -1169,6 +1178,7 @@
     "test/perf/load-admission.test.ts",
     "test/perf/metrics-capture.test.ts",
     "test/perf/model-switch.test.ts",
+    "test/perf/network-probes.test.ts",
     "test/perf/perf-gate.test.ts",
     "test/perf/profile-gate.test.ts",
     "test/perf/provider-health.test.ts",
@@ -1226,11 +1236,16 @@
     "test/release/beta-survey.test.ts",
     "test/release/capability-census.test.ts",
     "test/release/changelog.test.ts",
+    "test/release/channel-coherence.test.ts",
     "test/release/channels.test.ts",
+    "test/release/ci-policy.test.ts",
     "test/release/consumer-smoke.test.ts",
     "test/release/desktop-identity.test.ts",
+    "test/release/desktop-signing.test.ts",
+    "test/release/installer-behavior.test.ts",
     "test/release/installer-powershell.test.ts",
     "test/release/installer-verify.test.ts",
+    "test/release/launch-claims.test.ts",
     "test/release/numeric-claims.test.ts",
     "test/release/onboarding.test.ts",
     "test/release/platform-parity.test.ts",
@@ -1254,6 +1269,7 @@
     "test/reliability/provider-canaries.test.ts",
     "test/reliability/single-writer.test.ts",
     "test/reliability/store-edge.test.ts",
+    "test/reliability/uninstall-rc.test.ts",
     "test/reliability/update-uninstall.test.ts",
     "test/repo-map/cache.test.ts",
     "test/repo-map/context-combine.test.ts",
@@ -1336,7 +1352,9 @@
     "test/trust/lattice.test.ts",
     "test/trust/mcp-isolation.test.ts",
     "test/trust/migration-rollback.test.ts",
+    "test/trust/namespace-confinement.test.ts",
     "test/trust/namespace.test.ts",
+    "test/trust/os-sandbox.test.ts",
     "test/trust/persistence.test.ts",
     "test/trust/plugin-risk.test.ts",
     "test/trust/policy.test.ts",
@@ -1345,6 +1363,7 @@
     "test/trust/ux.test.ts",
     "test/trust/verify.test.ts",
     "test/update/channels-update.test.ts",
+    "test/update/npm-channel.test.ts",
     "test/util/process.test.ts",
     "test/ux-status.test.ts",
     "test/ux/disclosure.test.ts",
@@ -1790,8 +1809,17 @@
         "upgrade"
       ],
       "group": "system",
-      "usage": "xr update [--yes]",
+      "usage": "xr update [--check] [--json] [--yes]",
       "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "uninstall",
+      "aliases": [],
+      "group": "system",
+      "usage": "xr uninstall [--keep-data|--purge] [--yes]",
+      "needsKernel": false,
       "fastPath": false,
       "classification": "supported"
     },

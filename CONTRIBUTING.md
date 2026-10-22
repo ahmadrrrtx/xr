@@ -277,7 +277,7 @@ pass/fail/skip counts in the job summary (`.github/workflows/ci.yml`,
 
 | Requirement | Spec | Why / who enforces |
 |---|---|---|
-| Bun | **1.3.14** (CI pin via `.bun-version` + `packageManager`); 1.4.x is the verified dev baseline | `bun test` is the one runner; feature drift between versions is a real parity class (cross-platform.yml) |
+| Bun | **1.4.2** (CI pin via `.bun-version` + `packageManager`) | `bun test` is the one runner; feature drift between versions is a real parity class (cross-platform.yml) |
 | OS | Linux x64 (CI: `ubuntu-latest`); macOS/Windows supported with platform-specific exclusions | `scripts/platform-parity.ts` is the one computation authority for file selection |
 | Network | **None required.** Every e2e suite talks to a local stub (`test/helpers/stub-openai.ts` binds `127.0.0.1:0`); external canaries skip without provider secrets | A hermetic suite must run offline; `test/e2e-blackbox/*` never dials out |
 | Ports | Ephemeral-port availability on loopback; hook suites and e2e stubs must never collide with a hardcoded port | `test/helpers/suite-tmp.ts` preload + `isPortFree`/`assertStubClosed` hygiene in `test/e2e-blackbox/hygiene.test.ts` (zero leaked listeners is a TEST) |
@@ -289,10 +289,10 @@ pass/fail/skip counts in the job summary (`.github/workflows/ci.yml`,
 
 ```bash
 bun test                                   # whole suite (~150s, one process) — the sanity view
-bash scripts/parity-suite-runner.sh linux  # test / core (per-directory segments; one crash-class retry)
+bash scripts/parity-suite-runner.sh linux  # test / core (per-directory segments; no retries; quarantined files excluded)
 # test / security: find-based set of test/security test/trust test/capabilities
-#                  (+ root security.test.ts trust.test.ts); egress-proxy.test.ts runs
-#                  FIRST with its one-retry quarantine, exactly as in CI
+#                  (+ root security.test.ts trust.test.ts), minus quarantined files
+bun run scripts/quarantine.ts --run        # test / quarantine (non-blocking)
 bun run reliability:test                   # test / reliability-spawn
 # test / e2e-blackbox: the five capture suites + `bun test test/e2e-blackbox/streaming-matrix.test.ts -t "behavior capture"`
 # test / e2e-blackbox-proof: the F-02/F-03 KILL PROOFS (green in CI)
@@ -302,15 +302,18 @@ bun test test/e2e-blackbox/streaming-matrix.test.ts -t "kill proofs"
 **Hard time budgets:** bun has no per-file timeout. Spawn-heavy suites pass an
 explicit per-test `timeout` (e.g. `60_000`) and `helpers.ts` SIGKILLs any child
 that exceeds its cap; CI lane steps carry `timeout-minutes` that match the
-lane's slowest legitimate run. If a lane dies with no test-failure output, the
-parity runner retries once (crash-class) — a real `(fail)` is NEVER retried
-except the one documented egress quarantine (see below).
+lane's slowest legitimate run.
 
-**One retry, and only one, for exactly one test:** `test/security/egress-proxy.test.ts`
-"timeouts are enforced" has a residual label race (timer vs. socket-destroy
-handler — the true timeout can surface as "connection error: socket hang up").
-Phase 0 made the assertion deterministic but kept the plan-mandated one-retry
-quarantine in the CI `test / security` lane, scoped to that file only.
+**No retries (XR-LAUNCH-012).** A failing test, or a segment that crashes
+without test output, fails its lane on the first run. When a lane crashes, the
+parity runner bisects the segment to name the culprit file and then fails; it
+does not retry. A flaky test goes into `test/quarantine.json` with an owner, an
+issue and an expiry of at most 45 days. It then runs in the non-blocking
+`test / quarantine` lane until fixed, and the Quality Gate fails once the entry
+expires. The previous one-retry exception for `test/security/egress-proxy.test.ts`
+was removed after 12/12 clean runs. See [docs/ci/CI.md](docs/ci/CI.md) for the
+policy, the clean-machine journeys and the generated support matrix, and
+[docs/ci/REQUIRED_CHECKS.md](docs/ci/REQUIRED_CHECKS.md) for what blocks a merge.
 
 ---
 

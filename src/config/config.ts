@@ -693,10 +693,13 @@ export type XRConfig = z.infer<typeof ConfigSchema>;
 export { ConfigSchema };
 
 export const XR_HOME = process.env.XR_HOME ?? join(homedir(), ".xr");
-const CONFIG_PATH = join(XR_HOME, "config.json");
+// XR-LAUNCH-012: config.json is resolved per call (a frozen import-time path made test files share one config).
+const currentHome = (): string => process.env.XR_HOME ?? join(homedir(), ".xr");
+const currentConfigPath = (): string => join(currentHome(), "config.json");
 
 function ensureHome(): void {
-  if (!existsSync(XR_HOME)) mkdirSync(XR_HOME, { recursive: true });
+  const home = currentHome();
+  if (!existsSync(home)) mkdirSync(home, { recursive: true });
 }
 
 /** Ordered migrations: key = from-version, transforms raw object. */
@@ -1177,7 +1180,8 @@ export function loadConfig(): { config: XRConfig; warnings: string[] } {
 }
 
 function loadConfigInner(): { config: XRConfig; warnings: string[] } {
-  const cached = getCachedConfig<XRConfig>();
+  const CONFIG_PATH = currentConfigPath();
+  const cached = getCachedConfig<XRConfig>(CONFIG_PATH);
   if (cached) {
     // Secrets may still need a rare refresh; never block on OS keychain here.
     if (shouldLoadSecrets(false)) {
@@ -1245,7 +1249,7 @@ export function configCacheStats() {
 }
 
 export function configPath(): string {
-  return CONFIG_PATH;
+  return currentConfigPath();
 }
 
 /**
@@ -1291,6 +1295,7 @@ export function isMemoryEnabled(): boolean {
 export function saveConfig(config: XRConfig): void {
   ensureHome();
   const parsed = ConfigSchema.parse(config);
+  const CONFIG_PATH = currentConfigPath();
   writeFileSync(CONFIG_PATH, JSON.stringify(parsed, null, 2));
   setCachedConfig(parsed, [], CONFIG_PATH, "save");
 }
@@ -1324,7 +1329,7 @@ const PROVIDER_KEY_ENVS = [
  */
 function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
   // Phase 8 — ambient env hydration is gated (default OFF).
-  const envPath = join(XR_HOME, ".env");
+  const envPath = join(currentHome(), ".env");
   if (existsSync(envPath) && envSecretCompatEnabled()) {
     try { chmodSync(envPath, 0o600); } catch {}
     try {

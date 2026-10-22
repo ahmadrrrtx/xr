@@ -4,15 +4,16 @@
 # bun:ffi. Bun's native windows-aarch64 build disabled bun:ffi until
 # oven-sh/bun#33696 (merged 2026-07-20, fixes oven-sh/bun#28055); on a Bun
 # without it, dlopen throws and the authority reports `unsupported` (fails
-# closed). This lane is the evidence gate for the Windows ARM64 claim. It is not a
-# required check. Two rows: the pinned Bun (CLI; expected red until it carries
-# bun:ffi on windows-aarch64) and Bun 1.4.2 (what desktop-app.yml compiles the
-# sidecar with).
+# closed). This lane is the evidence gate for the Windows ARM64 claim. It is
+# not a required check (decision D7: non-gating, reported). Since Phase 3 the
+# repo pin (.bun-version / packageManager) is Bun 1.4.2, which carries the
+# fix, so the CLI and the desktop sidecar run the same Bun and one row covers
+# both. The job reports its true result: no continue-on-error.
 #
 # setup-bun falls back to x64 (emulated) on Windows ARM64 (oven-sh/setup-bun#164),
 # which would test the wrong binary, so the native build is fetched directly
 # and its SHA-256 is checked against the release's SHASUMS256.txt.
-name: Windows ARM64 (file authority)
+name: Windows ARM64 (file authority) (non-gating)
 
 on:
   workflow_dispatch:
@@ -47,19 +48,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The CLI binary / npm path runs on the pinned Bun (packageManager,
-          # .bun-version). Expected red until that Bun has bun:ffi on
-          # windows-aarch64, so it does not block; it is the evidence row.
-          - { bun: pinned, ships: "CLI", expectGreen: false }
-          # The desktop sidecar is compiled with Bun 1.4.2 (desktop-app.yml).
-          - { bun: "1.4.2", ships: "desktop sidecar", expectGreen: true }
-    continue-on-error: ${{ !matrix.expectGreen }}
+          # CLI binary / npm path and desktop sidecar: both on the pinned Bun.
+          - { bun: pinned, ships: "CLI + desktop sidecar" }
     defaults:
       run:
         shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install native bun-windows-aarch64 (checksum-verified)
         env:

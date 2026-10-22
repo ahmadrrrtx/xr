@@ -14,7 +14,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 export type UninstallMode = "keep-data" | "purge";
 
@@ -143,6 +143,39 @@ export function removePathEntries(paths: UninstallPaths): string[] {
   return touched;
 }
 
+/** install.ps1 appends `<installDir>\bin-local` to the HKCU user Path; drop exactly that entry. Pure. */
+export function stripUserPathEntry(userPath: string, entry: string): string {
+  const norm = (p: string) => p.trim().replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+  return userPath.split(";").filter((p) => norm(p) !== norm(entry)).join(";");
+}
+
+type PsRun = (script: string, env?: Record<string, string>) => { status: number | null; stdout: string };
+const runPs: PsRun = (script, env = {}) => {
+  const r = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", env: { ...process.env, ...env }, timeout: 30_000, windowsHide: true });
+  return { status: r.status, stdout: r.stdout ?? "" };
+};
+
+/** Windows: remove install.ps1's user-Path entry. Never writes back a Path it failed to read. */
+export function removeWindowsUserPath(paths: UninstallPaths, ps: PsRun = runPs, platform: NodeJS.Platform = process.platform): boolean {
+  if (platform !== "win32") return false;
+  const read = ps("[Environment]::GetEnvironmentVariable('Path','User')");
+  if (read.status !== 0) return false;
+  const before = read.stdout.replace(/\r?\n$/, "");
+  const after = stripUserPathEntry(before, join(paths.installDir, "bin-local"));
+  if (after === before) return false;
+  return ps("[Environment]::SetEnvironmentVariable('Path', $env:XR_UNINSTALL_PATH, 'User')", { XR_UNINSTALL_PATH: after }).status === 0;
+}
+
+/** Windows locks the running xr.exe inside the install dir: finish the removal after this process exits. */
+function scheduleWindowsRemoval(dir: string): boolean {
+  try {
+    spawn("cmd.exe", ["/d", "/c", `ping -n 4 127.0.0.1 >nul & rmdir /s /q "${dir}"`], { detached: true, stdio: "ignore", windowsHide: true, windowsVerbatimArguments: true }).unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Remove the launcher + the package install dir (never the running checkout). */
 export function removeInstallation(
   paths: UninstallPaths,
@@ -170,7 +203,7 @@ export function removeInstallation(
         rmSync(paths.installDir, { recursive: true, force: true });
         installDirRemoved = true;
       } catch {
-        /* best-effort */
+        if (process.platform === "win32") installDirRemoved = scheduleWindowsRemoval(paths.installDir);
       }
     }
   }
@@ -251,6 +284,7 @@ export function performUninstall(
   }
 
   const rcFilesTouched = removePathEntries(paths);
+  if (removeWindowsUserPath(paths)) rcFilesTouched.push("HKCU\\Environment\\Path");
   const install = removeInstallation(paths, {
     packageRoot: args.packageRoot,
     removeInstallDir,
