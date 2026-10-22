@@ -51,16 +51,13 @@ export function approvalRoutes(): DaemonRoute[] {
       id: "approvals.decide",
       prefix: "/api/approvals/",
       method: "POST",
-      handle: async ({ req, json, path, state, config }) => {
+      handle: async ({ req, json, path, state, config, actor }) => {
         try {
           const match = path.match(/^\/api\/approvals\/([^/]+)\/decision$/);
           if (!match) return null;
           const id = decodeURIComponent(match[1]);
-          const body = (await req.json().catch(() => ({}))) as {
-            approved?: boolean;
-            userId?: string;
-            phrase?: string;
-          };
+          // XR-LAUNCH-030: a body `userId` is accepted for compatibility and ignored.
+          const body = (await req.json().catch(() => ({}))) as { approved?: boolean; phrase?: string };
           if (typeof body?.approved !== "boolean") {
             return json({ error: "expected { approved: boolean }" }, 400);
           }
@@ -73,7 +70,7 @@ export function approvalRoutes(): DaemonRoute[] {
           if (!record) return json({ error: "approval not found" }, 404);
           const ok = store.decide(id, body.approved, {
             channel: "daemon",
-            userId: typeof body.userId === "string" ? body.userId : null,
+            userId: actor ?? "anonymous",
           });
           if (!ok) {
             return json(

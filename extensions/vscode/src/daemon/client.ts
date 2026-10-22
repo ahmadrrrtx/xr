@@ -213,7 +213,7 @@ export class DaemonClient {
   }
 
   async decideApproval(id: string, approved: boolean): Promise<void> {
-    await this.postJson(`/api/approvals/${encodeURIComponent(id)}/decision`, { approved, userId: "vscode" });
+    await this.postJson(`/api/approvals/${encodeURIComponent(id)}/decision`, { approved });
   }
 
   /**

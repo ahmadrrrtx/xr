@@ -41,7 +41,8 @@ export interface PendingApproval {
   /** Resolves once the approval is answered or expires (TTL default-deny). */
   promise: Promise<boolean>;
   /** Internal: resolves the promise. */
-  resolve(approved: boolean): void;
+  /** `by` — XR-LAUNCH-030: the server-derived caller (defaults to "local"). */
+  resolve(approved: boolean, by?: string): void;
   /** True when answered. */
   done: boolean;
 }
@@ -112,12 +113,12 @@ class ApprovalQueue {
       createdAt: Date.now(),
       promise,
       done: false,
-      resolve: (approved) => {
+      resolve: (approved, by) => {
         if (resolved) return;
         resolved = true;
         entry.done = true;
         // Record the decision durably — first writer wins.
-        this.approvalStore?.decide(entry.id, approved, { channel: "control", userId: "local" });
+        this.approvalStore?.decide(entry.id, approved, { channel: "control", userId: by ?? "local" });
         resolvePromise(approved);
         // entry.id is the store id once the durable request returned; also
         // clear the pre-request placeholder key if it differs.
@@ -169,15 +170,15 @@ class ApprovalQueue {
   }
 
   /** Answer an approval by id. Returns true if the id existed. */
-  answer(id: string, approved: boolean): boolean {
+  answer(id: string, approved: boolean, by?: string): boolean {
     const entry = this.entries.get(id);
     if (entry) {
-      entry.resolve(approved);
+      entry.resolve(approved, by);
       return true;
     }
     // Cross-process answer: the record exists durably even if this process
     // never saw the entry object.
-    return this.approvalStore?.decide(id, approved, { channel: "control", userId: "local" }) ?? false;
+    return this.approvalStore?.decide(id, approved, { channel: "control", userId: by ?? "local" }) ?? false;
   }
 
   /** Subscribe to changes (used by /api/control/events SSE-like polling). */

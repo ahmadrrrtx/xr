@@ -94,6 +94,15 @@ export class BrowserSessions {
     return cookieValues(cookieHeader, name).some((v) => this.isValid(v));
   }
 
+  /**
+   * XR-LAUNCH-030 — a stable, non-secret label for the live session in the
+   * header (the first 12 hex of its SHA-256), for audit records. Null if none.
+   */
+  labelFromCookie(cookieHeader: string, name: string): string | null {
+    const id = cookieValues(cookieHeader, name).find((v) => this.isValid(v));
+    return id === undefined ? null : hex(id).slice(0, 12);
+  }
+
   /** Revoke every `name` session id in the header; returns how many were live. */
   revokeFromCookie(cookieHeader: string, name: string): number {
     let n = 0;

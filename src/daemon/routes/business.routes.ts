@@ -209,7 +209,7 @@ export function businessRoutes(): DaemonRoute[] {
         if (!businessOS?.approvals) return ctx.json({ error: 'Business OS not initialized' }, 503);
         try {
           const result = businessOS.approvals.decide(approvalId, {
-            decidedBy: body.decidedBy ?? 'admin',
+            decidedBy: ctx.actor ?? 'anonymous', // XR-LAUNCH-030: server-derived; a body decidedBy is ignored
             outcome: body.outcome ?? 'approved',
             comment: body.comment,
           });
@@ -276,7 +276,7 @@ export function businessRoutes(): DaemonRoute[] {
         const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.workerGovernance) return ctx.json({ error: 'Business OS not initialized' }, 503);
         try {
-          const result = businessOS.workerGovernance.setEnabled(workerId, false, { actorId: body.actorId ?? 'admin', reason: body.reason ?? 'disabled via API' });
+          const result = businessOS.workerGovernance.setEnabled(workerId, false, { actorId: ctx.actor ?? 'anonymous', reason: body.reason ?? 'disabled via API' });
           return ctx.json(result);
         } catch (e) {
           return ctx.json({ error: (e as Error).message }, 400);
@@ -297,7 +297,7 @@ export function businessRoutes(): DaemonRoute[] {
         const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.workerGovernance) return ctx.json({ error: 'Business OS not initialized' }, 503);
         try {
-          const result = businessOS.workerGovernance.setEnabled(workerId, true, { actorId: body.actorId ?? 'admin' });
+          const result = businessOS.workerGovernance.setEnabled(workerId, true, { actorId: ctx.actor ?? 'anonymous' });
           return ctx.json(result);
         } catch (e) {
           return ctx.json({ error: (e as Error).message }, 400);

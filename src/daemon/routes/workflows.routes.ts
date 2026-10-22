@@ -284,7 +284,7 @@ export function workflowsRoutes(): DaemonRoute[] {
       prefix: RUNS,
       pattern: /^\/api\/workflows\/runs\/[^/]+\/human-decision$/,
       method: "POST",
-      handle: async ({ req, json, path, state, config }: Ctx) => {
+      handle: async ({ req, json, path, state, config, actor }: Ctx) => {
         const runId = decodeURIComponent(path.slice(RUNS.length, -"/human-decision".length));
         const b = await body(req);
         const nodeId = typeof b.nodeId === "string" ? b.nodeId : "";
@@ -306,7 +306,7 @@ export function workflowsRoutes(): DaemonRoute[] {
         else if (choice === "reject" || choice === "deny") decision = { review: "rejected", reason: comment ?? "Rejected" };
         else return problem(400, "Bad Request", "decision must be approve, changes_requested or reject for a review node");
         try {
-          const after = await rt.decide(runId, nodeId, decision, { userId: "desktop", channel: "desktop" }, comment);
+          const after = await rt.decide(runId, nodeId, decision, { userId: actor ?? "anonymous", channel: (actor ?? "anonymous").split(":")[0]! } /* XR-LAUNCH-030 */, comment);
           return json({ run: runView(after, rt.pendingFor(runId)) });
         } catch (err) {
           return fail(err);

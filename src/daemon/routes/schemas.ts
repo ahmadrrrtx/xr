@@ -47,7 +47,7 @@ export const ObjectResponse = z.looseObject({});
 
 export const ApprovalDecisionRequest = z.looseObject({
   approved: z.boolean().describe("True = approve the pending action; false = deny."),
-  userId: z.string().optional().describe("Optional operator identity recorded in the audit."),
+  userId: z.string().optional().describe("Ignored (XR-LAUNCH-030): the daemon records the authenticated caller — local:token, browser:<session label> or mobile:<device id>."),
 });
 
 export const ApprovalsListResponse = z.looseObject({

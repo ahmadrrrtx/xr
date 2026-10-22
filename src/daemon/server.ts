@@ -444,6 +444,7 @@ export function makeHandler(
     const canonicalPath = path.startsWith("/api/v1/") ? `/api${path.slice(7)}` : path;
     let mobileSession: MobileSession | null = null;
     let desktopPrivileged = false;
+    let actor = "anonymous"; // XR-LAUNCH-030: who is calling, derived here — never taken from a request body
 
     // Phase 31 · A13 — security.txt lives on the website; the daemon just
     // redirects there. Open path: no bearer token needed for a redirect.
@@ -473,9 +474,10 @@ export function makeHandler(
       // "mobile" session at the EXISTING seam (never a bearer bypass).
       if (auth.kind === "denied" && mobileCtx) {
         mobileSession = await resolveMobileSession(req, mobileCtx);
-        if (mobileSession.device) auth = { kind: "mobile" };
+        if (mobileSession.device) { auth = { kind: "mobile" }; actor = `mobile:${mobileSession.device.id}`; }
       } else if (auth.kind === "bearer" || auth.kind === "session") {
         desktopPrivileged = true;
+        actor = auth.kind === "bearer" ? "local:token" : `browser:${browser.labelFromCookie(req.headers.get("cookie") ?? "", SESSION_COOKIE) ?? "unknown"}`;
       }
 
       // Phase 4 · T5 — one-time bootstrap: set the session cookie and
@@ -602,6 +604,7 @@ export function makeHandler(
         path,
         method,
         token,
+        actor,
         host: resolveBindHost(),
         state,
         config,

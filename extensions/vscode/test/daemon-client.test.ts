@@ -185,3 +185,9 @@ test("bootstrapLink refuses a link that points away from the daemon origin, and 
   const old = fakeFetch({});
   await assert.rejects(new DaemonClient("http://127.0.0.1:3141", "t", old.impl).bootstrapLink(), (e: unknown) => e instanceof DaemonHttpError && e.status === 404);
 });
+
+test("decideApproval sends only the decision — the daemon records who decided (XR-LAUNCH-030)", async () => {
+  const { impl, calls } = fakeFetch({ "POST /api/approvals/a%201/decision": () => json({ ok: true, decision: "approved" }) });
+  await new DaemonClient("http://127.0.0.1:3141", "t", impl).decideApproval("a 1", true);
+  assert.deepEqual(JSON.parse(calls[0].body ?? "{}"), { approved: true });
+});

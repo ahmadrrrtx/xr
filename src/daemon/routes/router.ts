@@ -48,6 +48,13 @@ export interface DaemonRouteContext extends DaemonResponseHelpers {
   path: string;
   method: string;
   token: string;
+  /**
+   * XR-LAUNCH-030 — the authenticated caller, derived by the server at the
+   * auth seam: `local:token` (bearer), `browser:<12-hex session label>`,
+   * `mobile:<device id>`, or `anonymous`. Decision records use this, never a
+   * client-supplied identity. Optional only for direct handler tests.
+   */
+  actor?: string;
   host: string;
   state: DaemonState;
   config: XRConfig;

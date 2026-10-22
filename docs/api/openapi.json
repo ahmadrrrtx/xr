@@ -2789,7 +2789,7 @@
                     "type": "boolean"
                   },
                   "userId": {
-                    "description": "Optional operator identity recorded in the audit.",
+                    "description": "Ignored (XR-LAUNCH-030): the daemon records the authenticated caller — local:token, browser:<session label> or mobile:<device id>.",
                     "type": "string"
                   }
                 },
