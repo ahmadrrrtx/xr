@@ -80,7 +80,11 @@ import {
 // version line ("1.1.0 (Graphite) — Control Center"), proven by re-hashing
 // the render with the version reverted to 1.0.0/Truth, which reproduces
 // the previous pin byte-for-byte.
-const POST_PHASE4_SHA256 = "b38f9903e3674ae254e5d9ab25d479316a0fc0f930110177fd19010b271f8c20";
+// XR-LAUNCH-027 re-pin: the ONLY delta is the topbar "Sign out" form (a native
+// POST to /auth/logout; no script, no inline style), proven by removing those
+// two lines from the render, which reproduces the previous pin
+// (b38f9903…271f8c20) byte-for-byte.
+const POST_PHASE4_SHA256 = "aef98f816e0c30e1d6d95b0da1a2d16347121a1d5c363734653ea9e32817f4c9";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {
