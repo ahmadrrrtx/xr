@@ -70,6 +70,7 @@ function load() {
     GetExitCodeProcess: { args: [FFIType.i64, FFIType.ptr], returns: FFIType.i32 },
     CloseHandle: { args: [FFIType.i64], returns: FFIType.i32 },
     LocalFree: { args: [FFIType.ptr], returns: FFIType.ptr },
+    GetLastError: { args: [], returns: FFIType.u32 },
   }).symbols;
   return { userenv, advapi, k32 };
 }
@@ -205,7 +206,8 @@ export async function runInAppContainer(run: AppContainerRun): Promise<AppContai
     const ok = k32.CreateProcessW(null, ptr(cmdline), null, null, 1,
       C.EXTENDED_STARTUPINFO_PRESENT | C.CREATE_SUSPENDED | C.CREATE_NO_WINDOW | C.CREATE_UNICODE_ENVIRONMENT,
       ptr(envBlock), ptr(wide(run.cwd)), ptr(si), ptr(pi));
-    if (!ok) return { exitCode: null, stdout: "", stderr: "", timedOut: false, outputTruncated: false, durationMs: Date.now() - started, spawnError: "appcontainer: CreateProcessW failed" };
+    // Read the Win32 error first, before any other call can overwrite it (5 = access denied, 87 = invalid parameter).
+    if (!ok) return { exitCode: null, stdout: "", stderr: "", timedOut: false, outputTruncated: false, durationMs: Date.now() - started, spawnError: `appcontainer: CreateProcessW failed (Win32 error ${k32.GetLastError()})` };
     const hProcess = Number(pi.readBigUInt64LE(0)), hThread = Number(pi.readBigUInt64LE(8));
     handles.push(hProcess, hThread);
 

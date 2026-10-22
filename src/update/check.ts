@@ -77,8 +77,11 @@ export async function checkForUpdate(args: string[], rootDir: string): Promise<v
 export { latestCompleteRelease } from "./release-feed.ts";
 
 /** True inside a `bun build --compile` binary (modules live in Bun's virtual FS). */
-export function isCompiledBinary(url: string = import.meta.url): boolean {
-  return /\$bunfs|~BUN/.test(url);
+export function isCompiledBinary(url: string = import.meta.url, main: string = typeof Bun === "undefined" ? "" : Bun.main): boolean {
+  // Any runtime signal counts: on Windows the URL spelling of B:\~BUN\root may
+  // be percent-encoded (%7E), while Bun.main is always the virtual mount path.
+  const decoded = (() => { try { return decodeURIComponent(url); } catch { return url; } })();
+  return [url, decoded, main].some((s) => /\$bunfs|~BUN/.test(s));
 }
 
 /**

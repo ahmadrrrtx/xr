@@ -530,8 +530,16 @@ mod tests {
         "CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL);";
 
     fn tmp(tag: &str) -> PathBuf {
-        let d =
-            std::env::temp_dir().join(format!("xr-ds-{tag}-{}-{}", std::process::id(), now_ms()));
+        // A per-process counter, not just the clock: cargo runs tests on parallel
+        // threads, and two make_export() calls in the same millisecond shared one
+        // directory (and one database) — "table notes already exists".
+        static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let d = std::env::temp_dir().join(format!(
+            "xr-ds-{tag}-{}-{}-{n}",
+            std::process::id(),
+            now_ms()
+        ));
         fs::create_dir_all(&d).unwrap();
         d
     }

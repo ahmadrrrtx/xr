@@ -338,7 +338,8 @@ describeShell("install.ps1 — environment combinations executed (XR-LAUNCH-025)
         ["CONTAINS", { XR_INSTALL_DIR: w, XR_HOME: join(w, "d") }, "", /CONTAINS=STOP:.*contains XR's data home/],
         ["DEFAULTDATA", { XR_INSTALL_DIR: join(prof, ".xr") }, "", /DEFAULTDATA=STOP:.*data home or inside it/],
         ["PROFILE", { XR_INSTALL_DIR: prof }, "", /PROFILE=STOP:.*profile directory itself/],
-        ["ROOT", { XR_INSTALL_DIR: "/" }, "", /ROOT=STOP:.*drive root/],
+        // On Windows "/" is drive-relative (refused as not absolute); its drive root is C:\.
+        ["ROOT", { XR_INSTALL_DIR: process.platform === "win32" ? "C:\\" : "/" }, "", /ROOT=STOP:.*drive root/],
         ["RELATIVE", { XR_INSTALL_DIR: "rel/xr" }, "", /RELATIVE=STOP:.*must be an absolute path/],
         ["DOLLAR", { XR_INSTALL_DIR: join(w, "a$b") }, "", /DOLLAR=STOP:.*may not contain/],
         ["PERCENT", { XR_INSTALL_DIR: join(w, "a%PATH%") }, "", /PERCENT=STOP:.*may not contain/],

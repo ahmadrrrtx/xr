@@ -352,7 +352,7 @@ describe("XR-LAUNCH-017 · uninstall --purge removes keychain entries", () => {
     expect(res.secrets?.removed).toEqual(["OPENAI_API_KEY"]);
     expect(res.summary.dataHomeRemoved).toBe(true);
     rmSync(root, { recursive: true, force: true });
-  });
+  }, 30_000); // two real uninstalls: on Windows each reads the user Path via a cold PowerShell start (>5 s on windows-11-arm)
 
   test("the known-name list covers every fixed secret id defined in src/", () => {
     const sources = [

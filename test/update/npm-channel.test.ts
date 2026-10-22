@@ -200,6 +200,8 @@ describe("XR-LAUNCH-007 · an installer-placed compiled binary is never treated 
   test("compiled-binary detection reads Bun's virtual FS markers", () => {
     expect(isCompiledBinary("file:///$bunfs/root/xr-linux-x64")).toBe(true);
     expect(isCompiledBinary("file:///B:/~BUN/root/xr.exe")).toBe(true);
+    expect(isCompiledBinary("file:///B:/%7EBUN/root/xr.exe", "")).toBe(true); // percent-encoded spelling
+    expect(isCompiledBinary("file:///D:/a/xr/xr/src/update/check.ts", "B:\\~BUN\\root\\xr-windows-x64.exe")).toBe(true); // Bun.main signal
     expect(isCompiledBinary(import.meta.url)).toBe(false);
     expect(standaloneBinary(ROOT)).toBe(false); // running from source here
   });
