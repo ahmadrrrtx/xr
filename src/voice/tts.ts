@@ -96,6 +96,9 @@ export class TextToSpeech {
     this.persona = p;
   }
 
+  /** The HTTP TTS base URL (XR-LAUNCH-035 probes it on loopback only). */
+  get endpoint(): string { return this.baseUrl; }
+
   describe(): { engine: VoiceTtsBackend; available: boolean; detail: string } {
     // Sync describe for CLI status — uses last async selection or optimistic defaults.
     if (this.engineCache && Date.now() - this.engineCache.at < 30_000) {

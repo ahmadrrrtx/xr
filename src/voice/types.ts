@@ -63,7 +63,8 @@ export interface VoiceDeviceRef {
 export interface VoiceHealthCheck {
   id: string;
   label: string;
-  state: "ok" | "warn" | "fail";
+  /** "unknown" (XR-LAUNCH-035) — not probed: shown as "?", never as ✓. */
+  state: "ok" | "warn" | "fail" | "unknown";
   detail: string;
   remediation?: string;
 }

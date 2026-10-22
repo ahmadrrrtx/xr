@@ -11,8 +11,8 @@ import { VoiceActivityDetector } from "./vad.ts";
 import type { VoiceSettings, VoiceMode, VoiceSttBackend, VoiceTtsBackend } from "./types.ts";
 
 export async function handleVoiceCommand(argv: string[], store: Store): Promise<void> {
-  const sub = argv[0] || "status";
-  if (sub === "status") return printVoiceStatus();
+  const sub = !argv[0] || argv[0] === "--no-probe" ? "status" : argv[0];
+  if (sub === "status") return printVoiceStatus({ probe: !argv.includes("--no-probe") });
   if (sub === "devices") return printDevices();
   if (sub === "setup") return setupVoiceInteractive(argv.includes("--yes"));
   if (sub === "test") return testVoice(store);
@@ -31,7 +31,8 @@ export async function handleVoiceCommand(argv: string[], store: Store): Promise<
 function printVoiceUsage(): void {
   console.log(C.bold("Voice commands"));
   for (const line of [
-    "xr voice status              show privacy, devices, STT/TTS health",
+    "xr voice status              privacy, devices, probed STT/TTS health",
+    "xr voice status --no-probe   the same without probing STT/TTS",
     "xr voice setup               optional guided setup",
     "xr voice devices             list microphones and speakers",
     "xr voice test                record, transcribe, speak back",
@@ -43,7 +44,7 @@ function printVoiceUsage(): void {
   ]) console.log(`  ${C.cyan(line)}`);
 }
 
-export async function printVoiceStatus(): Promise<void> {
+export async function printVoiceStatus(opts: { probe?: boolean } = {}): Promise<void> {
   banner();
   console.log(C.bold("🎤 XR Voice Stack"));
   const settings = getVoiceSettings();
@@ -56,9 +57,9 @@ export async function printVoiceStatus(): Promise<void> {
   console.log(`  confirmation ... ${C.cyan(settings.confirmationPolicy)}`);
   console.log(`  interruption ... ${C.cyan(settings.interruptionPolicy)}`);
   console.log("");
-  const health = await checkVoiceStack(settings);
+  const health = await checkVoiceStack(settings, opts);
   for (const c of health.checks) {
-    const icon = c.state === "ok" ? C.green("✓") : c.state === "warn" ? C.amber("!") : C.red("✗");
+    const icon = c.state === "ok" ? C.green("✓") : c.state === "warn" ? C.amber("!") : c.state === "unknown" ? C.dim("?") : C.red("✗");
     console.log(`  ${icon} ${c.label.padEnd(20)} ${C.dim(c.detail)}`);
     if (c.remediation) console.log(`      ${C.dim(c.remediation)}`);
   }

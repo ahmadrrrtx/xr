@@ -280,7 +280,7 @@ export const CATALOG: CatalogEntry[] = [
     needsKernel: true,
     examples: [
       { cmd: "xr voice setup", description: "configure STT/TTS" },
-      { cmd: "xr voice status", description: "voice stack health" },
+      { cmd: "xr voice status", description: "voice stack health (probes STT/TTS; --no-probe skips)" },
     ],
     related: ["speak", "listen"],
     topics: ["voice", "work"],
