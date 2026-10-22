@@ -121,7 +121,9 @@ if (import.meta.main) {
     a.dir ?? ".",
     a.version ?? "0.0.0",
     a.tag ?? "v0.0.0",
-    a.notes ? readFileSync(a.notes, "utf8") : "See CHANGELOG.md",
+    // XR-LAUNCH-008: desktop-app.yml passes --notes as TEXT; reading it as a
+    // path crashed the manifest job (ENOENT) on every tag. --notes-file reads a file.
+    a["notes-file"] ? readFileSync(a["notes-file"], "utf8") : (a.notes || "See CHANGELOG.md"),
   );
   const n = Object.keys(manifest.platforms as object).length;
   writeFileSync(a.out ?? "latest.json", JSON.stringify(manifest, null, 2) + "\n", "utf8");

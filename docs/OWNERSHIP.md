@@ -167,6 +167,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-brand-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-seed-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/desktop-signing-plan.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-sink-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/fetch-v2-assets.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -225,6 +226,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/validate-baseline.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-release.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-security.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/verify-updater-signatures.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/write-sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `extensions/vscode/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 

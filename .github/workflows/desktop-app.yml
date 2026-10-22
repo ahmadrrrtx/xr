@@ -27,8 +27,10 @@
 # conversion only, every pixel from the owner-supplied original — no
 # derived geometry), committed at desktop/src-tauri/icons.
 #
-# Unsigned builds: code-signing/notarization keys are owner secrets and are
-# deliberately NOT referenced here; artifacts are honest "CI builds".
+# Signing (XR-LAUNCH-008, decision D5): wired but gated on owner secrets
+# (TAURI_UPDATER_KEY[_PASSWORD], APPLE_*, WINDOWS_CERTIFICATE[_PASSWORD]).
+# Without them every leg is an honest UNSIGNED build with a notice; see
+# docs/release/DESKTOP_SIGNING.md. No key material is ever in the repo.
 # =============================================================================
 name: Desktop App (Tauri packaging)
 
@@ -230,19 +232,96 @@ jobs:
       - name: Smoke-test the sidecar (real boot + health probe)
         shell: bash
         run: bash scripts/smoke-sidecar.sh ${{ matrix.triple }}
+      # XR-LAUNCH-008 (decision D5): signing is wired but gated on owner
+      # secrets. Absent secrets ⇒ an UNSIGNED build plus a notice (PRs, forks);
+      # never a silent "signed" claim. Only presence flags reach the planner;
+      # certificate material goes straight from the secret to the OS keystore.
+      - name: Signing plan (secrets-gated)
+        shell: bash
+        env:
+          HAS_UPDATER_KEY: ${{ secrets.TAURI_UPDATER_KEY != '' }}
+          HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+          HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+          HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+          WINDOWS_CERTIFICATE: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE || '' }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          thumb=""
+          if [ "${{ runner.os }}" = "Windows" ] && [ "$HAS_WINDOWS_CERT" = "true" ]; then
+            thumb="$(pwsh -NoProfile -Command '
+              $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+              $pfx = Join-Path $env:RUNNER_TEMP "xr-signing.pfx"
+              [IO.File]::WriteAllBytes($pfx, $bytes)
+              $pw = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+              $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+              Remove-Item $pfx -Force
+              $cert.Thumbprint')"
+          fi
+          os="linux"; [ "${{ runner.os }}" = "macOS" ] && os="macos"; [ "${{ runner.os }}" = "Windows" ] && os="windows"
+          # Absolute, forward-slash path (Git Bash on Windows: pwd -W → D:/a/_temp).
+          cfg="$(cd "$RUNNER_TEMP" && (pwd -W 2>/dev/null || pwd))/tauri-signing.json"
+          bun run scripts/desktop-signing-plan.ts --os "$os" --tag "${{ github.ref_type == 'tag' }}" \
+            ${thumb:+--thumbprint "$thumb"} --out "$cfg"
+          echo "XR_SIGNING_CONFIG=$cfg" >> "$GITHUB_ENV"
+          cat "$cfg"
+          # macOS: hand the Apple credentials to the bundler ONLY when present —
+          # an empty APPLE_CERTIFICATE would make the bundler try to import it.
+          if [ "$os" = "macos" ] && [ "$HAS_APPLE_CERT" = "true" ]; then
+            {
+              for k in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY; do
+                printf '%s<<XR_EOF\n%s\nXR_EOF\n' "$k" "${!k}"
+              done
+              if [ "$HAS_APPLE_NOTARY" = "true" ]; then
+                for k in APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do printf '%s<<XR_EOF\n%s\nXR_EOF\n' "$k" "${!k}"; done
+              fi
+            } >> "$GITHUB_ENV"
+          fi
       - name: Build bundles (tauri-action)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Phase 5 · signed updater artifacts. Empty secret ⇒ tauri build
-          # emits no .sig files ⇒ the manifest job publishes nothing (honest).
+          # Updater signing key (minisign, from `tauri signer generate`) and its
+          # password. Empty ⇒ the plan above turned createUpdaterArtifacts off.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_KEY_PASSWORD }}
+          # macOS: APPLE_* arrive via GITHUB_ENV from the plan step only when
+          # provisioned; the bundler then signs (hardened runtime) and, with the
+          # notary credentials, notarizes + staples.
         with:
           projectPath: desktop
-          args: --verbose ${{ matrix.tauriArgs }}
+          args: --verbose ${{ matrix.tauriArgs }} --config ${{ env.XR_SIGNING_CONFIG }}
       - name: List produced bundles
         shell: bash
         run: find desktop/src-tauri/${{ matrix.targetDir }}/bundle -maxdepth 3 -type f | sort
+      # XR-LAUNCH-008 acceptance: signatures are checked by the OS tools, not
+      # assumed from a green build. Runs only when the plan signed this leg.
+      - name: Verify macOS signature + notarization (codesign / spctl / stapler)
+        if: runner.os == 'macOS' && env.XR_SIGNED_OS == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          if [ "$XR_NOTARIZED" = "1" ]; then
+            spctl --assess --type execute --verbose=4 "$app"
+            for dmg in desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg/*.dmg; do xcrun stapler validate "$dmg"; done
+          fi
+      - name: Verify Windows Authenticode (signtool verify /pa)
+        if: runner.os == 'Windows' && env.XR_SIGNED_OS == '1'
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -Last 1
+          if (-not $signtool) { throw "signtool.exe not found" }
+          $files = Get-ChildItem desktop/src-tauri/${{ matrix.targetDir }}/bundle -Recurse -Include *.msi,*-setup.exe
+          if ($files.Count -eq 0) { throw "no installers to verify" }
+          foreach ($f in $files) { & $signtool.FullName verify /pa /v $f.FullName; if ($LASTEXITCODE -ne 0) { throw "signtool verify failed: $($f.Name)" } }
       - name: Assert Linux bundles (deb + rpm + AppImage)
         if: matrix.runsOn == 'ubuntu-22.04'
         shell: bash
@@ -564,9 +643,28 @@ jobs:
             echo "::warning::no signed updater artifacts — skipping publish (updater not provisioned)"
             echo "SKIP=1" >> "$GITHUB_ENV"
           fi
-      - name: Publish latest.json to the release
+          case "$GITHUB_REF_NAME" in *-*) echo "CHANNEL=beta" >> "$GITHUB_ENV" ;; *) echo "CHANNEL=stable" >> "$GITHUB_ENV" ;; esac
+      # XR-LAUNCH-008: the same minisign check the shipped updater performs,
+      # against the committed pubkey. A tampered manifest, a swapped payload or
+      # a signature from another key fails here and nothing is published.
+      - name: Verify every signature in latest.json against the committed pubkey
+        if: env.SKIP != '1'
+        run: bun run scripts/verify-updater-signatures.ts --manifest latest.json --dir updater-artifacts
+      - name: Publish latest.json to the release (stable channel)
         if: env.SKIP != '1'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
+          files: latest.json
+      # Beta channel endpoint (desktop/src-tauri/src/commands/updates.rs):
+      # releases/download/updater-beta/latest.json on a rolling pre-release.
+      - name: Publish latest.json to the rolling updater-beta pre-release (beta channel)
+        if: env.SKIP != '1' && env.CHANNEL == 'beta'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: updater-beta
+          name: "Updater channel: beta"
+          prerelease: true
+          make_latest: false
+          body: "Rolling pointer for the desktop beta update channel. Installers live on the versioned releases."
           files: latest.json

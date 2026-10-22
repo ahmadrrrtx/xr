@@ -34,8 +34,10 @@ gate, your approval, a spend ceiling, and a hash-chained log you can verify offl
 > `bun run claim-lint`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)
 > and the [known-limitations register](docs/release/1.1.0/known-limitations.md) before relying on it
 > for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on `PATH`;
-> the installer binaries do not. Desktop app builds are not code-signed yet. Feedback goes through the
-> [beta loop](docs/release/BETA.md).
+> the installer binaries do not. Desktop app builds are not code-signed yet. On macOS and Windows the
+> agent's shell commands need Docker/Podman (or the experimental `XR_OS_SANDBOX=experimental` sandbox)
+> and are refused otherwise; never approve commands in a repository you do not trust. Feedback goes
+> through the [beta loop](docs/release/BETA.md).
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
@@ -367,7 +369,7 @@ flowchart LR
     T["git tag v*<br/><small>release.manifest.json<br/>stamps identity on 6 surfaces</small>"] --> B["CI build<br/><small>one canonical build<br/>6 targets + source</small>"]
     B --> A["Assemble<br/><small>SHA256SUMS · CycloneDX SBOM<br/>.deb · channel manifests</small>"]
     A --> SIG["cosign keyless sign<br/><small>Rekor + Fulcio<br/>SLSA3 provenance (slsa-framework)</small>"]
-    SIG --> GH["GitHub Release<br/><small>signed binaries + bundles<br/>prerelease flag per semver</small>"]
+    SIG --> GH["GitHub Release<br/><small>signed checksums for binaries<br/>desktop bundles unsigned (for now)<br/>prerelease flag per semver</small>"]
     SIG --> NPM["npm publish<br/><small>OIDC trusted publishing<br/>npm provenance attestation</small>"]
     SIG --> DK["GHCR + Docker Hub<br/><small>cosign-signed images</small>"]
     GH --> V["Verify (anyone, offline-ish)<br/><small>cosign verify-blob · sigstore check<br/>docs/release/VERIFYING_RELEASES.md</small>"]
@@ -508,7 +510,7 @@ See [`docs/business-os-extension.md`](docs/business-os-extension.md) and the
 |---|---|
 | 🛰 **Always alive** | Tray keeps the engine, shortcuts and approvals badge working when the window closes; menu shows today's spend and pending approvals in the platform's own idiom. |
 | ⌨️ **Global, honestly** | HUD, push-to-talk and screenshot-a-region-and-ask work while unfocused; chords fall back when the OS owns them, and the Settings screen shows what the machine actually holds. |
-| 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart; no release key → refuses to update rather than updating unverified. |
+| 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart; no release key → refuses to update rather than updating unverified. **Not provisioned yet:** current desktop builds have no update feed ([signing runbook](docs/release/DESKTOP_SIGNING.md)). |
 | 🧯 **Truthful crash recovery** | Marker-file detection; cut-off runs are marked `killed`, never "completed"; optional redacted report you choose to send. No telemetry anywhere. |
 | 🪟 **Native where it counts** | macOS HIG application menu, Windows MSIX with deep links + toast activation, Linux Flathub-ready Flatpak. |
 
