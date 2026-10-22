@@ -8,6 +8,9 @@
 > must pass a self-check before they are offered, and have only CI evidence (`os-sandbox.yml`),
 > no user-hardware runs. Without the opt-in, shell commands on macOS/Windows still need Docker/Podman
 > and are otherwise refused (fail closed). Security review is required before they leave experimental.
+> Known gap (Windows): where the OS denies AppContainers the NUL device (Windows Server images,
+> including GitHub's windows-latest), Git for Windows cannot start inside the sandbox, because it opens NUL at
+> startup. XR does not widen the device's ACL; such commands fail with git's "/dev/null" error.
 **Owner:** Trust/Security Lead.
 **References:** [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) #1, #2, #3,
 [GUARANTEE_MATRIX.md](./GUARANTEE_MATRIX.md), [SECURITY.md](../../SECURITY.md) §scope,

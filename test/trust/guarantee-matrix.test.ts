@@ -62,7 +62,7 @@ describe("Phase 4 · T2 — guarantee matrix from live probes", () => {
     } else {
       expect(shellRow.kernelBoundary).toBe(true);
     }
-  });
+  }, 30_000); // two full live probe rounds (buildMatrix + manager.init) spawn real sandboxes; >5 s on CI runners
 
   test("no unsupported claim: a backend that reports no kernel boundary never shows one", async () => {
     const m = await buildMatrix();

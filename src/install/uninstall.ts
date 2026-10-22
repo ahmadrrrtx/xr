@@ -231,6 +231,10 @@ export function removeInstallation(
       // Never delete the code we are running from, nor HOME / a root / a
       // parent of the data home (a mis-set XR_INSTALL_DIR). XR-LAUNCH-025.
       skippedInstallDir = paths.installDir;
+    } else if (process.platform === "win32" && existsSync(join(paths.installDir, "bin-local"))) {
+      // install.ps1 layout: the xr.cmd that launched us lives in bin-local and cmd.exe reopens it after
+      // xr exits ("The system cannot find the path specified."), so remove the dir once we have exited.
+      installDirRemoved = scheduleWindowsRemoval(paths.installDir);
     } else {
       try {
         rmSync(paths.installDir, { recursive: true, force: true });
