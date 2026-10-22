@@ -10,12 +10,15 @@
  *   · offers a show/hide toggle so the token can be verified visually;
  *   · carries full labels, instructions, and an error announced via
  *     role="alert";
- *   · keeps the Phase-4 security contract exactly: the ONLY authentication
- *     path remains `GET <path>?token=…` → one-time bootstrap → HttpOnly
- *     SameSite=Strict session cookie. This page merely GETs the current URL
- *     with the token parameter. No token is ever stored in the HTML, and the
- *     JSON 401 contract for non-browser clients is unchanged
- *     (test/daemon/security tests pin both).
+ *   · XR-LAUNCH-018: the form POSTs the token in the request body to
+ *     /auth/login (src/daemon/session-auth.ts), which sets the same HttpOnly
+ *     SameSite=Strict session cookie as the `?token=` bootstrap and redirects
+ *     back to the deep link (hidden `next` field). The token never enters the
+ *     URL, history or referrers. The page tells the user where the token is
+ *     (`<XR home>/daemon/token`, owner-only, written by the running daemon),
+ *     so a hidden banner token is no longer a dead end. No token is ever
+ *     rendered into the HTML, and the JSON 401 contract for API clients is
+ *     unchanged.
  */
 
 import { esc } from "../util/html-escape.ts";
@@ -46,11 +49,15 @@ export function generateCspNonce(): string {
  * @param returnPath deep link the user originally asked for
  * @param nonce      per-response CSP nonce (from `generateCspNonce()`);
  *                   REQUIRED — calling without one throws (fail-closed).
+ * @param failed     true after a wrong token was submitted (different alert).
  */
-export function authPageHtml(returnPath = "/", nonce?: string): string {
+export function authPageHtml(returnPath = "/", nonce?: string, failed = false): string {
   if (!nonce) throw new Error("authPageHtml: a per-response CSP nonce is required");
-  // The form GETs the URL the user originally asked for, preserving deep links.
-  const action = returnPath.startsWith("/") && !returnPath.startsWith("//") ? returnPath : "/";
+  // The login POST redirects back to the URL the user originally asked for.
+  const next = returnPath.startsWith("/") && !returnPath.startsWith("//") && !returnPath.startsWith("/\\") ? returnPath : "/";
+  const alert = failed
+    ? "That token did not match the running daemon. The token changes every time <code>xr serve</code> starts — copy it again from the token file."
+    : "A valid access token is required to continue. If you followed an old link, the daemon may have restarted with a new token — paste the current one below.";
   return `<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -109,17 +116,20 @@ button.submit:hover { filter: brightness(1.1); }
   <div class="logo" aria-hidden="true">▀▄▀ <span>XR</span></div>
   <h1>Sign in to Control Center</h1>
   <p class="desc">
-    This dashboard is local-only and protected by the daemon's access
-    token (shown on a private terminal with <code>XR_PRINT_TOKEN=1 xr serve</code>;
-    packaged desktop opens its own session). Paste it below — from the
-    clipboard (Ctrl+V / ⌘V); paste is never blocked.
+    This dashboard is local-only and protected by the daemon's access token.
+    The running daemon keeps it in a file only your user can read:
+    <code>~/.xr/daemon/token</code> (or <code>$XR_HOME/daemon/token</code>) —
+    run <code>cat ~/.xr/daemon/token</code>, or on Windows
+    <code>type %USERPROFILE%\\.xr\\daemon\\token</code>. You can also print it on a
+    private terminal with <code>XR_PRINT_TOKEN=1 xr serve</code>; the packaged
+    desktop app opens its own session. Paste it below — from the clipboard
+    (Ctrl+V / ⌘V); paste is never blocked.
   </p>
   <div class="error" role="alert">
-    A valid access token is required to continue. If you followed an old
-    link, the one-time token may already have been exchanged for a session —
-    paste the token again below.
+    ${alert}
   </div>
-  <form method="get" action="${escapeAttr(action)}">
+  <form method="post" action="/auth/login">
+    <input type="hidden" name="next" value="${escapeAttr(next)}"/>
     <label for="token">Access token</label>
     <div class="field">
       <input id="token" name="token" type="password" autocomplete="off" spellcheck="false"

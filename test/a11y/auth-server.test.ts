@@ -38,7 +38,7 @@ describe("T3 — accessible auth responses", () => {
   test("deep links are preserved as the form's return path", async () => {
     const res = await freshHandler()(htmlGet("/dashboard"));
     const html = await res.text();
-    expect(html).toContain('action="/dashboard"');
+    expect(html).toContain('name="next" value="/dashboard"');
   });
 
   test("API clients still get the JSON 401 (Phase-4 contract intact)", async () => {
@@ -71,7 +71,7 @@ describe("T3 — accessible auth responses", () => {
     expect(css.status).toBe(401);
   });
 
-  test("the form's GET submission drives the one-time bootstrap exactly as before", async () => {
+  test("the `?token=` GET bootstrap still works exactly as before (desktop + reveal links)", async () => {
     const res = await freshHandler()(
       new Request(`http://127.0.0.1:7842/?token=${TOKEN}`, { headers: { accept: "text/html" } }),
     );

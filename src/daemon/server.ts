@@ -56,7 +56,8 @@ import {
   xrMetrics,
 } from "../observability/index.ts";
 import { CORE_VERSION } from "../core/version.ts";
-import { authPageCSP, authPageHtml, generateCspNonce } from "./auth-page.ts";
+import { cookieHasToken, handleLoginPost, LOGIN_PATH, sessionCookie, signInPageResponse, tokenEquals, wantsSignInPage } from "./session-auth.ts";
+import { writeDaemonTokenFile } from "./token-file.ts";
 import { applySecurityHeaders, SECURITY_TXT_URL } from "./security-headers.ts";
 import { envSecretCompatEnabled, setSecretReadAuditor } from "../security/secret-broker.ts";
 import { installDevGlobal, isDevMode } from "../util/dev-mode.ts";
@@ -168,7 +169,6 @@ const responseHelpers: DaemonResponseHelpers = {
  * authenticate via the session cookie established by the one-time bootstrap.
  */
 export const SESSION_COOKIE = "xr_session";
-const SESSION_COOKIE_SET = `${SESSION_COOKIE}=`;
 
 /**
  * One-SHOT-PER-GET bootstrap → secure cookie (launch-audit L-012 honesty pass).
@@ -195,18 +195,16 @@ export function authorizeRequest(
   token: string,
 ): { kind: "bearer" } | { kind: "session" } | { kind: "bootstrap"; url: string } | { kind: "denied" } {
   const authorization = req.headers.get("authorization") ?? "";
-  if (authorization === `Bearer ${token}`) return { kind: "bearer" };
+  if (authorization.startsWith("Bearer ") && tokenEquals(authorization.slice(7), token)) return { kind: "bearer" };
 
   const cookie = req.headers.get("cookie") ?? "";
-  if (cookie.split(";").some((c) => c.trim() === SESSION_COOKIE_SET + token)) return { kind: "session" };
+  if (cookieHasToken(cookie, SESSION_COOKIE, token)) return { kind: "session" };
 
   const url = new URL(req.url);
   const queryToken = url.searchParams.get("token");
-  if (queryToken === token) {
-    // Bootstrap is page-navigation only (GET); the redirect strips the
-    // token from the URL. See the honesty note on authorizeRequest above —
-    // the link stays valid for the daemon's lifetime, so treat it like
-    // the token it contains.
+  if (queryToken !== null && tokenEquals(queryToken, token)) {
+    // Bootstrap is page-navigation only (GET); the redirect strips the token from
+    // the URL. The link stays valid for the daemon's lifetime (027 → Phase 5).
     if (req.method.toUpperCase() === "GET") {
       url.searchParams.delete("token");
       return { kind: "bootstrap", url: url.toString() };
@@ -480,6 +478,7 @@ export function makeHandler(
       path !== "/api/health" &&
       path !== "/api/v1/health" &&
       path !== "/assets/auth.js" &&
+      path !== LOGIN_PATH &&
       path !== "/api/telegram/webhook" &&
       path !== "/api/discord/webhook"
     ) {
@@ -497,8 +496,7 @@ export function makeHandler(
       // redirect to the token-free URL (the token never lingers).
       if (auth.kind === "bootstrap") {
         // §15#10 — Secure when, and only when, the listener is LAN TLS.
-        const secureBit = lanRuntime ? "; Secure" : "";
-        const cookie = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000${secureBit}`;
+        const cookie = sessionCookie(SESSION_COOKIE, token, Boolean(lanRuntime));
         return new Response(null, {
           status: 302,
           headers: { location: auth.url, "set-cookie": cookie },
@@ -514,23 +512,13 @@ export function makeHandler(
         // ACCESSIBLE sign-in page instead of raw JSON — labelled field,
         // paste-friendly token entry, announced error. API clients (no
         // text/html Accept) keep the Phase-4 JSON contract unchanged.
-        const accept = req.headers.get("accept") ?? "";
-        if (method === "GET" && accept.includes("text/html")) {
-          // Phase 31 · Bucket A follow-up (#6): per-response CSP nonce —
-          // removes the previous `style-src 'unsafe-inline'` carve-out.
-          // The nonce is generated fresh for every 401, embedded in both the
-          // `<style nonce="…">` tag and the `style-src 'nonce-…'` directive,
-          // so a reflected-XSS attacker cannot inject a `<style>` block that
-          // the browser will honour.
-          const nonce = generateCspNonce();
-          return new Response(authPageHtml(path, nonce), {
-            status: 401,
-            headers: {
-              "content-type": "text/html; charset=utf-8",
-              "content-security-policy": authPageCSP(nonce),
-              "cache-control": "no-store",
-            },
-          });
+        // XR-LAUNCH-018: any page GET (not /api/, not /assets/) gets the page,
+        // including `curl /` with Accept: */*; the form POSTs to /auth/login.
+        if (wantsSignInPage(method, path, req.headers.get("accept"))) {
+          // Phase 31 · Bucket A follow-up (#6): per-response CSP nonce (no
+          // `style-src 'unsafe-inline'`), generated fresh for every 401 and
+          // embedded in both the `<style nonce>` tag and the CSP directive.
+          return signInPageResponse(`${path}${url.search}`);
         }
         return safeJson({ error: "unauthorized — local bearer token or session cookie required" }, 401);
         }
@@ -615,6 +603,8 @@ export function makeHandler(
       }
     }
 
+    // XR-LAUNCH-018: sign-in form POST (open path; rate-limited and body-capped above).
+    if (path === LOGIN_PATH && method === "POST") return handleLoginPost(req, token, { cookieName: SESSION_COOKIE, secure: Boolean(lanRuntime), allowedHosts: allowedDaemonHosts(process.env, lanExtraHosts) });
     const { config } = loadConfig();
     const response =
       (await routes({
@@ -821,6 +811,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // @types/bun types `server.port` as `number | undefined`, so fall back to
   // the requested port when the server does not report one.
   const boundPort = server.port ?? port;
+  const tokenFile = writeDaemonTokenFile(token); // XR-LAUNCH-018/034: owner-only, removed on stop
   // Always show a reachable URL: 0.0.0.0 is a bind address, not a destination.
   const displayHost = bindHost === CONTAINER_BIND ? DEFAULT_LOOPBACK : bindHost;
   const url = `http://${displayHost}:${boundPort}/`;
@@ -835,7 +826,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${boundPort}`)}
   ${xrGreen("✓")} Dashboard     ${xrCyan(reveal ? `${url}?token=${token}` : url)}
   ${xrGreen("✓")} Chat          ${xrCyan(reveal ? `http://${displayHost}:${boundPort}/chat?token=${token}` : `http://${displayHost}:${boundPort}/chat`)}
-  ${reveal ? `${xrDim("Token:")} ${xrDim(token)}` : `${xrDim("Token:")} ${xrDim("(hidden — sign in on the dashboard; to print it, run `XR_PRINT_TOKEN=1 xr serve` on a private terminal)")}`}
+  ${reveal ? `${xrDim("Token:")} ${xrDim(token)}` : `${xrDim("Token:")} ${xrDim("(hidden — sign in on the dashboard with the token in " + (tokenFile.path ?? "~/.xr/daemon/token") + ", or run `XR_PRINT_TOKEN=1 xr serve` on a private terminal)")}`}
   ${xrDim(
     bindHost === CONTAINER_BIND
       ? `Binding: ${bindHost} inside the container — publish it loopback-only on the host (127.0.0.1:${boundPort}:${boundPort})`
@@ -855,12 +846,11 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   return {
     port: boundPort,
     token,
-    // Phase 2.4 · P1-1 — LAN pairing URL on the ACTUAL bound port (never ":0"),
-    // used by the CLI banner/Q3 output.
     // Phase 2.4 · P1-1 — LAN pairing URL on the ACTUAL bound port (never
     // ":0"); the runtime is finalised in place for the mobile context.
     ...(lanRuntime ? { lanUrl: (lanRuntime.lanUrl = lanUrlFor(boundPort)) } : {}),
     stop: () => {
+      tokenFile.release();
       stopTriggers();
       void telegram.shutdown();
       void discord.shutdown();

@@ -174,7 +174,7 @@ describe.skipIf(!HAS_CHROMIUM)("T3 live — sign-in page (axe-core, WCAG 2.2 tag
     expect(body.error).toContain("unauthorized");
   });
 
-  test("the token form submits through the one-time bootstrap to the dashboard", async () => {
+  test("the token form POSTs to /auth/login and lands on the dashboard (XR-LAUNCH-018)", async () => {
     const page = await newPage();
     await signedInDashboard(page);
     expect(page.url()).toBe(`${base}/`);
