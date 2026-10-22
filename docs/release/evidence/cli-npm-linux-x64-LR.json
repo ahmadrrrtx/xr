@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "kind": "cli-journey",
+  "channel": "npm",
+  "target": "cli-npm-linux-x64",
+  "os": "linux",
+  "arch": "x64",
+  "version": "1.1.0",
+  "nextVersion": "1.1.1-journey.1",
+  "evidenceClass": "LR",
+  "commit": "14e0d4c5d294de09caa74ee5d68c625bc06b699a",
+  "dirty": false,
+  "runUrl": null,
+  "runner": "local",
+  "at": "2026-10-22T07:27:23.288Z",
+  "steps": [
+    {
+      "step": "build",
+      "status": "pass",
+      "detail": "npm tarballs for 1.1.0 and 1.1.1-journey.1",
+      "ms": 5557
+    },
+    {
+      "step": "package",
+      "status": "pass",
+      "detail": "tarballs carry bin/xr and release.manifest.json",
+      "ms": 134
+    },
+    {
+      "step": "install",
+      "status": "pass",
+      "detail": "npm -g into /home/user/.cache/tmp/xr-journey-npm-oT9DKd/prefix",
+      "ms": 5078
+    },
+    {
+      "step": "launch",
+      "status": "pass",
+      "detail": "v1.1.0 (Graphite)",
+      "ms": 126
+    },
+    {
+      "step": "agent",
+      "status": "pass",
+      "detail": "write_file applied in the workspace after 2 provider turn(s)",
+      "ms": 563
+    },
+    {
+      "step": "update",
+      "status": "pass",
+      "detail": "1.1.0 → 1.1.1-journey.1",
+      "ms": 2751
+    },
+    {
+      "step": "uninstall",
+      "status": "pass",
+      "detail": "launcher, install dir, data home removed; .profile/.bashrc/.zshrc byte-identical",
+      "ms": 555
+    }
+  ],
+  "result": "pass"
+}

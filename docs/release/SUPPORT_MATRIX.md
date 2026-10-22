@@ -27,13 +27,13 @@ Regenerate with `bun run support-matrix` after copying journey evidence into `do
 
 | Surface | Target | Build | Package | Install | Launch | Core-agent smoke | Update | Uninstall | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| npm CLI | Linux x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| npm CLI | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5 |
 | npm CLI | Linux arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows ARM64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| Installer binary | Linux x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| Installer binary | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5 |
 | Installer binary | Linux arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
@@ -58,7 +58,7 @@ Regenerate with `bun run support-matrix` after copying journey evidence into `do
 [7] containers are updated by pulling a new tag; no in-place update path  
 [8] no Phase 3 journey (proposed de-scope, owner to confirm); not to be advertised until it has its own journey  
 
-Launch gate (`--require-complete`): **incomplete** — 108 gating cell(s) without evidence or failing.
+Launch gate (`--require-complete`): **incomplete** — 94 gating cell(s) without evidence or failing.
 
 <!-- END GENERATED: journey matrix -->
 
