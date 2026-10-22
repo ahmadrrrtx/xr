@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- **ci:** ratcheted the release-pin assertions for PR #196 — `test/release/release-workflow.test.ts` now expects `sigstore/cosign-installer` **v4.1.2** and `softprops/action-gh-release` **v3.0.3** (both still full-SHA-pinned; the XR-LAUNCH-012 pin-tripwire class is unchanged). The dependabot actions bump had tripped the v3/v2 expectations in the ci `test / core`, cross-platform and Quality Gate lanes — the intended behavior of the ratchet; the fix is to re-baseline it in the same change that bumps the pins, not to weaken it.
+
 ### Known limitations
 
 - **Linux arm64 (launch CI, 2026-10-22):** the CLI and the `linux/arm64` image install and run, but the file tools fail closed (`blocked:filesystem-unsupported`). Reading and writing workspace files needs Linux x64, macOS or Windows x64 for now. The Linux arm64 npm, binary and Docker journey legs are reported in the support matrix but no longer gate a merge. The refusal message now says so instead of implying any glibc Linux works.

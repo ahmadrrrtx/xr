@@ -61,12 +61,12 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
   test("cosign keyless signing covers SHA256SUMS + tarball + SBOM (public Rekor)", () => {
     expect(workflow).toContain("cosign sign-blob --yes SHA256SUMS --bundle SHA256SUMS.bundle");
     expect(workflow).toContain("sbom.cyclonedx.json");
-    expect(workflow).toMatch(/sigstore\/cosign-installer@[0-9a-f]{40} # v3\b/); // SHA-pinned (XR-LAUNCH-012)
+    expect(workflow).toMatch(/sigstore\/cosign-installer@[0-9a-f]{40} # v4\b/); // SHA-pinned (XR-LAUNCH-012); v4.1.2 ratcheted with dependabot PR #196 (2026-10-23)
   });
 
   test("release assets include all artifacts + signatures; prereleases are honest", () => {
     expect(workflow).toContain("prerelease: ${{ needs.assemble.outputs.prerelease == 'true' }}");
-    expect(workflow).toMatch(/softprops\/action-gh-release@[0-9a-f]{40} # v2\b/); // SHA-pinned (XR-LAUNCH-012)
+    expect(workflow).toMatch(/softprops\/action-gh-release@[0-9a-f]{40} # v3\b/); // SHA-pinned (XR-LAUNCH-012); v3.0.3 ratcheted with dependabot PR #196 (2026-10-23)
   });
 
   test("npm publishes under OIDC with dist-tags (stable → latest, beta → beta)", () => {
