@@ -171,6 +171,10 @@ export function signInPageResponse(returnPath: string, failed = false): Response
     headers: {
       "content-type": "text/html; charset=utf-8",
       "content-security-policy": authPageCSP(nonce),
+      // Under `no-referrer` a browser sends `Origin: null` on the form POST, so
+      // loginOriginOk refused every real sign-in (caught by the live a11y lane).
+      // `same-origin` sends the real Origin to us and nothing cross-origin.
+      "referrer-policy": "same-origin",
       "cache-control": "no-store",
     },
   });

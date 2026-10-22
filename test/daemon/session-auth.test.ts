@@ -116,6 +116,18 @@ describe("XR-LAUNCH-018 · POST /auth/login", () => {
     expect(api.status).toBe(200);
   });
 
+  test("the sign-in page is `Referrer-Policy: same-origin` so a real browser's form POST carries its Origin", async () => {
+    // Under the global `no-referrer` a browser serializes the form POST's Origin
+    // as "null", which loginOriginOk (rightly) refuses — no one could sign in.
+    const h = freshHandler();
+    const page = await h(new Request(`${BASE}/`, { headers: { accept: "text/html" } }));
+    expect(page.status).toBe(401);
+    expect(page.headers.get("referrer-policy")).toBe("same-origin");
+    const api = await h(new Request(`${BASE}/api/overview`, { headers: { accept: "application/json" } }));
+    expect(api.headers.get("referrer-policy")).toBe("no-referrer");
+    expect((await h(loginRequest(form({ token: TOKEN, next: "/" }), { origin: "null" }))).status).toBe(403);
+  });
+
   test("a wrong token → the sign-in page again (401) with an announced mismatch, token not echoed", async () => {
     const res = await freshHandler()(loginRequest(form({ token: "not-the-token", next: "/" })));
     expect(res.status).toBe(401);
