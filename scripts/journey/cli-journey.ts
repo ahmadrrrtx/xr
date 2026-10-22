@@ -222,7 +222,8 @@ export async function runJourney(opts: { channel: "binary" | "npm"; evidenceClas
       }
       const rcBefore = rcFiles.map((f) => readFileSync(f));
       // Windows: install.ps1 edits the HKCU user Path; uninstall must restore it exactly.
-      const userPath = async () => (await sh(["pwsh", "-NoProfile", "-Command", "[Environment]::GetEnvironmentVariable('Path','User')"])).out.trim();
+      // Raw registry text + kind: the [Environment] API would hide %VAR% entries being flattened.
+      const userPath = async () => (await sh(["pwsh", "-NoProfile", "-Command", "$k=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment'); \"$($k.GetValueKind('Path')):$($k.GetValue('Path','',[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames))\""])).out.trim();
       const userPathBefore = WIN ? await userPath() : "";
 
       const server = await startFixtureServer({

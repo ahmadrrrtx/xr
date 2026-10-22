@@ -190,12 +190,16 @@ const runPs: PsRun = (script, env = {}) => {
 /** Windows: remove install.ps1's user-Path entry. Never writes back a Path it failed to read. */
 export function removeWindowsUserPath(paths: UninstallPaths, ps: PsRun = runPs, platform: NodeJS.Platform = process.platform): boolean {
   if (platform !== "win32") return false;
-  const read = ps("[Environment]::GetEnvironmentVariable('Path','User')");
+  // Raw value (DoNotExpandEnvironmentNames) and its own registry kind: the [Environment] API expands every
+  // %VAR% entry and writes REG_SZ, flattening the user's Path (install.ps1 does the same).
+  const read = ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; $k=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment'); if ($k) { $k.GetValue('Path','',[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) }");
   if (read.status !== 0) return false;
   const before = read.stdout.replace(/\r?\n$/, "");
   const after = stripUserPathEntry(before, join(paths.installDir, "bin-local"));
   if (after === before) return false;
-  return ps("[Environment]::SetEnvironmentVariable('Path', $env:XR_UNINSTALL_PATH, 'User')", { XR_UNINSTALL_PATH: after }).status === 0;
+  const write = "$k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $t=if($k.GetValueKind('Path') -eq 'String'){'String'}else{'ExpandString'}; " +
+    "$k.SetValue('Path',$env:XR_UNINSTALL_PATH,[Microsoft.Win32.RegistryValueKind]$t); $k.Close(); [Environment]::SetEnvironmentVariable('XR_PATH_BROADCAST','1','User'); [Environment]::SetEnvironmentVariable('XR_PATH_BROADCAST',$null,'User')";
+  return ps(write, { XR_UNINSTALL_PATH: after }).status === 0;
 }
 
 /** Windows locks the running xr.exe inside the install dir: finish the removal after this process exits. */

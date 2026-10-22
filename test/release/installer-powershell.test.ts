@@ -141,7 +141,11 @@ describe("install.ps1 — security posture", () => {
 
   test("PATH is only appended when the entry is genuinely absent", () => {
     expect(ps1).toMatch(/-notcontains/);
-    expect(ps1).toMatch(/SetEnvironmentVariable\('Path'/);
+    // Raw registry read/write keeps %VAR% entries and REG_EXPAND_SZ; the [Environment] API would flatten them.
+    expect(ps1).toMatch(/DoNotExpandEnvironmentNames/);
+    expect(ps1).toMatch(/RegistryValueKind\]\$kind/);
+    expect(ps1).toMatch(/SetEnvironmentVariable\('XR_PATH_BROADCAST', \$null, 'User'\)/);
+    expect(ps1).not.toMatch(/SetEnvironmentVariable\('Path'/);
   });
 });
 

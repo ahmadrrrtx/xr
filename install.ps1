@@ -420,6 +420,25 @@ function Install-XrDependencies {
   Write-XrOk 'Dependencies installed'
 }
 
+# The raw user Path (HKCU\Environment, %VAR% entries unexpanded). [Environment]::Get/SetEnvironmentVariable
+# would expand every %VAR% entry and store REG_SZ, permanently flattening the user's Path.
+function Get-XrUserPathRaw {
+  if (-not (Test-XrOnWindows)) { return '' }
+  $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+  if (-not $k) { return '' }
+  try { return [string]$k.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) } finally { $k.Close() }
+}
+function Set-XrUserPathRaw([string]$Value) {
+  if (-not (Test-XrOnWindows)) { return }
+  $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+  try {
+    $kind = if ($null -ne $k.GetValue('Path') -and $k.GetValueKind('Path') -eq 'String') { 'String' } else { 'ExpandString' }
+    $k.SetValue('Path', $Value, [Microsoft.Win32.RegistryValueKind]$kind)
+  } finally { $k.Close() }
+  # A bare registry write notifies nobody; a scratch user-variable set/clear broadcasts WM_SETTINGCHANGE.
+  [Environment]::SetEnvironmentVariable('XR_PATH_BROADCAST', '1', 'User'); [Environment]::SetEnvironmentVariable('XR_PATH_BROADCAST', $null, 'User')
+}
+
 function Install-XrLauncher {
   param([string]$TargetDirectory)
   $binDir = Join-Path $TargetDirectory 'bin-local'
@@ -444,12 +463,12 @@ function Install-XrLauncher {
   # PATH hygiene: append only when genuinely absent, compare case-insensitively
   # and ignore trailing separators, and never write back a PATH we failed to
   # read (that would silently truncate the user's PATH).
-  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $userPath = Get-XrUserPathRaw
   $entries = @()
-  if ($userPath) { $entries = $userPath -split ';' | ForEach-Object { $_.TrimEnd('\') } }
+  if ($userPath) { $entries = $userPath -split ';' | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') } }
   if ($entries -notcontains $binDir.TrimEnd('\')) {
     $newPath = if ($userPath) { "$userPath;$binDir" } else { $binDir }
-    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+    Set-XrUserPathRaw $newPath
     $env:Path = "$env:Path;$binDir"
     Write-XrOk "Added XR launcher to user PATH: $binDir"
   } else {
