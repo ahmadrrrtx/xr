@@ -233,7 +233,15 @@ pub fn export_entries(data: &Path) -> Result<Vec<PathBuf>, String> {
 
 /// Write the export zip. Databases are snapshotted first.
 pub fn write_export(data: &Path, dest: &Path) -> Result<usize, String> {
-    let scratch = std::env::temp_dir().join(format!("xr-export-{}", now_ms()));
+    // Unique per call: a clock-only name let two exports in the same millisecond share
+    // one scratch dir and snapshot file ("table notes already exists").
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let scratch = std::env::temp_dir().join(format!(
+        "xr-export-{}-{}-{n}",
+        std::process::id(),
+        now_ms()
+    ));
     fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;
     let result = (|| {
         let file = fs::File::create(dest).map_err(|e| e.to_string())?;

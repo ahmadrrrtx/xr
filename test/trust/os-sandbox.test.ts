@@ -141,5 +141,5 @@ describe.if(smoke)(`native sandbox smoke (${process.platform})`, () => {
       ? await run(["powershell.exe", "-NoProfile", "-Command", "try { (New-Object Net.Sockets.TcpClient).Connect('1.1.1.1', 443); 'CONNECTED' } catch { 'blocked' }"])
       : await shell("/usr/bin/nc -z -G 3 1.1.1.1 443 && echo CONNECTED || echo blocked");
     expect(r.stdout).not.toContain("CONNECTED");
-  });
+  }, 30_000); // above the run's own 20 s limit: a cold PowerShell start plus a blocked connect exceeded 5 s on windows-latest
 });
