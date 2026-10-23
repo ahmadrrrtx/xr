@@ -80,6 +80,28 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
+            // XR-WIN-BOOT-001 — manage every in-memory state BEFORE any other
+            // setup step. The main window's WebView2 bootstrap is asynchronous:
+            // on a slow machine (real-world Windows 11 with AV scanning) the
+            // page can finish loading and dispatch bootstrap IPC
+            // (`updates_state`, `db_health`, …) while the shell is still inside
+            // the early setup code below. A Tauri command resolving `State<T>`
+            // for a type that is not yet managed panics with "state() called
+            // before manage()"; when that dispatch happens inside the WebView2
+            // environment callback the panic crosses an FFI boundary and ABORTS
+            // the process before a single shell.log line exists — a silent
+            // startup death with zero diagnostics. Managing the in-memory
+            // defaults first removes the whole class of race. (Real-world
+            // capture: tauri-2.12.0 src/lib.rs:761, UpdatesState, inside
+            // CreateWebViewEnvironmentWithOptionsInternal → abort, ~6s after
+            // launch on a slow Windows 11 box.)
+            app.handle().manage(commands::recovery::RecoveryState::default());
+            app.handle().manage(commands::updates::UpdatesState::default());
+            app.handle().manage(commands::data_health::DataHealth::default());
+            app.handle().manage(commands::workspaces::SpawnState::new());
+            #[cfg(desktop)]
+            app.handle().manage(commands::screenshot::ScreenshotState::default());
+
             // Phase 27 §E — per-OS window chrome. Runs FIRST: macOS keeps its
             // decorations (real traffic lights), Windows and Linux drop them
             // because they draw their own caption buttons.
@@ -181,22 +203,18 @@ pub fn run() {
             // XR-LAUNCH-021 — BEFORE any connection to xr.db is opened: apply
             // a staged import (atomic swap with backup + rollback), then the
             // integrity preflight (a damaged file is moved aside, not fatal).
-            match app.path().app_data_dir() {
-                Ok(data_dir) => commands::data_health::startup(app.handle(), &data_dir),
-                Err(_) => {
-                    app.manage(commands::data_health::DataHealth::default());
-                }
+            // DataHealth is already managed at the top of setup
+            // (XR-WIN-BOOT-001); without a data dir there is nothing to do.
+            if let Ok(data_dir) = app.path().app_data_dir() {
+                commands::data_health::startup(app.handle(), &data_dir);
             }
             commands::chat::init(app)?;
-            // Phase 10 — workspaces: same xr.db (WAL), own connection + DDL,
-            // plus the in-memory window-bounds map used by multi-window spawn.
+            // Phase 10 — workspaces: same xr.db (WAL), own connection + DDL.
+            // (SpawnState is managed at the top of setup — XR-WIN-BOOT-001.)
             app.handle()
                 .manage(commands::workspaces::WorkspaceDb::init(app.handle()));
-            app.handle().manage(commands::workspaces::SpawnState::new());
-            // Phase 27 — recovery decision + updater state (both read-only
-            // until the user acts; neither talks to the network on its own).
-            app.handle().manage(commands::recovery::RecoveryState::default());
-            app.handle().manage(commands::updates::UpdatesState::default());
+            // (RecoveryState + UpdatesState are managed at the top of setup —
+            // XR-WIN-BOOT-001.)
             // Phase 12 — XR Shield: append-only audit chain on the shared xr.db.
             app.handle().manage(shield::ShieldDb::init(app.handle()));
             // Phase 13 — Budget governor: spend events + settings on the shared
@@ -220,7 +238,8 @@ pub fn run() {
                 // Voice Theater (Phase 16): ⌥⌘V toggle + native context menu.
                 commands::theater::init(app.handle())?;
                 // Phase 27 — screenshot-and-ask: ⌘⇧X (Ctrl+Shift+X elsewhere).
-                app.handle().manage(commands::screenshot::ScreenshotState::default());
+                // (ScreenshotState is managed at the top of setup —
+                // XR-WIN-BOOT-001.)
                 commands::screenshot::register(app.handle())?;
                 // Phase 27 — the always-alive tray, then the macOS app menu.
                 // (The menu reuses the tray's action ids, so one dispatcher
