@@ -44,7 +44,31 @@ pub fn run() {
     let engine_state = std::sync::Arc::new(engine::EngineState::default());
     let engine_setup = std::sync::Arc::clone(&engine_state);
     let engine_exit = std::sync::Arc::clone(&engine_state);
-    let builder = tauri::Builder::default().manage(engine_state);
+    // XR-WIN-BOOT-001 — every bootstrap-reachable in-memory state is managed on
+    // the BUILDER, not inside setup(). Tauri creates the config windows within
+    // build(), BEFORE setup() runs, and the WebView2 environment callback pumps
+    // the message loop while it works: on a slow machine the page finishes
+    // loading there and the frontend's frame-1 effects (App.tsx →
+    // updates_state, db_health, crash_state) dispatch IPC while the shell is
+    // still inside window creation. A Tauri command resolving `State<T>` that
+    // is not yet managed panics with "state() called before manage()"; inside
+    // the webview FFI callback that panic cannot unwind, so the process ABORTS
+    // with no shell.log and no crash record — the silent ~6s death captured
+    // live on Windows 11 (tauri-2.12.0 src/lib.rs:761, UpdatesState, inside
+    // CreateWebViewEnvironmentWithOptionsInternal). Proof this is the right
+    // layer: EngineState has always been managed right here on the builder and
+    // engine_link has never panicked. (Managing these in setup() — the first
+    // patch attempt — cannot help, because setup() starts only after build()
+    // returns.) DB-backed inits stay in setup(): they need the AppHandle and
+    // are only used by routed pages, long after setup completes.
+    let builder = tauri::Builder::default()
+        .manage(engine_state)
+        .manage(commands::updates::UpdatesState::default())
+        .manage(commands::recovery::RecoveryState::default())
+        .manage(commands::data_health::DataHealth::default())
+        .manage(commands::workspaces::SpawnState::new());
+    #[cfg(desktop)]
+    let builder = builder.manage(commands::screenshot::ScreenshotState::default());
 
     // Single instance must be registered first: a second launch hands its
     // argv to the running shell and exits — we focus the existing window.
@@ -80,27 +104,10 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
-            // XR-WIN-BOOT-001 — manage every in-memory state BEFORE any other
-            // setup step. The main window's WebView2 bootstrap is asynchronous:
-            // on a slow machine (real-world Windows 11 with AV scanning) the
-            // page can finish loading and dispatch bootstrap IPC
-            // (`updates_state`, `db_health`, …) while the shell is still inside
-            // the early setup code below. A Tauri command resolving `State<T>`
-            // for a type that is not yet managed panics with "state() called
-            // before manage()"; when that dispatch happens inside the WebView2
-            // environment callback the panic crosses an FFI boundary and ABORTS
-            // the process before a single shell.log line exists — a silent
-            // startup death with zero diagnostics. Managing the in-memory
-            // defaults first removes the whole class of race. (Real-world
-            // capture: tauri-2.12.0 src/lib.rs:761, UpdatesState, inside
-            // CreateWebViewEnvironmentWithOptionsInternal → abort, ~6s after
-            // launch on a slow Windows 11 box.)
-            app.handle().manage(commands::recovery::RecoveryState::default());
-            app.handle().manage(commands::updates::UpdatesState::default());
-            app.handle().manage(commands::data_health::DataHealth::default());
-            app.handle().manage(commands::workspaces::SpawnState::new());
-            #[cfg(desktop)]
-            app.handle().manage(commands::screenshot::ScreenshotState::default());
+            // XR-WIN-BOOT-001: all bootstrap-reachable in-memory states are
+            // managed on the BUILDER above — before the config windows exist,
+            // so no frame-1 IPC can ever resolve an un-managed State<T>.
+            // Nothing to manage here; see the builder comment.
 
             // Phase 27 §E — per-OS window chrome. Runs FIRST: macOS keeps its
             // decorations (real traffic lights), Windows and Linux drop them
@@ -203,17 +210,17 @@ pub fn run() {
             // XR-LAUNCH-021 — BEFORE any connection to xr.db is opened: apply
             // a staged import (atomic swap with backup + rollback), then the
             // integrity preflight (a damaged file is moved aside, not fatal).
-            // DataHealth is already managed at the top of setup
+            // DataHealth is already managed on the builder
             // (XR-WIN-BOOT-001); without a data dir there is nothing to do.
             if let Ok(data_dir) = app.path().app_data_dir() {
                 commands::data_health::startup(app.handle(), &data_dir);
             }
             commands::chat::init(app)?;
             // Phase 10 — workspaces: same xr.db (WAL), own connection + DDL.
-            // (SpawnState is managed at the top of setup — XR-WIN-BOOT-001.)
+            // (SpawnState is managed on the builder — XR-WIN-BOOT-001.)
             app.handle()
                 .manage(commands::workspaces::WorkspaceDb::init(app.handle()));
-            // (RecoveryState + UpdatesState are managed at the top of setup —
+            // (RecoveryState + UpdatesState are managed on the builder —
             // XR-WIN-BOOT-001.)
             // Phase 12 — XR Shield: append-only audit chain on the shared xr.db.
             app.handle().manage(shield::ShieldDb::init(app.handle()));
@@ -238,7 +245,7 @@ pub fn run() {
                 // Voice Theater (Phase 16): ⌥⌘V toggle + native context menu.
                 commands::theater::init(app.handle())?;
                 // Phase 27 — screenshot-and-ask: ⌘⇧X (Ctrl+Shift+X elsewhere).
-                // (ScreenshotState is managed at the top of setup —
+                // (ScreenshotState is managed on the builder —
                 // XR-WIN-BOOT-001.)
                 commands::screenshot::register(app.handle())?;
                 // Phase 27 — the always-alive tray, then the macOS app menu.
