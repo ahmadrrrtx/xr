@@ -203,11 +203,10 @@ pub fn run() {
             // XR-LAUNCH-021 — BEFORE any connection to xr.db is opened: apply
             // a staged import (atomic swap with backup + rollback), then the
             // integrity preflight (a damaged file is moved aside, not fatal).
-            match app.path().app_data_dir() {
-                Ok(data_dir) => commands::data_health::startup(app.handle(), &data_dir),
-                // DataHealth is already managed at the top of setup
-                // (XR-WIN-BOOT-001); without a data dir there is nothing to do.
-                Err(_) => {}
+            // DataHealth is already managed at the top of setup
+            // (XR-WIN-BOOT-001); without a data dir there is nothing to do.
+            if let Ok(data_dir) = app.path().app_data_dir() {
+                commands::data_health::startup(app.handle(), &data_dir);
             }
             commands::chat::init(app)?;
             // Phase 10 — workspaces: same xr.db (WAL), own connection + DDL.
