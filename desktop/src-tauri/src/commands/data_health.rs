@@ -37,7 +37,12 @@ pub fn note<R: Runtime>(app: &AppHandle<R>, notice: Option<String>) {
 /// Setup hook, BEFORE any database connection is opened: apply a staged
 /// import (see `data_safety::stage_import`), then the integrity preflight.
 pub fn startup<R: Runtime>(app: &AppHandle<R>, data_dir: &Path) {
-    app.manage(DataHealth::default());
+    // XR-WIN-BOOT-001: setup already manages this state's default up-front so
+    // bootstrap IPC can never race it (see lib.rs). Keep the manage here
+    // idempotent for callers that run without setup (unit tests).
+    if app.try_state::<DataHealth>().is_none() {
+        app.manage(DataHealth::default());
+    }
     match crate::data_safety::apply_pending_import(data_dir) {
         Ok(notice) => note(app, notice),
         Err(e) => note(app, Some(e)),
