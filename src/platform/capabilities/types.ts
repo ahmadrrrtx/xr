@@ -312,7 +312,7 @@ export interface CapabilityDescriptor {
   keywords: string[];
 }
 
-const strArr = z.array(z.string()).default([]);
+const strArr = z.array(z.string()).prefault([]);
 
 export const CapabilityDescriptorSchema = z.object({
   schemaVersion: z.literal(CAPABILITY_DESCRIPTOR_SCHEMA_VERSION),
@@ -439,7 +439,7 @@ export const CapabilityDescriptorSchema = z.object({
     sbom: z.object({ ref: z.string(), format: z.string().optional(), verified: z.boolean().optional() }).optional(),
     dependencyLocks: z.array(z.object({ id: z.string(), version: z.string(), hash: z.string().optional(), type: z.string().optional() })).optional(),
     capabilityStatement: z.string().optional(),
-  }).default({}),
+  }).prefault({}),
   tags: strArr,
   keywords: strArr,
 });

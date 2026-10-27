@@ -1,0 +1,4 @@
+$ python3 /home/user/xr-evidence/validate_sbom_schema.py
+/home/user/xr-evidence/validate_sbom_schema.py:15: DeprecationWarning: jsonschema.RefResolver is deprecated as of v4.18.0, in favor of the https://github.com/python-jsonschema/referencing library, which provides more compliant referencing behavior as well as more flexible APIs for customization. A future release will remove RefResolver. Please file a feature request (on referencing) if you are missing an API for the kind of customization you need.
+  resolver=jsonschema.RefResolver.from_schema(schema,store=store)
+PASS: actual generated CycloneDX1.5 combined inventory validates against official schema; 1206 components; schema digests recorded

@@ -13,6 +13,7 @@
 import type { EnvironmentExecutable, TrustRequest } from "./types.ts";
 
 export interface ShellTrustSpecOptions {
+  signal?: AbortSignal;
   timeoutMs?: number;
   maxOutputBytes?: number;
   /** Network destinations the command will touch (hostnames/URLs). */
@@ -58,6 +59,7 @@ export function shellTrustSpec(
     env: {},
     timeoutMs: opts.timeoutMs ?? 120_000,
     maxOutputBytes: opts.maxOutputBytes ?? 4 * 1024 * 1024,
+    signal: opts.signal,
   };
   return { request, executable };
 }

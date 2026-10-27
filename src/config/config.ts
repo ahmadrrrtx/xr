@@ -34,37 +34,37 @@ export const DEFAULT_HEALTH_TIMEOUT_MS = 2500;
 export const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 
 const ConfigSchema = z.object({
-  version: z.number().default(CONFIG_VERSION),
+  version: z.number().prefault(CONFIG_VERSION),
   defaults: z
     .object({
-      mode: z.enum(["agent", "plan", "ask"]).default("agent"),
-      provider: z.string().regex(/^[a-z0-9_-]+$/i).default("ollama"),
-      model: z.string().min(1).max(200).default("qwen2.5:7b"),
+      mode: z.enum(["agent", "plan", "ask"]).prefault("agent"),
+      provider: z.string().regex(/^[a-z0-9_-]+$/i).prefault("ollama"),
+      model: z.string().min(1).max(200).prefault("qwen2.5:7b"),
       fallbackProvider: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
       fallbackModel: z.string().min(1).max(200).optional(),
     })
-    .default({}),
+    .prefault({}),
   budget: z
     .object({
-      perTaskUsd: z.number().default(0.25),
-      perTaskTokens: z.number().default(250_000),
+      perTaskUsd: z.number().prefault(0.25),
+      perTaskTokens: z.number().prefault(250_000),
     })
-    .default({}),
+    .prefault({}),
   security: z
     .object({
       // Sensible defaults so web tools work out-of-the-box without leaving a hole.
       // Users can tighten this to their own allow-list in config.json.
-      egressAllowlist: z.array(z.string()).default(["searx.be", "api.github.com", "registry.npmjs.org", "pypi.org", "crates.io"]),
+      egressAllowlist: z.array(z.string()).prefault(["searx.be", "api.github.com", "registry.npmjs.org", "pypi.org", "crates.io"]),
       /**
        * Phase 4 · T4 — explicitly permitted raw-IP / loopback destinations
        * (e.g. a local model runtime at 127.0.0.1:11434). Exact host or
        * host:port entries; the ONLY way through the private-range block.
        * Absent = raw IP literals are refused at the egress proxy.
        */
-      allowedHosts: z.array(z.string()).default([]),
+      allowedHosts: z.array(z.string()).prefault([]),
       requireApproval: z
         .array(z.string())
-        .default(["write_file", "delete", "shell", "send"]),
+        .prefault(["write_file", "delete", "shell", "send"]),
       /**
        * Phase 4 · T1 — hardened mode (fail-closed). Default TRUE: high-risk
        * actions (shell/code/MCP/plugins) must run inside an enforceable OS
@@ -73,38 +73,38 @@ const ConfigSchema = z.object({
        * operator explicitly accepts the degraded posture (logged + audited).
        * Env override: XR_TRUST_HARDENED=0|false.
        */
-      hardened: z.boolean().default(true),
+      hardened: z.boolean().prefault(true),
     })
-    .default({}),
+    .prefault({}),
   providers: z
     .object({
       // OpenAI-compatible provider overrides
       ollama: z
-        .object({ baseUrl: z.string().url().refine((v) => v.startsWith("http://") || v.startsWith("https://"), "must be http(s)").default("http://localhost:11434/v1") })
-        .default({}),
+        .object({ baseUrl: z.string().url().refine((v) => v.startsWith("http://") || v.startsWith("https://"), "must be http(s)").prefault("http://localhost:11434/v1") })
+        .prefault({}),
       groq: z
-        .object({ baseUrl: z.string().url().default("https://api.groq.com/openai/v1") })
-        .default({}),
+        .object({ baseUrl: z.string().url().prefault("https://api.groq.com/openai/v1") })
+        .prefault({}),
       together: z
-        .object({ baseUrl: z.string().url().default("https://api.together.xyz/v1") })
-        .default({}),
+        .object({ baseUrl: z.string().url().prefault("https://api.together.xyz/v1") })
+        .prefault({}),
       openrouter: z
-        .object({ baseUrl: z.string().url().default("https://openrouter.ai/api/v1") })
-        .default({}),
+        .object({ baseUrl: z.string().url().prefault("https://openrouter.ai/api/v1") })
+        .prefault({}),
       deepseek: z
-        .object({ baseUrl: z.string().url().default("https://api.deepseek.com/v1") })
-        .default({}),
+        .object({ baseUrl: z.string().url().prefault("https://api.deepseek.com/v1") })
+        .prefault({}),
       // Native providers don't need baseUrl (use their own API endpoints)
     })
     .passthrough()
-    .default({}),
+    .prefault({}),
   // ── Stage 3: Universal Provider Engine ─────────────────────────────────────
   providerEngine: z
     .object({
       /** GAP-001 — model-call ceiling (ms); never unbounded. Env: XR_PROVIDER_TIMEOUT_MS. */
-      requestTimeoutMs: z.number().int().positive().max(3_600_000).default(120_000),
+      requestTimeoutMs: z.number().int().positive().max(3_600_000).prefault(120_000),
       /** Phase 04 — health check ceiling (ms); bounded separately from request. Env: XR_HEALTH_TIMEOUT_MS */
-      healthTimeoutMs: z.number().int().positive().max(30_000).default(2500),
+      healthTimeoutMs: z.number().int().positive().max(30_000).prefault(2500),
       routingStrategy: z
         .enum([
           "primary",
@@ -114,7 +114,7 @@ const ConfigSchema = z.object({
           "cheapest",
           "fastest",
         ])
-        .default("hybrid"),
+        .prefault("hybrid"),
       customProviders: z
         .array(
           z.object({
@@ -123,25 +123,25 @@ const ConfigSchema = z.object({
             baseUrl: z.string().url(),
             apiKeyEnv: z.string().optional(),
             defaultModel: z.string(),
-            headers: z.record(z.string()).optional(),
+            headers: z.record(z.string(), z.string()).optional(),
             capabilities: z
               .object({
-                chat: z.boolean().default(true),
-                reasoning: z.boolean().default(false),
-                vision: z.boolean().default(false),
-                embeddings: z.boolean().default(false),
-                toolUse: z.boolean().default(false),
-                jsonMode: z.boolean().default(false),
-                functionCalling: z.boolean().default(false),
-                streaming: z.boolean().default(false),
+                chat: z.boolean().prefault(true),
+                reasoning: z.boolean().prefault(false),
+                vision: z.boolean().prefault(false),
+                embeddings: z.boolean().prefault(false),
+                toolUse: z.boolean().prefault(false),
+                jsonMode: z.boolean().prefault(false),
+                functionCalling: z.boolean().prefault(false),
+                streaming: z.boolean().prefault(false),
               })
-              .default({}),
+              .prefault({}),
           }),
         )
-        .default([]),
-      providerCapabilities: z.record(z.any()).default({}),
+        .prefault([]),
+      providerCapabilities: z.record(z.string(), z.any()).prefault({}),
     })
-    .default({}),
+    .prefault({}),
   // ── XR 4.4: Universal Intelligence Plane ────────────────────────────────
   // Additive routing preferences. Defaults preserve XR 4.3 behavior:
   // hybrid strategy via providerEngine, explicit pins still win.
@@ -163,29 +163,31 @@ const ConfigSchema = z.object({
         .optional(),
       localityPolicy: z
         .enum(["any", "local_only", "private_only", "no_cloud"])
-        .default("any"),
-      allowFallback: z.boolean().default(true),
+        .prefault("any"),
+      allowFallback: z.boolean().prefault(false),
+      /** Independent consent to send a failed request to a different provider. */
+      allowCrossProviderFallback: z.boolean().prefault(false),
       /** Explicit opt-in to escalate local/private work to cloud on failure. */
-      allowCloudFallback: z.boolean().default(false),
-      preferFree: z.boolean().default(true),
+      allowCloudFallback: z.boolean().prefault(false),
+      preferFree: z.boolean().prefault(true),
       maxCostUsd: z.number().min(0).optional(),
       latencyPreference: z
         .enum(["any", "realtime", "fast", "standard", "slow"])
-        .default("any"),
+        .prefault("any"),
       qualityPreference: z
         .enum(["any", "basic", "standard", "high", "frontier"])
-        .default("any"),
+        .prefault("any"),
       /** Opt out of historical outcome influence (safe default remains on with confidence gates). */
-      disableHistorical: z.boolean().default(false),
+      disableHistorical: z.boolean().prefault(false),
       /** When false, automatic routing is off — only explicit/default pins. */
-      enableAutomatic: z.boolean().default(true),
+      enableAutomatic: z.boolean().prefault(false),
       /**
        * Phase 5 · T1 — difficulty-aware capability gating (RouteLLM
        * principle, deterministic): estimate task difficulty and require
        * MEASURED fidelity ≥ the implied floor. The gate rejects only measured
        * contracts below the floor; unmeasured models pass on static priors.
        */
-      difficultyRouting: z.boolean().default(true),
+      difficultyRouting: z.boolean().prefault(true),
       /** Phase 5 · T1 — explicit global fidelity floor override (0..1). */
       minOverallFidelity: z.number().min(0).max(1).optional(),
       /**
@@ -194,39 +196,39 @@ const ConfigSchema = z.object({
        */
       breaker: z
         .object({
-          windowSize: z.number().int().min(4).max(512).default(32),
-          minSamples: z.number().int().min(1).max(128).default(4),
-          errorRateThreshold: z.number().min(0.05).max(1).default(0.5),
-          qualityRateThreshold: z.number().min(0.05).max(1).default(0.6),
-          cooldownMs: z.number().int().min(1000).default(30_000),
-          cooldownMaxMs: z.number().int().min(1000).default(300_000),
-          jitterRatio: z.number().min(0).max(1).default(0.2),
+          windowSize: z.number().int().min(4).max(512).prefault(32),
+          minSamples: z.number().int().min(1).max(128).prefault(4),
+          errorRateThreshold: z.number().min(0.05).max(1).prefault(0.5),
+          qualityRateThreshold: z.number().min(0.05).max(1).prefault(0.6),
+          cooldownMs: z.number().int().min(1000).prefault(30_000),
+          cooldownMaxMs: z.number().int().min(1000).prefault(300_000),
+          jitterRatio: z.number().min(0).max(1).prefault(0.2),
         })
-        .default({}),
+        .prefault({}),
       /** Phase 5 · T3 — jittered retry budget for transient failures. */
       retry: z
         .object({
-          maxInPlaceRetries: z.number().int().min(0).max(5).default(1),
-          baseDelayMs: z.number().int().min(0).default(250),
-          maxDelayMs: z.number().int().min(0).default(4_000),
-          totalBudgetMs: z.number().int().min(0).default(8_000),
-          jitterRatio: z.number().min(0).max(1).default(0.3),
+          maxInPlaceRetries: z.number().int().min(0).max(5).prefault(1),
+          baseDelayMs: z.number().int().min(0).prefault(250),
+          maxDelayMs: z.number().int().min(0).prefault(4_000),
+          totalBudgetMs: z.number().int().min(0).prefault(8_000),
+          jitterRatio: z.number().min(0).max(1).prefault(0.3),
         })
-        .default({}),
+        .prefault({}),
     })
-    .default({}),
+    .prefault({}),
   localModels: z
     .object({
-      runtime: z.enum(["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang", "custom-openai"]).default("ollama"),
-      provider: z.string().regex(/^[a-z0-9_-]+$/i).default("ollama"),
-      enabled: z.boolean().default(false),
+      runtime: z.enum(["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang", "custom-openai"]).prefault("ollama"),
+      provider: z.string().regex(/^[a-z0-9_-]+$/i).prefault("ollama"),
+      enabled: z.boolean().prefault(false),
       selected: z.string().min(1).max(200).optional(),
       recommended: z.string().min(1).max(200).optional(),
       recommendationReason: z.string().max(1000).optional(),
       installedAt: z.string().datetime().optional(),
-      routing: z.enum(["local-only", "hybrid", "cloud-first"]).default("hybrid"),
-      useCase: z.enum(["general", "coding", "reasoning", "summarization", "research", "embeddings", "voice"]).default("general"),
-      runtimes: z.record(z.object({
+      routing: z.enum(["local-only", "hybrid", "cloud-first"]).prefault("hybrid"),
+      useCase: z.enum(["general", "coding", "reasoning", "summarization", "research", "embeddings", "voice"]).prefault("general"),
+      runtimes: z.record(z.string(), z.object({
         providerId: z.string().optional(),
         baseUrl: z.string().url().optional(),
         installed: z.boolean().optional(),
@@ -235,26 +237,26 @@ const ConfigSchema = z.object({
         healthy: z.boolean().optional(),
         lastCheckedAt: z.string().optional(),
         detail: z.string().optional(),
-      })).default({}),
+      })).prefault({}),
       installed: z.array(z.object({
         id: z.string(),
         runtime: z.string(),
         providerId: z.string(),
         model: z.string(),
-        family: z.array(z.string()).default([]),
-        source: z.string().default("unknown"),
+        family: z.array(z.string()).prefault([]),
+        source: z.string().prefault("unknown"),
         sizeGb: z.number().optional(),
         quantization: z.string().optional(),
-        downloaded: z.boolean().default(false),
-        configured: z.boolean().default(false),
-        healthy: z.boolean().default(false),
+        downloaded: z.boolean().prefault(false),
+        configured: z.boolean().prefault(false),
+        healthy: z.boolean().prefault(false),
         baseUrl: z.string().optional(),
         installedAt: z.string().optional(),
         lastCheckedAt: z.string().optional(),
         detail: z.string().optional(),
-      })).default([]),
+      })).prefault([]),
     })
-    .default({}),
+    .prefault({}),
   // Block 8: MCP servers to consume tools from.
   mcpServers: z
     .array(
@@ -264,55 +266,55 @@ const ConfigSchema = z.object({
         apiKeyEnv: z.string().optional(),
       }),
     )
-    .default([]),
+    .prefault([]),
   // Block 8: outbound webhooks for events.
   webhooks: z
     .object({
       url: z.string().optional(),
-      events: z.array(z.string()).default(["task.done", "security", "budget.pause"]),
+      events: z.array(z.string()).prefault(["task.done", "security", "budget.pause"]),
     })
-    .default({}),
+    .prefault({}),
   // Auto-select free provider when available
-  preferFreeProviders: z.boolean().default(true),
+  preferFreeProviders: z.boolean().prefault(true),
   // Stage 8 — Voice Stack. Disabled by default, push-to-talk by default,
   // local-first by default. Cloud STT/TTS and always-listen require explicit opt-in.
   voice: z
     .object({
-      enabled: z.boolean().default(false),
-      mode: z.enum(["off", "push-to-talk", "wake-word", "always-listen"]).default("push-to-talk"),
+      enabled: z.boolean().prefault(false),
+      mode: z.enum(["off", "push-to-talk", "wake-word", "always-listen"]).prefault("push-to-talk"),
       inputDevice: z.string().min(1).max(500).optional(),
       outputDevice: z.string().min(1).max(500).optional(),
-      sttBackend: z.enum(["auto", "sherpa", "http", "groq", "openai", "whisper-cli", "whispercpp", "disabled"]).default("auto"),
+      sttBackend: z.enum(["auto", "sherpa", "http", "groq", "openai", "whisper-cli", "whispercpp", "disabled"]).prefault("auto"),
       sttUrl: z.string().url().optional(),
-      sttModel: z.string().min(1).max(200).default("base.en"),
+      sttModel: z.string().min(1).max(200).prefault("base.en"),
       sttLanguage: z.string().min(2).max(32).optional(),
-      ttsBackend: z.enum(["auto", "sherpa", "http", "piper", "kokoro-cli", "system", "say", "espeak", "powershell", "openai", "disabled"]).default("auto"),
+      ttsBackend: z.enum(["auto", "sherpa", "http", "piper", "kokoro-cli", "system", "say", "espeak", "powershell", "openai", "disabled"]).prefault("auto"),
       ttsUrl: z.string().url().optional(),
-      ttsVoice: z.string().min(1).max(200).default("default"),
-      ttsPersona: z.enum(["calm", "fast", "detailed"]).default("calm"),
-      vadBackend: z.enum(["energy", "silero-external", "none"]).default("energy"),
-      wakeBackend: z.enum(["text", "openwakeword-external", "none"]).default("text"),
-      wakeWord: z.string().min(2).max(80).default("hey xr"),
-      pushToTalkKey: z.string().min(1).max(80).default("enter"),
-      alwaysListen: z.boolean().default(false),
-      interruptionPolicy: z.enum(["barge-in", "finish-sentence", "disabled"]).default("barge-in"),
-      confirmationPolicy: z.enum(["always-risky", "always", "never-execute-risky"]).default("always-risky"),
-      microphonePermission: z.enum(["unknown", "granted", "denied"]).default("unknown"),
-      speakerPermission: z.enum(["unknown", "granted", "denied"]).default("unknown"),
-      transcriptPolicy: z.enum(["off", "session", "local-private"]).default("session"),
-      transcriptRetentionDays: z.number().int().min(0).max(365).default(7),
-      fallbackTextMode: z.boolean().default(true),
-      allowCloudStt: z.boolean().default(false),
-      allowCloudTts: z.boolean().default(false),
-      noiseSuppression: z.boolean().default(true),
+      ttsVoice: z.string().min(1).max(200).prefault("default"),
+      ttsPersona: z.enum(["calm", "fast", "detailed"]).prefault("calm"),
+      vadBackend: z.enum(["energy", "silero-external", "none"]).prefault("energy"),
+      wakeBackend: z.enum(["text", "openwakeword-external", "none"]).prefault("text"),
+      wakeWord: z.string().min(2).max(80).prefault("hey xr"),
+      pushToTalkKey: z.string().min(1).max(80).prefault("enter"),
+      alwaysListen: z.boolean().prefault(false),
+      interruptionPolicy: z.enum(["barge-in", "finish-sentence", "disabled"]).prefault("barge-in"),
+      confirmationPolicy: z.enum(["always-risky", "always", "never-execute-risky"]).prefault("always-risky"),
+      microphonePermission: z.enum(["unknown", "granted", "denied"]).prefault("unknown"),
+      speakerPermission: z.enum(["unknown", "granted", "denied"]).prefault("unknown"),
+      transcriptPolicy: z.enum(["off", "session", "local-private"]).prefault("session"),
+      transcriptRetentionDays: z.number().int().min(0).max(365).prefault(7),
+      fallbackTextMode: z.boolean().prefault(true),
+      allowCloudStt: z.boolean().prefault(false),
+      allowCloudTts: z.boolean().prefault(false),
+      noiseSuppression: z.boolean().prefault(true),
       endpointing: z.object({
-        minSilenceMs: z.number().int().min(100).max(5000).default(650),
-        maxSilenceMs: z.number().int().min(250).max(10000).default(1500),
-        speechPaddingMs: z.number().int().min(0).max(2000).default(250),
-        maxUtteranceMs: z.number().int().min(1000).max(120000).default(15000),
-        energyThreshold: z.number().min(0.001).max(0.5).default(0.012),
-      }).default({}),
-      deviceMetadata: z.record(z.unknown()).default({}),
+        minSilenceMs: z.number().int().min(100).max(5000).prefault(650),
+        maxSilenceMs: z.number().int().min(250).max(10000).prefault(1500),
+        speechPaddingMs: z.number().int().min(0).max(2000).prefault(250),
+        maxUtteranceMs: z.number().int().min(1000).max(120000).prefault(15000),
+        energyThreshold: z.number().min(0.001).max(0.5).prefault(0.012),
+      }).prefault({}),
+      deviceMetadata: z.record(z.string(), z.unknown()).prefault({}),
       lastTestResult: z.object({
         ok: z.boolean(),
         at: z.string(),
@@ -326,42 +328,42 @@ const ConfigSchema = z.object({
       lastUsedAt: z.string().optional(),
     })
     .passthrough()
-    .default({}),
+    .prefault({}),
   // v0.9 / Stage 6 — durable memory system (long-term preferences, project
   // context, facts). Local-first and EXPLICIT by default: XR only stores what
   // the user asks it to. `autoSuggest` offers to remember things found in
   // chat/voice, but still requires user confirmation — never a silent auto-save.
   memory: z
     .object({
-      enabled: z.boolean().default(true),
+      enabled: z.boolean().prefault(true),
       /** Offer to remember "remember …" phrases in chat/voice (asks first). */
-      autoSuggest: z.boolean().default(true),
+      autoSuggest: z.boolean().prefault(true),
       /** Inject relevant memory into chat/research prompts (conservative). */
-      injectInChat: z.boolean().default(true),
+      injectInChat: z.boolean().prefault(true),
       /** Max entries surfaced into any single prompt. */
-      recallLimit: z.number().int().min(0).max(20).default(5),
+      recallLimit: z.number().int().min(0).max(20).prefault(5),
       /**
        * Use embeddings-based semantic recall (Ollama nomic-embed-text) with an
        * automatic lexical fallback. Set false to force deterministic lexical
        * recall everywhere.
        */
-      semanticRecall: z.boolean().default(true),
+      semanticRecall: z.boolean().prefault(true),
       /**
        * Stage 6 — auto-prune entries older than this many days at opportune
        * moments (e.g. on `xr doctor`). 0 = never auto-expire (explicit only).
        * This NEVER deletes high-importance (>=4) or exclusion rules.
        */
-      autoExpireDays: z.number().int().min(0).max(3650).default(0),
+      autoExpireDays: z.number().int().min(0).max(3650).prefault(0),
       /**
        * Stage 6 — fold finished conversations into compact session summaries
        * (kept in a SEPARATE store, never confused with long-term facts). Off
        * by default so XR is never noisy/creepy.
        */
-      saveSessionSummaries: z.boolean().default(false),
+      saveSessionSummaries: z.boolean().prefault(false),
       /** Stage 6 — minimum user/assistant turns before a summary is saved. */
-      sessionSummaryMinTurns: z.number().int().min(2).max(100).default(6),
+      sessionSummaryMinTurns: z.number().int().min(2).max(100).prefault(6),
     })
-    .default({}),
+    .prefault({}),
   // XR 4.5 — Knowledge and Context OS. Additive: every default preserves 4.4
   // behavior, so an upgraded install behaves identically until opted in.
   knowledge: z
@@ -370,65 +372,65 @@ const ConfigSchema = z.object({
        * Master switch for the context layer. When false XR falls back to the
        * 4.4 memory injection path exactly (rollback lever, §19).
        */
-      enabled: z.boolean().default(true),
+      enabled: z.boolean().prefault(true),
       /**
        * Injection mode.
        *  - "legacy"  : 4.4 behavior (single unlabelled memory block) — DEPRECATED (Phase 7, F-21)
        *  - "context" : 4.5 typed, channel-separated context packages (the only path from 2.0)
        *  - "both"    : context packages + legacy block — DEPRECATED (still works; loadConfig() warns)
        */
-      injectionMode: z.enum(["legacy", "context", "both"]).default("context"),
+      injectionMode: z.enum(["legacy", "context", "both"]).prefault("context"),
       /**
        * Enforce scope/authorization before ranking. Disabling this is UNSAFE
        * and exists only for incident diagnosis; it is logged loudly and must
        * never be used as a rollback path (§19).
        */
-      enforceScope: z.boolean().default(true),
+      enforceScope: z.boolean().prefault(true),
       /** Quarantine untrusted external content rather than dropping it. */
-      quarantineUntrusted: z.boolean().default(true),
+      quarantineUntrusted: z.boolean().prefault(true),
       /** Use the intelligence plane to route embedding/reranking models. */
-      routeEmbeddings: z.boolean().default(true),
+      routeEmbeddings: z.boolean().prefault(true),
       /** Force deterministic lexical retrieval (no embedding calls at all). */
-      lexicalOnly: z.boolean().default(false),
+      lexicalOnly: z.boolean().prefault(false),
       /** Enable the deterministic reranking stage. */
-      rerank: z.boolean().default(true),
+      rerank: z.boolean().prefault(true),
       /** Hard cap on items in one assembled context package. */
-      maxPackageItems: z.number().int().min(0).max(200).default(48),
+      maxPackageItems: z.number().int().min(0).max(200).prefault(48),
       /** Hard cap on characters in one assembled context package. */
-      maxPackageChars: z.number().int().min(0).max(200_000).default(24_000),
+      maxPackageChars: z.number().int().min(0).max(200_000).prefault(24_000),
       /** Evidence-preserving compression for long tasks. */
-      compression: z.boolean().default(true),
+      compression: z.boolean().prefault(true),
       /**
        * Refuse to compress when a required evidence invariant would be lost.
        * Turning this off permits lossy summaries — not recommended (§9.6).
        */
-      compressionFailSafe: z.boolean().default(true),
+      compressionFailSafe: z.boolean().prefault(true),
       /** Persist context packages so a resumed task can revalidate them. */
-      durablePackages: z.boolean().default(true),
+      durablePackages: z.boolean().prefault(true),
       /** Revalidate consent/revocation/scope when a task resumes. */
-      revalidateOnResume: z.boolean().default(true),
+      revalidateOnResume: z.boolean().prefault(true),
       /** Metadata verbosity in normal (non-inspection) output. */
-      disclosure: z.enum(["concise", "detailed"]).default("concise"),
+      disclosure: z.enum(["concise", "detailed"]).prefault("concise"),
     })
-    .default({}),
+    .prefault({}),
   // v0.8: Computer control (safe desktop automation).  Disabled by default —
   // the user must opt in via `xr control start` or by setting `enabled: true`.
   control: z
     .object({
-      enabled: z.boolean().default(false),
-      defaultMode: z.enum(["auto", "step", "dry-run"]).default("auto"),
+      enabled: z.boolean().prefault(false),
+      defaultMode: z.enum(["auto", "step", "dry-run"]).prefault("auto"),
       /** ms between actions in a plan; gives the user time to cancel. */
-      stepDelayMs: z.number().int().min(0).max(10_000).default(250),
+      stepDelayMs: z.number().int().min(0).max(10_000).prefault(250),
       // v0.8.2 — plan memory (cache successful plans to skip the LLM next time).
       memory: z
         .object({
-          enabled: z.boolean().default(true),
+          enabled: z.boolean().prefault(true),
           /** Maximum entries to keep (oldest pruned on overflow — informational). */
-          maxEntries: z.number().int().min(1).max(10_000).default(500),
+          maxEntries: z.number().int().min(1).max(10_000).prefault(500),
         })
-        .default({}),
+        .prefault({}),
     })
-    .default({}),
+    .prefault({}),
   // XR 5.1 (v16): Environment Interaction OS. Adds one governed contract over
   // browser/desktop/filesystem/application/voice/vision. Enabled by default —
   // the layer only GATES existing control/voice primitives (it cannot widen
@@ -436,90 +438,90 @@ const ConfigSchema = z.object({
   // modality switches are the supported Phase 8 rollback granularity (§17).
   environment: z
     .object({
-      enabled: z.boolean().default(true),
+      enabled: z.boolean().prefault(true),
       /** Per-modality kill switches (rollback without touching core XR). */
       modalities: z
         .object({
-          browser: z.boolean().default(true),
-          desktop: z.boolean().default(true),
-          filesystem: z.boolean().default(true),
-          application: z.boolean().default(true),
-          voice: z.boolean().default(true),
-          vision: z.boolean().default(true),
+          browser: z.boolean().prefault(true),
+          desktop: z.boolean().prefault(true),
+          filesystem: z.boolean().prefault(true),
+          application: z.boolean().prefault(true),
+          voice: z.boolean().prefault(true),
+          vision: z.boolean().prefault(true),
         })
-        .default({}),
+        .prefault({}),
       browser: z
         .object({
           /** Session domain policy (applies to governed isolated sessions). */
-          allowedDomains: z.array(z.string().max(200)).max(200).default([]),
-          blockedDomains: z.array(z.string().max(200)).max(500).default([]),
+          allowedDomains: z.array(z.string().max(200)).max(200).prefault([]),
+          blockedDomains: z.array(z.string().max(200)).max(500).prefault([]),
           /** Governed sessions fail closed on private/localhost navigation. */
-          blockPrivateNetworks: z.boolean().default(true),
-          maxDownloadBytes: z.number().int().min(0).max(100 * 1024 * 1024).default(50 * 1024 * 1024),
+          blockPrivateNetworks: z.boolean().prefault(true),
+          maxDownloadBytes: z.number().int().min(0).max(100 * 1024 * 1024).prefault(50 * 1024 * 1024),
         })
-        .default({}),
+        .prefault({}),
       vision: z
         .object({
           /** Cloud vision model calls: explicit opt-in, default off. */
-          allowCloud: z.boolean().default(false),
-          maxImageBytes: z.number().int().min(262_144).max(25 * 1024 * 1024).default(5 * 1024 * 1024),
+          allowCloud: z.boolean().prefault(false),
+          maxImageBytes: z.number().int().min(262_144).max(25 * 1024 * 1024).prefault(5 * 1024 * 1024),
           /** Observations older than this cannot justify coordinate actions. */
-          staleObservationMs: z.number().int().min(1_000).max(300_000).default(30_000),
+          staleObservationMs: z.number().int().min(1_000).max(300_000).prefault(30_000),
         })
-        .default({}),
+        .prefault({}),
       voice: z
         .object({
           /** Minimum deterministic intent confidence for voice control actions. */
-          minControlConfidence: z.number().min(0).max(1).default(0.6),
+          minControlConfidence: z.number().min(0).max(1).prefault(0.6),
         })
-        .default({}),
+        .prefault({}),
       recovery: z
         .object({
           /** Bounded self-healing only (§7.7). Hard cap 1 re-observe retry. */
-          maxReobserveRetries: z.number().int().min(0).max(1).default(1),
-          circuitFailures: z.number().int().min(2).max(10).default(3),
-          circuitCooldownMs: z.number().int().min(5_000).max(600_000).default(60_000),
+          maxReobserveRetries: z.number().int().min(0).max(1).prefault(1),
+          circuitFailures: z.number().int().min(2).max(10).prefault(3),
+          circuitCooldownMs: z.number().int().min(5_000).max(600_000).prefault(60_000),
         })
-        .default({}),
+        .prefault({}),
       sessions: z
         .object({
-          maxActive: z.number().int().min(1).max(20).default(5),
-          idleTimeoutMs: z.number().int().min(30_000).max(3_600_000).default(300_000),
+          maxActive: z.number().int().min(1).max(20).prefault(5),
+          idleTimeoutMs: z.number().int().min(30_000).max(3_600_000).prefault(300_000),
         })
-        .default({}),
+        .prefault({}),
     })
-    .default({}),
+    .prefault({}),
   // XR 5.2 (v17): Capability Ecosystem. Additive inspection/policy
   // overlay over existing plugin/skill/MCP/provider/tool/workflow systems.
   // It never grants authority by itself; it only controls verification/review
   // defaults used by installers and the common capability inspector.
   capabilities: z
     .object({
-      enabled: z.boolean().default(true),
+      enabled: z.boolean().prefault(true),
       /** Require package signatures for remote/registry installs. Local packages remain inspectable but marked unsigned. */
-      requireSignedPackages: z.boolean().default(false),
+      requireSignedPackages: z.boolean().prefault(false),
       /** Require explicit review before an update can gain new effective authority. */
-      updateRequiresReview: z.boolean().default(true),
+      updateRequiresReview: z.boolean().prefault(true),
       /** Quarantine capabilities on package/signature/contract verification failure. */
-      quarantineOnVerificationFailure: z.boolean().default(true),
+      quarantineOnVerificationFailure: z.boolean().prefault(true),
       /** Workspace-level denied permissions; denied always wins over user grants. */
-      deniedPermissions: z.array(z.string()).default([]),
+      deniedPermissions: z.array(z.string()).prefault([]),
       /** Discovery never ranks by popularity alone; this keeps evidence-biased ranking enabled. */
-      evidenceWeightedDiscovery: z.boolean().default(true),
+      evidenceWeightedDiscovery: z.boolean().prefault(true),
     })
-    .default({}),
+    .prefault({}),
   // Phase 2 · F-11 — durable consent plane. TTL default-deny on EVERY surface:
   // an unanswered approval is a denied action, never a stuck process.
   approvals: z
     .object({
       /** Default time-to-live for an approval request before default-deny. */
-      defaultTtlMs: z.number().int().min(5_000).max(86_400_000).default(300_000),
+      defaultTtlMs: z.number().int().min(5_000).max(86_400_000).prefault(300_000),
       /** Per-surface TTL overrides (e.g. { "telegram": 300000, "daemon": 120000 }). Additive. */
-      perSurface: z.record(z.string(), z.number().int().min(5_000).max(86_400_000)).default({}),
+      perSurface: z.record(z.string(), z.number().int().min(5_000).max(86_400_000)).prefault({}),
       /** Phase 8 — headless Tier-2 requires typed confirm (default true). */
-      typedConfirm: z.boolean().default(true),
+      typedConfirm: z.boolean().prefault(true),
     })
-    .default({}),
+    .prefault({}),
   /**
    * Phase 6 — Orchestration plane (multi-agent substrate policy).
    *
@@ -535,59 +537,59 @@ const ConfigSchema = z.object({
   orchestration: z
     .object({
       /** Global parallel-worker cap for THIS process (queue, never fail). */
-      concurrentWorkers: z.number().int().min(1).max(32).default(4),
+      concurrentWorkers: z.number().int().min(1).max(32).prefault(4),
       /** Per-workflow in-flight worker cap (lane cap inside one tree). */
-      perWorkflowWorkers: z.number().int().min(1).max(32).default(4),
+      perWorkflowWorkers: z.number().int().min(1).max(32).prefault(4),
       /** Opt-in supervised plan-fragment editing (LLM may add/rename/skip). */
-      supervisorEditing: z.boolean().default(false),
+      supervisorEditing: z.boolean().prefault(false),
       supervisorEditingKinds: z
         .array(z.enum(["general", "research", "build", "refactor", "security", "automation", "business"]))
-        .default(["build", "research"]),
+        .prefault(["build", "research"]),
       /** Upper bound on applied fragment edits per workflow lifetime. */
-      maxPlanEdits: z.number().int().min(0).max(8).default(3),
+      maxPlanEdits: z.number().int().min(0).max(8).prefault(3),
       /** Artifact verifier gate. */
-      verifier: z.boolean().default(true),
+      verifier: z.boolean().prefault(true),
       verifierKinds: z
         .array(z.enum(["general", "research", "build", "refactor", "security", "automation", "business"]))
-        .default(["research", "build", "refactor"]),
+        .prefault(["research", "build", "refactor"]),
       /** Cheap local profile for the extra model call (falls back to defaults). */
       verifierProvider: z.string().optional(),
       verifierModel: z.string().optional(),
       /** Partition floors: a lane the root cannot fund at the floor is DENIED. */
-      partitionFloorUsd: z.number().min(0).default(0.01),
-      partitionFloorTokens: z.number().int().min(0).default(1000),
+      partitionFloorUsd: z.number().min(0).prefault(0.01),
+      partitionFloorTokens: z.number().int().min(0).prefault(1000),
       /** Per-role partition weight overrides (merged over template defaults). */
-      roleWeights: z.record(z.string(), z.number().positive()).default({}),
+      roleWeights: z.record(z.string(), z.number().positive()).prefault({}),
       /** Durability for plain `xr run` sessions (per-step checkpoint rows). */
-      checkpointPlainRuns: z.boolean().default(true),
+      checkpointPlainRuns: z.boolean().prefault(true),
     })
-    .default({}),
+    .prefault({}),
   // XR 1.0 — plugin ecosystem. Local-first and explicit by design. The plugin
   // SYSTEM is always available (so `xr plugins …` works), but whether enabled
   // plugins are LOADED into the agent's tool list is governed here.
   plugins: z
     .object({
       /** Load enabled plugins' tools into the agent. Set false to hard-disable. */
-      enabled: z.boolean().default(true),
+      enabled: z.boolean().prefault(true),
       /**
        * Require entrypoint hash to match the value recorded at install. When
        * true (default), a tampered/changed plugin is refused as "untrusted".
        */
-      requireTrust: z.boolean().default(true),
+      requireTrust: z.boolean().prefault(true),
       /**
        * Permissions XR will never grant to any plugin, regardless of manifest /
        * user approval (enterprise policy hook). Empty by default.
        */
-      deniedPermissions: z.array(z.string()).default([]),
+      deniedPermissions: z.array(z.string()).prefault([]),
       /** Phase 8 — unsigned plugins quarantined (hatch: XR_PLUGINS_ALLOW_UNSIGNED=1). */
-      requireSigned: z.boolean().default(true),
+      requireSigned: z.boolean().prefault(true),
     })
-    .default({}),
+    .prefault({}),
   business: z
     .object({
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().prefault(false),
     })
-    .default({}),
+    .prefault({}),
   /**
    * Phase 10 — Web Research / Firecrawl.
    * Provider-agnostic: SearXNG + direct fetch always work when configured;
@@ -599,63 +601,63 @@ const ConfigSchema = z.object({
     .object({
       firecrawl: z
         .object({
-          enabled: z.boolean().default(false),
-          baseUrl: z.string().url().default("https://api.firecrawl.dev"),
-          apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).default("FIRECRAWL_API_KEY"),
-          timeoutMs: z.number().int().positive().max(300_000).default(30_000),
-          maxPages: z.number().int().min(1).max(500).default(20),
-          maxDepth: z.number().int().min(0).max(10).default(2),
-          maxConcurrency: z.number().int().min(1).max(10).default(2),
+          enabled: z.boolean().prefault(false),
+          baseUrl: z.string().url().prefault("https://api.firecrawl.dev"),
+          apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).prefault("FIRECRAWL_API_KEY"),
+          timeoutMs: z.number().int().positive().max(300_000).prefault(30_000),
+          maxPages: z.number().int().min(1).max(500).prefault(20),
+          maxDepth: z.number().int().min(0).max(10).prefault(2),
+          maxConcurrency: z.number().int().min(1).max(10).prefault(2),
         })
-        .default({}),
-      maxPages: z.number().int().min(1).max(500).default(20),
-      maxDepth: z.number().int().min(0).max(10).default(2),
-      maxConcurrency: z.number().int().min(1).max(8).default(3),
-      maxRequests: z.number().int().min(1).max(1000).default(50),
-      maxBytes: z.number().int().min(1024).max(64 * 1024 * 1024).default(4 * 1024 * 1024),
-      maxDurationMs: z.number().int().min(1000).max(3_600_000).default(120_000),
-      allowedDomains: z.array(z.string().max(200)).max(200).default([]),
-      blockedDomains: z.array(z.string().max(200)).max(500).default([]),
-      sameDomainOnly: z.boolean().default(false),
-      includeSubdomains: z.boolean().default(true),
-      allowPublicWeb: z.boolean().default(false),
+        .prefault({}),
+      maxPages: z.number().int().min(1).max(500).prefault(20),
+      maxDepth: z.number().int().min(0).max(10).prefault(2),
+      maxConcurrency: z.number().int().min(1).max(8).prefault(3),
+      maxRequests: z.number().int().min(1).max(1000).prefault(50),
+      maxBytes: z.number().int().min(1024).max(64 * 1024 * 1024).prefault(4 * 1024 * 1024),
+      maxDurationMs: z.number().int().min(1000).max(3_600_000).prefault(120_000),
+      allowedDomains: z.array(z.string().max(200)).max(200).prefault([]),
+      blockedDomains: z.array(z.string().max(200)).max(500).prefault([]),
+      sameDomainOnly: z.boolean().prefault(false),
+      includeSubdomains: z.boolean().prefault(true),
+      allowPublicWeb: z.boolean().prefault(false),
     })
-    .default({}),
+    .prefault({}),
   /** Phase 8 · T2 — opt-in local telemetry (no silent egress). */
   telemetry: z
     .object({
-      enabled: z.boolean().default(false),
-      endpoint: z.string().url().default("http://127.0.0.1:4318"),
-      serviceName: z.string().min(1).max(80).default("xr"),
-      sampleRatio: z.number().min(0).max(1).default(1),
+      enabled: z.boolean().prefault(false),
+      endpoint: z.string().url().prefault("http://127.0.0.1:4318"),
+      serviceName: z.string().min(1).max(80).prefault("xr"),
+      sampleRatio: z.number().min(0).max(1).prefault(1),
       content: z
         .object({
-          prompt: z.boolean().default(false),
-          toolArgs: z.boolean().default(false),
+          prompt: z.boolean().prefault(false),
+          toolArgs: z.boolean().prefault(false),
         })
-        .default({}),
-      exportMetrics: z.boolean().default(true),
-      exportLogs: z.boolean().default(true),
-      batchIntervalMs: z.number().int().min(500).max(600_000).default(5000),
-      batchMax: z.number().int().min(1).max(1000).default(100),
-      ringBufferSize: z.number().int().min(16).max(16384).default(512),
+        .prefault({}),
+      exportMetrics: z.boolean().prefault(true),
+      exportLogs: z.boolean().prefault(true),
+      batchIntervalMs: z.number().int().min(500).max(600_000).prefault(5000),
+      batchMax: z.number().int().min(1).max(1000).prefault(100),
+      ringBufferSize: z.number().int().min(16).max(16384).prefault(512),
       /** Per-metric label cardinality budgets (overflow folds to xr_other). */
-      cardinality: z.record(z.number().int().min(1).max(10_000)).default({}),
+      cardinality: z.record(z.string(), z.number().int().min(1).max(10_000)).prefault({}),
     })
-    .default({}),
+    .prefault({}),
   // Onboarding-persisted user profile (written by src/interfaces/onboard.ts).
   workspace: z
     .object({
-      name: z.string().min(1).max(120).default("My Workspace"),
+      name: z.string().min(1).max(120).prefault("My Workspace"),
     })
-    .default({}),
-  theme: z.enum(["dark", "high-contrast", "reduced-motion"]).default("dark"),
+    .prefault({}),
+  theme: z.enum(["dark", "high-contrast", "reduced-motion"]).prefault("dark"),
   accessibility: z
     .object({
-      largeText: z.boolean().default(false),
-      screenReader: z.boolean().default(false),
+      largeText: z.boolean().prefault(false),
+      screenReader: z.boolean().prefault(false),
     })
-    .default({}),
+    .prefault({}),
   /**
    * Explicit env-var → config-path override contract (Phase 4 · S-1 finding
    * F3). `"envOverrides": { "providers.openrouter.baseUrl": "OPENROUTER_BASE_URL" }`
@@ -666,27 +668,27 @@ const ConfigSchema = z.object({
    * schema validation; `__proto__`/`prototype`/`constructor` segments are
    * refused. Everything overridden is reported in the loadConfig warnings.
    */
-  envOverrides: z.record(z.string()).default({}),
+  envOverrides: z.record(z.string(), z.string()).prefault({}),
   /** Kill-switch for automation/CI: ignore every envOverrides mapping. */
-  envOverridesLocked: z.boolean().default(false),
+  envOverridesLocked: z.boolean().prefault(false),
   // Phase 9 fields (triggers / telegram) live in migrate-22 so this file does not grow.
   /** Phase 4 — signed-audit + optional egress-gated remote anchor (default off). */
   audit: z
     .object({
-      signEvery: z.number().int().min(1).max(100_000).default(256),
+      signEvery: z.number().int().min(1).max(100_000).prefault(256),
       anchor: z
         .object({
-          enabled: z.boolean().default(false),
+          enabled: z.boolean().prefault(false),
           /** HTTPS URL / s3-style URL / file:// path receiving checkpoint PUTs. */
           sink: z.string().max(2048).optional(),
           /** Anchor cadence while long-lived processes run (ms). Default 1h. */
-          intervalMs: z.number().int().min(60_000).max(7 * 24 * 3_600_000).default(3_600_000),
+          intervalMs: z.number().int().min(60_000).max(7 * 24 * 3_600_000).prefault(3_600_000),
           /** Also anchor on clean process exit (default true; only when enabled). */
-          anchorOnExit: z.boolean().default(true),
+          anchorOnExit: z.boolean().prefault(true),
         })
-        .default({}),
+        .prefault({}),
     })
-    .default({}),
+    .prefault({}),
 }).extend(phase9ConfigShape).extend(phase26ConfigShape);
 
 export type XRConfig = z.infer<typeof ConfigSchema>;

@@ -28,7 +28,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Store } from "../src/state/workspace-store.ts";
-import { runAgent } from "../src/core/agent.ts"; // deprecated alias: loop-level unit path (pattern: test/agent.test.ts)
+import { runAgent } from "./helpers/scripted-agent.ts"; // deprecated alias: loop-level unit path (pattern: test/agent.test.ts)
 import { executeOnSurface } from "../src/services/surface-execution.ts";
 import { AgentService } from "../src/services/agent-service.ts";
 import { MultiAgentService } from "../src/services/multi-agent-service.ts";
@@ -83,6 +83,7 @@ function loopProvider(turns: ModelTurn[]): Provider & { calls: number } {
   let calls = 0;
   return {
     id: "mock",
+    modelId: "m",
     label: "Mock",
     get calls() {
       return calls;
@@ -131,6 +132,7 @@ describe("agent loop checkpoints (A-19)", () => {
     let calls = 0;
     const provider: Provider = {
       id: "mock",
+    modelId: "m",
       label: "Mock",
       async chat() {
         calls++;
@@ -215,6 +217,7 @@ function configFake() {
   return {
     get: () => ({
       defaults: { provider: "mock", model: "m" },
+      providerEngine: {providerCapabilities:{"mock":{models:{"m":{cost:{inPerMTok:0,outPerMTok:0,known:true,source:"synthetic service fixture; no provider billing"}}}}}},
       budget: { perTaskUsd: 5, perTaskTokens: 250_000 },
       security: { egressAllowlist: [], requireApproval: [] },
       memory: {
@@ -320,6 +323,7 @@ describe("workflow cancellation reach (A-19)", () => {
     // loop (and be caught by max_steps) rather than fake-finish.
     const provider: Provider = {
       id: "mock",
+    modelId: "m",
       label: "Mock",
       async chat() {
         chatCalls++;
@@ -373,6 +377,7 @@ describe("workflow cancellation reach (A-19)", () => {
     let chatCalls = 0;
     const gating: Provider = {
       id: "mock",
+    modelId: "m",
       label: "Mock",
       async chat() {
         chatCalls++;

@@ -1,0 +1,72 @@
+$ bash -c export PATH=/home/user/.cache/xr-rust/bin:/home/user/.bun/bin:/usr/bin:/bin CARGO_HOME=/home/user/.cache/xr-cargo CARGO_TARGET_DIR=/home/user/.cache/xr-budget-target; cargo test --locked --manifest-path scripts/native-budget-check/Cargo.toml --jobs 1 && mkdir -p /home/user/.cache/xr-native-contract-tests && rustc --test desktop/src-tauri/src/legacy_credentials.rs -o /home/user/.cache/xr-native-contract-tests/legacy && /home/user/.cache/xr-native-contract-tests/legacy && rustc --test desktop/src-tauri/src/desktop_home.rs -o /home/user/.cache/xr-native-contract-tests/home && /home/user/.cache/xr-native-contract-tests/home
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded itoa v1.0.18
+  Downloaded serde v1.0.229
+  Downloaded quote v1.0.47
+  Downloaded unicode-ident v1.0.27
+  Downloaded zmij v1.0.23
+  Downloaded serde_derive v1.0.229
+  Downloaded serde_core v1.0.229
+  Downloaded proc-macro2 v1.0.107
+  Downloaded memchr v2.8.3
+  Downloaded serde_json v1.0.151
+  Downloaded syn v3.0.9
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.27
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling zmij v1.0.23
+   Compiling syn v3.0.9
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling xr-native-budget-check v0.0.0 (/home/user/xr/scripts/native-budget-check)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.49s
+     Running unittests src/lib.rs (/home/user/.cache/xr-budget-target/debug/deps/xr_native_budget_check-9375fb170a469327)
+
+running 18 tests
+test governor::tests::civil_dates_round_trip ... ok
+test governor::tests::formatting_matches_intl ... ok
+test governor::tests::fresh_defaults_allow_and_report_remaining ... ok
+test governor::tests::hard_cap_off_warns_instead_of_blocking ... ok
+test governor::tests::mulberry32_vector ... ok
+test governor::tests::approach_downshift_sonnet_haiku_local ... ok
+test governor::tests::one_cent_cap_blocks_with_a_repair_path ... ok
+test governor::tests::per_request_downshifts_then_denies ... ok
+test governor::tests::per_request_quarter_dollar_blocks_opus ... ok
+test governor::tests::period_october_pkt ... ok
+test governor::tests::price_table ... ok
+test governor::tests::reserve_blocks_new_work_but_allows_finalization ... ok
+test governor::tests::seed_vector_matches_webview ... ok
+test governor::tests::settings_coercion_clamps ... ok
+test governor::tests::series_and_breakdown ... ok
+test governor::tests::shared_dated_pricing_vectors ... ok
+test governor::tests::states_and_breakers ... ok
+test governor::tests::unknown_price_and_guard_cannot_override_explicit_target ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests xr_native_budget_check
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test tests::no_foreign_service_or_cli_environment_account ... ok
+test tests::legacy_desktop_accounts_remain_recoverable ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test tests::explicit_desktop_home_wins_without_needing_a_cli_home ... ok
+test tests::default_is_independent_and_does_not_create_or_copy_anything ... ok
+test tests::missing_or_relative_homes_fail_closed_instead_of_using_cwd ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

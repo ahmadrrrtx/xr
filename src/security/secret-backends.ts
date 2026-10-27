@@ -72,30 +72,30 @@ const SERVICE = "xr";
 const clean = (s: string) => s.trim(); // matches the pre-015 readers
 
 /** `security -i` command line with the value double-quoted (stdin only). */
-export function macosAddCommand(name: string, value: string): string {
+export function macosAddCommand(name: string, value: string, service = SERVICE): string {
   const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-  return `add-generic-password -U -a ${q(name)} -s ${q(SERVICE)} -w ${q(value)}\n`;
+  return `add-generic-password -U -a ${q(name)} -s ${q(service)} -w ${q(value)}\n`;
 }
 
-export function macosBackend(r: SecretRunner = defaultRunner): OsSecretBackend {
-  const findArgs = (name: string) => ["find-generic-password", "-a", name, "-s", SERVICE, "-w"];
-  const delArgs = (name: string) => ["delete-generic-password", "-a", name, "-s", SERVICE];
+export function macosBackend(r: SecretRunner = defaultRunner, service = SERVICE): OsSecretBackend {
+  const findArgs = (name: string) => ["find-generic-password", "-a", name, "-s", service, "-w"];
+  const delArgs = (name: string) => ["delete-generic-password", "-a", name, "-s", service];
   return {
     id: "macos-keychain",
-    async set(name, value) { return (await r.run("security", ["-i"], macosAddCommand(name, value))).ok; },
+    async set(name, value) { return (await r.run("security", ["-i"], macosAddCommand(name, value, service))).ok; },
     async get(name) { const o = await r.run("security", findArgs(name)); return o.ok && clean(o.stdout) ? clean(o.stdout) : undefined; },
     async remove(name) { return (await r.run("security", delArgs(name))).ok; },
-    setSync(name, value) { return r.runSync("security", ["-i"], macosAddCommand(name, value)).ok; },
+    setSync(name, value) { return r.runSync("security", ["-i"], macosAddCommand(name, value, service)).ok; },
     getSync(name) { const o = r.runSync("security", findArgs(name)); return o.ok && clean(o.stdout) ? clean(o.stdout) : undefined; },
     removeSync(name) { return r.runSync("security", delArgs(name)).ok; },
     async list() { return null; },
   };
 }
 
-export function linuxBackend(r: SecretRunner = defaultRunner): OsSecretBackend {
-  const storeArgs = (name: string) => ["store", "--label", `XR ${name}`, "application", SERVICE, "name", name];
-  const lookupArgs = (name: string) => ["lookup", "application", SERVICE, "name", name];
-  const clearArgs = (name: string) => ["clear", "application", SERVICE, "name", name];
+export function linuxBackend(r: SecretRunner = defaultRunner, service = SERVICE): OsSecretBackend {
+  const storeArgs = (name: string) => ["store", "--label", `XR ${name}`, "application", service, "name", name];
+  const lookupArgs = (name: string) => ["lookup", "application", service, "name", name];
+  const clearArgs = (name: string) => ["clear", "application", service, "name", name];
   return {
     id: "linux-secret-service",
     async set(name, value) { return (await r.run("secret-tool", storeArgs(name), value)).ok; },
@@ -106,7 +106,7 @@ export function linuxBackend(r: SecretRunner = defaultRunner): OsSecretBackend {
     removeSync(name) { return r.runSync("secret-tool", clearArgs(name)).ok; },
     async list() {
       // `search` also prints values; only attribute names are parsed, nothing is kept or logged.
-      const o = await r.run("secret-tool", ["search", "--all", "application", SERVICE]);
+      const o = await r.run("secret-tool", ["search", "--all", "application", service]);
       if (!o.ok) return null;
       return [...o.stdout.matchAll(/^attribute\.name = ([A-Z][A-Z0-9_]{1,80})$/gm)].map((m) => m[1]!);
     },
@@ -148,8 +148,8 @@ export function windowsBackend(secretDir: () => string, r: SecretRunner = defaul
   };
 }
 
-export function osBackendFor(id: OsBackendId, secretDir: () => string): OsSecretBackend {
-  if (id === "macos-keychain") return macosBackend();
-  if (id === "linux-secret-service") return linuxBackend();
+export function osBackendFor(id: OsBackendId, secretDir: () => string, service = SERVICE): OsSecretBackend {
+  if (id === "macos-keychain") return macosBackend(undefined, service);
+  if (id === "linux-secret-service") return linuxBackend(undefined, service);
   return windowsBackend(secretDir);
 }

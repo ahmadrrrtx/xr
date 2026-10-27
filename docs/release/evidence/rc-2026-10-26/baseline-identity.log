@@ -1,0 +1,17 @@
+$ bash -c bun run release:check; a=$?; bun run channel:check; b=$?; bun run claim-lint; c=$?; printf "INDIVIDUAL EXIT CODES release=%s channel=%s claims=%s\n" "$a" "$b" "$c"; test "$a$b$c" = 000
+$ bun run scripts/release-manifest.ts --check
+  ok    package.json                 in sync at 1.1.0
+  ok    src/core/version.ts          in sync at 1.1.0
+  ok    website/src/lib/site.ts      in sync at 1.1.0
+  ok    README.md                    in sync at 1.1.0
+  ok    install.sh                   in sync at public 1.0.0
+  ok    install.ps1                  in sync at public 1.0.0
+  ok    desktop/src-tauri/tauri.conf.json in sync at 1.1.0
+  ok    desktop/src-tauri/Cargo.toml in sync at 1.1.0
+
+[release-manifest] all 8 surfaces in sync at 1.1.0 (Graphite)
+$ bun run scripts/channel-manifest.ts --check
+[channel:check] ok — 5 channel configs in sync with release v1.1.0 (one canonical build, many channels)
+$ bun run scripts/claim-lint.ts
+[claim-lint] ✓ no unsupported claims · 20 evidenced claims · every cited Article exists in docs/CONSTITUTION.md · published numbers and doc links single-sourced · v1.1.0
+INDIVIDUAL EXIT CODES release=0 channel=0 claims=0

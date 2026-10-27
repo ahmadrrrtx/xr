@@ -1,0 +1,5 @@
+$ bash -c bun run api:schema:generate && bun run client:generate
+$ bun run scripts/generate-openapi.ts --write
+[api-schema] wrote /home/user/xr/docs/api/openapi.json (283 operations, 1056083 bytes)
+$ bun run scripts/generate-client.ts --write
+[client-generate] wrote /home/user/xr/src/clients/daemon-client.generated.ts (1480 lines)

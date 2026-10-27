@@ -44,11 +44,11 @@ const TABLE = `## Quick start
 `;
 
 describe("gate 8 — status label (decision D2)", () => {
-  test("the repository itself is labelled Public beta and passes", () => {
-    expect(manifest.identity.stability).toBe("public-beta");
+  test("repository surfaces derive the actual authoritative maturity, not a hardcoded beta/stable label", () => {
+    const label={"public-beta":"Public beta","developer-preview":"Developer preview","stable":"Stable"}[manifest.identity.stability ?? "public-beta"];
     expect(lintStatusLabel(manifest, ROOT)).toEqual([]);
-    expect(readFileSync(join(ROOT, "README.md"), "utf8")).toContain("**Status: Public beta.**");
-    expect(readFileSync(join(ROOT, "website/src/lib/site.ts"), "utf8")).toContain('status: "Public beta",');
+    expect(readFileSync(join(ROOT, "README.md"), "utf8")).toContain(`**Status: ${label}.**`);
+    expect(readFileSync(join(ROOT, "website/src/lib/site.ts"), "utf8")).toContain(`status: "${label}",`);
   });
 
   test("stable-production wording on a public surface fails while the label is beta", () => {

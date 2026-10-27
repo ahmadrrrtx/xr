@@ -89,17 +89,17 @@ ok=""
 for _ in $(seq 1 30); do
   sleep 1
   if ! kill -0 "$PID" 2>/dev/null; then
-    echo "[smoke] FAIL: sidecar exited early — log:"; cat "$SMOKE_HOME/serve.log" || true; exit 1
+    echo "[smoke] FAIL: sidecar exited early — log:"; sed -E 's/(Token: ).*/\1[REDACTED]/; s/(Bearer )[A-Za-z0-9._~-]+/\1[REDACTED]/g' "$SMOKE_HOME/serve.log" || true; exit 1
   fi
   if curl -sf "http://127.0.0.1:${PORT}/api/v1/health" >/dev/null 2>&1; then ok=1; break; fi
 done
 
 if [ -z "$ok" ]; then
-  echo "[smoke] FAIL: health probe never answered — log:"; cat "$SMOKE_HOME/serve.log" || true; exit 1
+  echo "[smoke] FAIL: health probe never answered — log:"; sed -E 's/(Token: ).*/\1[REDACTED]/; s/(Bearer )[A-Za-z0-9._~-]+/\1[REDACTED]/g' "$SMOKE_HOME/serve.log" || true; exit 1
 fi
 
 echo "[smoke] health OK — token handshake banner present:"
 # Strip ANSI (Windows Bun may emit color codes even redirected) before matching.
 sed 's/\x1b\[[0-9;]*m//g' "$SMOKE_HOME/serve.log" | grep -q "Token: " \
   && echo "[smoke] PASS" \
-  || { echo "[smoke] FAIL: no token banner — log:"; cat "$SMOKE_HOME/serve.log" || true; exit 1; }
+  || { echo "[smoke] FAIL: no token banner — log:"; sed -E 's/(Token: ).*/\1[REDACTED]/; s/(Bearer )[A-Za-z0-9._~-]+/\1[REDACTED]/g' "$SMOKE_HOME/serve.log" || true; exit 1; }

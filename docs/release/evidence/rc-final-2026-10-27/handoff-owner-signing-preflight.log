@@ -1,0 +1,2 @@
+$ bun scripts/desktop-signing-plan.ts --preflight --tag true
+BLOCKED: missing owner signing prerequisites: APPLE_CERTIFICATE / password / signing identity; APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID; WINDOWS_CERTIFICATE / password

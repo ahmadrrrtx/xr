@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "1.1.0",
-  "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+  "version": "1.1.1-rc.1",
+  "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr"
@@ -35,6 +35,10 @@
     "baseline:inventory": "bun run scripts/baseline-inventory.ts",
     "baseline:measure": "bun run scripts/measure-baseline.ts",
     "baseline:validate": "bun run scripts/validate-baseline.ts",
+    "security:check": "bun run scripts/verify-security.ts",
+    "release:verify": "bun run scripts/verify-release.ts --strict",
+    "benchmark:agent": "bun run scripts/agent-benchmark.ts",
+    "benchmark:agent:smoke": "bun run scripts/agent-benchmark.ts --smoke",
     "release:stamp": "bun run scripts/release-manifest.ts --write",
     "release:check": "bun run scripts/release-manifest.ts --check",
     "channel:sync": "bun run scripts/channel-manifest.ts --write",
@@ -125,7 +129,7 @@
   "dependencies": {
     "qrcode": "^1.5.4",
     "unpdf": "1.7.0",
-    "zod": "^3.23.8"
+    "zod": "4.6.6"
   },
   "optionalDependencies": {
     "playwright": "^1.47.0"

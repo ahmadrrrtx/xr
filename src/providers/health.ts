@@ -151,6 +151,14 @@ function timeoutReport(id: string, boundMs: number): ProviderHealthReport {
   };
 }
 
+/** Offline inspection: never starts a probe, including a background refresh.
+ * Expired evidence is unknown; endpoint/model changes use a different key. */
+export function inspectProviderHealth(config: XRConfig, id: string, model?: string): CachedProviderHealth | undefined {
+  if (!healthCacheEnabled()) return undefined;
+  const hit = providerHealthCache.get(cacheKey(config, id, model));
+  return hit && !hit.stale ? { ...hit.value, cached: true, stale: false, deduped: false, probeMs: 0 } : undefined;
+}
+
 /**
  * Bounded, cached, deduplicated provider health — THE daemon request path.
  * Never throws for probe failures (auth errors, timeouts and connectivity

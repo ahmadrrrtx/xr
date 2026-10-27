@@ -204,7 +204,9 @@ export function scoreCandidate(
   // overrides the point-in-time snapshot when samples exist.
   let availability = 0.7;
   if (model.health) {
-    if (model.health.ok && model.health.available !== false) {
+    if (model.health.ok === undefined) {
+      availability = 0.7; notes.push("reachability not probed; credentials are not health");
+    } else if (model.health.ok && model.health.available !== false) {
       availability = model.health.stale ? 0.75 : 0.95;
     } else if (model.health.stale) {
       availability = 0.55;
@@ -217,7 +219,7 @@ export function scoreCandidate(
   // Local without health still ok
   if (!model.health && model.locality.locality === "local") availability = 0.7;
   // Cloud without credentials should have been filtered; if not, tank score
-  if (model.locality.requiresCredential && model.health?.authOk === false) {
+  if (model.locality.requiresCredential && (model.credentialAvailable === false || model.health?.authOk === false)) {
     availability = 0.05;
   }
   const gate = ctx.routingHealth?.gate(model.providerId, model.modelId);

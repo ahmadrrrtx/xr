@@ -23,7 +23,9 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 /** Anything that isn't plain text lives here (segments, status, attachments). */
 export interface MessageMetadata {
   /** Ordered parts — lets tool cards interject between text segments. */
-  segments?: Array<{ type: 'text'; text: string } | { type: 'tool'; index: number }>;
+  segments?: Array<
+    { type: 'text'; text: string } | { type: 'tool'; index: number }
+  >;
   status?: 'queued' | 'failed' | 'error';
   attachments?: Array<{ name: string; size: number }>;
   /** Phase 13: what the budget governor did to this turn. */
@@ -69,8 +71,8 @@ export interface BudgetNote {
   from?: string;
   to?: string;
   why?: string;
-  /** What this turn cost (USD), once recorded. */
-  costUsd?: number;
+  /** Engine-estimated actual-attempt cost; null is unknown, never free. */
+  costUsd?: number | null;
 }
 
 export interface ChatMessage {
@@ -111,19 +113,31 @@ export interface MessagePage {
 export interface ChatDb {
   listSessions(): Promise<Session[]>;
   getSession(id: string): Promise<Session | null>;
-  createSession(id: string, title: string, model: string | null, now: number): Promise<Session>;
+  createSession(
+    id: string,
+    title: string,
+    model: string | null,
+    now: number
+  ): Promise<Session>;
   updateSessionTitle(id: string, title: string, now: number): Promise<void>;
   updateSessionModel(id: string, model: string): Promise<void>;
   archiveSession(id: string, archived: boolean): Promise<void>;
   deleteSession(id: string): Promise<void>;
-  listMessages(sessionId: string, cursor: number | null, limit: number): Promise<MessagePage>;
+  listMessages(
+    sessionId: string,
+    cursor: number | null,
+    limit: number
+  ): Promise<MessagePage>;
   saveMessage(msg: ChatMessage): Promise<void>;
   deleteMessage(id: string): Promise<void>;
 }
 
 /* ── Tauri impl ─────────────────────────────────────────────────────────── */
 
-async function invokeChat<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+async function invokeChat<T>(
+  command: string,
+  args?: Record<string, unknown>
+): Promise<T> {
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<T>(command, args);
 }
@@ -147,7 +161,12 @@ const tauriDb: ChatDb = {
     return invokeChat<Session | null>('chat_get_session', { id });
   },
   async createSession(id, title, model, now) {
-    return invokeChat<Session>('chat_create_session', { id, title, model, now });
+    return invokeChat<Session>('chat_create_session', {
+      id,
+      title,
+      model,
+      now,
+    });
   },
   async updateSessionTitle(id, title, now) {
     await invokeChat<void>('chat_update_session_title', { id, title, now });
@@ -164,7 +183,7 @@ const tauriDb: ChatDb = {
   async listMessages(sessionId, cursor, limit) {
     const page = await invokeChat<{ messages: RawMessage[]; hasMore: boolean }>(
       'chat_list_messages',
-      { sessionId, cursor, limit },
+      { sessionId, cursor, limit }
     );
     return {
       hasMore: page.hasMore,
@@ -226,7 +245,14 @@ const browserDb: ChatDb = {
   },
   async createSession(id, title, model, now) {
     const all = readLS<Session[]>(LS_SESSIONS, []);
-    const session: Session = { id, title, model, createdAt: now, updatedAt: now, archived: false };
+    const session: Session = {
+      id,
+      title,
+      model,
+      createdAt: now,
+      updatedAt: now,
+      archived: false,
+    };
     writeLS(LS_SESSIONS, [...all, session]);
     return session;
   },
@@ -258,19 +284,20 @@ const browserDb: ChatDb = {
   async deleteSession(id) {
     writeLS(
       LS_SESSIONS,
-      readLS<Session[]>(LS_SESSIONS, []).filter((s) => s.id !== id),
+      readLS<Session[]>(LS_SESSIONS, []).filter((s) => s.id !== id)
     );
     const msgs = readLS<ChatMessage[]>(LS_MESSAGES, []);
     writeLS(
       LS_MESSAGES,
-      msgs.filter((m) => m.sessionId !== id),
+      msgs.filter((m) => m.sessionId !== id)
     );
   },
   async listMessages(sessionId, cursor, limit) {
     const all = readLS<ChatMessage[]>(LS_MESSAGES, [])
       .filter((m) => m.sessionId === sessionId)
       .sort((a, b) => b.createdAt - a.createdAt); // newest first
-    const idx = cursor === null ? 0 : all.findIndex((m) => m.createdAt < cursor);
+    const idx =
+      cursor === null ? 0 : all.findIndex((m) => m.createdAt < cursor);
     const start = cursor !== null && idx === -1 ? all.length : idx;
     const page = all.slice(start, start + limit + 1);
     const hasMore = page.length > limit;
@@ -293,7 +320,7 @@ const browserDb: ChatDb = {
   async deleteMessage(id) {
     writeLS(
       LS_MESSAGES,
-      readLS<ChatMessage[]>(LS_MESSAGES, []).filter((m) => m.id !== id),
+      readLS<ChatMessage[]>(LS_MESSAGES, []).filter((m) => m.id !== id)
     );
   },
 };

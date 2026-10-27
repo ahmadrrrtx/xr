@@ -25,12 +25,12 @@ const EndpointSchema = z.object({
 });
 
 const StateSchema = z.object({
-  version: z.literal(1).default(1),
-  registries: z.record(EndpointSchema).default({}),
-  cachedRegistries: z.record(z.any()).default({}),
-  installedSources: z.record(z.object({ registryId: z.string(), packageUrl: z.string(), packageSha256: z.string().optional(), installedAt: z.number() })).default({}),
-  rollbackSnapshots: z.record(z.array(z.object({ version: z.string(), dir: z.string(), packagePath: z.string().optional(), createdAt: z.number() }))).default({}),
-  trustedPublishers: z.record(z.any()).default({}),
+  version: z.literal(1).prefault(1),
+  registries: z.record(z.string(), EndpointSchema).prefault({}),
+  cachedRegistries: z.record(z.string(), z.any()).prefault({}),
+  installedSources: z.record(z.string(), z.object({ registryId: z.string(), packageUrl: z.string(), packageSha256: z.string().optional(), installedAt: z.number() })).prefault({}),
+  rollbackSnapshots: z.record(z.string(), z.array(z.object({ version: z.string(), dir: z.string(), packagePath: z.string().optional(), createdAt: z.number() }))).prefault({}),
+  trustedPublishers: z.record(z.string(), z.any()).prefault({}),
 });
 
 export class MarketplaceBackendStore {

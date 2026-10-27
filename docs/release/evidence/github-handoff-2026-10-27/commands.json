@@ -1,0 +1,56 @@
+[
+  {
+    "name": "github-handoff-windows-host-fix",
+    "command": [
+      "bun",
+      "test",
+      "test/desktop/sidecar-targets.test.ts",
+      "test/release/candidate-enforcement.test.ts"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T08:20:30.913004+00:00",
+    "seconds": 0.119,
+    "exit_code": 0,
+    "log": "github-handoff-windows-host-fix.log",
+    "max_rss_kib": 66196,
+    "user_cpu_seconds": 0.073,
+    "system_cpu_seconds": 0.064,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "github-handoff-types",
+    "command": [
+      "node",
+      "--max-old-space-size=1024",
+      "--max-semi-space-size=16",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T08:20:31.072889+00:00",
+    "seconds": 20.132,
+    "exit_code": 0,
+    "log": "github-handoff-types.log",
+    "max_rss_kib": 1008516,
+    "user_cpu_seconds": 28.549,
+    "system_cpu_seconds": 1.195,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "github-handoff-release-policy",
+    "command": [
+      "bash",
+      "-c",
+      "bun run release:check && bun run channel:check && bun run ci:policy && git diff --check"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T08:20:51.361013+00:00",
+    "seconds": 0.772,
+    "exit_code": 0,
+    "log": "github-handoff-release-policy.log",
+    "max_rss_kib": 31220,
+    "user_cpu_seconds": 0.123,
+    "system_cpu_seconds": 0.068,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  }
+]

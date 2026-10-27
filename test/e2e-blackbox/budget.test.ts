@@ -1,8 +1,8 @@
 /**
  * XR — e2e black-box: governor budget stop + human-raise path (Phase 0).
  *
- * Deterministic without real money: with a stub provider (unknown provider ⇒
- * $0 pricing — pricing.ts defaults), the per-task TOKEN ceiling
+ * Deterministic without real money: with a stub provider and an explicit
+ * synthetic tariff (unknown production pricing is refused), the per-task TOKEN ceiling
  * (--max-tokens) is the enforceable cap. Two flows:
  *
  *  1. spend stop — a ceiling below the next-step estimate denies the step at

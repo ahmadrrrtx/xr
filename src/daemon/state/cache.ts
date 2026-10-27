@@ -44,6 +44,12 @@ export async function checkInternetCached(): Promise<boolean> {
   }
 }
 
+/** Offline inspection; unknown is not fabricated as a failed live probe. */
+export function inspectInternetCache(): boolean | undefined {
+  const hit = internetCache.get("default");
+  return hit && !hit.stale ? hit.value : undefined;
+}
+
 export function invalidateInternetCache(): void {
   internetCache.clear();
 }

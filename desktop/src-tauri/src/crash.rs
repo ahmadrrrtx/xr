@@ -37,16 +37,10 @@ pub const SHELL_LOG_MAX_BYTES: u64 = 256 * 1024;
 /// How much of any log file a report carries.
 pub const REPORT_TAIL_BYTES: u64 = 100 * 1024;
 
-/// `XR_HOME` when set (the engine honours the same variable), else `$HOME/.xr`.
-/// Honouring the variable is what lets tests and CI run hermetically.
+/// Same independent root as the bundled engine; never the CLI's XR_HOME.
+/// setup validates resolution before any lifecycle/recovery handler runs.
 pub fn xr_home() -> PathBuf {
-    if let Some(dir) = std::env::var_os("XR_HOME") {
-        return PathBuf::from(dir);
-    }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    home.join(".xr")
+    crate::desktop_home::resolve().expect("desktop home validated during setup")
 }
 
 pub fn flag_path(home: &Path) -> PathBuf {

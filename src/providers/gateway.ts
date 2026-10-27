@@ -33,12 +33,13 @@
  * Feature flag: XR_PROVIDER_GATEWAY=0 disables gateway fallback to direct registry.createProvider
  */
 
+import { chatAttempt, streamAttempt } from "./attempts.ts";
 import type { XRConfig } from "../config/config.ts";
 import type { Provider, Message, Tool, ChatOptions, ModelTurn } from "../core/types.ts";
 import { registry } from "./registry.ts";
 import type { ProviderPreset } from "./presets.ts";
 import { PRESETS } from "./presets.ts";
-import { checkProviderHealthCached, type CachedProviderHealth, HEALTH_BOUND_MS, type ProviderHealthReport } from "./health.ts";
+import { inspectProviderHealth, checkProviderHealthCached, type CachedProviderHealth, HEALTH_BOUND_MS, type ProviderHealthReport } from "./health.ts";
 import { buildCatalog, type IntelligenceCatalog, catalogFingerprint, catalogCacheStats } from "../intelligence/catalog.ts";
 import { RoutingService, FallbackProvider } from "../intelligence/routing-service.ts";
 import { buildProvider as legacyBuildProvider, buildProviderWithDecision } from "./factory.ts";
@@ -60,15 +61,7 @@ export function gatewayEnabled(): boolean {
 
 // ── Provider Streaming types ────────────────────────────────────────────────
 
-export interface ProviderStreamChunk {
-  text?: string;
-  toolCall?: { tool: string; args: Record<string, unknown> };
-  usage?: { inTokens: number; outTokens: number };
-  finish?: boolean;
-  reasoning?: string;
-  model?: string;
-  providerId?: string;
-}
+export type ProviderStreamChunk = import("../core/types.ts").ProviderStreamChunk;
 
 export type ProviderStream = AsyncGenerator<ProviderStreamChunk>;
 
@@ -180,10 +173,8 @@ export class ProviderGateway {
     input: ProviderResolutionInput = {},
   ): Promise<ProviderResolution> {
     const started = Date.now();
-    const router = new RoutingService(config);
-
-    // Resolve provider + decision (also handles fallback wrapping)
-    const { provider, decision } = router.resolveWithDecision(input as any);
+    // Resolver owns custom-provider synchronization; RoutingService owns policy.
+    const { provider, decision } = buildProviderWithDecision(config, input as any);
 
     const selectedProviderId = decision?.selected?.providerId ?? input.provider ?? config.defaults.provider;
     const selectedModelId = decision?.selected?.modelId ?? input.model ?? config.defaults.model;
@@ -237,6 +228,11 @@ export class ProviderGateway {
   }
 
   // ── Health ────────────────────────────────────────────────────────────────
+
+  /** Read existing evidence without network I/O or background refresh. */
+  inspectHealth(config: XRConfig, id: string, model?: string): CachedProviderHealth | undefined {
+    return inspectProviderHealth(config, id, model);
+  }
 
   async health(config: XRConfig, id: string, model?: string): Promise<CachedProviderHealth> {
     if (!gatewayEnabled()) {
@@ -320,35 +316,14 @@ export class ProviderGateway {
     input: ProviderResolutionInput,
     options?: ChatOptions,
   ): Promise<{ turn: ModelTurn; providerId: string; modelId: string; attempted: string[] }> {
-    const chain = await this.fallbackChain(config, {
-      primaryProviderId: input.provider,
-      primaryModelId: input.model,
-    });
-
+    const resolution = buildProviderWithDecision(config, input as any);
     const attempted: string[] = [];
-    let lastError: unknown;
-
-    for (const step of chain.steps) {
-      attempted.push(`${step.providerId}/${step.modelId}`);
-      try {
-        const prov = this.createProvider(step.providerId, config, step.modelId);
-        const turn = await prov.chat(messages, tools, options);
-        return { turn, providerId: step.providerId, modelId: step.modelId, attempted };
-      } catch (e) {
-        lastError = e;
-        // Cancellation must never trigger fallback — user explicitly stopped
-        if (isCancellation(e)) throw e;
-        const normalized = normalizeProviderError(e, step.providerId, step.modelId);
-        // Do NOT retry non-retryable errors
-        if (!isRetryableProviderError(normalized)) {
-          throw normalized;
-        }
-        // Retryable → try next fallback
-        continue;
-      }
-    }
-
-    throw normalizeProviderError(lastError, chain.steps[0]?.providerId ?? "unknown", chain.steps[0]?.modelId);
+    const controls: ChatOptions = { ...options, afterAttempt: async a => { attempted.push(`${a.providerId}/${a.modelId ?? "?"}`); await options?.afterAttempt?.(a); } };
+    // A second attempt requires the caller's real budget-admission hook. A
+    // display-only or missing callback is never synthesized as permission.
+    const p = resolution.provider;
+    const turn = p.managesAttempts ? await p.chat(messages, tools, controls) : await chatAttempt(p, messages, tools, controls);
+    return { turn, providerId: turn.executing?.providerId ?? p.id, modelId: turn.executing?.modelId ?? p.modelId ?? input.model ?? "unknown", attempted };
   }
 
   // ── Execution ─────────────────────────────────────────────────────────────
@@ -362,7 +337,8 @@ export class ProviderGateway {
   ): Promise<ModelTurn> {
     const resolution = await this.resolve(config, input);
     try {
-      return await resolution.provider.chat(messages, tools, options);
+      const p = resolution.provider;
+      return p.managesAttempts ? await p.chat(messages, tools, options) : await chatAttempt(p, messages, tools, options);
     } catch (e) {
       throw normalizeProviderError(e, resolution.resolved.providerId, resolution.resolved.modelId);
     }
@@ -380,33 +356,12 @@ export class ProviderGateway {
     options?: ChatOptions,
   ): ProviderStream {
     const resolution = await this.resolve(config, input);
-    const provider: any = resolution.provider;
-
-    // If provider implements chatStream, use it
-    if (typeof provider.chatStream === "function") {
-      try {
-        const stream: ProviderStream = provider.chatStream(messages, tools, options);
-        for await (const chunk of stream) {
-          yield chunk;
-        }
-        return;
-      } catch (e) {
-        throw normalizeProviderError(e, resolution.resolved.providerId, resolution.resolved.modelId);
-      }
-    }
-
-    // Fallback: single chat() call yielded as stream
+    const provider = resolution.provider;
     try {
-      const turn = await resolution.provider.chat(messages, tools, options);
-      if (turn.message) {
-        yield { text: turn.message, finish: false, providerId: resolution.resolved.providerId, model: resolution.resolved.modelId };
-      }
-      for (const tc of turn.toolCalls ?? []) {
-        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: resolution.resolved.providerId };
-      }
-      yield { usage: turn.usage, finish: true, providerId: resolution.resolved.providerId, model: resolution.resolved.modelId };
+      if (provider.managesAttempts && provider.chatStream) yield* provider.chatStream(messages, tools, options);
+      else yield* streamAttempt(provider, messages, tools, options);
     } catch (e) {
-      throw normalizeProviderError(e, resolution.resolved.providerId, resolution.resolved.modelId);
+      throw normalizeProviderError(e, provider.id, provider.modelId);
     }
   }
 

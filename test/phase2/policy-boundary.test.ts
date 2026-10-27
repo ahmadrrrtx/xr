@@ -13,7 +13,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../../src/state/workspace-store.ts";
-import { runAgent } from "../../src/core/agent.ts";
+import { runAgent } from "../helpers/scripted-agent.ts";
 import { ToolRegistryService } from "../../src/tools/registry-service.ts";
 import { evaluatePolicy } from "../../src/capabilities/policy.ts";
 import { createCapabilityRequest } from "../../src/capabilities/request.ts";

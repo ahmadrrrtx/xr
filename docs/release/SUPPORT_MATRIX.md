@@ -1,5 +1,10 @@
 # XR Support Matrix (current — regenerated at every release gate change)
 
+> Historical matrix: these recorded releases/runs do **not** validate the
+> uncommitted1.1.1-rc.1 candidate. Current native/platform/signing status is
+> BLOCKED/NOT RUN in the [candidate report](RELEASE_CANDIDATE_REPORT.md).
+
+
 **Rule (Constitution Art. XIX/XX + "supported means validated"):** a platform or
 channel appears here only with the exact CI evidence that validates it.
 `partial` is never rounded up to `supported`. If evidence is missing, the
@@ -27,13 +32,13 @@ Regenerate with `bun run support-matrix` after copying journey evidence into `do
 
 | Surface | Target | Build | Package | Install | Launch | Core-agent smoke | Update | Uninstall | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| npm CLI | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5 |
+| npm CLI | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5<br>LR e25afd36+local changes |
 | npm CLI | Linux arm64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows ARM64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| Installer binary | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5 |
+| Installer binary | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5<br>LR e25afd36+local changes |
 | Installer binary | Linux arm64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
@@ -67,7 +72,7 @@ Launch gate (`--require-complete`): **incomplete** — 74 gating cell(s) without
 | Platform | Tier | Validated by | Evidence |
 |---|---|---|---|
 | Linux x64 (glibc) | **Tier 1 — primary** | full unit suite (every test file), typecheck, golden path, nightly golden path, first-task survey, deb install test, binary smoke | `ci.yml`, `cross-platform.yml`, `nightly.yml`, `channel-install.yml` |
-| Linux arm64 | Tier 2 · **file tools unsupported (non-gating)** | canonical build cross-compiles + container path linux/arm64; full-suite parity pending a native arm runner. The CLI installs and runs, but the file authority fails closed on the hosted arm64 runners (`blocked:filesystem-unsupported`, first journey run 2026-10-22), so workspace file reads/writes need Linux x64, macOS or Windows x64 for now. The npm, binary and Docker linux/arm64 journey legs are reported, not gating (owner decision 2026-10-22). | `release.yml` matrix (build-only, smoke skipped — recorded), `journey.yml` (`ubuntu-24.04-arm`, docker arm64; non-gating) |
+| Linux arm64 | Tier 2 · **native evidence pending (non-gating)** | The earlier hosted CLI and Docker journeys failed closed (`blocked:filesystem-unsupported`). The candidate corrects the Linux arm64 `openat2` flag ABI; confined I/O and denial regressions have been exercised under arm64 emulation, not native hardware. The native filesystem suite and npm, binary and Docker journeys must confirm the correction; full-suite parity is still pending. All three journey legs remain reported, not gating (owner decision 2026-10-22). | `release.yml` matrix (build-only, smoke skipped — recorded), `journey.yml` (`ubuntu-24.04-arm`, docker arm64; non-gating) |
 | macOS arm64 | **Tier 1** | typecheck + full unit suite (the same files as Linux) + golden path on every push/PR; binary build + native smoke in release matrix | `cross-platform.yml`, `release.yml` |
 | macOS x64 (Intel) | Tier 2 | canonical build cross-compiles; native smoke unavailable on arm64 runners (recorded honestly) | `release.yml` |
 | Windows x64 | **Tier 1*** | typecheck + unit suite (every file except the Windows exclusions below, each with a reason) + golden path on every push/PR; binary build + native smoke; winget/scoop manifest binding tests | `cross-platform.yml`, `channel-install.yml`, `test/platform/exclusions.json` |

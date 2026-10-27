@@ -5,9 +5,9 @@
  * wizard (`src/interfaces/onboard.ts`) uses — one authority, no duplicated
  * logic:
  *   · status   → getProviderEnvStatus() + cached bounded provider health +
- *                detectAllRuntimes() + cached best-effort internet probe
- *   · provider → setSecret() (OS keychain / sealed file) + defaults write
- *                via saveConfig() + advisory health probe (save never fails
+ *                offline runtime/internet cache inspection
+ *   · provider → setSecret() (OS credential backend / reported file backend) + defaults write
+ *                via saveConfig() + explicit opt-in advisory health probe (save never fails
  *                on probe outcome — mirrors the CLI's F-1 behavior)
  *   · complete → audit-recorded completion (append-only, verifiable)
  *
@@ -18,10 +18,10 @@
 
 import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/config.ts";
 import { PRESETS } from "../../providers/factory.ts";
-import { checkProviderHealthCached, invalidateProviderHealthCache } from "../../providers/health.ts";
-import { detectAllRuntimes } from "../../local/runtimes.ts";
-import { setSecretAsync, getSecretSyncCached } from "../../security/secrets.ts";
-import { checkInternetCached } from "../state/cache.ts";
+import { inspectProviderHealth, checkProviderHealthCached, invalidateProviderHealthCache } from "../../providers/health.ts";
+import { inspectDetectedRuntimes } from "../../local/runtimes.ts";
+import { setSecretAsync, removeSecretAsync } from "../../security/secrets.ts";
+import { inspectInternetCache } from "../state/cache.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 export function onboardingRoutes(): DaemonRoute[] {
@@ -35,54 +35,36 @@ export function onboardingRoutes(): DaemonRoute[] {
         // Only HOSTED presets with a stored key count as configured — local
         // presets never need a key (getProviderEnvStatus marks them hasKey),
         // and they are covered by the local-runtime health below.
-        const configured = Object.values(PRESETS)
-          .filter((p) => p.apiKeyEnv && Boolean(process.env[p.apiKeyEnv] || getSecretSyncCached(p.apiKeyEnv)))
-          .map((p) => p.id);
-        // Health probes run IN PARALLEL, are bounded (~2.5 s each), and are
-        // served from the shared health cache (60 s positive / 15 s negative):
-        // the status call is an advisory "is anything ready" check and must
-        // never take 8 s × N providers or re-probe the same provider on every
-        // dashboard poll.
-        const ready: string[] = [];
-        await Promise.all(
-          configured.map(async (id) => {
-            try {
-              const health = await checkProviderHealthCached(config, id);
-              if (health.ok) ready.push(id);
-            } catch {
-              // checkProviderHealthCached already reports failure internally;
-              // never break status.
-            }
-          }),
-        );
-        // Phase 01 — runtime detection and the internet probe are independent;
-        // run them concurrently (was sequential: detection + up to 2 s probe).
-        const [runtimes, internet] = await Promise.all([
-          detectAllRuntimes(),
-          checkInternetCached(),
-        ]);
+        const configured = status.filter(p => PRESETS[p.id]?.apiKeyEnv && p.hasKey).map(p => p.id);
+        // Inspection is offline. Explicit diagnostics populate these caches;
+        // saving a key never implies authentication/reachability/agent proof.
+        const ready = configured.filter(id => inspectProviderHealth(config, id)?.ok === true);
+        const runtimes = inspectDetectedRuntimes();
+        const internet = inspectInternetCache();
         const localRuntime = config.localModels.runtime ?? "ollama";
         const localInfo = runtimes.find((r) => r.id === localRuntime);
         const localHealthy = localInfo?.healthy === true;
         const reasons: string[] = [];
         if (configured.length === 0 && !localHealthy) {
-          reasons.push("No provider key is stored and no local model is running yet.");
+          reasons.push("No provider key is stored; a local runtime has not been verified. Configure a provider or run an explicit local diagnostic.");
         } else if (ready.length === 0 && !localHealthy) {
-          reasons.push("Your configured route(s) are not reachable and no local model is running.");
+          reasons.push("Configured routes have no fresh successful reachability evidence. Run an explicit diagnostic or select another target.");
         } else if (ready.length === 0) {
-          reasons.push("Your configured route(s) are not reachable right now.");
+          reasons.push("Configured cloud routes have no fresh successful reachability evidence.");
         }
         return json({
           needsSetup: configured.length === 0 && !localHealthy,
           reasons,
-          cloud: { configured: configured.length, ready: ready.length, count: status.length },
+          cloud: { configured: configured.length, ready: ready.length, count: status.filter(p => PRESETS[p.id]?.apiKeyEnv).length },
           local: {
             runtime: localRuntime,
             healthy: localHealthy,
+            healthState: localInfo ? (localHealthy ? "reachable" : "unreachable") : "unknown",
             running: localInfo?.running ?? false,
             installed: (localInfo?.models ?? []).length,
           },
-          internet,
+          internet: internet ?? false, // legacy boolean; unknown is explicit below
+          internetState: internet === undefined ? "unknown" : internet ? "reachable" : "unreachable",
           config: {
             provider: config.defaults.provider,
             model: config.defaults.model,
@@ -117,6 +99,12 @@ export function onboardingRoutes(): DaemonRoute[] {
           if (!key) return json({ error: "apiKey is required" }, 400);
           if (key.length > 2048) return json({ error: "apiKey is unreasonably long" }, 400);
 
+          const next = loadConfig().config;
+          const setDefault = body.setDefault !== false;
+          // Never pair a newly selected vendor with the previous vendor's model.
+          const targetModel = body.model?.trim() || (next.defaults.provider === providerId ? next.defaults.model : preset.defaultModel);
+          if (setDefault && !targetModel) return json({ error: "an explicit model is required for this provider" }, 400);
+          state.store.audit("onboarding.provider.requested", { provider: providerId, model: setDefault ? targetModel : null, setDefault });
           const backend = await setSecretAsync(envName, key);
           // No clearSecretMemo() here: setSecretAsync sets the memo to the latest
           // written value on EVERY backend (keychain/secret-service/dpapi AND
@@ -130,11 +118,9 @@ export function onboardingRoutes(): DaemonRoute[] {
           // probe and the next status/list call are FRESH — never a stale
           // "API key not set" negative from before the key existed.
           invalidateProviderHealthCache(providerId);
-          const next = loadConfig().config;
-          const setDefault = body.setDefault !== false;
           if (setDefault) {
             next.defaults.provider = providerId;
-            if (body.model?.trim()) next.defaults.model = body.model.trim();
+            next.defaults.model = targetModel;
             saveConfig(next);
           }
           state.store.audit("onboarding.provider", {
@@ -148,7 +134,7 @@ export function onboardingRoutes(): DaemonRoute[] {
           // (mirrors the CLI onboarding F-1 contract). Bounded + cached
           // (Phase 01): a hanging endpoint cannot stall the save flow.
           let health: { ok: boolean; detail: string | null; latencyMs: number | null } | null = null;
-          if (body.probe !== false) {
+          if (body.probe === true) {
             try {
               const h = await checkProviderHealthCached(next, providerId);
               health = { ok: h.ok, detail: h.detail ?? null, latencyMs: h.latencyMs ?? null };
@@ -167,6 +153,23 @@ export function onboardingRoutes(): DaemonRoute[] {
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
+      },
+    }),
+    route({
+      id: "onboarding.provider.remove",
+      path: "/api/onboarding/provider/remove",
+      method: "POST",
+      handle: async ({ req, json, state }) => {
+        try {
+          const body = await req.json() as { providerId?: string };
+          const provider = PRESETS[body.providerId ?? ""];
+          if (!provider?.apiKeyEnv) return json({ error: "a keyed provider preset is required; custom credential changes use the configured engine broker" }, 400);
+          state.store.audit("onboarding.provider.remove.requested", { provider: provider.id });
+          const backend = await removeSecretAsync(provider.apiKeyEnv);
+          invalidateProviderHealthCache(provider.id);
+          state.store.audit("onboarding.provider.removed", { provider: provider.id, secretBackend: backend, externalCredentialMayRemain: true });
+          return json({ ok: true, provider: provider.id, secretBackend: backend, notice: "Known engine credential storage cleared. Environment variables, other installations and backups may still hold a key. Revoke it at the provider for full revocation." });
+        } catch (e) { return json({ error: (e as Error).message }, 400); }
       },
     }),
     route({

@@ -132,6 +132,7 @@ test("loop streams real token deltas in order and produces the final fullText", 
   const provider = scriptedStreamingProvider([envelope], 5);
   const events: ChatStreamEvent[] = [];
   const result = await runAgent("greet", "ask", {
+    pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
     provider,
     store,
     cwd: tmp,
@@ -157,6 +158,7 @@ test("loop emits a provider_ready status event before the first token", async ()
   const provider = scriptedStreamingProvider(['{"message":"ok","tool_calls":[],"done":true}']);
   const events: ChatStreamEvent[] = [];
   await runAgent("hi", "ask", {
+    pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
     provider,
     store,
     cwd: tmp,
@@ -178,6 +180,7 @@ test("tool_call → tool execution → tool_result → continue generation → d
   const provider = scriptedStreamingProvider([turn0, turn1]);
   const events: ChatStreamEvent[] = [];
   const result = await runAgent("echo hi", "agent", {
+    pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
     provider,
     store,
     cwd: tmp,
@@ -218,6 +221,7 @@ test("a failing tool emits tool_result ok:false and generation continues", async
   const provider = scriptedStreamingProvider([turn0, turn1]);
   const events: ChatStreamEvent[] = [];
   const result = await runAgent("do it", "agent", {
+    pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
     provider,
     store,
     cwd: tmp,
@@ -245,6 +249,7 @@ test("already-aborted signal returns cancelled and never calls the provider", as
   const controller = new AbortController();
   controller.abort();
   const result = await runAgent("hi", "ask", {
+    pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
     provider,
     store,
     cwd: tmp,
@@ -263,6 +268,7 @@ test("cancellation mid-turn aborts the provider and stops the run as cancelled",
   const provider = cancellableStreamingProvider();
   const controller = new AbortController();
   const promise = runAgent("hi", "ask", {
+    pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
     provider,
     store,
     cwd: tmp,

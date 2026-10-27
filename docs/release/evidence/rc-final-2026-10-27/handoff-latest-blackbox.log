@@ -1,0 +1,125 @@
+$ env XR_TEST_CONCURRENCY=1 bun test test/e2e-blackbox
+bun test v1.4.2 (744846f84)
+
+test/e2e-blackbox/budget.test.ts:
+(pass) budget enforcement over the real CLI > ceiling below the first step estimate: denied before any spend (exit 1, budget audit, zero requests) [594.68ms]
+(pass) budget enforcement over the real CLI > human raise path: same home, raised ceiling → the task completes (exit 0, session.done) [806.48ms]
+
+test/e2e-blackbox/filesystem-authority.test.ts:
+(pass) FS01/FS04 read_file linked/marker.txt: no canary in provider, output or audit [585.45ms]
+(pass) FS01/FS04 read_file .env: no canary in provider, output or audit [510.86ms]
+(pass) FS01/FS04 read_file alias.txt: no canary in provider, output or audit [527.65ms]
+(pass) FS01/FS04 read_file key.pem: no canary in provider, output or audit [507.14ms]
+(pass) FS02 write_file linked missing destination: zero outside effect [545.04ms]
+(pass) FS05 implicit AGENTS.md link cannot reach provider [503.75ms]
+(pass) FS05 implicit package.json link cannot reach provider [440.60ms]
+(pass) FS05 implicit .gitignore link cannot reach provider [479.45ms]
+(pass) FS05 implicit .xrignore link cannot reach provider [528.35ms]
+(pass) FS06/FS07 search_code explicit .: secret never enters output [579.69ms]
+(pass) FS06/FS07 search_code explicit linked: secret never enters output [467.67ms]
+(pass) FS06/FS07 search_code explicit .env: secret never enters output [501.03ms]
+(pass) FS01/FS02 positive in-root read_file retains real operation and schema [478.53ms]
+(pass) FS01/FS02 positive in-root write_file retains real operation and schema [579.89ms]
+(pass) E08/E09 actual process shell policy/decoy ["cmd"] [572.57ms]
+(pass) E08/E09 actual process shell policy/decoy ["cmd","command"] [560.18ms]
+(pass) E08/E09 actual process shell policy/decoy ["command"] [536.20ms]
+(pass) E08/E09 actual process shell policy/decoy ["cmd"] [535.57ms]
+(pass) E03 exact token override reaches the actual downstream governor independently of USD [484.64ms]
+(pass) E10 print-mode tool filtering cannot be upgraded by an allow rule [495.39ms]
+(pass) E10 harmless quoted force-push text uses actual cmd dangerous classification, never the decoy [503.95ms]
+
+test/e2e-blackbox/cancel.test.ts:
+(pass) xr run against a hanging provider > SIGINT mid-flight: exit 130, interrupted-by-user message, honest audited cancel [486.92ms]
+(pass) xr run against a hanging provider > a second SIGINT force-exits (POSIX 130) instead of hanging forever [740.01ms]
+
+test/e2e-blackbox/parent-watch.test.ts:
+(pass) xr serve --parent-pid (SEC-12) > the daemon stops itself after its shell is SIGKILLed [1332.21ms]
+
+test/e2e-blackbox/run-lifecycle.test.ts:
+(pass) xr run — default task path over the real CLI > fresh XR_HOME → run → exit 0, done contract on stdout [497.09ms]
+(pass) xr run — default task path over the real CLI > audit chain: session.start → session.done, hashes link (tamper-evident) [463.26ms]
+(pass) xr run — default task path over the real CLI > session.done records honest accounting for a fresh run [517.91ms]
+(pass) xr run — default task path over the real CLI > config state: provider record survives a run unmodified [0.20ms]
+(pass) xr run — default task path over the real CLI > provider stdout banner: no truecolor/256-color codes with --no-color [506.37ms]
+
+test/e2e-blackbox/audit-crypto.test.ts:
+(pass) xr audit verify — signed evidence over the real CLI > fresh install auto-keys on boot; verify --crypto exits 0 [304.22ms]
+(pass) xr audit verify — signed evidence over the real CLI > plain verify (chain-only) exits 0 on an unmodified install [324.03ms]
+(pass) xr audit verify — signed evidence over the real CLI > ADVERSARY: wholesale truncate + consistent hash rebuild is caught (non-zero exit) [795.29ms]
+(pass) xr audit verify — signed evidence over the real CLI > key loss: signing key removed → verify --crypto exits 2 (limited to chain) [288.62ms]
+(pass) xr audit verify — signed evidence over the real CLI > re-key rotates the key; old segment still verifies and chain stays green [419.76ms]
+(pass) xr audit anchor — default off, fail-safe > with no anchor configured, `audit anchor` reports disabled and exits 0 [287.99ms]
+(pass) xr audit anchor — default off, fail-safe > a fresh install performs no anchor traffic and has no anchor records [189.04ms]
+
+test/e2e-blackbox/coder-contract.test.ts:
+(pass) coding CLI dry-run end to end > ordinary approved writes still execute [534.80ms]
+(pass) coding CLI dry-run end to end > --dry-run: no write even when edit permission is explicitly allowed [592.53ms]
+(pass) coding CLI dry-run end to end > --dryRun: no write even when edit permission is explicitly allowed [518.54ms]
+(pass) coding CLI dry-run end to end > --dry-run=true: no write even when edit permission is explicitly allowed [564.28ms]
+(pass) coding CLI dry-run end to end > shell dry-run simulates without invoking the isolation executor [540.15ms]
+(pass) coding CLI dry-run end to end > XR-LAUNCH-024: a refused tool prints its cause, a stable reason and a next step in --json [570.02ms]
+(pass) coding CLI dry-run end to end > --dry-run=false does not disable ordinary explicit writes [503.72ms]
+(pass) budget routing and honest unsupported flags > the exact requested USD override replaces configured per-task USD [516.18ms]
+(pass) budget routing and honest unsupported flags > coder resume fails clearly before boot/model activity, never starts fresh [37.64ms]
+(pass) budget routing and honest unsupported flags > --budget NaN: usage error before boot or provider call [25.12ms]
+(pass) budget routing and honest unsupported flags > --budget Infinity: usage error before boot or provider call [25.56ms]
+(pass) budget routing and honest unsupported flags > --budget 0: usage error before boot or provider call [25.85ms]
+(pass) budget routing and honest unsupported flags > --budget=-1: usage error before boot or provider call [21.58ms]
+(pass) budget routing and honest unsupported flags > --budget: usage error before boot or provider call [30.93ms]
+(pass) budget routing and honest unsupported flags > --max-tokens 0: usage error before boot or provider call [25.67ms]
+(pass) budget routing and honest unsupported flags > --max-tokens 12junk: usage error before boot or provider call [31.14ms]
+(pass) budget routing and honest unsupported flags > --max-tokens 1.5: usage error before boot or provider call [30.81ms]
+(pass) budget routing and honest unsupported flags > --max-tokens: usage error before boot or provider call [29.68ms]
+(pass) budget routing and honest unsupported flags > --resume: usage error before boot or provider call [42.75ms]
+(pass) budget routing and honest unsupported flags > --resume=: usage error before boot or provider call [26.08ms]
+(pass) budget routing and honest unsupported flags > --dry-run=invalid: usage error before boot or provider call [24.91ms]
+(pass) budget routing and honest unsupported flags > --mode plan: usage error before boot or provider call [38.80ms]
+(pass) budget routing and honest unsupported flags > --mode ask: usage error before boot or provider call [40.15ms]
+(pass) budget routing and honest unsupported flags > --mode typo: usage error before boot or provider call [42.85ms]
+(pass) budget routing and honest unsupported flags > --mode minimal: usage error before boot or provider call [42.48ms]
+(pass) budget routing and honest unsupported flags > --mode=: usage error before boot or provider call [24.49ms]
+(pass) command-local mode compatibility > install --mode minimal still completes without a model or full install [232.00ms]
+(pass) command-local mode compatibility > legacy xr run also refuses unknown execution modes before boot [23.50ms]
+
+test/e2e-blackbox/hygiene.test.ts:
+(pass) harness hygiene (M-07) > stub close releases its port immediately (zero leaked listeners) [52.29ms]
+(pass) harness hygiene (M-07) > stub close with a HANGING in-flight socket does not leak either [153.01ms]
+(pass) harness hygiene (M-07) > a terminated CLI child leaves no tracked process behind [27.99ms]
+(pass) harness hygiene (M-07) > SIGKILLed children are reaped by the registry (defensive cleanup) [0.82ms]
+
+test/e2e-blackbox/streaming-matrix.test.ts:
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > sse-ok (declared streaming:true) [563.80ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > non-sse-body (declared streaming:true) [543.74ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > empty-body (declared streaming:true) [552.67ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > no-usage (declared streaming:true) [487.19ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > native-tool-calls (declared streaming:true) [552.27ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > hanging (declared streaming:true) [3548.06ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > 500 (declared streaming:true) [561.28ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:true) > slow (declared streaming:true) [1387.21ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > sse-ok (declared streaming:false) [591.20ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > non-sse-body (declared streaming:false) [515.80ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > empty-body (declared streaming:false) [568.55ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > no-usage (declared streaming:false) [547.59ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > native-tool-calls (declared streaming:false) [549.19ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > hanging (declared streaming:false) [3580.81ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > 500 (declared streaming:false) [550.20ms]
+(pass) streaming matrix — behavior capture (HEAD truth, declared streaming:false · F-03 pins) > slow (declared streaming:false) [1319.91ms]
+(pass) scenario matrix determinism: every scenario serves (self-test) > every scenario serves and the scenario list is unique [53.22ms]
+(pass) F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1) > non-SSE body over a stream request: real model content is consumed, never a silent '(no response)' success [526.34ms]
+(pass) F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1) > empty content over a stream request can never produce exit 0 with zero model content [544.19ms]
+(pass) F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1) > a provider declaring capabilities.streaming:false never receives stream:true [512.81ms]
+(pass) F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1) > a non-SSE body answered to a streaming:false provider is a content-consumed success (never a fake one) [542.97ms]
+(pass) F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1) > with --no-color the run path emits zero ANSI escape codes [536.29ms]
+
+test/e2e-blackbox/providers-lifecycle.test.ts:
+(pass) providers add --yes: unattended add writes the same config shape as interactive [225.08ms]
+(pass) providers add --yes with missing flags: exit 2 (usage), no prompt, no hang [147.49ms]
+(pass) providers add --yes rejects invalid base URLs (validation never weakened) [151.89ms]
+(pass) providers list shows the custom provider in a FRESH process [352.71ms]
+(pass) providers set <custom> + run --provider <custom> work in fresh processes [856.54ms]
+(pass) providers add --key-env: value in env is stored securely; absent env is reported honestly [415.34ms]
+
+ 98 pass
+ 0 fail
+ 413 expect() calls
+Ran 98 tests across 10 files. [46.48s]

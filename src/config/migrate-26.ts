@@ -20,24 +20,24 @@ const chatBudgetsShape = z
     maxUsd: z.number().min(0).optional(),
     maxTokens: z.number().int().min(0).optional(),
   })
-  .default({});
+  .prefault({});
 
 const rateLimitShape = z
   .object({
     /** Burst size. */
-    tokens: z.number().positive().default(20),
+    tokens: z.number().positive().prefault(20),
     /** Sustained refill per second (default 20 messages a minute, as Telegram). */
-    refillPerSec: z.number().min(0).default(20 / 60),
+    refillPerSec: z.number().min(0).prefault(20 / 60),
   })
-  .default({});
+  .prefault({});
 
 export const phase26ConfigShape = {
   discord: z
     .object({
       /** The user wants the bot running. Set by Start/Stop and Connect/Disconnect. */
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().prefault(false),
       /** Start on daemon boot when enabled and a token is present. */
-      autoStart: z.boolean().default(true),
+      autoStart: z.boolean().prefault(true),
       rateLimit: rateLimitShape,
       chatBudgets: chatBudgetsShape,
       /**
@@ -45,7 +45,7 @@ export const phase26ConfigShape = {
        * flow only; never preconfigured by hand — there is no env allow-list for
        * Discord, by design (the brief deleted it for Phase 24 too).
        */
-      pairedUserIds: z.array(SNOWFLAKE).max(50).default([]),
+      pairedUserIds: z.array(SNOWFLAKE).max(50).prefault([]),
       /**
        * Guild channels XR may answer in. Default empty = DMs only. A channel is
        * added from the Integrations settings popover or by redeeming a channel
@@ -54,14 +54,14 @@ export const phase26ConfigShape = {
       allowedChannels: z
         .array(z.object({ guildId: SNOWFLAKE, channelId: SNOWFLAKE }))
         .max(100)
-        .default([]),
+        .prefault([]),
       /** Documents are capped here; photos stay capped at 2 MB. */
       maxAttachmentBytes: z
         .number()
         .int()
         .min(64 * 1024)
         .max(20 * 1024 * 1024)
-        .default(5 * 1024 * 1024),
+        .prefault(5 * 1024 * 1024),
       /**
        * The application's Ed25519 public key (64 hex chars) from the Discord
        * Developer Portal. Only needed for interactions-webhook mode, where it
@@ -81,13 +81,13 @@ export const phase26ConfigShape = {
        */
       devGuildId: SNOWFLAKE.optional(),
     })
-    .default({}),
+    .prefault({}),
   whatsapp: z
     .object({
       /** The user wants the linked device running. */
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().prefault(false),
       /** Reconnect on daemon boot when credentials exist. */
-      autoStart: z.boolean().default(true),
+      autoStart: z.boolean().prefault(true),
       rateLimit: rateLimitShape,
       chatBudgets: chatBudgetsShape,
       /**
@@ -95,25 +95,25 @@ export const phase26ConfigShape = {
        * Default empty = nobody. Pairing with the phone does NOT allow anyone:
        * the QR links the device, the allow-list decides who may talk to XR.
        */
-      allowedContacts: z.array(z.string().regex(/^\d{6,15}$/)).max(200).default([]),
+      allowedContacts: z.array(z.string().regex(/^\d{6,15}$/)).max(200).prefault([]),
       /**
        * When true, a contact the user messages first is added to the allow-list
        * automatically (outbox whitelist). Default false — the most conservative
        * setting, per the fail-closed rule.
        */
-      respondToOutbox: z.boolean().default(false),
+      respondToOutbox: z.boolean().prefault(false),
       /** Documents are capped here; photos stay capped at 2 MB. */
       maxAttachmentBytes: z
         .number()
         .int()
         .min(64 * 1024)
         .max(20 * 1024 * 1024)
-        .default(5 * 1024 * 1024),
+        .prefault(5 * 1024 * 1024),
       /**
        * The account's own number, discovered when the device links. Read-only
        * mirror for the UI ("Linked as …"); never used to message anyone.
        */
       selfJid: z.string().max(64).optional(),
     })
-    .default({}),
+    .prefault({}),
 };

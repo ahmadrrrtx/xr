@@ -1,189 +1,408 @@
-/**
- * XR Phase 4 · T6 — release artifact verification.
- *
- * Verifies a release bundle the way an independent party would:
- *   1. integrity  — the artifact's SHA-256 matches SHA256SUMS;
- *   2. SBOM       — parses as CycloneDX 1.5, pins the locked deps (hashes);
- *   3. provenance — SLSA provenance parses and its subject hash matches;
- *   4. signature  — cosign keyless verification (Rekor-backed) when cosign
- *                   is available; otherwise a local Ed25519 verification for
- *                   tests/self-check (never presented as keyless proof).
- *
- * Claims discipline (Art. IX.4): this script reports EXACTLY what it
- * verified. Keyless/Rekor verification is only reported when it actually ran
- * against the public transparency log.
- *
- * Usage:
- *   bun run scripts/verify-release.ts --artifact xr.tgz --sums SHA256SUMS \
- *       --sbom sbom.cyclonedx.json --provenance provenance.json
- *       [--cosign-identity 'https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v*']
- *       [--local-key key.pub --local-sig sig.bin]   # test path
- */
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { basename } from "node:path";
-import { runCommand } from "../src/util/process.ts";
-
+/** Verify exactly the requested facets; missing inputs fail, not silently skip.
+ * --strict requires authenticated publisher + SLSA evidence. Local Ed25519
+ * fixtures/parsed DSSE subjects NEVER stand in for those production checks. */
+import { createHash, verify } from "node:crypto";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
+import { runCommand } from "../src/util/process";
 export interface VerificationReport {
   ok: boolean;
   checks: Array<{ name: string; ok: boolean; detail?: string }>;
 }
-
-function sha256File(path: string): string {
+export function parseSums(text: string): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    const match = /^([a-fA-F0-9]{64})[ \t]+\*?(.+)$/.exec(line);
+    if (!match) throw new Error("Malformed checksum entry");
+    const name = match[2]!.replace(/^\.\//, "");
+    if (
+      !name ||
+      name.startsWith("/") ||
+      /^[a-z]:/i.test(name) ||
+      /[\\\x00-\x1f\x7f]/.test(name) ||
+      name.split("/").some((s) => s === ".." || s === "." || !s)
+    )
+      throw new Error("Unsafe checksum path");
+    if (result.has(name)) throw new Error("Duplicate checksum entry");
+    result.set(name, match[1]!.toLowerCase());
+  }
+  if (!result.size) throw new Error("Empty checksum inventory");
+  return result;
+}
+function sha256(path: string): string {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
-
-function parseSums(sums: string): Map<string, string> {
-  const m = new Map<string, string>();
-  for (const line of sums.split("\n")) {
-    const parts = line.trim().split(/\s+/);
-    if (parts.length >= 2 && /^[0-9a-f]{64}$/i.test(parts[0])) {
-      m.set(parts[1].replace(/^\*/, ""), parts[0].toLowerCase());
-    }
+export function validateSbom(doc: any, expectedVersion?: string): boolean {
+  if (
+    doc?.bomFormat !== "CycloneDX" ||
+    doc.specVersion !== "1.5" ||
+    !Array.isArray(doc.components) ||
+    !doc.components.length
+  )
+    return false;
+  const root = doc.metadata?.component;
+  if (
+    typeof root?.["bom-ref"] !== "string" ||
+    !root["bom-ref"] ||
+    typeof root.version !== "string" ||
+    (expectedVersion && root.version !== expectedVersion)
+  )
+    return false;
+  const refs = new Set<string>([root["bom-ref"]]);
+  for (const c of doc.components) {
+    if (
+      typeof c.name !== "string" ||
+      !c.name ||
+      typeof c.version !== "string" ||
+      !c.version ||
+      typeof c["bom-ref"] !== "string" ||
+      refs.has(c["bom-ref"])
+    )
+      return false;
+    refs.add(c["bom-ref"]);
+    if (
+      c.hashes !== undefined &&
+      (!Array.isArray(c.hashes) ||
+        !c.hashes.length ||
+        !c.hashes.every((h: any) =>
+          (
+            ({
+              "SHA-256": /^[a-f\d]{64}$/i,
+              "SHA-384": /^[a-f\d]{96}$/i,
+              "SHA-512": /^[a-f\d]{128}$/i,
+            }) as Record<string, RegExp>
+          )[h.alg]?.test(h.content),
+        ))
+    )
+      return false;
+    if (
+      !c.hashes &&
+      !c.properties?.some(
+        (p: any) =>
+          p.name === "xr:integrity" && p.value.startsWith("unavailable"),
+      )
+    )
+      return false;
   }
-  return m;
+  return (
+    Array.isArray(doc.dependencies) &&
+    doc.dependencies.some((d: any) => d.ref === root["bom-ref"]) &&
+    doc.dependencies.every(
+      (d: any) =>
+        refs.has(d.ref) &&
+        (!d.dependsOn || d.dependsOn.every((ref: string) => refs.has(ref))),
+    )
+  );
 }
-
-export async function verifyRelease(opts: {
+/** Parse one or more DSSE/statement JSONL records. This is a digest check,
+ * NOT DSSE signature/builder authentication; slsa-verifier does that below. */
+export function provenanceMatches(
+  text: string,
+  name: string,
+  digest: string,
+): boolean {
+  let records: any[];
+  try {
+    records = [JSON.parse(text)];
+  } catch {
+    records = text
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l));
+  }
+  return records.some((record) => {
+    const statement =
+      record.payload !== undefined
+        ? JSON.parse(Buffer.from(record.payload, "base64").toString("utf8"))
+        : record;
+    return (
+      Array.isArray(statement?.subject) &&
+      statement.subject.some(
+        (s: any) =>
+          typeof s.name === "string" &&
+          basename(s.name) === basename(name) &&
+          s.digest?.sha256?.toLowerCase() === digest,
+      )
+    );
+  });
+}
+export interface VerificationInput {
   artifact: string;
   sums?: string;
   sbom?: string;
   provenance?: string;
+  expectedVersion?: string;
   cosignIdentity?: string;
   cosignIssuer?: string;
   localKey?: string;
   localSig?: string;
-}): Promise<VerificationReport> {
-  const checks: VerificationReport["checks"] = [];
-
-  // 1. Integrity vs SHA256SUMS
-  if (opts.sums && existsSync(opts.sums)) {
-    const sums = parseSums(readFileSync(opts.sums, "utf8"));
-    const expected =
-      sums.get(opts.artifact) ??
-      sums.get(`./${opts.artifact}`) ??
-      sums.get(basename(opts.artifact)) ??
-      sums.get(`./${basename(opts.artifact)}`);
-    const actual = sha256File(opts.artifact);
-    checks.push({
-      name: "artifact-sha256",
-      ok: expected !== undefined && expected === actual,
-      detail: expected ? `sha256 ${actual}` : "no entry in SHA256SUMS",
-    });
-  }
-
-  // 2. SBOM structure
-  if (opts.sbom && existsSync(opts.sbom)) {
+  slsaSourceUri?: string;
+  slsaSourceTag?: string;
+  strict?: boolean;
+}
+export async function verifyRelease(
+  opts: VerificationInput,
+): Promise<VerificationReport> {
+  const checks: VerificationReport["checks"] = [],
+    add = (name: string, ok: boolean, detail?: string) => {
+      checks.push({ name, ok, ...(detail ? { detail } : {}) });
+    };
+  const artifactExists =
+    existsSync(opts.artifact) && lstatSync(opts.artifact).isFile();
+  add("artifact-exists", artifactExists);
+  if (!artifactExists) return { ok: false, checks };
+  const digest = sha256(opts.artifact);
+  if (opts.strict)
+    add(
+      "complete-release-inputs",
+      Boolean(
+        opts.sums &&
+        opts.sbom &&
+        opts.provenance &&
+        opts.cosignIdentity &&
+        opts.expectedVersion &&
+        opts.slsaSourceUri &&
+        opts.slsaSourceTag,
+      ),
+      "strict requires sums, SBOM, exact publisher identity, expected version and authenticated SLSA inputs; local keys cannot substitute",
+    );
+  let sums: Map<string, string> | undefined;
+  if (opts.sums) {
     try {
-      const sbom = JSON.parse(readFileSync(opts.sbom, "utf8"));
-      const ok =
-        sbom.bomFormat === "CycloneDX" &&
-        typeof sbom.specVersion === "string" &&
-        Array.isArray(sbom.components) &&
-        sbom.components.length > 0 &&
-        sbom.components.every(
-          (c: { name?: string; version?: string }) => typeof c.name === "string" && typeof c.version === "string",
-        );
-      checks.push({
-        name: "sbom-cyclonedx",
-        ok,
-        detail: ok ? `${sbom.components.length} components, spec ${sbom.specVersion}` : "invalid CycloneDX document",
-      });
-    } catch (e) {
-      checks.push({ name: "sbom-cyclonedx", ok: false, detail: `unparseable: ${(e as Error).message}` });
-    }
-  }
-
-  // 3. SLSA provenance subject match
-  if (opts.provenance && existsSync(opts.provenance)) {
-    try {
-      const prov = JSON.parse(readFileSync(opts.provenance, "utf8"));
-      const subject = prov?.subject ?? [];
-      const actual = sha256File(opts.artifact);
-      const matched = subject.some(
-        (s: { digest?: Record<string, string>; name?: string }) =>
-          s.digest && String(s.digest.sha256 ?? "").toLowerCase() === actual,
+      sums = parseSums(readFileSync(opts.sums, "utf8"));
+      const expected =
+        sums.get(opts.artifact.replace(/^\.\//, "")) ??
+        sums.get(basename(opts.artifact));
+      add(
+        "artifact-sha256",
+        expected === digest,
+        expected ? `sha256 ${digest}` : "artifact absent from sums",
       );
-      checks.push({
-        name: "slsa-provenance-subject",
-        ok: matched,
-        detail: matched ? `subject sha256 matches ${opts.artifact}` : "no subject digest matches the artifact",
-      });
-    } catch (e) {
-      checks.push({ name: "slsa-provenance-subject", ok: false, detail: `unparseable: ${(e as Error).message}` });
+      if (opts.strict) {
+        for (const [name, expectedHash] of sums) {
+          const file = resolve(dirname(opts.sums), name);
+          add(
+            `inventory-sha256:${name}`,
+            existsSync(file) &&
+              lstatSync(file).isFile() &&
+              sha256(file) === expectedHash,
+          );
+        }
+      }
+    } catch {
+      add(
+        "artifact-sha256",
+        false,
+        "missing/malformed/duplicate/unsafe checksum inventory",
+      );
     }
   }
-
-  // 4. Signature: cosign keyless (Rekor) when available, else local Ed25519.
-  const cosign = await runCommand("cosign", ["version"], { timeoutMs: 8000, env: { PATH: process.env.PATH ?? "" } });
-  if (cosign.ok && opts.cosignIdentity) {
-    const identityFlag = opts.cosignIdentity.includes("*")
-      ? "--certificate-identity-regexp"
-      : "--certificate-identity";
-    const args = [
-      "verify-blob",
-      identityFlag, opts.cosignIdentity,
-      "--certificate-oidc-issuer", opts.cosignIssuer ?? "https://token.actions.githubusercontent.com",
-      "--bundle", `${opts.artifact}.bundle`,
-      opts.artifact,
-    ];
-    const res = await runCommand("cosign", args, { timeoutMs: 120_000, env: { PATH: process.env.PATH ?? "" } });
-    checks.push({
-      name: "cosign-keyless-verify",
-      ok: res.ok,
-      detail: res.ok
-        ? "signature verified against the public Rekor transparency log (keyless)"
-        : res.stderr.trim().slice(0, 300) || "cosign verify-blob failed",
-    });
-  } else if (opts.localKey && opts.localSig && existsSync(opts.localKey) && existsSync(opts.localSig)) {
-    // Local test path: Ed25519 over the artifact bytes. NOT keyless proof —
-    // reported honestly as a local self-check.
+  if (opts.sbom) {
     try {
-      const { verify } = await import("node:crypto");
-      const key = readFileSync(opts.localKey);
-      const sig = readFileSync(opts.localSig);
-      const artifact = readFileSync(opts.artifact);
-      const ok = verify(null, artifact, key, sig);
-      checks.push({
-        name: "local-signature",
+      const doc = JSON.parse(readFileSync(opts.sbom, "utf8")),
+        ok = validateSbom(doc, opts.expectedVersion);
+      add(
+        "sbom-cyclonedx",
         ok,
-        detail: ok
+        ok
+          ? `${doc.components.length} locked components; explicitly scoped inventory`
+          : "invalid CycloneDX structure/digests/refs or identity mismatch",
+      );
+      if (sums)
+        add("sbom-sha256", sums.get(basename(opts.sbom)) === sha256(opts.sbom));
+    } catch {
+      add("sbom-cyclonedx", false, "missing or malformed requested SBOM");
+    }
+  }
+  if (opts.provenance) {
+    try {
+      add(
+        "slsa-provenance-subject",
+        provenanceMatches(
+          readFileSync(opts.provenance, "utf8"),
+          opts.artifact,
+          digest,
+        ),
+        "subject name/digest only; NOT builder authentication",
+      );
+    } catch {
+      add(
+        "slsa-provenance-subject",
+        false,
+        "missing/malformed requested provenance",
+      );
+    }
+  }
+  const commandEnv: NodeJS.ProcessEnv = {
+    PATH: process.env.PATH ?? "",
+    ...(process.env.HOME ? { HOME: process.env.HOME } : {}),
+    ...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+  };
+  if (opts.cosignIdentity) {
+    if (
+      opts.cosignIdentity.includes("*") ||
+      !opts.cosignIdentity.startsWith("https://github.com/")
+    ) {
+      add(
+        "cosign-keyless-verify",
+        false,
+        "require an exact GitHub workflow@tag identity, not a wildcard",
+      );
+    } else {
+      const version = await runCommand("cosign", ["version"], {
+        timeoutMs: 8000,
+        env: commandEnv,
+      });
+      if (!version.ok)
+        add(
+          "cosign-keyless-verify",
+          false,
+          "cosign unavailable; no publisher claim made",
+        );
+      else {
+        for (const [name, path] of [
+          ["cosign-keyless-verify", opts.artifact],
+          ["signed-checksum-inventory", opts.sums],
+          ["signed-sbom", opts.sbom],
+        ] as const) {
+          if (!path) continue;
+          if (!existsSync(`${path}.bundle`)) {
+            add(name, false, "missing requested signature bundle");
+            continue;
+          }
+          const result = await runCommand(
+            "cosign",
+            [
+              "verify-blob",
+              "--certificate-identity",
+              opts.cosignIdentity,
+              "--certificate-oidc-issuer",
+              opts.cosignIssuer ??
+                "https://token.actions.githubusercontent.com",
+              "--bundle",
+              `${path}.bundle`,
+              path,
+            ],
+            { timeoutMs: 120_000, env: commandEnv },
+          );
+          add(
+            name,
+            result.ok,
+            result.ok
+              ? "cosign keyless verification executed (certificate identity + transparency bundle)"
+              : "cosign verification failed; no publisher claim made",
+          );
+        }
+      }
+    }
+  } else if (opts.localKey && opts.localSig) {
+    try {
+      const ok = verify(
+        null,
+        readFileSync(opts.artifact),
+        readFileSync(opts.localKey),
+        readFileSync(opts.localSig),
+      );
+      add(
+        "local-signature",
+        ok,
+        ok
           ? "local Ed25519 signature verified (self-check path, NOT keyless/Rekor)"
           : "local signature does not match the artifact",
-      });
-    } catch (e) {
-      checks.push({ name: "local-signature", ok: false, detail: `verification error: ${(e as Error).message}` });
+      );
+    } catch {
+      add(
+        "local-signature",
+        false,
+        "missing/invalid local verification inputs",
+      );
     }
-  } else {
-    checks.push({
-      name: "signature",
-      ok: false,
-      detail: "no cosign binary with identity, and no local key/signature provided — nothing to verify (no claim made)",
-    });
+  } else
+    add(
+      "signature",
+      false,
+      "no verification identity/key supplied — no claim made",
+    );
+  if (opts.slsaSourceUri || opts.slsaSourceTag) {
+    if (!opts.provenance || !opts.slsaSourceUri || !opts.slsaSourceTag)
+      add(
+        "slsa-builder-authentication",
+        false,
+        "provenance/source URI/source tag all required",
+      );
+    else {
+      const result = await runCommand(
+        "slsa-verifier",
+        [
+          "verify-artifact",
+          opts.artifact,
+          "--provenance-path",
+          opts.provenance,
+          "--source-uri",
+          opts.slsaSourceUri,
+          "--source-tag",
+          opts.slsaSourceTag,
+        ],
+        { timeoutMs: 120_000, env: commandEnv },
+      );
+      add(
+        "slsa-builder-authentication",
+        result.ok,
+        result.ok
+          ? "slsa-verifier authenticated builder/source tag and subject digest"
+          : "slsa-verifier missing/failed; parsed subject is NOT authentication",
+      );
+    }
   }
-
   return { ok: checks.every((c) => c.ok), checks };
 }
-
 if (import.meta.main) {
-  const args = process.argv.slice(2);
-  const get = (flag: string): string | undefined => {
-    const i = args.indexOf(flag);
-    return i >= 0 ? args[i + 1] : undefined;
-  };
-  const report = await verifyRelease({
-    artifact: get("--artifact") ?? "xr.tgz",
-    sums: get("--sums"),
-    sbom: get("--sbom"),
-    provenance: get("--provenance"),
-    cosignIdentity: get("--cosign-identity"),
-    cosignIssuer: get("--cosign-issuer"),
-    localKey: get("--local-key"),
-    localSig: get("--local-sig"),
-  });
-  for (const c of report.checks) {
-    console.log(`${c.ok ? "✓" : "✗"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}`);
+  const args = process.argv.slice(2),
+    values = new Map<string, string>(),
+    booleans = new Set(["--strict", "--json"]),
+    allowed = new Set([
+      "--artifact",
+      "--sums",
+      "--sbom",
+      "--provenance",
+      "--expected-version",
+      "--cosign-identity",
+      "--cosign-issuer",
+      "--local-key",
+      "--local-sig",
+      "--slsa-source-uri",
+      "--slsa-source-tag",
+    ]);
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (booleans.has(a)) continue;
+    if (!allowed.has(a) || !args[i + 1] || args[i + 1]!.startsWith("--"))
+      throw new Error("Unknown/missing verification argument");
+    values.set(a, args[++i]!);
   }
-  console.log(report.ok ? "VERIFIED" : "NOT VERIFIED");
-  process.exit(report.ok ? 0 : 1);
+  const get = (flag: string) => values.get(flag),
+    report = await verifyRelease({
+      artifact: get("--artifact") ?? "xr.tgz",
+      sums: get("--sums"),
+      sbom: get("--sbom"),
+      provenance: get("--provenance"),
+      expectedVersion: get("--expected-version"),
+      cosignIdentity: get("--cosign-identity"),
+      cosignIssuer: get("--cosign-issuer"),
+      localKey: get("--local-key"),
+      localSig: get("--local-sig"),
+      slsaSourceUri: get("--slsa-source-uri"),
+      slsaSourceTag: get("--slsa-source-tag"),
+      strict: args.includes("--strict"),
+    });
+  if (args.includes("--json")) console.log(JSON.stringify(report, null, 2));
+  else {
+    for (const c of report.checks)
+      console.log(
+        `${c.ok ? "✓" : "✗"} ${c.name}${c.detail ? ` — ${c.detail}` : ""}`,
+      );
+    console.log(report.ok ? "VERIFIED REQUESTED FACETS" : "NOT VERIFIED");
+  }
+  process.exitCode = report.ok ? 0 : 1;
 }

@@ -1,0 +1,11 @@
+# Test the actual pure native governor without downloading/building Tauri/GTK.
+[package]
+name = "xr-native-budget-check"
+version = "0.0.0"
+publish = false
+edition = "2021"
+rust-version = "1.77"
+[dependencies]
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+[workspace]

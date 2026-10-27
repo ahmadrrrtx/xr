@@ -12,7 +12,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAgentLoop } from "../../../src/core/agent.ts";
+import { runAgentLoop } from "../../helpers/scripted-agent.ts";
 import type { ChatStreamEvent, Message, ModelTurn, Provider, Tool } from "../../../src/core/types.ts";
 import { Store } from "../../../src/state/workspace-store.ts";
 import { ToolRegistryService } from "../../../src/tools/registry-service.ts";
@@ -202,6 +202,13 @@ describe("XR-LAUNCH-024 · classifier and event builder", () => {
     expect(toolResultEvent("i", "shell", { ok: false, output: "x", reason: "blocked:isolation-unavailable" }).reason).toBe("blocked:isolation-unavailable");
     expect(toolResultEvent("i", "read_file", { ok: false, output: "filesystem missing", reason: "made:up" }).reason).toBe("missing:file");
     expect(toolResultEvent("i", "read_file", { ok: true, output: "hi" })).toEqual({ type: "tool_result", id: "i", tool: "read_file", ok: true, result: "hi" });
+  });
+
+  test("filesystem-unavailable guidance describes the enforcement prerequisite without declaring arm64 unsupported", () => {
+    const next = TOOL_REASONS["blocked:filesystem-unsupported"];
+    expect(next).toContain("openat2");
+    expect(next).toContain("glibc");
+    expect(next).not.toContain("Linux arm64 is not supported");
   });
 
   test("every code has a next step and the codes are namespaced", () => {

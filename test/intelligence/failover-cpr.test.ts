@@ -95,6 +95,7 @@ describe("Phase 5 · failover-injection harness (ContinuityBench-style)", () => 
       health,
       construct: () => fallback.p,
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
       contextAnchors: ANCHORS,
       onFailover: (r) => failovers.push(r),
@@ -102,7 +103,7 @@ describe("Phase 5 · failover-injection harness (ContinuityBench-style)", () => 
 
     const turnAnswers: string[] = [];
     for (const msgs of turns) {
-      const turn = await rp.chat(msgs, []);
+      const turn = await rp.chat(msgs, [], { beforeAttempt: () => {} });
       turnAnswers.push(turn.message);
     }
 
@@ -158,10 +159,11 @@ describe("Phase 5 · failover-injection harness (ContinuityBench-style)", () => 
       health,
       construct: () => fallback.p,
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
       onFailover: (r) => records.push(r),
     });
-    await rp.chat(conversation()[3]!, []);
+    await rp.chat(conversation()[3]!, [], { beforeAttempt: () => {} });
     expect(records).toHaveLength(1);
     const ctx = records[0]!.context;
     expect(ctx.messageCount).toBe(7);

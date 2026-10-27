@@ -291,10 +291,6 @@ impl Inner {
     }
 
     fn seed_if_fresh(&mut self, now: i64) -> Result<(), String> {
-        // Demo history is a development aid — never in a release build.
-        if !crate::seed_purge::demo_data_enabled() {
-            return Ok(());
-        }
         let seeded = read_kv(&self.conn, KEY_SEEDED).map_err(|e| e.to_string())?;
         let version = seeded.and_then(|s| s.parse::<i64>().ok());
         if version == Some(SEED_VERSION) || !self.events.is_empty() {
@@ -689,7 +685,8 @@ pub fn budget_init<R: Runtime>(
     let (overview, out) = state.with(|db, _out| {
         db.tz = tz_offset_min;
         db.invalidate();
-        db.seed_if_fresh(now)?;
+        // Deliberate demo opt-in only; direct seed calls below are test fixtures.
+        if crate::seed_purge::demo_data_enabled() { db.seed_if_fresh(now)?; }
         Ok(db.overview_now(now))
     })?;
     flush(&app, out);
@@ -840,6 +837,9 @@ mod tests {
             estimated_tokens_in: 2000.0,
             estimated_tokens_out: 800.0,
             estimated_cost: None,
+            // RC-204: downshifting is opt-in per request; the fixture keeps the
+            // budget settings' default (no per-request override).
+            allow_downshift: None,
             agent: Some("main".into()),
             workspace: Some("xr".into()),
             session_id: Some("chat-test".into()),
@@ -854,7 +854,7 @@ mod tests {
             agent: Some("main".into()),
             workspace: Some("xr".into()),
             session_id: Some("chat-test".into()),
-            model: Some("claude-sonnet-4.5".into()),
+            model: Some("claude-sonnet-5-5".into()),
             tokens_in: Some(2000.0),
             tokens_out: Some(800.0),
             cost_usd: cost,
@@ -875,7 +875,7 @@ mod tests {
             })
             .unwrap();
         assert_eq!(ov.events_total, 246);
-        assert!((ov.spent_month - 0.409827).abs() < 1e-9);
+        assert!((ov.spent_month - 0.385849).abs() < 1e-9);
         assert_eq!(ov.state, "ok");
         // Reload from the same connection state: rows are on disk (in-memory db here).
         let (count, _) = db
@@ -906,7 +906,7 @@ mod tests {
                 d.record(spend(0.0098), NOW, out)?;
                 // Lowering the cap below what is already spent → capped, no breaker.
                 d.update_settings(serde_json::json!({ "monthlyLimit": 0.01 }), NOW, out)?;
-                let v = d.check(req("claude-sonnet-4.5"), NOW + 1, out)?;
+                let v = d.check(req("claude-sonnet-5-5"), NOW + 1, out)?;
                 Ok((v, d.events.clone()))
             })
             .unwrap();
@@ -931,16 +931,16 @@ mod tests {
                 d.tz = TZ;
                 d.record(spend(0.0098), NOW, out)?;
                 d.update_settings(serde_json::json!({ "monthlyLimit": 0.01 }), NOW, out)?;
-                assert!(!d.check(req("claude-sonnet-4.5"), NOW + 1, out)?.allowed);
+                assert!(!d.check(req("claude-sonnet-5-5"), NOW + 1, out)?.allowed);
                 let s =
                     d.update_settings(serde_json::json!({ "monthlyLimit": 5.0 }), NOW + 2, out)?;
-                assert!(d.check(req("claude-sonnet-4.5"), NOW + 3, out)?.allowed);
+                assert!(d.check(req("claude-sonnet-5-5"), NOW + 3, out)?.allowed);
                 // Threshold breaker: 4.75 of 5 → paused.
                 let r = d.record(spend(4.74), NOW + 4, out)?;
                 assert_eq!(r.tripped.as_deref(), Some("threshold"));
                 assert!(d.settings.paused);
                 assert_eq!(
-                    d.check(req("claude-sonnet-4.5"), NOW + 5, out)?.code,
+                    d.check(req("claude-sonnet-5-5"), NOW + 5, out)?.code,
                     "paused"
                 );
                 let resumed = d.set_paused(false, None, NOW + 6, out)?;

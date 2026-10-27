@@ -92,7 +92,8 @@ export interface EnvelopePlan {
 /** POLICY — the constraints the run may not exceed. Ambiguity denies (Art. IV.4). */
 export interface EnvelopePolicy {
   readonly budget: { maxUsd?: number; maxTokens?: number };
-  readonly pricing: { inPerMTok: number; outPerMTok: number };
+  readonly pricing: import("../../cost/governor.ts").Pricing;
+  readonly pricingOverrides?: Record<string, import("../../cost/governor.ts").Pricing>;
   readonly egressAllowlist: readonly string[];
   readonly dryRun: boolean;
   readonly toolsAllow?: readonly string[];

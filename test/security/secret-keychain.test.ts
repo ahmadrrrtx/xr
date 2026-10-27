@@ -38,6 +38,7 @@ class MockKeychain implements OsSecretBackend {
   failSet = false;
   failGet = false;
   failRemove = false;
+  keepOnRemove = false;
   /** set() reports success but stores a different value (read-back must catch it). */
   corrupt = false;
   listable = true;
@@ -55,6 +56,7 @@ class MockKeychain implements OsSecretBackend {
   private doRemove(name: string): boolean {
     this.calls.push(`remove:${name}`);
     if (this.failRemove) return false;
+    if (this.keepOnRemove) return true;
     return this.store.delete(name);
   }
   async set(n: string, v: string) { return this.doSet(n, v); }
@@ -222,6 +224,33 @@ describe("XR-LAUNCH-015 · keychain is the primary store", () => {
     secrets.setSecret(NAME, VALUE);
     await secrets.removeSecretAsync(NAME);
     expect(kc.store.has(NAME)).toBe(false);
+  });
+
+  test("a refused OS deletion never reports success or destroys recovery metadata", async () => {
+    secrets.setSecret(NAME, VALUE);
+    kc.failRemove = true;
+    await expect(secrets.removeSecretAsync(NAME)).rejects.toThrow('not confirmed');
+    expect(() => secrets.removeSecret(NAME)).toThrow('not confirmed');
+    expect(kc.store.get(NAME)).toBe(VALUE);
+    expect(secrets.readSecretIndex().entries[NAME]).toBe('linux-secret-service');
+    expect(secrets.getSecretSyncCached(NAME)).toBe(VALUE);
+    kc.failRemove = false;
+    await secrets.removeSecretAsync(NAME);
+    expect(kc.store.has(NAME)).toBe(false);
+  });
+
+  test("unavailable OS store and a false acknowledgment cannot hide retained credentials", async () => {
+    secrets.setSecret(NAME, VALUE);
+    secrets.__setOsBackendForTests(null);
+    await expect(secrets.removeSecretAsync(NAME)).rejects.toThrow('unavailable');
+    expect(() => secrets.removeSecret(NAME)).toThrow('unavailable');
+    expect(secrets.readSecretIndex().entries[NAME]).toBe('linux-secret-service');
+    secrets.__setOsBackendForTests(kc);
+    kc.keepOnRemove = true;
+    await expect(secrets.removeSecretAsync(NAME)).rejects.toThrow('not confirmed');
+    expect(() => secrets.removeSecret(NAME)).toThrow('not confirmed');
+    expect(kc.store.has(NAME)).toBe(true);
+    expect(secrets.readSecretIndex().entries[NAME]).toBe('linux-secret-service');
   });
 
   test("an indexed but unreadable audit key is NOT replaced (chain anchor kept)", () => {
@@ -494,4 +523,20 @@ describe("XR-LAUNCH-015 · doctor reports the real store", () => {
     expect(h.state).toBe("warn");
     expect(h.remediation).toContain("xr repair");
   });
+});
+
+test("desktop OS keychain service is per-home and does not overwrite CLI service", async () => {
+  const cli = secrets.secretServiceNamespace({ XR_HOME: '/owner/.xr' });
+  const desktop = secrets.secretServiceNamespace({ XR_HOME: '/owner/.xr-desktop', XR_SECRET_NAMESPACE: 'desktop' });
+  const other = secrets.secretServiceNamespace({ XR_HOME: '/owner/other-desktop', XR_SECRET_NAMESPACE: 'desktop' });
+  expect(() => secrets.secretServiceNamespace({ XR_SECRET_NAMESPACE: 'invalid' })).toThrow();
+  expect(cli).toBe('xr'); expect(desktop).not.toBe(cli); expect(other).not.toBe(desktop);
+  expect(desktop).not.toContain('/owner/');
+  const calls: Array<{ args: string[]; input?: string }> = [];
+  const runner: SecretRunner = { async run(_cmd, args, input) { calls.push({ args, input }); return { ok: true, stdout: '' }; }, runSync(_cmd, args, input) { calls.push({ args, input }); return { ok: true, stdout: '' }; } };
+  await linuxBackend(runner, desktop).set(NAME, VALUE);
+  await linuxBackend(runner, cli).set(NAME, 'different-cli-test-key');
+  expect(calls[0].args).toContain(desktop); expect(calls[0].args).not.toContain(VALUE);
+  expect(calls[1].args).toContain(cli); expect(calls[1].input).toBe('different-cli-test-key');
+  expect(macosAddCommand(NAME, VALUE, desktop)).toContain(`-s "${desktop}"`);
 });

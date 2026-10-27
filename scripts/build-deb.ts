@@ -35,6 +35,13 @@ export interface DebInfo {
   installedSizeKiB: number;
 }
 
+/** Canonical semver -> Debian ordering; preview sorts before its stable release. */
+export function debianVersion(version: string): string {
+  const m=/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(version);
+  if(!m || m[4]?.split(".").some(p=>/^0\d+$/.test(p)))throw new Error("Invalid canonical semver for Debian artifact");
+  return `${m[1]}.${m[2]}.${m[3]}${m[4]?`~${m[4]}`:""}`;
+}
+
 // ── tar (ustar) writer — enough for control/data archives ─────────────────
 
 function tarHeader(name: string, size: number, mode: number, type: "0" | "5"): Buffer {
@@ -110,7 +117,7 @@ export function buildDeb(options: { info: DebInfo; binaryPath: string; binaryNam
 
   const control = [
     `Package: ${info.package}`,
-    `Version: ${info.version}`,
+    `Version: ${debianVersion(info.version)}`,
     `Section: ${info.section}`,
     `Priority: ${info.priority}`,
     `Architecture: ${info.architecture}`,
@@ -175,7 +182,6 @@ if (import.meta.main) {
     },
     binaryPath: bin,
   });
-  await Bun.write(join(out.endsWith(".deb") ? out : join(out, debName), "."), deb).catch(() => undefined);
   const dest = out.endsWith(".deb") ? out : join(out, debName);
   await Bun.write(dest, deb);
   console.log(JSON.stringify({ ok: true, deb: dest, bytes: deb.length }));

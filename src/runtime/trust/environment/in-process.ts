@@ -49,16 +49,18 @@ export class InProcessBackend implements EnvironmentBackend {
       timeoutMs: exec.timeoutMs,
       maxOutputBytes: exec.maxOutputBytes,
       stdin: exec.stdin,
+      signal: exec.signal,
     });
     return {
-      ok: raw.exitCode === 0 && !raw.timedOut,
+      ok: raw.exitCode === 0 && !raw.timedOut && !raw.cancelled && !raw.outputTruncated,
       exitCode: raw.exitCode,
       stdout: raw.stdout,
       stderr: raw.stderr,
       timedOut: raw.timedOut,
+      cancelled: raw.cancelled,
       outputTruncated: raw.outputTruncated,
       durationMs: raw.durationMs,
-      boundaryEvent: raw.outputTruncated || raw.timedOut,
+      boundaryEvent: raw.outputTruncated || raw.timedOut || !!raw.cancelled,
       boundaryDetail: raw.outputTruncated ? "output limit reached" : raw.timedOut ? "wall-clock timeout" : undefined,
     };
   }

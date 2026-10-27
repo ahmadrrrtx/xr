@@ -1,393 +1,86 @@
-/**
- * XR — Native Google AI Provider (Gemini models)
- * 
- * Supports ALL Gemini models: 1.5 Flash, 1.5 Pro, 1.5 Ultra, 2.0, etc.
- * Direct API access with full tool-calling (function calling) support.
- * 
- * API Docs: https://ai.google.dev/gemini-api/docs
- * 
- * Cost: Free tier (15 req/min, 1500 req/day on Gemini 1.5 Flash!)
- *       Great for zero-cost setup.
+/** Gemini API only. Vertex/ADC fallback is deliberately NOT inferred from ambient
+ * GCP state. A different endpoint/account needs an explicit provider selection.
+ * API keys are headers, never URL parameters; raw upstream errors are not reflected.
  */
-import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChunk } from "../../core/types.ts";
-import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
-import { normalizeProviderError } from "../errors.ts";
-import { repairToTurn } from "../../reliability/repair.ts";
+import type { ChatOptions, Message, ModelTurn, Provider, Tool } from "../../core/types.ts";
+import { guardedRequest } from "../request-guard.ts";
 import { secretBrokerSync } from "../../security/secret-broker.ts";
-
-interface GoogleOptions {
-  model?: string;
-  apiKeyEnv?: string;
-}
-
-// Gemini content format
-interface GeminiContent {
-  role?: string;
-  parts: Array<{ text?: string; functionCall?: { name: string; args: Record<string, unknown> }; functionResponse?: { name: string; response: Record<string, unknown> } }>;
-}
-
+import { malformedProviderResponseError, normalizeProviderError } from "../errors.ts";
+import { toolParameters } from "./schemas.ts";
+import { assistantCalls, assistantText, chunksOfTurn, nativeBlocks, objectArgs, outputLimit, usagePair } from "./history.ts";
 export class GoogleProvider implements Provider {
-  id = "google";
-  label = "Google Gemini";
-  private apiKeyEnv: string;
-  private model: string;
-  private get apiKey(): string {
-    return secretBrokerSync(this.apiKeyEnv) ?? "";
+  readonly capabilities = { streaming: false, toolUse: true, functionCalling: true, jsonMode: false };
+  readonly id = "google";
+  readonly label = "Google Gemini";
+  private readonly model: string;
+  private readonly apiKeyEnv: string;
+  private readonly baseUrl = "https://generativelanguage.googleapis.com/v1beta";
+  constructor(opts: { model?: string; apiKeyEnv?: string } = {}) { this.model = opts.model ?? "gemini-3.8-flash"; this.apiKeyEnv = opts.apiKeyEnv ?? "GOOGLE_API_KEY"; }
+  get modelId() { return this.model; }
+  private headers() {
+    const key = secretBrokerSync(this.apiKeyEnv);
+    if (!key) throw new Error("Google API key unavailable through the credential broker");
+    return { "Content-Type": "application/json", "x-goog-api-key": key };
   }
-
-  get modelId(): string {
-    return this.model;
-  }
-  private baseUrl = "https://generativelanguage.googleapis.com/v1beta";
-
-  // Gemini model configs
-  private static readonly MODELS: Record<string, { 
-    supportsVision?: boolean;
-    supportsFunctionCalling?: boolean;
-    maxTokens?: number;
-    isFreeTier?: boolean;
-  }> = {
-    "gemini-2.0-flash": { supportsVision: true, supportsFunctionCalling: true, maxTokens: 8192, isFreeTier: true },
-    "gemini-1.5-flash": { supportsVision: true, supportsFunctionCalling: true, maxTokens: 8192, isFreeTier: true },
-    "gemini-1.5-flash-8b": { supportsVision: true, supportsFunctionCalling: true, maxTokens: 8192, isFreeTier: true },
-    "gemini-1.5-pro": { supportsVision: true, supportsFunctionCalling: true, maxTokens: 32768, isFreeTier: false },
-    "gemini-pro": { supportsVision: false, supportsFunctionCalling: true, maxTokens: 30720 },
-    "gemini-pro-vision": { supportsVision: true, supportsFunctionCalling: true, maxTokens: 4096 },
-  };
-
-  constructor(opts: GoogleOptions = {}) {
-    this.apiKeyEnv = opts.apiKeyEnv ?? "GOOGLE_API_KEY";
-    this.model = opts.model ?? "gemini-1.5-flash";
-  }
-
   async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
-    const apiKey = this.apiKey;
-    if (!apiKey) {
-      throw new Error(
-        `Google API key not found. Set GOOGLE_API_KEY in your environment.\n` +
-        `Get your key at: https://aistudio.google.com/app/apikey`
-      );
-    }
-
-    // Convert messages to Gemini format
-    const contents: GeminiContent[] = [];
-    let systemInstruction = "";
-
-    for (const msg of messages) {
-      if (msg.role === "system") {
-        systemInstruction += msg.content + "\n";
-        continue;
-      }
-
-      const role = msg.role === "assistant" ? "model" : "user";
-      
-      if (msg.role === "tool") {
-        // Tool results become function responses
-        const parts: GeminiContent["parts"] = [{
-          functionResponse: {
-            name: msg.name ?? "unknown_tool",
-            response: { output: msg.content },
-          },
-        }];
-        contents.push({ role: "user", parts });
-      } else if (msg.role === "assistant") {
-        // Parse JSON tool calls from assistant message
-        try {
-          const parsed = JSON.parse(msg.content);
-          const parts: GeminiContent["parts"] = [];
-          
-          if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
-            for (const tc of parsed.tool_calls) {
-              parts.push({
-                functionCall: {
-                  name: tc.tool,
-                  args: tc.args ?? {},
-                },
-              });
-            }
-          }
-          
-          if (parsed.message) {
-            parts.push({ text: parsed.message });
-          }
-          
-          if (parts.length > 0) {
-            contents.push({ role: "model", parts });
-          }
-        } catch {
-          // Plain text response
-          if (msg.content.trim()) {
-            contents.push({ role, parts: [{ text: msg.content }] });
-          }
-        }
-      } else {
-        // User message
-        contents.push({ role, parts: [{ text: msg.content }] });
-      }
-    }
-
-    // Build tool config for function calling
-    const toolsConfig: any = tools.length > 0 ? {
-      tools: [
-        {
-          functionDeclarations: tools.map(t => ({
-            name: t.name,
-            description: t.description,
-            parameters: {
-              type: "OBJECT",
-              properties: t.parameters,
-            },
-          })),
-        },
-      ],
-    } : undefined;
-
-    // Build request body
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        temperature: 0.3,
-        topP: 0.95,
-        maxOutputTokens: 2048,
-      },
+    const contents: Array<{ role: "user" | "model"; parts: any[] }> = [];
+    let system = "";
+    const append = (role: "user" | "model", parts: any[]) => {
+      if (!parts.length) return;
+      const last = contents.at(-1);
+      if (last?.role === role) last.parts.push(...parts); else contents.push({ role, parts: [...parts] });
     };
-
-    if (toolsConfig) {
-      body.tools = toolsConfig.tools;
+    for (const m of messages) {
+      if (m.role === "system") { system += m.content + "\n"; continue; }
+      if (m.role === "assistant") {
+        const native = nativeBlocks(m, this.id, this.model, "gemini-content");
+        if (native) append("model", native);
+        else {
+          const text = assistantText(m);
+          append("model", [...(text ? [{ text }] : []), ...assistantCalls(m).map(c => ({ functionCall: { name: c.tool, args: c.args, ...(c.id ? { id: c.id } : {}) } }))]);
+        }
+      } else if (m.role === "tool") append("user", [{ functionResponse: { name: m.name ?? "unknown", ...(m.toolCallId ? { id: m.toolCallId } : {}), response: { output: m.content } } }]);
+      else append("user", [{ text: m.content }]);
     }
-
-    if (systemInstruction) {
-      body.systemInstruction = { parts: [{ text: systemInstruction }] };
-    }
-
-    const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${apiKey}`;
-    
+    system += "\nUse native function calls when tools are supplied, not tool JSON in text. XR independently authorizes tool execution. Final answers are text.";
     try {
-      // GAP-001 — bounded + cancellable (was: no signal, no timeout).
-      const res = await guardedRequest(this.id, options, (signal) =>
-        fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal,
-        }),
-      );
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        let detail = `HTTP ${res.status}: ${txt.slice(0, 300)}`;
-        
-        try {
-          const err = JSON.parse(txt);
-          if (err.error?.message) {
-            detail = err.error.message;
-          }
-        } catch { /* use raw */ }
-        
-        throw new Error(`Google Gemini API error: ${detail}`);
-      }
-
-      const json: any = await res.json();
-      const candidate = json.candidates?.[0];
-      const content = candidate?.content?.parts ?? [];
-
+      const res = await guardedRequest(this.id, options, signal => fetch(`${this.baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`, {
+        method: "POST", signal, redirect: "error", headers: this.headers(),
+        body: JSON.stringify({ contents, systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: outputLimit(options?.maxOutputTokens) }, ...(tools.length ? { tools: [{ functionDeclarations: tools.map(t => ({ name: t.name, description: t.description, parametersJsonSchema: toolParameters(t.parameters) })) }] } : {}) }),
+      }));
+      if (!res.ok) { await res.body?.cancel(); throw new Error(`Google API HTTP ${res.status}`); }
+      let j: any;
+      try { j = await res.json(); } catch (e) { if ((e as Error).name === "ProviderAbortError") throw e; throw malformedProviderResponseError(this.id, "invalid JSON", this.model); }
+      const candidate = j.candidates?.[0];
+      if (!candidate || !Array.isArray(candidate.content?.parts)) throw malformedProviderResponseError(this.id, "missing candidate parts (possibly refused)", this.model);
+      const parts: any[] = candidate.content.parts;
       let message = "";
-      const toolCalls: { tool: string; args: Record<string, unknown> }[] = [];
-
-      for (const part of content) {
-        if (part.text) {
-          message += part.text;
-        }
-        if (part.functionCall) {
-          toolCalls.push({
-            tool: part.functionCall.name,
-            args: part.functionCall.args ?? {},
-          });
+      const toolCalls: ModelTurn["toolCalls"] = [], ids = new Set<string>();
+      for (const p of parts) {
+        // Do not display provider reasoning. Retain signatures in native state.
+        if (typeof p.text === "string" && !p.thought) message += p.text;
+        if (p.functionCall) {
+          const c = p.functionCall;
+          if (typeof c.name !== "string" || (c.id !== undefined && (typeof c.id !== "string" || ids.has(c.id)))) throw malformedProviderResponseError(this.id, "invalid/duplicate function id", this.model);
+          if (c.id) ids.add(c.id);
+          try { toolCalls.push({ ...(c.id ? { id: c.id } : {}), tool: c.name, args: objectArgs(c.args ?? {}) }); } catch { throw malformedProviderResponseError(this.id, "invalid function arguments", this.model); }
         }
       }
-
-      // Usage info (Gemini provides token counts in response)
-      const usage = json.usageMetadata ? {
-        inTokens: json.usageMetadata.promptTokenCount ?? 0,
-        outTokens: json.usageMetadata.candidatesTokenCount ?? 0,
-      } : undefined;
-
-      return {
-        message,
-        toolCalls,
-        done: toolCalls.length === 0,
-        usage,
-      };
-    } catch (e) {
-      // GAP-001 — never retry a cancelled/timed-out turn on another endpoint.
-      if (e instanceof ProviderAbortError) throw e;
-      // Fall back to Vertex AI if configured
-      const vertexProject = process.env.GCP_PROJECT_ID;
-      const vertexLocation = process.env.GCP_LOCATION ?? "us-central1";
-      
-      if (vertexProject && (e as Error).message.includes("API key")) {
-        // Retry with Vertex AI
-        return this.chatVertexAI(messages, tools, vertexProject, vertexLocation);
-      }
-      
-      throw e;
-    }
+      if (toolCalls.length > 64) throw malformedProviderResponseError(this.id, "too many tool calls", this.model);
+      const u = j.usageMetadata;
+      // candidatesTokenCount excludes thought tokens. Do NOT lose billable reasoning.
+      const usage = usagePair(u?.promptTokenCount, u ? (u.candidatesTokenCount ?? NaN) + (u.thoughtsTokenCount ?? 0) : undefined);
+      const complete = candidate.finishReason === "STOP";
+      return { message, toolCalls, done: complete && !toolCalls.length, ...(!complete ? { error: "Gemini turn incomplete/refused (output limit or finish reason); no tools executed" } : {}), usage, ...(usage ? { usageSource: "provider" as const } : {}), executing: { providerId: this.id, modelId: this.model }, native: { providerId: this.id, modelId: this.model, format: "gemini-content", blocks: parts }, status: message || toolCalls.length ? "parsed" : "empty" };
+    } catch (e) { throw normalizeProviderError(e, this.id, this.model); }
   }
-
-  // Vertex AI fallback for enterprise users
-  private async chatVertexAI(
-    messages: Message[],
-    tools: Tool[],
-    project: string,
-    location: string
-  ): Promise<ModelTurn> {
-    const token = await this.getVertexToken();
-    if (!token) throw new Error("Failed to get GCP authentication token");
-
-    // Similar conversion as main chat, but use Vertex endpoint
-    const contents: GeminiContent[] = [];
-    
-    for (const msg of messages) {
-      if (msg.role === "system") continue;
-      const role = msg.role === "assistant" ? "model" : "user";
-      
-      if (msg.role === "tool") {
-        contents.push({
-          role: "user",
-          parts: [{
-            functionResponse: {
-              name: msg.name ?? "unknown",
-              response: { output: msg.content },
-            },
-          }],
-        });
-      } else if (msg.role === "assistant") {
-        try {
-          const parsed = JSON.parse(msg.content);
-          const parts: GeminiContent["parts"] = [];
-          if (parsed.tool_calls) {
-            for (const tc of parsed.tool_calls) {
-              parts.push({
-                functionCall: { name: tc.tool, args: tc.args ?? {} },
-              });
-            }
-          }
-          if (parsed.message) parts.push({ text: parsed.message });
-          if (parts.length) contents.push({ role: "model", parts });
-        } catch {
-          if (msg.content.trim()) {
-            contents.push({ role, parts: [{ text: msg.content }] });
-          }
-        }
-      } else {
-        contents.push({ role, parts: [{ text: msg.content }] });
-      }
-    }
-
-    const toolsConfig: any = tools.length > 0 ? {
-      tools: [{
-        functionDeclarations: tools.map(t => ({
-          name: t.name,
-          description: t.description,
-          parameters: { type: "OBJECT", properties: t.parameters },
-        })),
-      }],
-    } : undefined;
-
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
-    };
-    if (toolsConfig) body.tools = toolsConfig.tools;
-
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${this.model}:generateContent`;
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`Vertex AI ${res.status}: ${txt.slice(0, 200)}`);
-    }
-
-    const json: any = await res.json();
-    const content = json.candidates?.[0]?.content?.parts ?? [];
-    
-    let message = "";
-    const toolCalls: { tool: string; args: Record<string, unknown> }[] = [];
-    
-    for (const part of content) {
-      if (part.text) message += part.text;
-      if (part.functionCall) {
-        toolCalls.push({ tool: part.functionCall.name, args: part.functionCall.args ?? {} });
-      }
-    }
-
-    return { message, toolCalls, done: toolCalls.length === 0 };
-  }
-
-  private async getVertexToken(): Promise<string | null> {
-    try {
-      const { runCommand } = await import("../../util/process.ts");
-      const r = await runCommand("gcloud", ["auth", "print-access-token"], { timeoutMs: 10000 });
-      const token = r.stdout.trim();
-      return r.ok && token ? token : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async *chatStream(
-    messages: import("../../core/types.ts").Message[],
-    tools: import("../../core/types.ts").Tool[],
-    options?: import("../../core/types.ts").ChatOptions,
-  ): AsyncGenerator<ProviderStreamChunk> {
-    try {
-      const turn = await this.chat(messages, tools, options);
-      if (turn.message) {
-        yield { text: turn.message, providerId: this.id, model: this.model };
-      }
-      for (const tc of turn.toolCalls ?? []) {
-        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
-      }
-      yield { usage: turn.usage, finish: true, providerId: this.id, model: this.model };
-    } catch (e) {
-      throw normalizeProviderError(e, this.id, this.model);
-    }
-  }
-
-  
-  async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
-    const apiKey = this.apiKey;
-    if (!apiKey) {
-      return { ok: false, detail: "GOOGLE_API_KEY not set" };
-    }
-
+  async *chatStream(messages: Message[], tools: Tool[], options?: ChatOptions) { yield* chunksOfTurn(await this.chat(messages, tools, options), this.id, this.model); }
+  async health() {
     const start = Date.now();
     try {
-      const res = await fetch(
-        `${this.baseUrl}/models?key=${apiKey}`,
-        { method: "GET" }
-      );
-
-      const latency = Date.now() - start;
-      
-      if (res.ok) {
-        const json: any = await res.json();
-        const models = json.models?.map((m: any) => m.name.split("/").pop()) ?? [];
-        return { 
-          ok: true, 
-          latencyMs: latency, 
-          detail: `models: ${models.slice(0, 5).join(", ")}${models.length > 5 ? "..." : ""}` 
-        };
-      }
-      
-      return { ok: false, detail: `HTTP ${res.status}` };
-    } catch (e) {
-      return { ok: false, detail: (e as Error).message };
-    }
+      const res = await guardedRequest(this.id, { timeoutMs: 8000 }, signal => fetch(`${this.baseUrl}/models/${encodeURIComponent(this.model)}`, { signal, redirect: "error", headers: this.headers() }));
+      await res.body?.cancel();
+      return { ok: res.ok, latencyMs: Date.now() - start, detail: res.ok ? "Model endpoint reachable; agent compatibility not validated" : `HTTP ${res.status}` };
+    } catch { return { ok: false, detail: "Credential/endpoint probe failed; no generation requested" }; }
   }
 }

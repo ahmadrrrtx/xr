@@ -1,0 +1,73 @@
+$ bun test test/release/identity-hardening.test.ts test/release/desktop-identity.test.ts test/release/channel-coherence.test.ts test/release/release-workflow.test.ts
+bun test v1.4.2 (744846f84)
+
+test/release/identity-hardening.test.ts:
+(pass) RC-101 release identity is checked, never silently repaired > SemVer 2 precedence includes numeric prerelease identifiers and ignores build metadata [0.74ms]
+(pass) RC-101 release identity is checked, never silently repaired > desktop JS package and root Cargo lock identity are mandatory declared targets [2.19ms]
+(pass) RC-101 release identity is checked, never silently repaired > lock stamping preserves every dependency byte and refuses missing/duplicate roots [0.07ms]
+(pass) RC-101 release identity is checked, never silently repaired > tag must match committed identity, cannot be withdrawn or falsely stable [0.32ms]
+
+test/release/desktop-identity.test.ts:
+(pass) desktop version-identity surfaces (L-008) > manifest declares tauri.conf.json and Cargo.toml as stamped targets [0.20ms]
+(pass) desktop version-identity surfaces (L-008) > all desktop surfaces evaluate in sync at the manifest version [2.04ms]
+(pass) desktop version-identity surfaces (L-008) > stampJsonVersionOnly touches ONLY the version key [0.16ms]
+(pass) desktop version-identity surfaces (L-008) > stampTomlPackageVersion rewrites only the [package] version line and fails loudly without one [0.10ms]
+(pass) desktop version-identity surfaces (L-008) > Cargo.toml version equals the manifest version (the drift that shipped) [0.31ms]
+
+test/release/release-workflow.test.ts:
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > triggers on v* tags [0.03ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > truth gates run BEFORE any build (release:check + claim-lint + channel:check) [0.03ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > builds the full 5-target canonical matrix across real OS runners [0.08ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > SLSA provenance is wired to REAL assemble outputs (the Phase-4 fix) [0.06ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > cosign keyless signing covers SHA256SUMS + tarball + SBOM (public Rekor) [0.09ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > release assets include all artifacts + signatures; prereleases are honest [0.04ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > npm publishes under OIDC with dist-tags (stable → latest, beta → beta) [0.25ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > docker publishes to GHCR with attestations + cosign image signature [0.03ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > channels are stamped from the signed SHA256SUMS (no unsigned drift path) [0.01ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > windows channel zip (winget/scoop) is part of the canonical set
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > the .deb artifact is built from the canonical linux-x64 binary
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > changelog is generated from git history at release time [0.01ms]
+(pass) Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families > a single matrix drives Linux + macOS + Windows [0.02ms]
+(pass) Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families > one parity authority computes the suite per OS (no hand-picked subsets) [0.05ms]
+(pass) Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families > typecheck + golden path run on every OS [0.01ms]
+(pass) Phase 9 · T6 — nightly beta install survey on 3 OS families > survey jobs exist for all three OS families with the ≥0.99 gate [0.04ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > publish jobs are tag-gated; untagged dispatch uses the manifest version [0.10ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > SBOM is generated before SHA256SUMS; sums use write-sums.ts (no GNU sha256sum) [0.07ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > nightly uses write-sums, does not overlay $PWD on /app, and notifies on failure [0.02ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > Dockerfile copies scripts/ bin/ plugins/ so the container golden-path can run [0.01ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > canaries: keyless fixture leg must pass; live leg is an audited skip without secrets (XR-LAUNCH-012) [0.04ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > supply-chain runs the 1.x tag⇔npm invariant; weekly consumer-smoke skips if unpublished [0.01ms]
+
+test/release/channel-coherence.test.ts:
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > the real manifest declares a stable public version every claimed channel must serve [0.07ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > installers and README are stamped with the public version, not the development line [0.20ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > compareSemver orders core numerically and pre-releases before releases [0.10ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > publicVersionOf falls back to identity.version for legacy manifests [0.03ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > a public version ahead of the development line is rejected [0.53ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > a pre-release public version is rejected [0.29ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > an unknown claimed channel is rejected [0.32ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > the public version cannot also be withdrawn [0.43ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > a withdrawn tag needs an evidence-backed reason [0.29ms]
+(pass) tag ⇔ npm invariant — withdrawn tags (Supply Chain gate) > a withdrawn stable tag with no npm publish is excused, and reported [0.25ms]
+(pass) tag ⇔ npm invariant — withdrawn tags (Supply Chain gate) > without the declaration the same state fails closed (today's red Supply Chain run) [0.07ms]
+(pass) tag ⇔ npm invariant — withdrawn tags (Supply Chain gate) > a withdrawn version that reaches npm is always a failure [0.20ms]
+(pass) channel-live-check against a fake registry world > a coherent world passes every claimed channel [2.28ms]
+(pass) channel-live-check against a fake registry world > today's state: v1.1.0 is GitHub Latest and not a pre-release → github-releases FAILS [0.21ms]
+(pass) channel-live-check against a fake registry world > a release missing installer assets fails (the v1.1.0 desktop-only release) [0.24ms]
+(pass) channel-live-check against a fake registry world > npm latest drift and a withdrawn version on npm both fail [0.52ms]
+(pass) channel-live-check against a fake registry world > a missing tap (today's 404) and a formula with a wrong sha both fail homebrew [0.63ms]
+(pass) channel-live-check against a fake registry world > winget not yet merged fails with a pending message; a wrong sha fails too [0.61ms]
+(pass) channel-live-check against a fake registry world > scoop manifest hash drift fails [0.29ms]
+(pass) channel-live-check against a fake registry world > docker :latest pointing elsewhere, or a missing version tag, fails [0.36ms]
+(pass) channel-live-check against a fake registry world > the check is read-only: it only issues GET/HEAD requests and never touches unpinned branches [0.25ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > stamped, pinned files that match the signed sums are publishable [0.73ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > WinGet files land under manifests/a/ (first letter of the identifier), not r/ [0.02ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > a formula sha that does not match SHA256SUMS blocks publication [0.24ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > files for a different version are refused [0.07ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > unstamped placeholders and missing manifests are refused [0.06ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > the repository's channel workflows use the verified publisher and the correct WinGet path [0.13ms]
+
+ 58 pass
+ 0 fail
+ 216 expect() calls
+Ran 58 tests across 4 files. [58.00ms]

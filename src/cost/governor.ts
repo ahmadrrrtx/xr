@@ -27,23 +27,21 @@ export interface PartitionRef {
 }
 
 export interface Budget {
-  /** Hard ceiling in USD for this task (0 or undefined = local/free, no $ cap). */
+  /** Estimated USD admission threshold, NOT a provider invoice ceiling. 0/undefined disables this task threshold. */
   maxUsd?: number;
-  /** Hard ceiling in total tokens for this task. */
+  /** Estimated total-token admission threshold (provider tokenization may differ). */
   maxTokens?: number;
 }
 
-/** Per-model pricing in USD per 1M tokens. Local models = 0. */
-export interface Pricing {
-  inPerMTok: number;
-  outPerMTok: number;
-}
+export type { Pricing } from "./pricing-types.ts";
+import type { Pricing } from "./pricing-types.ts";
 
 export interface CostSnapshot {
   inTokens: number;
   outTokens: number;
   totalTokens: number;
   usd: number;
+  pricingAvailable?: boolean;
 }
 
 export type GovernorDecision =
@@ -78,7 +76,7 @@ export class CostGovernor {
     private pricing: Pricing,
     /**
      * Global budget manager. OPTIONAL: when omitted the governor still enforces
-     * the per-task token/USD ceilings (its headline guarantee) but skips the
+     * the estimated per-task token/USD admission thresholds but skips the
      * global monthly/daily cap check. This keeps the governor usable standalone
      * (e.g. in unit tests or any caller that has no Store) without weakening the
      * per-task ceiling in any way.
@@ -95,8 +93,11 @@ export class CostGovernor {
     private envId?: string,
   ) {}
 
+  setPricing(pricing: Pricing): void { this.settleOpenReservation(); this.pricing = pricing; }
+
   /** Record real usage after a model call. */
   record(inTok: number, outTok: number): void {
+    if (![inTok, outTok].every(n => Number.isFinite(n) && n >= 0)) throw new Error("invalid provider usage");
     this.inTokens += inTok;
     this.outTokens += outTok;
     this.usd +=
@@ -122,6 +123,7 @@ export class CostGovernor {
       outTokens: this.outTokens,
       totalTokens: this.inTokens + this.outTokens,
       usd: this.usd,
+      pricingAvailable: this.pricing.known !== false && Number.isFinite(this.pricing.inPerMTok) && Number.isFinite(this.pricing.outPerMTok),
     };
   }
 
@@ -135,18 +137,20 @@ export class CostGovernor {
    * usage, then the next admission runs inside ONE serialized write
    * transaction (global + per-task caps evaluated atomically).
    */
-  checkBeforeStep(): GovernorDecision {
+  checkBeforeStep(bounds?: { inTokens: number; outTokens: number }): GovernorDecision {
     // Settle the previous step's reservation against ACTUAL usage before the
     // next admission, so reservations track reality and never drift.
     this.settleOpenReservation();
 
     const snap = this.snapshot();
+    if (!snap.pricingAvailable) return { allow: false, reason: "price unavailable: configure sourced/operator-declared rates or choose a known-priced/local model; no request sent", snapshot: snap };
 
     // 1. Global Budget Check
     const avgTokens = this.steps > 0 ? snap.totalTokens / this.steps : 2000;
-    const estTokens = Math.max(avgTokens, 500);
-    const estUsd =
-      this.steps > 0 ? snap.usd / this.steps : (estTokens / 1_000_000) * this.pricing.outPerMTok;
+    const estTokens = bounds ? bounds.inTokens + bounds.outTokens : Math.max(avgTokens, 500);
+    const estUsd = bounds ? (bounds.inTokens * this.pricing.inPerMTok + bounds.outTokens * this.pricing.outPerMTok) / 1e6 : this.steps > 0 ? snap.usd / this.steps : (estTokens / 1_000_000) * this.pricing.outPerMTok;
+
+    if (![estTokens, estUsd].every(n => Number.isFinite(n) && n >= 0)) return { allow: false, reason: "invalid admission estimate", snapshot: snap };
 
     // Global cap check only runs when a budget manager was provided. When it is
     // absent we fall through to the per-task ceilings below (still enforced).
@@ -367,13 +371,13 @@ export class CostGovernor {
   meter(): string {
     const s = this.snapshot();
     const tokPart = `${fmt(s.totalTokens)} tok`;
-    const usdPart = this.pricing.inPerMTok + this.pricing.outPerMTok > 0
+    const usdPart = !s.pricingAvailable ? " (price unavailable)" : this.pricing.inPerMTok + this.pricing.outPerMTok > 0
       ? ` ≈ $${s.usd.toFixed(4)}`
-      : " (no price data)";
+      : " (no provider token fee)";
     const cap = this.budget.maxUsd
-      ? ` / $${this.budget.maxUsd} cap`
+      ? ` / $${this.budget.maxUsd} estimated admission threshold`
       : this.budget.maxTokens
-        ? ` / ${fmt(this.budget.maxTokens)} cap`
+        ? ` / ${fmt(this.budget.maxTokens)} estimated token admission threshold`
         : "";
     return `💰 ${tokPart}${usdPart}${cap}`;
   }

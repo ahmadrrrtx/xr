@@ -177,14 +177,14 @@ export function normalizeProviderError(
       details: { statusCode, providerMessage: message },
     });
   }
-  if (statusCode === 502 || statusCode === 503 || statusCode === 504 || /overload|unavailable|service.*unavailable|gateway/i.test(rawMessage)) {
+  if ((statusCode !== undefined && statusCode >= 500) || /overload|unavailable|service.*unavailable|gateway/i.test(rawMessage)) {
     const kind: ProviderErrorKind = /overload/i.test(rawMessage) ? "provider_overload" : "unavailable";
     return new ProviderError(kind, providerId, `Provider ${providerId} ${kind === "provider_overload" ? "overloaded" : "unavailable"}`, {
       modelId,
       details: { statusCode, providerMessage: message },
     });
   }
-  if (/network|ECONN|ENOTFOUND|fetch failed|connection/i.test(rawMessage)) {
+  if (["ConnectionRefused","ConnectionReset","ECONNREFUSED","ECONNRESET","EHOSTUNREACH","ENETUNREACH","ETIMEDOUT","ENOTFOUND"].includes(String(anyErr?.code ?? anyErr?.cause?.code ?? "")) || /network|ECONN|ENOTFOUND|fetch failed|connection/i.test(rawMessage)) {
     return new ProviderError("network_failure", providerId, `Network failure contacting provider ${providerId}`, {
       modelId,
       details: { statusCode, providerMessage: message },
@@ -201,7 +201,7 @@ export function normalizeProviderError(
 function redactSecrets(text: string): string {
   // Redact API keys, bearer tokens, sk- etc.
   return text
-    .replace(/(?:api[_-]?key|bearer|token)\s*[:=]\s*['\"]?([A-Za-z0-9-_]{20,})['\"]?/gi, "$1=[REDACTED]")
+    .replace(/(api[_-]?key|bearer|token)\s*[:=]\s*['\"]?[A-Za-z0-9-_]{20,}['\"]?/gi, "$1=[REDACTED]")
     .replace(/sk-[A-Za-z0-9_-]{10,}/gi, "sk-[REDACTED]")
     .replace(/Bearer\s+[A-Za-z0-9-_]{20,}/gi, "Bearer [REDACTED]")
     .replace(/key\s+sk-[A-Za-z0-9_-]+/gi, "key [REDACTED]");

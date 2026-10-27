@@ -4,6 +4,12 @@
  * Does not own trust, budget, or durable execution — consumes them via contracts.
  */
 
+import { randomUUID } from "node:crypto";
+import { CostGovernor } from "../cost/governor.ts";
+import { BudgetService } from "../services/budget-service.ts";
+import { ReservationRepo } from "../state/repos/reservation-repo.ts";
+import { attemptControls } from "../core/model-accounting.ts";
+import { chatAttempt } from "../providers/attempts.ts";
 import type { XRConfig } from "../config/config.ts";
 import type { Provider } from "../core/types.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
@@ -35,7 +41,8 @@ import {
 } from "./metrics.ts";
 import { IntelligenceRouter, policyFromConfig } from "./router.ts";
 import { mayFallbackOnTrigger, type FallbackTrigger } from "./fallback.ts";
-import { priceFor } from "../cost/pricing.ts";
+import { evaluateCandidate } from "./evaluator.ts";
+import { priceFor, pricingAvailable } from "../cost/pricing.ts";
 import { routingSpan, endRoutingSpan } from "../observability/instrument.ts";
 import { xrMetrics } from "../observability/metrics.ts";
 import type {
@@ -97,7 +104,8 @@ export class IntelligenceService implements LifecycleHook {
 
   private config(): XRConfig {
     try {
-      return this.services.resolve(Tokens.Config).get();
+      const source = this.services.resolve(Tokens.Config);
+      return typeof source.reload === "function" ? source.reload() : source.get();
     } catch {
       // Early init / tests without config service — lazy static import avoided for cycles
       // Callers in production always have Config registered.
@@ -259,6 +267,7 @@ export class IntelligenceService implements LifecycleHook {
     }
 
     const policy = decision.constraints.localityPolicy;
+    const configSnapshot = JSON.stringify(config);
     const { retry } = this.breakerPolicy(config);
     const service = this;
 
@@ -271,9 +280,20 @@ export class IntelligenceService implements LifecycleHook {
       construct(step) {
         return service.construct(config, step.providerId, step.modelId);
       },
+      canFallback(target) {
+        const current = service.config();
+        if (JSON.stringify(current) !== configSnapshot) return false; // re-resolve; never use a stale endpoint/consent snapshot
+        const freshPolicy = policyFromConfig(current);
+        if (!(request.requirements?.allowFallback ?? freshPolicy.allowFallback)) return false;
+        if (target.providerId !== selected.providerId && !(request.requirements?.allowCrossProviderFallback ?? freshPolicy.allowCrossProviderFallback)) return false;
+        if (localityOf(selected.providerId, current) !== "cloud" && localityOf(target.providerId, current) === "cloud" && !(request.requirements?.allowCloudFallback ?? freshPolicy.allowCloudFallback)) return false;
+        const m = findModel(service.catalog(current), target.providerId, target.modelId);
+        return !!m && evaluateCandidate(m, { ...decision.requirements, pin: undefined }, freshPolicy).compatible;
+      },
       // Defense-in-depth (Phase 2 · T3 rule): each hop re-verifies locality.
       localityGuard(providerId) {
-        return localityAllowed(policy, localityOf(providerId));
+        const current = service.config();
+        return JSON.stringify(current) === configSnapshot && localityAllowed(policy, localityOf(providerId, current)) && localityAllowed(policyFromConfig(current).localityPolicy, localityOf(providerId, current));
       },
       onFailover(rec) {
         service.recordFailover(rec);
@@ -315,15 +335,8 @@ export class IntelligenceService implements LifecycleHook {
         ? "L1_equivalent_fallback"
         : "L2_reduced_fallback";
     }
-    const rank: Record<string, number> = { basic: 1, standard: 2, high: 3, frontier: 4, unknown: 0 };
-    const selModel = findModel(catalog, selected.providerId, selected.modelId);
-    const stepModel = findModel(catalog, step.providerId, step.modelId);
-    if (selModel && stepModel) {
-      return (rank[stepModel.quality.class] ?? 0) >= (rank[selModel.quality.class] ?? 0)
-        ? "L1_equivalent_fallback"
-        : "L2_reduced_fallback";
-    }
-    return "L2_reduced_fallback";
+    return "L2_reduced_fallback"; // equivalence is unknown without measured evidence
+
   }
 
   /** Record one failover hop: SLO event (context evidence rides the record). */
@@ -352,12 +365,15 @@ export class IntelligenceService implements LifecycleHook {
         outcomeSampleFor(decision.requirements.modelClass, outcome),
       );
       if (outcome.success && outcome.usage) {
-        const pricing = priceFor(outcome.providerId, outcome.modelId);
+        const override = (this.config().providerEngine?.providerCapabilities?.[outcome.providerId] as any)?.models?.[outcome.modelId]?.cost;
+        const pricing = priceFor(outcome.providerId, outcome.modelId, { override });
+        if (!pricingAvailable(pricing)) return;
         const costUsd =
           (outcome.usage.inTokens / 1e6) * pricing.inPerMTok +
           (outcome.usage.outTokens / 1e6) * pricing.outPerMTok;
         const contract = this.behavioral.contract(outcome.providerId, outcome.modelId);
-        const fidelity = contract?.source === "measured" ? contract.overallFidelity : 0.5;
+        if (contract?.source !== "measured") return; // no invented quality statistic
+        const fidelity = contract.overallFidelity;
         this.slo.record({
           kind: "cpq",
           at: Date.now(),
@@ -378,9 +394,10 @@ export class IntelligenceService implements LifecycleHook {
    * not probed (no silent egress).
    */
   async measureModels(
-    filter: { providerId?: string; modelId?: string } = {},
+    filter: { providerId?: string; modelId?: string; live?: boolean } = {},
     evaluator: BehavioralEvaluator = new BehavioralEvaluator(),
   ): Promise<{ measured: BehavioralContract[]; skipped: Array<{ key: string; reason: string }> }> {
+    if (filter.live !== true || !filter.providerId || !filter.modelId) return { measured: [], skipped: [{ key: "*", reason: "No probes sent: require explicit live opt-in and one exact provider/model" }] };
     const config = this.config();
     const catalog = this.catalog(config);
     const policy = policyFromConfig(config);
@@ -391,7 +408,7 @@ export class IntelligenceService implements LifecycleHook {
       if (filter.providerId && model.providerId !== filter.providerId) continue;
       if (filter.modelId && model.modelId !== filter.modelId) continue;
       const key = `${model.providerId}/${model.modelId}`;
-      if (!localityAllowed(policy.localityPolicy, localityOf(model.providerId))) {
+      if (!localityAllowed(policy.localityPolicy, localityOf(model.providerId, config))) {
         skipped.push({ key, reason: `locality policy ${policy.localityPolicy} forbids probing` });
         continue;
       }
@@ -404,9 +421,27 @@ export class IntelligenceService implements LifecycleHook {
       }
       try {
         const provider = this.construct(config, model.providerId, model.modelId);
-        const contract = await evaluator.evaluate(provider, model.modelId);
-        this.behavioral.save(contract);
-        measured.push(contract);
+        const store = this.services.resolve(Tokens.Store);
+        const id = `probe_${randomUUID()}`;
+        store.createSession(id, `Explicit compatibility probes: ${key}`, "ask");
+        const override = config.providerEngine?.providerCapabilities?.[model.providerId]?.models?.[model.modelId]?.cost;
+        const rates = priceFor(model.providerId, model.modelId, { override });
+        const budget = { maxUsd: Math.min(config.budget.perTaskUsd > 0 ? config.budget.perTaskUsd : .25, .25), maxTokens: 30_000 };
+        const governor = BudgetService.governorForStore(store,budget,rates,id);
+        let success = false, count = 0;
+        try {
+          const metered: Provider = { id: provider.id, label: provider.label, modelId: model.modelId, health: () => provider.health(),
+            chat: async (messages, tools, options) => {
+              if (++count > 10) throw new Error("Probe request bound reached");
+              const fresh = this.config();
+              if (!localityAllowed(policyFromConfig(fresh).localityPolicy, localityOf(model.providerId, fresh))) throw new Error("Probe privacy policy changed; no further requests");
+              const controls = attemptControls({ provider, pricingTarget: { id: model.providerId, model: model.modelId }, pricing: rates, pricingOverrides: { [key]: rates }, budget, governor, maxOutputTokens: 1024, sessionId: id, step: count, messages, tools, signal: options?.signal,
+                audit: (e, d) => store.audit(e, d, id), recordCost: (p, m, i, o, usd, source) => store.recordCost(id, p, m, i, o, usd, source) });
+              return chatAttempt(provider, messages, tools, { ...controls, timeoutMs: options?.timeoutMs });
+            } };
+          const contract = await evaluator.evaluate(metered, model.modelId);
+          this.behavioral.save(contract); measured.push(contract); success = true;
+        } finally { governor.close(); store.endSession(id, success ? "done" : "error"); }
       } catch (e) {
         skipped.push({ key, reason: (e as Error).message.slice(0, 120) });
       }

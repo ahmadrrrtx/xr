@@ -53,6 +53,7 @@ function cannedProvider(turns?: ModelTurn[]): Provider {
   let step = 0;
   return {
     id: "fake-llm",
+    modelId: "canned-1",
     label: "Canned Fake",
     async health() {
       return { ok: true };
@@ -73,6 +74,7 @@ function configFake() {
   return {
     get: () => ({
       defaults: { provider: "fake-llm", model: "canned-1" },
+      providerEngine: {providerCapabilities:{"fake-llm":{models:{"canned-1":{cost:{inPerMTok:0,outPerMTok:0,known:true,source:"synthetic service fixture; no provider billing"}}}}}},
       budget: { perTaskUsd: 5, perTaskTokens: 250_000 },
       security: { egressAllowlist: [], requireApproval: [] },
       memory: {
@@ -142,10 +144,10 @@ describe("AgentService — DI wiring", () => {
     expect(events).toContain("session.done");
     expect(store.verifyChain().valid).toBe(true);
 
-    // Token counters are recorded even when the provider is priceless.
+    // Token counters are recorded under an explicitly declared synthetic zero tariff.
     const summary = store.costSummary();
     expect(summary.totalTokens).toBe(150);
-    expect(summary.byModel.some((m) => m.model === "Canned Fake")).toBe(true);
+    expect(summary.byModel.some((m) => m.model === "canned-1")).toBe(true);
   });
 
   test("system prompt override flows into the conversation", async () => {

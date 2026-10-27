@@ -62,12 +62,22 @@ export type StreamEvent =
   /** A tool call is parked on an approval (card shows the pending state). */
   | { type: 'tool_waiting'; id: string; approvalId: string }
   /** What the engine is doing right now ("Waiting for qwen2.5:0.5b…"). */
-  | { type: 'status'; status: string; message?: string; provider?: string; model?: string }
+  | {
+      type: 'status';
+      status: string;
+      message?: string;
+      provider?: string;
+      model?: string;
+    }
   /** Real token counts from the provider. */
   | { type: 'usage'; inTokens: number; outTokens: number }
   /** The engine run backing this turn (trace link, Runs row). */
   | { type: 'run'; runId: string }
-  | { type: 'done'; stopped?: 'done' | 'error' | 'budget' | 'cancelled' | 'max_steps' | string }
+  | {
+      type: 'done';
+      stopped?:
+        'done' | 'error' | 'budget' | 'cancelled' | 'max_steps' | string;
+    }
   | {
       type: 'error';
       message: string;
@@ -82,7 +92,7 @@ export type StreamEvent =
   /** The hard limit hit mid-reply (partial kept). */
   | { type: 'budget_cutoff'; reason: string }
   /** What the turn actually cost (after the stream). */
-  | { type: 'budget_charged'; costUsd: number; model: string };
+  | { type: 'budget_charged'; costUsd: number | null; model: string };
 
 export interface StreamOptions {
   messages: ChatTurn[];
@@ -113,7 +123,7 @@ export interface StreamOptions {
    */
   requestApproval?: (
     call: { summary: string },
-    spec: ApprovalSpec,
+    spec: ApprovalSpec
   ) => Promise<{ approved: boolean; reason?: string; blocked?: boolean }>;
   /**
    * Who is spending. When set, the local governor is asked before the call

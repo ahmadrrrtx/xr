@@ -306,9 +306,14 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/onboarding/status");
   }
 
-  /** Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. The save succeeds even when the live probe fails — the outcome is reported honestly. */
+  /** Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. A live probe is explicit opt-in; its failure does not undo a successful save — the outcome is reported honestly. */
   async onboardingProvider(body: z.infer<typeof S.OnboardingProviderRequest>): Promise<z.infer<typeof S.OnboardingProviderResponse>> {
     return await this.call("POST", "/api/v1/onboarding/provider", body);
+  }
+
+  /** Remove a known engine provider credential with acknowledged backend deletion. External environment/other-install/backups and vendor-side revocation remain owner responsibilities. */
+  async onboardingProviderRemove(body: z.infer<typeof S.OnboardingProviderRemoveRequest>): Promise<z.infer<typeof S.OnboardingProviderRemoveResponse>> {
+    return await this.call("POST", "/api/v1/onboarding/provider/remove", body);
   }
 
   /** Record onboarding completion in the audit log (the honest completion record). */

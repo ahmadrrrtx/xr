@@ -2113,7 +2113,7 @@ export class WorkspaceStore {
           `UPDATE budget_config SET monthly_cap=?, daily_cap=?, warnings_enabled=?, auto_fallback=?, created_at=? WHERE id=1`,
         ).run(
           config.monthly_cap,
-          config.daily_cap ?? current.daily_cap,
+          config.daily_cap !== undefined ? config.daily_cap : current.daily_cap,
           config.warnings_enabled !== undefined ? (config.warnings_enabled ? 1 : 0) : current.warnings_enabled ? 1 : 0,
           config.auto_fallback !== undefined ? (config.auto_fallback ? 1 : 0) : current.auto_fallback ? 1 : 0,
           Date.now()

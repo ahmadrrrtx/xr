@@ -1,6 +1,7 @@
 /** XR Daemon — budget routes. */
 
 import { loadConfig, saveConfig } from "../../config/config.ts";
+import { BudgetService } from "../../services/budget-service.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 export function budgetRoutes(): DaemonRoute[] {
@@ -17,19 +18,15 @@ export function budgetRoutes(): DaemonRoute[] {
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
-        const persisted = store.getBudgetConfig();
+        const persisted = BudgetService.managerForStore(store).getConfig();
         const cost = store.costSummary();
         return json({
           config: {
             perTaskUsd: config.budget.perTaskUsd,
             perTaskTokens: config.budget.perTaskTokens,
           },
-          persisted: persisted ?? {
-            monthly_cap: 0,
-            daily_cap: null,
-            warnings_enabled: true,
-            auto_fallback: true,
-          },
+          persisted,
+          accounting: "standard/declared token-cost estimates, not a provider invoice ceiling",
           usage: {
             totalUsd: cost.totalUsd,
             totalTokens: cost.totalTokens,
@@ -65,25 +62,36 @@ export function budgetRoutes(): DaemonRoute[] {
             dailyCap?: number | null;
             warningsEnabled?: boolean;
             autoFallback?: boolean;
+            tightenOnly?: boolean;
           };
+          for (const key of ['perTaskUsd', 'monthlyCap', 'dailyCap'] as const) {
+            const value = body[key];
+            if (value === undefined || (key === 'dailyCap' && value === null)) continue;
+            if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return json({ error: `${key} must be a finite nonnegative number` }, 400);
+          }
+          for (const key of ['warningsEnabled', 'autoFallback', 'tightenOnly'] as const) if (body[key] !== undefined && typeof body[key] !== 'boolean') return json({ error: `${key} must be a boolean` }, 400);
           const next = loadConfig().config;
           const store = state.store;
-          if (typeof body.perTaskUsd === "number" && Number.isFinite(body.perTaskUsd) && body.perTaskUsd >= 0) {
+          const intent = { perTaskUsd: body.perTaskUsd ?? null, monthlyCap: body.monthlyCap ?? null, dailyCap: body.dailyCap ?? null, warningsEnabled: body.warningsEnabled ?? null, autoFallback: body.autoFallback ?? null, tightenOnly: body.tightenOnly === true };
+          // Only declared scalar fields, never arbitrary user payloads/secrets.
+          store.audit("budget.update.requested", intent);
+          if (!body.tightenOnly && typeof body.perTaskUsd === "number") {
             next.budget.perTaskUsd = body.perTaskUsd;
+            saveConfig(next);
           }
-          saveConfig(next);
-          store.setBudgetConfig({
-            monthly_cap: typeof body.monthlyCap === "number" && Number.isFinite(body.monthlyCap) ? body.monthlyCap : (store.getBudgetConfig()?.monthly_cap ?? 0),
-            daily_cap: body.dailyCap === null ? null : (typeof body.dailyCap === "number" && Number.isFinite(body.dailyCap) ? body.dailyCap : store.getBudgetConfig()?.daily_cap ?? null),
-            warnings_enabled: body.warningsEnabled ?? store.getBudgetConfig()?.warnings_enabled ?? true,
-            auto_fallback: body.autoFallback ?? store.getBudgetConfig()?.auto_fallback ?? true,
-          });
-          store.audit("budget.update", {
-            perTaskUsd: next.budget.perTaskUsd,
-            monthlyCap: body.monthlyCap ?? null,
-            dailyCap: body.dailyCap ?? null,
-            warningsEnabled: body.warningsEnabled ?? null,
-            autoFallback: body.autoFallback ?? null,
+          // Serialized with the SAME write gate used by reservations. A stale
+          // client cannot raise a concurrently lowered monthly/daily limit.
+          store.write(() => {
+            const existing = BudgetService.managerForStore(store).getConfig();
+            const monthly = body.monthlyCap ?? existing.monthly_cap;
+            const daily = body.dailyCap === undefined ? existing.daily_cap : body.dailyCap;
+            store.setBudgetConfig({
+              monthly_cap: body.tightenOnly ? Math.min(existing.monthly_cap, monthly) : monthly,
+              daily_cap: body.tightenOnly ? (existing.daily_cap === null ? daily : daily === null ? existing.daily_cap : Math.min(existing.daily_cap, daily)) : daily,
+              warnings_enabled: body.tightenOnly ? existing.warnings_enabled : body.warningsEnabled ?? existing.warnings_enabled,
+              auto_fallback: body.tightenOnly ? existing.auto_fallback : body.autoFallback ?? existing.auto_fallback,
+            });
+            store.audit("budget.update", { ...intent, perTaskUsd: next.budget.perTaskUsd });
           });
           return json({ ok: true, perTaskUsd: next.budget.perTaskUsd, persisted: store.getBudgetConfig() });
         } catch (e) {

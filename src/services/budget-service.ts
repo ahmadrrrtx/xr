@@ -3,6 +3,8 @@
  * Manages spending caps, cost accounting, and governs per-task usage.
  */
 
+import { ReservationRepo } from "../state/repos/reservation-repo.ts";
+import type { WorkspaceStore } from "../state/workspace-store.ts";
 import { CostRepo } from "../state/repos/cost-repo.ts";
 import { BudgetManager, BudgetStatus } from "../cost/manager.ts";
 import { CostGovernor, Budget, Pricing, CostSnapshot, GovernorDecision } from "../cost/governor.ts";
@@ -20,6 +22,12 @@ export class BudgetService implements LifecycleHook {
     this.budgetManager = new BudgetManager(costStore as any); 
     // Note: BudgetManager was written against old store, cast to any for now 
     // but we'll fix the BudgetManager to use CostRepo.
+  }
+
+  /** Construction only; admission decisions remain in CostGovernor. */
+  static managerForStore(store: WorkspaceStore): BudgetManager { return new BudgetManager(store); }
+  static governorForStore(store: WorkspaceStore, budget: Budget, pricing: Pricing, sessionId: string): CostGovernor {
+    return new CostGovernor(budget,pricing,BudgetService.managerForStore(store),new ReservationRepo(store),sessionId);
   }
 
   /**

@@ -1,0 +1,12 @@
+$ bash scripts/audit-deps.sh . desktop
+── audit-deps: /home/user/xr
+bun install v1.4.2 (744846f84)
+
+Checked 80 installs across 82 packages (no changes) [15.00ms]
+audit-deps: no advisories reported by bun audit
+── audit-deps: /home/user/xr/desktop
+bun install v1.4.2 (744846f84)
+
+Checked 457 installs across 514 packages (no changes) [576.00ms]
+audit-deps: ignored dev-only high in zod — Zod can exhaust memory while validating oversized constrained collections https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
+audit-deps: PASS — no high/critical advisories in the production graph (286 production packages, 1 dev-only ignored)

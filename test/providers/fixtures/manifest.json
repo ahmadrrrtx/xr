@@ -24,7 +24,7 @@
       "id": "google",
       "file": "google.json",
       "kind": "hosted",
-      "tier": "free"
+      "tier": "cheap"
     },
     {
       "id": "ollama",

@@ -5,7 +5,10 @@
  */
 import { isTauri } from '@/lib/tauri';
 
-async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+async function invoke<T>(
+  command: string,
+  args?: Record<string, unknown>
+): Promise<T> {
   const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
   return tauriInvoke<T>(command, args);
 }
@@ -101,12 +104,13 @@ export async function keychainDelete(
   service: string,
   account: string
 ): Promise<void> {
-  if (!isTauri()) return;
-  try {
-    await invoke('keychain_delete', { service, account });
-  } catch {
-    /* deleting a missing entry is fine */
-  }
+  if (!isTauri())
+    throw new Error(
+      'Legacy OS credential deletion requires the native desktop; entry retained.'
+    );
+  // The native command treats only NoEntry as idempotent and confirms absence.
+  // Locked/unavailable stores must propagate, not fabricate a successful removal.
+  await invoke('keychain_delete', { service, account });
 }
 
 /* ── Data folder / files ────────────────────────────────────────────── */
@@ -160,7 +164,8 @@ export async function clearCache(): Promise<number> {
 /** Zip the data dir; returns the chosen destination path or null (cancel). */
 export async function exportAllData(): Promise<DataTransferResult> {
   if (!isTauri()) return { status: 'cancelled' };
-  if (await notMainWindow()) return { status: 'error', message: MAIN_WINDOW_ONLY_MESSAGE };
+  if (await notMainWindow())
+    return { status: 'error', message: MAIN_WINDOW_ONLY_MESSAGE };
   try {
     const path = await invoke<string | null>('export_all_data');
     return path ? { status: 'done', path } : { status: 'cancelled' };
@@ -176,9 +181,12 @@ export async function exportAllData(): Promise<DataTransferResult> {
  */
 export async function importAllData(): Promise<DataTransferResult> {
   if (!isTauri()) return { status: 'cancelled' };
-  if (await notMainWindow()) return { status: 'error', message: MAIN_WINDOW_ONLY_MESSAGE };
+  if (await notMainWindow())
+    return { status: 'error', message: MAIN_WINDOW_ONLY_MESSAGE };
   try {
-    return (await invoke<boolean>('import_all_data')) ? { status: 'done' } : { status: 'cancelled' };
+    return (await invoke<boolean>('import_all_data'))
+      ? { status: 'done' }
+      : { status: 'cancelled' };
   } catch (e) {
     return { status: 'error', message: String(e) };
   }
@@ -187,12 +195,14 @@ export async function importAllData(): Promise<DataTransferResult> {
 /* ── Destructive / lifecycle ────────────────────────────────────────── */
 
 /** Wipe settings (and optionally conversations) then restart. Never returns. */
-export async function resetApp(wipeConversations: boolean): Promise<string | null> {
+export async function resetApp(
+  wipeConversations: boolean
+): Promise<string | null> {
   if (!isTauri()) return null;
   if (await notMainWindow()) return MAIN_WINDOW_ONLY_MESSAGE;
   return invoke('reset_app', { wipeConversations }).then(
     () => null,
-    (e: unknown) => String(e),
+    (e: unknown) => String(e)
   );
 }
 
@@ -305,7 +315,9 @@ export async function screenshotSetShortcut(
 ): Promise<ShortcutRegistration | null> {
   if (!isTauri()) return null;
   try {
-    return await invoke<ShortcutRegistration>('screenshot_ask_set_shortcut', { chord });
+    return await invoke<ShortcutRegistration>('screenshot_ask_set_shortcut', {
+      chord,
+    });
   } catch {
     return null;
   }
@@ -327,7 +339,9 @@ export async function theaterSetShortcut(
 ): Promise<ShortcutRegistration | null> {
   if (!isTauri()) return null;
   try {
-    return await invoke<ShortcutRegistration>('theater_set_shortcut', { chord });
+    return await invoke<ShortcutRegistration>('theater_set_shortcut', {
+      chord,
+    });
   } catch {
     return null;
   }

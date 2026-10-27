@@ -42,7 +42,7 @@ export interface ProviderConfig {
   addedAt: number;
   lastTest?: { ok: boolean; at: number; latencyMs?: number; message?: string };
   /** Where the API key lives — 'none' for keyless local providers. */
-  keyStorage: 'keychain' | 'local-insecure' | 'none';
+  keyStorage: 'engine' | 'keychain' | 'local-insecure' | 'none';
 }
 
 export interface DefaultModels {

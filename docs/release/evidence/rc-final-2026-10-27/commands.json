@@ -1,0 +1,432 @@
+[
+  {
+    "name": "final-native-pure-modules",
+    "command": [
+      "bash",
+      "-c",
+      "export PATH=/home/user/.cache/xr-rust/bin:/home/user/.bun/bin:/usr/bin:/bin CARGO_HOME=/home/user/.cache/xr-cargo CARGO_TARGET_DIR=/home/user/.cache/xr-budget-target; cargo test --locked --manifest-path scripts/native-budget-check/Cargo.toml --jobs 1 && mkdir -p /home/user/.cache/xr-native-contract-tests && rustc --test desktop/src-tauri/src/legacy_credentials.rs -o /home/user/.cache/xr-native-contract-tests/legacy && /home/user/.cache/xr-native-contract-tests/legacy && rustc --test desktop/src-tauri/src/desktop_home.rs -o /home/user/.cache/xr-native-contract-tests/home && /home/user/.cache/xr-native-contract-tests/home"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:13:28.375647+00:00",
+    "seconds": 10.796,
+    "exit_code": 0,
+    "log": "final-native-pure-modules.log",
+    "max_rss_kib": 273496,
+    "user_cpu_seconds": 9.201,
+    "system_cpu_seconds": 1.388,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "final-security-verified",
+    "command": [
+      "env",
+      "XR_SEG_TIMEOUT=120",
+      "XR_TEST_BWRAP_PATH=/home/user/toolchains/bubblewrap-0.12.0/extracted/usr/bin/bwrap",
+      "bun",
+      "run",
+      "security:check",
+      "--full",
+      "--out",
+      "/home/user/xr-evidence/security-gate-verified.json"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:29:46.804716+00:00",
+    "seconds": 185.411,
+    "exit_code": 0,
+    "log": "final-security-verified.log",
+    "max_rss_kib": 304752,
+    "user_cpu_seconds": 86.251,
+    "system_cpu_seconds": 15.208,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-renderer-build",
+    "command": [
+      "bash",
+      "-c",
+      "cd desktop && bun run build"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:35:26.239465+00:00",
+    "seconds": 27.071,
+    "exit_code": 0,
+    "log": "handoff-renderer-build.log",
+    "max_rss_kib": 752372,
+    "user_cpu_seconds": 33.475,
+    "system_cpu_seconds": 1.586,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-renderer-lint",
+    "command": [
+      "bash",
+      "-c",
+      "cd desktop && bun run lint"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:35:53.360545+00:00",
+    "seconds": 32.428,
+    "exit_code": 0,
+    "log": "handoff-renderer-lint.log",
+    "max_rss_kib": 431972,
+    "user_cpu_seconds": 50.237,
+    "system_cpu_seconds": 1.136,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-agent-benchmark",
+    "command": [
+      "bun",
+      "run",
+      "benchmark:agent",
+      "--out",
+      "/home/user/xr-evidence/agent-benchmark-final.json"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:36:25.829908+00:00",
+    "seconds": 0.628,
+    "exit_code": 0,
+    "log": "handoff-agent-benchmark.log",
+    "max_rss_kib": 100704,
+    "user_cpu_seconds": 0.604,
+    "system_cpu_seconds": 0.078,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-cli-binary-journey",
+    "command": [
+      "bun",
+      "scripts/journey/cli-journey.ts",
+      "--channel",
+      "binary",
+      "--evidence",
+      "/home/user/xr-evidence/cli-binary-final.json",
+      "--class",
+      "LR"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:36:28.585718+00:00",
+    "seconds": 5.067,
+    "exit_code": 0,
+    "log": "handoff-cli-binary-journey.log",
+    "max_rss_kib": 218244,
+    "user_cpu_seconds": 3.571,
+    "system_cpu_seconds": 1.677,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-cli-npm-journey",
+    "command": [
+      "bun",
+      "scripts/journey/cli-journey.ts",
+      "--channel",
+      "npm",
+      "--evidence",
+      "/home/user/xr-evidence/cli-npm-final.json",
+      "--class",
+      "LR"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:36:33.690444+00:00",
+    "seconds": 12.804,
+    "exit_code": 0,
+    "log": "handoff-cli-npm-journey.log",
+    "max_rss_kib": 228596,
+    "user_cpu_seconds": 12.289,
+    "system_cpu_seconds": 2.349,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-debian-version-regression",
+    "command": [
+      "bun",
+      "test",
+      "test/release/channels.test.ts",
+      "test/release/identity-hardening.test.ts"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:38:39.525362+00:00",
+    "seconds": 0.11,
+    "exit_code": 0,
+    "log": "handoff-debian-version-regression.log",
+    "max_rss_kib": 56976,
+    "user_cpu_seconds": 0.086,
+    "system_cpu_seconds": 0.021,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-tarball-scope",
+    "command": [
+      "bun",
+      "scripts/consumer-smoke.ts",
+      "--tarball",
+      "/home/user/.cache/xr-rc-artifacts/rrrtx-xr-1.1.1-rc.1.tgz"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:38:45.851819+00:00",
+    "seconds": 0.084,
+    "exit_code": 0,
+    "log": "handoff-tarball-scope.log",
+    "max_rss_kib": 31852,
+    "user_cpu_seconds": 0.08,
+    "system_cpu_seconds": 0.019,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-sbom-schema",
+    "command": [
+      "python3",
+      "/home/user/xr-evidence/validate_sbom_schema.py"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:40:01.802535+00:00",
+    "seconds": 3.232,
+    "exit_code": 0,
+    "log": "handoff-sbom-schema.log",
+    "max_rss_kib": 55460,
+    "user_cpu_seconds": 2.153,
+    "system_cpu_seconds": 0.066,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-authentication-blocker",
+    "command": [
+      "bun",
+      "scripts/verify-release.ts",
+      "--strict",
+      "--artifact",
+      "/home/user/.cache/xr-rc-artifacts/rrrtx-xr-1.1.1-rc.1.tgz",
+      "--sums",
+      "/home/user/.cache/xr-rc-artifacts/SHA256SUMS",
+      "--sbom",
+      "/home/user/.cache/xr-rc-artifacts/sbom.cyclonedx.json",
+      "--expected-version",
+      "1.1.1-rc.1",
+      "--json"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:40:05.080665+00:00",
+    "seconds": 0.208,
+    "exit_code": 1,
+    "log": "handoff-authentication-blocker.log",
+    "max_rss_kib": 163224,
+    "user_cpu_seconds": 0.142,
+    "system_cpu_seconds": 0.069,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-owner-signing-preflight",
+    "command": [
+      "bun",
+      "scripts/desktop-signing-plan.ts",
+      "--preflight",
+      "--tag",
+      "true"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:40:05.334644+00:00",
+    "seconds": 0.011,
+    "exit_code": 1,
+    "log": "handoff-owner-signing-preflight.log",
+    "max_rss_kib": 19296,
+    "user_cpu_seconds": 0.003,
+    "system_cpu_seconds": 0.007,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-native-prerequisites",
+    "command": [
+      "bash",
+      "-c",
+      "pkg-config --modversion gtk+-3.0 webkit2gtk-4.1"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:40:05.383743+00:00",
+    "seconds": 0.117,
+    "exit_code": 1,
+    "log": "handoff-native-prerequisites.log",
+    "max_rss_kib": 12980,
+    "user_cpu_seconds": 0.026,
+    "system_cpu_seconds": 0.0,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-production-seed-gate",
+    "command": [
+      "bun",
+      "scripts/desktop-seed-gate.ts",
+      "desktop/dist"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:41:20.235092+00:00",
+    "seconds": 0.028,
+    "exit_code": 0,
+    "log": "handoff-production-seed-gate.log",
+    "max_rss_kib": 31576,
+    "user_cpu_seconds": 0.016,
+    "system_cpu_seconds": 0.012,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-final-core-types",
+    "command": [
+      "node",
+      "--max-old-space-size=1024",
+      "--max-semi-space-size=16",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:41:20.294956+00:00",
+    "seconds": 18.722,
+    "exit_code": 0,
+    "log": "handoff-final-core-types.log",
+    "max_rss_kib": 1002612,
+    "user_cpu_seconds": 27.004,
+    "system_cpu_seconds": 0.921,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-current-source-binary",
+    "command": [
+      "bash",
+      "-c",
+      "bun scripts/compile-sidecar.ts --if-missing && bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu && cp desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu /home/user/.cache/xr-rc-artifacts/xr-linux-x64 && bun scripts/build-deb.ts --bin /home/user/.cache/xr-rc-artifacts/xr-linux-x64 --out /home/user/.cache/xr-rc-artifacts/xr_1.1.1-rc.1_amd64.deb && bun scripts/write-sums.ts /home/user/.cache/xr-rc-artifacts"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:41:39.139697+00:00",
+    "seconds": 6.893,
+    "exit_code": 0,
+    "log": "handoff-current-source-binary.log",
+    "max_rss_kib": 387940,
+    "user_cpu_seconds": 4.296,
+    "system_cpu_seconds": 0.908,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-current-artifact-check",
+    "command": [
+      "python3",
+      "/home/user/xr-evidence/inspect_local_artifacts.py"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:41:46.069114+00:00",
+    "seconds": 1.076,
+    "exit_code": 0,
+    "log": "handoff-current-artifact-check.log",
+    "max_rss_kib": 49992,
+    "user_cpu_seconds": 0.875,
+    "system_cpu_seconds": 0.296,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-latest-blackbox",
+    "command": [
+      "env",
+      "XR_TEST_CONCURRENCY=1",
+      "bun",
+      "test",
+      "test/e2e-blackbox"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:41:47.186375+00:00",
+    "seconds": 46.492,
+    "exit_code": 0,
+    "log": "handoff-latest-blackbox.log",
+    "max_rss_kib": 112732,
+    "user_cpu_seconds": 39.876,
+    "system_cpu_seconds": 6.958,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-support-matrix-refresh",
+    "command": [
+      "bash",
+      "-c",
+      "bun run support-matrix && bun run support-matrix --check"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:53:33.107918+00:00",
+    "seconds": 0.035,
+    "exit_code": 0,
+    "log": "handoff-support-matrix-refresh.log",
+    "max_rss_kib": 30196,
+    "user_cpu_seconds": 0.026,
+    "system_cpu_seconds": 0.012,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "handoff-closed-docs",
+    "command": [
+      "bash",
+      "-c",
+      "bun run release:check && bun run channel:check && bun run claim-lint && bun run ci:policy && bun run desktop:ipc-acl --check && bun run support-matrix --check && bun run ownership:check && git diff --check"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:54:27.013399+00:00",
+    "seconds": 0.456,
+    "exit_code": 0,
+    "log": "handoff-closed-docs.log",
+    "max_rss_kib": 69020,
+    "user_cpu_seconds": 0.427,
+    "system_cpu_seconds": 0.135,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "closure-security",
+    "command": [
+      "env",
+      "XR_SEG_TIMEOUT=120",
+      "XR_TEST_BWRAP_PATH=/home/user/toolchains/bubblewrap-0.12.0/extracted/usr/bin/bwrap",
+      "bun",
+      "run",
+      "security:check",
+      "--full",
+      "--out",
+      "/home/user/xr-evidence/security-closure.json"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:54:33.235143+00:00",
+    "seconds": 191.155,
+    "exit_code": 0,
+    "log": "closure-security.log",
+    "max_rss_kib": 307176,
+    "user_cpu_seconds": 93.179,
+    "system_cpu_seconds": 16.117,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "closure-existing-quarantine",
+    "command": [
+      "bun",
+      "test",
+      "test/daemon/phase2b.test.ts"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:58:20.029893+00:00",
+    "seconds": 0.451,
+    "exit_code": 0,
+    "log": "closure-existing-quarantine.log",
+    "max_rss_kib": 101700,
+    "user_cpu_seconds": 0.355,
+    "system_cpu_seconds": 0.077,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  },
+  {
+    "name": "closure-final-doc-check",
+    "command": [
+      "bash",
+      "-c",
+      "bun run release:check && bun run channel:check && bun run claim-lint && bun run ci:policy && bun run desktop:ipc-acl --check && bun run api:schema:check && bun run client:check && bun run support-matrix --check && bun run size-gate && bun run ownership:check && git diff --check"
+    ],
+    "cwd": "/home/user/xr",
+    "started_utc": "2026-10-27T07:59:45.277326+00:00",
+    "seconds": 0.954,
+    "exit_code": 0,
+    "log": "closure-final-doc-check.log",
+    "max_rss_kib": 95824,
+    "user_cpu_seconds": 0.987,
+    "system_cpu_seconds": 0.258,
+    "resource_measurement": "wait4 child, includes reaped descendants"
+  }
+]

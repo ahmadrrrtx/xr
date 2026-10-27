@@ -22,6 +22,7 @@ import {
   expectExit,
   expectNoTimedOut,
   readConfig,
+  writeConfig,
   removeHome,
   freshHome,
   assertStubClosed,
@@ -126,9 +127,16 @@ test("providers set <custom> + run --provider <custom> work in fresh processes",
     );
     expectExit(add, 0);
 
-    // set runs the model-switch state machine incl. a canary probe → the
-    // stub's GET /models must satisfy it (this is the M-05 path: CLI-driven).
-    const set = await runCli(["providers", "set", ID], { home });
+    // A scripted endpoint explicitly declares tool support and a synthetic
+    // tariff. Unknown real providers are never inferred capable/free.
+    const configured=readConfig(home);
+    const custom=(configured.providerEngine as any).customProviders.find((p:any)=>p.id===ID);
+    custom.capabilities.toolUse=true;
+    (configured.providerEngine as any).providerCapabilities={[ID]:{models:{[stub.model]:{cost:{inPerMTok:1,outPerMTok:1,known:true,source:"synthetic lifecycle fixture; no billing"}}}}};
+    writeConfig(home,configured);
+    const beforeSelection=stub.requests.length;
+    const set = await runCli(["providers", "set", ID,"--force"], { home });
+    expect(stub.requests.length).toBe(beforeSelection); // configured-only selection is offline
     expectNoTimedOut(set);
     expectExit(set, 0);
 

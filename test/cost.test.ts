@@ -42,10 +42,11 @@ test("local (ollama) pricing is free", () => {
   expect(p.outPerMTok).toBe(0);
 });
 
-test("groq 70b is free tier", () => {
+test("hosted free-tier eligibility is not assumed; unknown Groq rates are unavailable", () => {
   const p = priceFor("groq", "llama-3.3-70b");
-  expect(p.inPerMTok).toBe(0);
-  expect(p.outPerMTok).toBe(0);
+  expect(p.known).toBe(false);
+  expect(Number.isNaN(p.inPerMTok)).toBe(true);
+  expect(Number.isNaN(p.outPerMTok)).toBe(true);
 });
 
 test("AGENT LOOP: a tiny token ceiling stops the run (the headline guarantee)", async () => {

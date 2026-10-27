@@ -1,0 +1,30 @@
+$ bun test test/desktop/sidecar-targets.test.ts test/release/candidate-enforcement.test.ts
+bun test v1.4.2 (744846f84)
+
+test/desktop/sidecar-targets.test.ts:
+(pass) sidecar compile matrix (L-002/L-003) > every launch triple has a real bun compile target (no rename-only cross) [0.18ms]
+(pass) sidecar compile matrix (L-002/L-003) > resolveCompile flags cross builds and windows .exe follows the TARGET [0.10ms]
+(pass) sidecar compile matrix (L-002/L-003) > unknown host fails loudly instead of producing a mislabeled binary [0.10ms]
+(pass) sidecar compile matrix (L-002/L-003) > desktop-app.yml ships a bundle leg for every launch triple [0.21ms]
+(pass) sidecar compile matrix (L-002/L-003) > smoke-sidecar.sh skips cross-target honestly instead of faking a run [0.02ms]
+(pass) sidecar dev cache refuses stale source, target, tool, missing metadata or changed binary bytes [1.31ms]
+(pass) real Windows process.platform win32 resolves native x64/arm64 without environment overrides [0.05ms]
+
+test/release/candidate-enforcement.test.ts:
+(pass) SRI becomes correct hex and graph refs resolve; malformed hashes and fake identity fail [0.88ms]
+(pass) combined inventory contains real renderer and Cargo locked dependencies; no version override [14.71ms]
+(pass) malformed/duplicate/path-escape checksum inventories fail closed [0.25ms]
+(pass) DSSE subject matching is name+digest only, never authentication [0.13ms]
+(pass) valid local crypto cannot hide requested missing files or substitute for strict release evidence [1.35ms]
+(pass) all tag candidates require actual OS-signing prerequisites, not just a preview label [0.16ms]
+(pass) release preparation never replaces a published release [0.18ms]
+(pass) native evidence must be successful exact-tag/exact-SHA latest run and a real completed aggregate job [0.38ms]
+(pass) desktop architecture collisions are prevented and test/private artifacts cannot publish [2.63ms]
+(pass) workflow graph prepares only private drafts and requires owner + exact native CI before publication [3.05ms]
+(pass) channel file bytes must be in the signed inventory; matching URLs do not forgive injected Ruby [3.72ms]
+(pass) raw OS/updater signing credentials are tag-only env inputs, never PR/development values [0.58ms]
+
+ 19 pass
+ 0 fail
+ 111 expect() calls
+Ran 19 tests across 2 files. [112.00ms]

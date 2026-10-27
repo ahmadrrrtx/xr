@@ -29,10 +29,14 @@ import { ModelPicker } from './ModelPicker';
 const NO_MESSAGES: ChatMessage[] = [];
 
 export function ChatHeader({ sessionId }: { sessionId: string }) {
-  const session = useSessionsStore((s) => s.sessions.find((x) => x.id === sessionId));
+  const session = useSessionsStore((s) =>
+    s.sessions.find((x) => x.id === sessionId)
+  );
   const renameSession = useSessionsStore((s) => s.renameSession);
   const messages = useChatStore((s) => s.messages[sessionId] ?? NO_MESSAGES);
-  const stream = useChatStore((s) => (s.stream?.sessionId === sessionId ? s.stream : null));
+  const stream = useChatStore((s) =>
+    s.stream?.sessionId === sessionId ? s.stream : null
+  );
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
@@ -46,19 +50,23 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
     let tokens = 0;
     let cost = 0;
     let measured = false;
+    let costComplete = true;
     for (const m of messages) {
       if (m.metadata?.usage) {
         tokens += m.metadata.usage.inTokens + m.metadata.usage.outTokens;
         measured = true;
       }
+      if (m.metadata?.usage && m.metadata?.budget?.costUsd == null)
+        costComplete = false;
       if (m.metadata?.budget?.costUsd) cost += m.metadata.budget.costUsd;
     }
     if (stream?.usage) {
       tokens += stream.usage.inTokens + stream.usage.outTokens;
       measured = true;
     }
+    if (stream?.usage && stream.budget?.costUsd == null) costComplete = false;
     if (stream?.budget?.costUsd) cost += stream.budget.costUsd;
-    return { tokens, cost, measured };
+    return { tokens, cost, measured, costComplete };
   }, [messages, stream]);
 
   const title = session?.title ?? 'New chat';
@@ -73,12 +81,21 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
 
   const exportMd = async (): Promise<void> => {
     const md = transcriptMarkdown(title, messages);
-    const name = `${title.replace(/[^\w\s-]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'chat'}.md`;
+    const name = `${
+      title
+        .replace(/[^\w\s-]+/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .toLowerCase() || 'chat'
+    }.md`;
     try {
       const { isTauri } = await import('@/lib/tauri');
       if (isTauri()) {
         const { save } = await import('@tauri-apps/plugin-dialog');
-        const path = await save({ defaultPath: name, filters: [{ name: 'Markdown', extensions: ['md'] }] });
+        const path = await save({
+          defaultPath: name,
+          filters: [{ name: 'Markdown', extensions: ['md'] }],
+        });
         if (!path) return;
         const { writeTextFile } = await import('@tauri-apps/plugin-fs');
         await writeTextFile(path, md);
@@ -139,7 +156,12 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
           className="group/title text-text-primary hover:bg-bg-raised flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13.5px] font-semibold"
         >
           <span className="truncate">{title}</span>
-          <Pencil size={12} strokeWidth={1.75} aria-hidden="true" className="text-text-tertiary shrink-0 opacity-0 group-hover/title:opacity-100" />
+          <Pencil
+            size={12}
+            strokeWidth={1.75}
+            aria-hidden="true"
+            className="text-text-tertiary shrink-0 opacity-0 group-hover/title:opacity-100"
+          />
         </button>
       )}
 
@@ -160,12 +182,22 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
         <span
           className="text-text-tertiary font-mono text-[11px] tabular-nums"
           data-testid="chat-counters"
-          title={totals.measured ? 'Tokens reported by the provider' : 'The provider has not reported token counts'}
+          title={
+            totals.measured
+              ? 'Provider-reported or explicitly estimated tokens; cost from engine attempt settlement'
+              : 'The provider has not reported token counts'
+          }
           aria-live="off"
         >
           {totals.measured ? `${totals.tokens.toLocaleString()} tok` : '— tok'}
           {' · '}
-          {localModel && totals.cost === 0 ? <span className="text-text-tertiary">local</span> : fmtUsd(totals.cost, { precise: true })}
+          {!totals.costComplete ? (
+            'Cost unavailable'
+          ) : localModel && totals.cost === 0 ? (
+            <span className="text-text-tertiary">local token fee $0</span>
+          ) : (
+            fmtUsd(totals.cost, { precise: true })
+          )}
         </span>
         <button
           type="button"
@@ -194,13 +226,16 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Clear this conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              Removes {messages.length} message{messages.length === 1 ? '' : 's'} from “{title}”. The session stays; this
-              cannot be undone.
+              Removes {messages.length} message
+              {messages.length === 1 ? '' : 's'} from “{title}”. The session
+              stays; this cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel autoFocus>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void clear()}>Clear</AlertDialogAction>
+            <AlertDialogAction onClick={() => void clear()}>
+              Clear
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

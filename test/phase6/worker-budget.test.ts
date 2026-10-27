@@ -76,6 +76,7 @@ function budgetProvider(): Provider & { reset(): void } {
   };
   return {
     id: "fake-llm",
+    modelId: "canned-1",
     label: "Budget Fake",
     async health() {
       return { ok: true };
@@ -106,6 +107,7 @@ function wiredRegistry(provider: Provider): ServiceRegistry {
     {
       get: () => ({
         defaults: { provider: "fake-llm", model: "canned-1" },
+      providerEngine: {providerCapabilities:{"fake-llm":{models:{"canned-1":{cost:{inPerMTok:0,outPerMTok:0,known:true,source:"synthetic service fixture; no provider billing"}}}}}},
         // Deliberately HUGE legacy aliases: if a worker ever falls back to
         // these instead of its partition, the tree can exceed the root and
         // the Σ assertions below fail loudly. That is the F-12 regression.

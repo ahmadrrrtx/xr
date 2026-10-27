@@ -71,19 +71,21 @@ export class RestrictedProcessBackend implements EnvironmentBackend {
       timeoutMs: exec.timeoutMs,
       maxOutputBytes: exec.maxOutputBytes,
       stdin: exec.stdin,
+      signal: exec.signal,
     });
 
-    const boundaryEvent = raw.outputTruncated || raw.timedOut || raw.spawnError !== undefined;
+    const boundaryEvent = raw.outputTruncated || raw.timedOut || !!raw.cancelled || raw.spawnError !== undefined;
     if (boundaryEvent && ctx.onBoundary) {
-      ctx.onBoundary(raw.spawnError ?? (raw.timedOut ? "timeout" : "output-limit"));
+      ctx.onBoundary(raw.spawnError ?? (raw.cancelled ? "cancelled" : raw.timedOut ? "timeout" : "output-limit"));
     }
 
     return {
-      ok: raw.exitCode === 0 && !raw.timedOut && raw.spawnError === undefined,
+      ok: raw.exitCode === 0 && !raw.timedOut && !raw.cancelled && !raw.outputTruncated && raw.spawnError === undefined,
       exitCode: raw.exitCode,
       stdout: raw.stdout,
       stderr: raw.stderr,
       timedOut: raw.timedOut,
+      cancelled: raw.cancelled,
       outputTruncated: raw.outputTruncated,
       durationMs: raw.durationMs,
       boundaryEvent,

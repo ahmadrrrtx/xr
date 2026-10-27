@@ -1,0 +1,11 @@
+{
+  "status": "OBSERVED",
+  "utc": "2026-10-27T07:49:11.755411+00:00",
+  "url": "https://api.github.com/repos/ahmadrrrtx/xr/releases/latest",
+  "tag": "v1.1.0",
+  "prerelease": false,
+  "draft": false,
+  "assetCount": 5,
+  "name": "v1.1.0",
+  "note": "Read-only observation; no default promotion or owner repair performed"
+}

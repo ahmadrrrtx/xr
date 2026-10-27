@@ -1,5 +1,13 @@
 # Reproducible Release Runbook (Phase 9)
 
+> **Current candidate policy (2026-10-27):**1.1.1-rc.1 is an unpublished
+> developer preview. Tags prepare private drafts; publication requires explicit
+> owner dispatch and complete signing/provenance/native gates. Stable defaults
+> are separately promoted. The current [report](RELEASE_CANDIDATE_REPORT.md),
+> [commands](VERIFICATION_COMMANDS.md) and [signing runbook](DESKTOP_SIGNING.md)
+> supersede historical automatic tag-to-latest assumptions. Do not reuse1.1.0.
+
+
 Everything below is enforced by CI; humans follow the same steps locally when
 preparing a release. **The release is evidence-bound: if a gate fails, the
 release does not happen.**

@@ -1,0 +1,32 @@
+$ env XR_TEST_BWRAP_PATH=/home/user/toolchains/bubblewrap-0.12.0/extracted/usr/bin/bwrap bun test test/trust/namespace-confinement.test.ts
+bun test v1.4.2 (744846f84)
+
+test/trust/namespace-confinement.test.ts:
+(pass) namespace sandbox (unshare) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged [102.32ms]
+(pass) namespace sandbox (unshare) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged [98.29ms]
+(pass) namespace sandbox (unshare) confines the filesystem > HOME, /root and other /home entries are absent [50.47ms]
+(pass) namespace sandbox (unshare) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch [50.24ms]
+(pass) namespace sandbox (unshare) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing [50.07ms]
+(pass) namespace sandbox (unshare) confines the filesystem > readonly grant cannot be remounted writable; mapped-root cannot regain capabilities [105.02ms]
+(pass) namespace sandbox (unshare) confines the filesystem > invalid limits and a blocked subtree never execute a host marker [1.20ms]
+(pass) namespace sandbox (unshare) confines the filesystem > hard CPU/address-space/process limits are applied and cannot be raised [52.90ms]
+(pass) namespace sandbox (unshare) confines the filesystem > aborting an isolated action kills its delayed descendant, with no later host effect [582.46ms]
+(pass) namespace sandbox (unshare) confines the filesystem > network is none [55.60ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged [18.05ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged [16.98ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > HOME, /root and other /home entries are absent [12.45ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch [9.72ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing [8.72ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > readonly grant cannot be remounted writable; mapped-root cannot regain capabilities [17.59ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > invalid limits and a blocked subtree never execute a host marker [0.27ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > hard CPU/address-space/process limits are applied and cannot be raised [10.07ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > aborting an isolated action kills its delayed descendant, with no later host effect [581.49ms]
+(pass) namespace sandbox (bwrap) confines the filesystem > network is none [11.49ms]
+(pass) unshare setup fails closed > no staging mountpoint → the script refuses before mounting anything [0.28ms]
+(pass) unshare setup fails closed > every mount step is checked (no '|| true' on a confinement step) [0.99ms]
+(pass) unshare setup fails closed > a setup failure is reported as a refusal and the command never runs [69.45ms]
+
+ 23 pass
+ 0 fail
+ 105 expect() calls
+Ran 23 tests across 1 file. [2.07s]

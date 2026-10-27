@@ -98,10 +98,11 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
         return okTurn();
       }),
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
       onOutcome: (o) => outcomes.push(o),
     });
-    const turn = await rp.chat(M("hi"), []);
+    const turn = await rp.chat(M("hi"), [], { beforeAttempt: () => {} });
     expect(turn.message).toBe("primary answer");
     expect(calls).toEqual(["ollama"]);
     expect(outcomes).toHaveLength(1);
@@ -126,12 +127,13 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
       health,
       construct: () => fb,
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
       onFailover: (r) => records.push(r),
       onDegradation: (l) => levels.push(l),
       retry: { maxInPlaceRetries: 1 },
     });
-    const turn = await rp.chat(M("hi"), []);
+    const turn = await rp.chat(M("hi"), [], { beforeAttempt: () => {} });
     expect(turn.message).toBe("rescued");
     // 2 primary attempts (1 retry for transient) + 1 fallback attempt
     expect(calls).toEqual(["ollama", "ollama", "lmstudio"]);
@@ -141,7 +143,7 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
     expect(levels).toContain("L1_equivalent_fallback");
   });
 
-  test("permanent failure → NO in-place retry, straight to the diverse fallback", async () => {
+  test("permanent authentication failure is terminal — no retry or provider switch", async () => {
     const calls: string[] = [];
     const primary = provider("ollama", async () => {
       calls.push("ollama");
@@ -155,23 +157,25 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
       health,
       construct: () => fb,
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
       retry: { maxInPlaceRetries: 3 }, // even with retries allowed, permanent skips them
     });
-    await rp.chat(M("hi"), []);
-    expect(calls).toEqual(["ollama", "lmstudio"]);
+    await expect(rp.chat(M("hi"), [], { beforeAttempt: () => {} })).rejects.toThrow();
+    expect(calls).toEqual(["ollama"]);
   });
 
-  test("semantic failure (invalid turn / refusal-shaped) advances and records quality degradation for the breaker", async () => {
+  test("semantic failure is terminal and records a quality failure without another request", async () => {
     const primary = provider("ollama", async () => ({ message: "", toolCalls: [], done: false }) as ModelTurn); // invalid
     const fb = provider("lmstudio", async () => okTurn("clean"));
     const rp = new ResilientProvider(primary, "m1", [{ providerId: "lmstudio", modelId: "m2", reason: "t" }], {
       health,
       construct: () => fb,
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
     });
-    await rp.chat(M("hi"), []);
+    await expect(rp.chat(M("hi"), [], { beforeAttempt: () => {} })).rejects.toThrow();
     const gate = health.gate("ollama", "m1");
     expect(gate.qualityFailRate).toBeGreaterThan(0);
   });
@@ -192,7 +196,7 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
       localityGuard: (id) => id !== "openai", // simulates local_only defense-in-depth
       sleep: async () => {},
     });
-    await expect(rp.chat(M("hi"), [])).rejects.toBeInstanceOf(RoutingEscalationError);
+    await expect(rp.chat(M("hi"), [], { beforeAttempt: () => {} })).rejects.toBeInstanceOf(RoutingEscalationError);
     expect(calls).not.toContain("openai"); // cloud NEVER called
     expect(calls.every((c) => c === "ollama")).toBe(true); // only the primary was attempted
   });
@@ -223,10 +227,11 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
           return okTurn();
         })),
         localityGuard: () => true,
+        canFallback: () => true,
         sleep: async () => {},
       },
     );
-    const turn = await rp.chat(M("hi"), []);
+    const turn = await rp.chat(M("hi"), [], { beforeAttempt: () => {} });
     expect(turn.message).toBe("third");
     expect(calls).not.toContain("lmstudio");
     expect(calls).toContain("jan");
@@ -234,7 +239,7 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
 
   test("chain exhaustion throws RoutingEscalationError with a full, redacted package (no fake success)", async () => {
     const primary = provider("ollama", async () => {
-      throw new Error("401 invalid api key=sk-live-FAKEKEY123456789");
+      throw new Error("HTTP 503 upstream token=sk-live-FAKEKEY123456789");
     });
     const fb = provider("lmstudio", async () => {
       throw new Error("timeout");
@@ -243,10 +248,11 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
       health,
       construct: () => fb,
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
     });
     try {
-      await rp.chat(M("hi"), []);
+      await rp.chat(M("hi"), [], { beforeAttempt: () => {} });
       expect.unreachable("must throw");
     } catch (e) {
       const err = e as RoutingEscalationError;
@@ -256,7 +262,7 @@ describe("Phase 5 · ResilientProvider chain execution", () => {
       expect(pkg.attempts.length).toBeGreaterThanOrEqual(2);
       expect(pkg.repair.length).toBeGreaterThan(0);
       // error classes are recorded per attempt
-      expect(pkg.attempts[0]!.errorClass).toBe("permanent");
+      expect(pkg.attempts[0]!.errorClass).toBe("transient");
       // NO SECRETS in the package (Part 20)
       expect(JSON.stringify(pkg)).not.toMatch(/sk-live/);
       expect(pkg.attempts[0]!.message).toContain("[redacted]");

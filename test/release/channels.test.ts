@@ -21,11 +21,11 @@ import {
   PACKAGING_DIR,
 } from "../../scripts/channel-manifest.ts";
 import { buildDeb } from "../../scripts/build-deb.ts";
-import { loadManifest } from "../../scripts/release-manifest.ts";
+import { loadManifest,publicVersionOf } from "../../scripts/release-manifest.ts";
 import { parse, serialize } from "../../scripts/sums.ts";
 
 const manifest = loadManifest();
-const VERSION = manifest.identity.version;
+const VERSION = publicVersionOf(manifest);
 
 describe("Phase 9 · T3 — one canonical build, many channels", () => {
   test("every installer-facing URL points at the canonical release of the manifest version", () => {
@@ -206,3 +206,21 @@ function extractTarData(tar: Buffer, name: string): Buffer | null {
   const e = tarEntries(tar).find((x) => x.name === name);
   return e ? e.data : null;
 }
+
+test('preview identity never changes canonical stable formula/manifests/URLs; public authority wins',()=>{
+  const preview={...manifest,identity:{...manifest.identity,version:'99.0.0-rc.1',stability:'developer-preview' as const},channels:{...manifest.channels!,publicVersion:'1.0.0'}};
+  for(const file of renderedTemplates(preview)){
+    expect(file.content).not.toContain('99.0.0-rc.1');expect(file.relpath).not.toContain('99.0.0-rc.1');
+    if(file.content.includes('/releases/download/'))expect(file.content).toContain('/releases/download/v1.0.0/');
+  }
+});
+
+test('Debian prerelease version is derived and sorts before stable, without a second product authority',async()=>{
+  const {debianVersion}=await import('../../scripts/build-deb');
+  expect(debianVersion('1.1.1-rc.1')).toBe('1.1.1~rc.1');expect(debianVersion('1.1.1+build.2')).toBe('1.1.1');
+  for(const bad of ['1.1.1\nDepends: bad','01.1.1','1.1.1-01'])expect(()=>debianVersion(bad)).toThrow();
+  if(process.platform==='linux'){
+    const {spawnSync}=await import('node:child_process');
+    const result=spawnSync('dpkg',['--compare-versions',debianVersion('1.1.1-rc.1'),'lt',debianVersion('1.1.1')]);expect(result.status).toBe(0);
+  }
+});

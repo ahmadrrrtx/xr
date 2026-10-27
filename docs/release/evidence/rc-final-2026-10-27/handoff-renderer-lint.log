@@ -1,0 +1,2 @@
+$ bash -c cd desktop && bun run lint
+$ eslint .

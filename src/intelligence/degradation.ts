@@ -21,6 +21,8 @@
  */
 
 import type { ChatOptions, Message, ModelTurn, Provider, ProviderStreamChunk, Tool } from "../core/types.ts";
+import { chatAttempt, streamAttempt } from "../providers/attempts.ts";
+import { ProviderError, normalizeProviderError } from "../providers/errors.ts";
 import { ProviderAbortError } from "../providers/request-guard.ts";
 import {
   contextManifest,
@@ -73,16 +75,24 @@ export function classifyError(err: unknown): ClassifiedError {
   // dutifully failed over to the NEXT provider, issuing fresh requests for a
   // run the user had just stopped. Cancellation is terminal for the whole call.
   if (err instanceof ProviderAbortError) {
-    return { cls: "cancelled", reason: err.message };
+    return { cls: err.kind === "cancelled" ? "cancelled" : "transient", reason: redactSecrets(err.message) };
+  }
+  // Structured adapter errors take precedence over arbitrary message text.
+  // An authentication error mentioning "503" is still terminal, not retryable.
+  if (err instanceof ProviderError) {
+    const cls: ErrorClass = err.details.isCancellation ? "cancelled"
+      : ["malformed_response", "content_policy_refusal"].includes(err.kind) ? "semantic"
+      : err.retryable && ["rate_limit", "timeout", "unavailable", "provider_overload", "network_failure"].includes(err.kind) ? "transient" : "permanent";
+    return { cls, reason: redactSecrets(err.message) };
   }
   if (err instanceof SemanticFailure) {
-    return { cls: "semantic", reason: err.message };
+    return { cls: "semantic", reason: redactSecrets(err.message) };
   }
   const msg = err instanceof Error ? err.message : String(err);
-  if (SEMANTIC.test(msg)) return { cls: "semantic", reason: msg.slice(0, 160) };
-  if (TRANSIENT.test(msg)) return { cls: "transient", reason: msg.slice(0, 160) };
-  if (PERMANENT.test(msg)) return { cls: "permanent", reason: msg.slice(0, 160) };
-  return { cls: "permanent", reason: `unclassified failure: ${msg.slice(0, 120)}` };
+  if (TRANSIENT.test(msg)) return { cls: "transient", reason: redactSecrets(msg.slice(0, 160)) };
+  if (SEMANTIC.test(msg)) return { cls: "semantic", reason: redactSecrets(msg.slice(0, 160)) };
+  if (PERMANENT.test(msg)) return { cls: "permanent", reason: redactSecrets(msg.slice(0, 160)) };
+  return { cls: "permanent", reason: `unclassified failure: ${redactSecrets(msg.slice(0, 120))}` };
 }
 
 // ── Retry budget + jittered backoff ─────────────────────────────────────────
@@ -186,6 +196,8 @@ export interface ResilientDeps {
   construct(step: FallbackStep): Provider;
   /** Defense-in-depth locality re-check per hop (never silently escalate). */
   localityGuard(providerId: string): boolean;
+  /** Explicit consent + fresh capability/credential policy; absence denies hops. */
+  canFallback?(target: { providerId: string; modelId: string }): boolean;
   retry?: Partial<RetryPolicy>;
   /** Canonical anchor facts the harness wants verified (production: none). */
   contextAnchors?: string[];
@@ -215,7 +227,7 @@ export interface ResilientTarget {
 
 /** A turn must carry SOMETHING actionable, else it is a semantic failure. */
 export function validateTurn(turn: ModelTurn): { ok: boolean; reason?: string } {
-  if (turn.done) return { ok: true };
+  if (turn.error) return { ok: false, reason: "provider returned an explicit error turn" };
   if (turn.toolCalls && turn.toolCalls.length > 0) return { ok: true };
   if (turn.message && turn.message.trim().length > 0) return { ok: true };
   return { ok: false, reason: "empty turn: no message, no tool calls, not done" };
@@ -230,6 +242,10 @@ const DEFAULT_SLEEP = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)
  * the single routing authority already decided.
  */
 export class ResilientProvider implements Provider {
+  readonly managesAttempts = true;
+  private active: Provider;
+  get modelId() { return this.active.modelId ?? (this.active === this.primary ? this.primaryModel : undefined); }
+  get capabilities() { return this.active.capabilities; }
   private readonly policy: RetryPolicy;
   private highestLevel: DegradationLevel = "L0_full";
 
@@ -240,10 +256,12 @@ export class ResilientProvider implements Provider {
     private readonly deps: ResilientDeps,
   ) {
     this.policy = { ...DEFAULT_RETRY_POLICY, ...deps.retry };
+    this.active = primary;
+    this.bindTarget(primary, { providerId: primary.id, modelId: primaryModel, level: "L0_full" });
   }
 
   get id(): string {
-    return this.primary.id;
+    return this.active.id;
   }
 
   get label(): string {
@@ -256,11 +274,23 @@ export class ResilientProvider implements Provider {
     return this.highestLevel;
   }
 
+  private bindTarget(provider: Provider, target: ResilientTarget): void {
+    const legacyModel = (provider as Provider & { model?: string }).model;
+    if (provider.id !== target.providerId || (provider.modelId !== undefined && provider.modelId !== target.modelId) || (legacyModel !== undefined && legacyModel !== target.modelId)) throw new Error("Provider target identity mismatch; no request sent");
+    if (provider.modelId === undefined) Object.defineProperty(provider, "modelId", { value: target.modelId, configurable: true });
+  }
+
+  /** Optional telemetry is not admission/audit: it must never replay a paid call.
+   * Authoritative beforeAttempt/afterAttempt failures remain terminal. */
+  private report(effect: () => unknown): void {
+    try { const result = effect(); if (result instanceof Promise) void result.catch(() => {}); } catch { /* best-effort telemetry only */ }
+  }
+
   private escalate(level: DegradationLevel, reason: string): void {
     const order: DegradationLevel[] = ["L0_full", "L1_equivalent_fallback", "L2_reduced_fallback", "L3_escalation"];
     if (order.indexOf(level) > order.indexOf(this.highestLevel)) {
       this.highestLevel = level;
-      this.deps.onDegradation?.(level, reason);
+      this.report(() => this.deps.onDegradation?.(level, reason));
     }
   }
 
@@ -270,6 +300,7 @@ export class ResilientProvider implements Provider {
     const warn = this.deps.warn ?? ((l: string) => console.warn(l));
     const attempts: FailoverAttempt[] = [];
     let sleptMs = 0;
+    let lastFailedTarget: ResilientTarget | undefined;
     let lastError: ClassifiedError = { cls: "permanent", reason: "no target attempted" };
 
     const targets: ResilientTarget[] = [
@@ -277,12 +308,13 @@ export class ResilientProvider implements Provider {
       ...this.chain.map((s) => ({
         providerId: s.providerId,
         modelId: s.modelId,
-        level: s.level ?? "L1_equivalent_fallback",
+        level: s.level ?? "L2_reduced_fallback",
         step: s,
       })),
     ];
 
     let provider: Provider = this.primary;
+    this.active = this.primary;
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i]!;
 
@@ -293,94 +325,107 @@ export class ResilientProvider implements Provider {
         continue;
       }
 
+      if (i > 0 && (!options?.beforeAttempt || this.deps.canFallback?.(target) !== true)) {
+        attempts.push(this.attempt(target, "skipped", "fallback consent/admission unavailable or configuration changed", 0)); continue;
+      }
       const permit = this.deps.health.permit(target.providerId, target.modelId);
       if (permit === "deny_open") {
         attempts.push(this.attempt(target, "skipped", "circuit open — target skipped", 0));
         continue;
       }
 
-      if (i > 0) {
-        provider = this.deps.construct(target.step!);
-        const manifest = contextManifest(messages, this.deps.contextAnchors ?? []);
-        this.escalate(target.level, `failover to ${target.providerId}/${target.modelId}`);
-        const record: FailoverRecord = {
-          decisionId: this.deps.decisionId,
-          from: {
-            providerId: targets[i - 1]!.providerId,
-            modelId: targets[i - 1]!.modelId,
-          },
-          to: { providerId: target.providerId, modelId: target.modelId },
-          trigger: lastError.cls,
-          level: target.level,
-          context: manifest,
-          at: Date.now(),
-        };
-        this.deps.onFailover?.(record);
-        warn(
-          `\x1b[33m! ${targets[i - 1]!.providerId}/${targets[i - 1]!.modelId} failed (${lastError.cls}). ` +
-            `Failing over to ${target.providerId}/${target.modelId} [${target.level}, context: ${manifest.messageCount} messages preserved]\x1b[0m`,
-        );
-      }
+      try {
+        if (i > 0) {
+          provider = this.deps.construct(target.step!);
+          this.bindTarget(provider, target);
+          this.active = provider;
+          const manifest = contextManifest(messages, this.deps.contextAnchors ?? []);
+          this.escalate(target.level, `failover to ${target.providerId}/${target.modelId}`);
+          const record: FailoverRecord = {
+            decisionId: this.deps.decisionId,
+            from: {
+              providerId: (lastFailedTarget ?? targets[0]!).providerId,
+              modelId: (lastFailedTarget ?? targets[0]!).modelId,
+            },
+            to: { providerId: target.providerId, modelId: target.modelId },
+            trigger: lastError.cls,
+            level: target.level,
+            context: manifest,
+            at: Date.now(),
+          };
+          this.report(() => this.deps.onFailover?.(record));
+          this.report(() => warn(
+            `\x1b[33m! ${(lastFailedTarget ?? targets[0]!).providerId}/${(lastFailedTarget ?? targets[0]!).modelId} failed (${lastError.cls}). ` +
+              `Failing over to ${target.providerId}/${target.modelId} [${target.level}, context: ${manifest.messageCount} messages preserved]\x1b[0m`,
+          ));
+        }
 
-      // In-place retry is allowed for transient failures within budget only.
-      for (let retry = 0; ; retry++) {
-        const t0 = Date.now();
-        try {
-          const turn = await provider.chat(messages, tools, options);
-          const validation = validateTurn(turn);
-          if (!validation.ok) throw new SemanticFailure(validation.reason!);
-          const ms = Date.now() - t0;
-          this.deps.health.record(target.providerId, target.modelId, { ok: true, latencyMs: ms, qualityOk: true });
-          if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, true);
-          this.deps.onOutcome?.({
-            providerId: target.providerId,
-            modelId: target.modelId,
-            success: true,
-            latencyMs: ms,
-            qualityOk: true,
-            usage: turn.usage,
-          });
-          return turn;
-        } catch (e) {
-          const ms = Date.now() - t0;
-          const classified = classifyError(e);
-          // GAP-001 — cancellation is terminal for the ENTIRE call, not just
-          // this attempt. `break` would only leave the retry loop and the
-          // outer target loop would keep failing over to further providers,
-          // issuing new requests for work the user already stopped. Rethrow so
-          // the loop reports an honest `cancelled` outcome.
-          if (classified.cls === "cancelled") throw e;
-          lastError = classified;
-          attempts.push(this.attempt(target, classified.cls, classified.reason, ms));
-          if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, false);
-          // Every failed attempt is an error sample; qualityOk=false only for
-          // semantic failures (the "well-formed but wrong" class the breaker
-          // must see). Transient/permanent are transport/auth classes.
-          const trip = this.deps.health.record(target.providerId, target.modelId, {
-            ok: false,
-            latencyMs: ms,
-            qualityOk: classified.cls === "transient",
-          });
-          if (trip) this.deps.onTrip?.(trip);
-          this.deps.onOutcome?.({
-            providerId: target.providerId,
-            modelId: target.modelId,
-            success: false,
-            latencyMs: ms,
-            qualityOk: classified.cls === "transient",
-          });
+        // In-place retry is allowed for transient failures within budget only.
+        for (let retry = 0; ; retry++) {
+          const t0 = Date.now();
+          try {
+            const turn = await chatAttempt(provider, messages, tools, options, i > 0);
+            const validation = validateTurn(turn);
+            if (!validation.ok) throw new SemanticFailure(validation.reason!);
+            const ms = Date.now() - t0;
+            this.deps.health.record(target.providerId, target.modelId, { ok: true, latencyMs: ms, qualityOk: true });
+            if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, true);
+            this.report(() => this.deps.onOutcome?.({
+              providerId: target.providerId,
+              modelId: target.modelId,
+              success: true,
+              latencyMs: ms,
+              qualityOk: true,
+              usage: turn.usage,
+            }));
+            return turn;
+          } catch (e) {
+            const ms = Date.now() - t0;
+            const classified = classifyError(e);
+            // GAP-001 — cancellation is terminal for the ENTIRE call, not just
+            // this attempt. `break` would only leave the retry loop and the
+            // outer target loop would keep failing over to further providers,
+            // issuing new requests for work the user already stopped. Rethrow so
+            // the loop reports an honest `cancelled` outcome.
+            if (classified.cls === "cancelled" || ["ProviderBudgetAdmissionError", "ProviderAccountingError"].includes((e as Error).name)) throw e;
+            lastError = classified;
+            lastFailedTarget = target;
+            attempts.push(this.attempt(target, classified.cls, classified.reason, ms));
+            if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, false);
+            // Every failed attempt is an error sample; qualityOk=false only for
+            // semantic failures (the "well-formed but wrong" class the breaker
+            // must see). Transient/permanent are transport/auth classes.
+            const trip = this.deps.health.record(target.providerId, target.modelId, {
+              ok: false,
+              latencyMs: ms,
+              qualityOk: classified.cls === "transient",
+            });
+            if (trip) this.report(() => this.deps.onTrip?.(trip));
+            this.report(() => this.deps.onOutcome?.({
+              providerId: target.providerId,
+              modelId: target.modelId,
+              success: false,
+              latencyMs: ms,
+              qualityOk: classified.cls === "transient",
+            }));
 
-          const canRetry =
-            classified.cls === "transient" &&
-            retry < this.policy.maxInPlaceRetries &&
-            sleptMs < this.policy.totalBudgetMs;
-          if (!canRetry) break;
-          const delay = backoffDelay(retry, this.policy, sleptMs, random);
-          if (delay > 0) {
-            sleptMs += delay;
-            await sleep(delay);
+            if (classified.cls !== "transient") throw normalizeProviderError(e, target.providerId, target.modelId);
+            const canRetry =
+              this.deps.health.gate(target.providerId, target.modelId).state !== "open" &&
+              !!options?.beforeAttempt && this.deps.canFallback?.(target) === true &&
+              classified.cls === "transient" &&
+              retry < this.policy.maxInPlaceRetries &&
+              sleptMs < this.policy.totalBudgetMs;
+            if (!canRetry) break;
+            const delay = backoffDelay(retry, this.policy, sleptMs, random);
+            if (delay > 0) {
+              sleptMs += delay;
+              await sleep(delay);
+            }
           }
         }
+      } finally {
+        if (permit === "probe") this.deps.health.cancelProbe(target.providerId, target.modelId);
       }
     }
 
@@ -388,7 +433,7 @@ export class ResilientProvider implements Provider {
       schemaVersion: 1,
       decisionId: this.deps.decisionId,
       reason:
-        `No viable provider: ${attempts.length} attempt(s) across ${targets.length} target(s) failed. ` +
+        `No viable provider: ${attempts.filter(a => a.errorClass !== "skipped").length} request attempt(s) across ${targets.length} target(s) failed. ` +
         `Last failure (${lastError.cls}): ${lastError.reason}`,
       attempts,
       level: "L3_escalation",
@@ -401,7 +446,6 @@ export class ResilientProvider implements Provider {
       at: Date.now(),
     };
     this.escalate("L3_escalation", "fallback chain exhausted");
-    this.deps.onDegradation?.("L3_escalation", "fallback chain exhausted");
     throw new RoutingEscalationError(pkg);
   }
 
@@ -433,6 +477,7 @@ export class ResilientProvider implements Provider {
     const warn = this.deps.warn ?? ((l: string) => console.warn(l));
     const attempts: FailoverAttempt[] = [];
     let sleptMs = 0;
+    let lastFailedTarget: ResilientTarget | undefined;
     let lastError: ClassifiedError = { cls: "permanent", reason: "no target attempted" };
 
     const targets: ResilientTarget[] = [
@@ -440,117 +485,113 @@ export class ResilientProvider implements Provider {
       ...this.chain.map((s) => ({
         providerId: s.providerId,
         modelId: s.modelId,
-        level: s.level ?? "L1_equivalent_fallback",
+        level: s.level ?? "L2_reduced_fallback",
         step: s,
       })),
     ];
 
     let provider: Provider = this.primary;
+    this.active = this.primary;
     for (let i = 0; i < targets.length; i++) {
       const target = targets[i]!;
       if (!this.deps.localityGuard(target.providerId)) {
         attempts.push(this.attempt(target, "skipped", `locality guard refused ${target.providerId}`, 0));
         continue;
       }
+      if (i > 0 && (!options?.beforeAttempt || this.deps.canFallback?.(target) !== true)) {
+        attempts.push(this.attempt(target, "skipped", "fallback consent/admission unavailable or configuration changed", 0)); continue;
+      }
       const permit = this.deps.health.permit(target.providerId, target.modelId);
       if (permit === "deny_open") {
         attempts.push(this.attempt(target, "skipped", "circuit open — target skipped", 0));
         continue;
       }
-      if (i > 0) {
-        provider = this.deps.construct(target.step!);
-        const manifest = contextManifest(messages, this.deps.contextAnchors ?? []);
-        this.escalate(target.level, `failover to ${target.providerId}/${target.modelId}`);
-        this.deps.onFailover?.({
-          decisionId: this.deps.decisionId,
-          from: { providerId: targets[i - 1]!.providerId, modelId: targets[i - 1]!.modelId },
-          to: { providerId: target.providerId, modelId: target.modelId },
-          trigger: lastError.cls,
-          level: target.level,
-          context: manifest,
-          at: Date.now(),
-        });
-        warn(
-          `\x1b[33m! ${targets[i - 1]!.providerId}/${targets[i - 1]!.modelId} failed (${lastError.cls}). ` +
-            `Failing over to ${target.providerId}/${target.modelId} [${target.level}, context: ${manifest.messageCount} messages preserved]\x1b[0m`,
-        );
-      }
+      try {
+        if (i > 0) {
+          provider = this.deps.construct(target.step!);
+          this.bindTarget(provider, target);
+          this.active = provider;
+          const manifest = contextManifest(messages, this.deps.contextAnchors ?? []);
+          this.escalate(target.level, `failover to ${target.providerId}/${target.modelId}`);
+          this.report(() => this.deps.onFailover?.({
+            decisionId: this.deps.decisionId,
+            from: { providerId: (lastFailedTarget ?? targets[0]!).providerId, modelId: (lastFailedTarget ?? targets[0]!).modelId },
+            to: { providerId: target.providerId, modelId: target.modelId },
+            trigger: lastError.cls,
+            level: target.level,
+            context: manifest,
+            at: Date.now(),
+          }));
+          this.report(() => warn(
+            `\x1b[33m! ${(lastFailedTarget ?? targets[0]!).providerId}/${(lastFailedTarget ?? targets[0]!).modelId} failed (${lastError.cls}). ` +
+              `Failing over to ${target.providerId}/${target.modelId} [${target.level}, context: ${manifest.messageCount} messages preserved]\x1b[0m`,
+          ));
+        }
 
-      for (let retry = 0; ; retry++) {
-        const t0 = Date.now();
-        let emitted = false;
-        let usage: ModelTurn["usage"];
-        try {
-          const stream = (provider as Provider & {
-            chatStream?: (m: Message[], t: Tool[], o?: ChatOptions) => AsyncGenerator<ProviderStreamChunk>;
-          }).chatStream;
-          if (typeof stream === "function") {
-            for await (const chunk of stream.call(provider, messages, tools, options)) {
+        for (let retry = 0; ; retry++) {
+          const t0 = Date.now();
+          let emitted = false;
+          let usage: ModelTurn["usage"];
+          try {
+            let turnError = false;
+            for await (const chunk of streamAttempt(provider, messages, tools, options, i > 0)) {
               if (chunk.text || chunk.toolCall) emitted = true;
               if (chunk.usage) usage = chunk.usage;
+              if (chunk.error) turnError = true;
               yield chunk;
             }
-          } else {
-            const turn = await provider.chat(messages, tools, options);
-            const validation = validateTurn(turn);
-            if (!validation.ok) throw new SemanticFailure(validation.reason!);
-            usage = turn.usage;
-            if (turn.message) {
-              emitted = true;
-              yield { text: turn.message, providerId: provider.id, model: target.modelId };
+            if (turnError || !emitted) throw new SemanticFailure("empty or incomplete stream; no fallback replay");
+            const ms = Date.now() - t0;
+            this.deps.health.record(target.providerId, target.modelId, { ok: true, latencyMs: ms, qualityOk: true });
+            if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, true);
+            this.report(() => this.deps.onOutcome?.({
+              providerId: target.providerId,
+              modelId: target.modelId,
+              success: true,
+              latencyMs: ms,
+              qualityOk: true,
+              usage,
+            }));
+            return;
+          } catch (e) {
+            const ms = Date.now() - t0;
+            const classified = classifyError(e);
+            if (classified.cls === "cancelled" || ["ProviderBudgetAdmissionError", "ProviderAccountingError"].includes((e as Error).name)) throw e;
+            // Record the actual failure, then forbid replay after partial output.
+            lastError = classified;
+            lastFailedTarget = target;
+            attempts.push(this.attempt(target, classified.cls, classified.reason, ms));
+            if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, false);
+            const trip = this.deps.health.record(target.providerId, target.modelId, {
+              ok: false,
+              latencyMs: ms,
+              qualityOk: classified.cls === "transient",
+            });
+            if (trip) this.report(() => this.deps.onTrip?.(trip));
+            this.report(() => this.deps.onOutcome?.({
+              providerId: target.providerId,
+              modelId: target.modelId,
+              success: false,
+              latencyMs: ms,
+              qualityOk: classified.cls === "transient",
+            }));
+            if (emitted || classified.cls !== "transient") throw normalizeProviderError(e, target.providerId, target.modelId);
+            const canRetry =
+              this.deps.health.gate(target.providerId, target.modelId).state !== "open" &&
+              !!options?.beforeAttempt && this.deps.canFallback?.(target) === true &&
+              classified.cls === "transient" &&
+              retry < this.policy.maxInPlaceRetries &&
+              sleptMs < this.policy.totalBudgetMs;
+            if (!canRetry) break;
+            const delay = backoffDelay(retry, this.policy, sleptMs, random);
+            if (delay > 0) {
+              sleptMs += delay;
+              await sleep(delay);
             }
-            for (const tc of turn.toolCalls ?? []) {
-              emitted = true;
-              yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: provider.id, model: target.modelId };
-            }
-            if (turn.usage) yield { usage: turn.usage, providerId: provider.id, model: target.modelId };
-            yield { finish: true, providerId: provider.id, model: target.modelId };
-          }
-          const ms = Date.now() - t0;
-          this.deps.health.record(target.providerId, target.modelId, { ok: true, latencyMs: ms, qualityOk: true });
-          if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, true);
-          this.deps.onOutcome?.({
-            providerId: target.providerId,
-            modelId: target.modelId,
-            success: true,
-            latencyMs: ms,
-            qualityOk: true,
-            usage,
-          });
-          return;
-        } catch (e) {
-          const ms = Date.now() - t0;
-          const classified = classifyError(e);
-          if (classified.cls === "cancelled") throw e;
-          // Partial output already reached the consumer: no silent switch.
-          if (emitted) throw e;
-          lastError = classified;
-          attempts.push(this.attempt(target, classified.cls, classified.reason, ms));
-          if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, false);
-          const trip = this.deps.health.record(target.providerId, target.modelId, {
-            ok: false,
-            latencyMs: ms,
-            qualityOk: classified.cls === "transient",
-          });
-          if (trip) this.deps.onTrip?.(trip);
-          this.deps.onOutcome?.({
-            providerId: target.providerId,
-            modelId: target.modelId,
-            success: false,
-            latencyMs: ms,
-            qualityOk: classified.cls === "transient",
-          });
-          const canRetry =
-            classified.cls === "transient" &&
-            retry < this.policy.maxInPlaceRetries &&
-            sleptMs < this.policy.totalBudgetMs;
-          if (!canRetry) break;
-          const delay = backoffDelay(retry, this.policy, sleptMs, random);
-          if (delay > 0) {
-            sleptMs += delay;
-            await sleep(delay);
           }
         }
+      } finally {
+        if (permit === "probe") this.deps.health.cancelProbe(target.providerId, target.modelId);
       }
     }
 
@@ -558,7 +599,7 @@ export class ResilientProvider implements Provider {
       schemaVersion: 1,
       decisionId: this.deps.decisionId,
       reason:
-        `No viable provider: ${attempts.length} attempt(s) across ${targets.length} target(s) failed. ` +
+        `No viable provider: ${attempts.filter(a => a.errorClass !== "skipped").length} request attempt(s) across ${targets.length} target(s) failed. ` +
         `Last failure (${lastError.cls}): ${lastError.reason}`,
       attempts,
       level: "L3_escalation",
@@ -571,7 +612,6 @@ export class ResilientProvider implements Provider {
       at: Date.now(),
     };
     this.escalate("L3_escalation", "fallback chain exhausted");
-    this.deps.onDegradation?.("L3_escalation", "fallback chain exhausted");
     throw new RoutingEscalationError(pkg);
   }
 

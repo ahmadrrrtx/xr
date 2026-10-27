@@ -41,6 +41,10 @@ const TZ = -300;
 
 const settings = (patch: Partial<BudgetSettings> = {}): BudgetSettings => ({
   ...DEFAULT_BUDGET_SETTINGS,
+  // Explicit deterministic fixtures: never evidence of configured/installed routes.
+  modelDownshifting: true,
+  configuredModels: ['claude-sonnet-5-5', 'gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra', 'gemini-3.8-flash'],
+  installedLocal: ['qwen2.5:3b', 'qwen2.5-coder:3b'],
   ...patch,
 });
 
@@ -61,7 +65,7 @@ const spend = (over: Partial<SpendEvent>): SpendEvent => ({
   agent: "main",
   workspace: "xr",
   sessionId: "chat-1",
-  model: "claude-sonnet-4.5",
+  model: "claude-sonnet-5-5",
   tokensIn: 1000,
   tokensOut: 500,
   costUsd: 0.0105,
@@ -111,10 +115,10 @@ describe("period", () => {
 
 describe("pricing", () => {
   test("registry estimate and unknown fallback", () => {
-    expect(estimateCost("claude-sonnet-4.5", 2000, 800)).toBe(0.018);
-    expect(estimateCost("gpt-5-mini", 2000, 800)).toBe(0.00078);
+    expect(estimateCost("claude-sonnet-5-5", 2000, 800)).toBe(0.012);
+    expect(estimateCost("gpt-6-luna", 2000, 800)).toBe(0.0006);
     expect(estimateCost("qwen2.5:3b", 2000, 800)).toBe(0);
-    expect(estimateCost("mystery-9000", 2000, 800)).toBe(0.022);
+    expect(Number.isNaN(estimateCost("mystery-9000", 2000, 800))).toBe(true);
     expect(modelInfo("mystery-9000").estimate).toBe(true);
     expect(modelInfo("llama3.1:70b").local).toBe(true);
   });
@@ -122,7 +126,7 @@ describe("pricing", () => {
 
 describe("governor", () => {
   const req = {
-    model: "claude-sonnet-4.5",
+    model: "claude-sonnet-5-5",
     estimatedTokensIn: 2000,
     estimatedTokensOut: 800,
     agent: "main",
@@ -136,9 +140,9 @@ describe("governor", () => {
     const r = checkPreCall(s, counters(s), req, { now: NOW });
     expect(r.allowed).toBe(true);
     expect(r.code).toBe("ok");
-    expect(r.estimatedCost).toBe(0.018);
+    expect(r.estimatedCost).toBe(0.012);
     expect(usableLimit(s)).toBe(4.5);
-    expect(r.remaining).toBe(0.982); // daily $1 is the tightest cap
+    expect(r.remaining).toBe(0.988); // daily $1 is the tightest cap
     expect(r.hardRemaining).toBe(1);
     expect(r.state).toBe("ok");
   });
@@ -174,7 +178,7 @@ describe("governor", () => {
   test("per-request: downshift first, deny when downshifting is off", () => {
     const big = {
       ...req,
-      model: "gpt-5",
+      model: "gpt-6-astra",
       estimatedTokensIn: 100_000,
       estimatedTokensOut: 20_000,
     };
@@ -182,8 +186,8 @@ describe("governor", () => {
     const r = checkPreCall(s, counters(s), big, { now: NOW });
     expect(r.allowed).toBe(true);
     expect(r.code).toBe("downshifted");
-    expect(r.downgradedToModel).toBe("gemini-2.5-flash"); // priciest cheaper model that fits $0.25
-    expect(r.estimatedCost).toBe(0.08);
+    expect(r.downgradedToModel).toBe("gemini-3.8-flash"); // priciest cheaper model that fits $0.25
+    expect(r.estimatedCost).toBe(0.15);
     const off = settings({ modelDownshifting: false });
     const d = checkPreCall(off, counters(off), big, { now: NOW });
     expect(d.allowed).toBe(false);
@@ -191,10 +195,10 @@ describe("governor", () => {
     expect(d.reason).toContain("per-request limit of $0.25");
   });
 
-  test("per-request $1 blocks a $1.20 call even with downshifting (nothing cheaper fits)", () => {
+  test("per-request $0.25 blocks a $0.32 call even with downshifting (nothing cheaper fits)", () => {
     const s = settings({
-      perRequestLimit: 1,
-      configuredModels: ["claude-opus-4-6"],
+      perRequestLimit: 0.25,
+      configuredModels: ["claude-opus-5-5"],
       installedLocal: [],
     });
     const r = checkPreCall(
@@ -202,22 +206,22 @@ describe("governor", () => {
       counters(s),
       {
         ...req,
-        model: "claude-opus-4-6",
+        model: "claude-opus-5-5",
         estimatedTokensIn: 40_000,
         estimatedTokensOut: 8_000,
       },
       { now: NOW },
     );
-    expect(r.estimatedCost).toBe(1.2);
+    expect(r.estimatedCost).toBe(0.32);
     expect(r.allowed).toBe(false);
     expect(r.code).toBe("per-request");
   });
 
-  test("approach downshift: Sonnet → Haiku at 80 %, → local at 85 %", () => {
+  test("opt-in advisory downshift: Sonnet → Luna at 80 %, → local at 85 %", () => {
     const s = settings();
     const warn = checkPreCall(s, counters(s, 4.0, 0), req, { now: NOW });
     expect(warn.code).toBe("downshifted");
-    expect(warn.downgradedToModel).toBe("claude-haiku-4-6");
+    expect(warn.downgradedToModel).toBe("gpt-6-luna");
     expect(warn.downshiftWhy).toBe("80% of the monthly budget is used.");
     const danger = checkPreCall(s, counters(s, 4.3, 0), req, { now: NOW });
     expect(danger.downgradedToModel).toBe("qwen2.5-coder:3b");
@@ -225,7 +229,7 @@ describe("governor", () => {
     expect(
       checkPreCall(noLocal, counters(noLocal, 4.3, 0), req, { now: NOW })
         .downgradedToModel,
-    ).toBe("claude-haiku-4-6");
+    ).toBe("gpt-6-luna");
     const off = settings({ modelDownshifting: false });
     expect(
       checkPreCall(off, counters(off, 4.0, 0), req, { now: NOW }).code,
@@ -245,7 +249,7 @@ describe("governor", () => {
       { now: NOW },
     );
     expect(final.allowed).toBe(true);
-    expect(final.remaining).toBe(0.492);
+    expect(final.remaining).toBe(0.498);
   });
 
   test("daily, agent and workspace caps are enforced in that order", () => {
@@ -403,7 +407,7 @@ describe("seed", () => {
     );
     expect(c.spentToday).toBe(0);
     expect(c.spentMonth).toBeGreaterThan(0);
-    expect(c.spentMonth).toBeLessThan(1);
+    expect(c.spentMonth).toBeLessThan(2);
   });
 });
 

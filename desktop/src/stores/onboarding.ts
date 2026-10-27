@@ -6,10 +6,16 @@
  * write-through) and flips `onboardingComplete`, which the router gate reads.
  */
 import { create } from 'zustand';
+import { toast } from 'sonner';
+import { prepareModelSetup, type SetupChoice } from '@/engine/setup';
 
 import type { GpuInfo, MicInfo, OllamaInfo, SystemInfo } from '@/lib/detect';
 import { applyTheme, type ThemeId } from '@/stores/theme';
-import { readSettingJSON, writeSettingJSON } from '@/lib/persistent-store';
+import {
+  purgeLegacyCredentialSettings,
+  readSettingJSON,
+  writeSettingJSON,
+} from '@/lib/persistent-store';
 
 export const ONBOARDING_KEY = 'xr.onboarding.complete';
 const ONBOARDED_AT_KEY = 'xr.onboarding.at';
@@ -18,10 +24,7 @@ const MODEL_KEY = 'xr.model.default';
 const VOICE_KEY = 'xr.voice';
 const INTEGRATIONS_KEY = 'xr.integrations.desired';
 
-export type ModelChoice =
-  | { source: 'local'; model: string; label: string }
-  | { source: 'cloud'; apiKey?: string }
-  | { source: 'skip' };
+export type ModelChoice = SetupChoice;
 
 export type DownloadState =
   | { status: 'idle' }
@@ -56,10 +59,24 @@ interface OnboardingState {
   nextStep: () => void;
   prevStep: () => void;
   goToStep: (n: number) => void;
-  setDetections: (d: Partial<Pick<OnboardingState, 'systemInfo' | 'gpu' | 'mics' | 'ollama' | 'checking'>>) => void;
+  setDetections: (
+    d: Partial<
+      Pick<
+        OnboardingState,
+        'systemInfo' | 'gpu' | 'mics' | 'ollama' | 'checking'
+      >
+    >
+  ) => void;
   setModelChoice: (c: ModelChoice) => void;
   setMic: (id: string | null) => void;
-  setVoicePrefs: (p: Partial<Pick<OnboardingState, 'noiseSuppression' | 'wakeWordEnabled' | 'ttsVoice' | 'micSelected'>>) => void;
+  setVoicePrefs: (
+    p: Partial<
+      Pick<
+        OnboardingState,
+        'noiseSuppression' | 'wakeWordEnabled' | 'ttsVoice' | 'micSelected'
+      >
+    >
+  ) => void;
   setUserName: (name: string) => void;
   setTheme: (t: ThemeId) => void;
   setBudget: (n: number) => void;
@@ -71,6 +88,11 @@ interface OnboardingState {
 
 /** First-run check — used by the router gate + splash. */
 export async function isOnboardingComplete(): Promise<boolean> {
+  const purged = await purgeLegacyCredentialSettings();
+  if (purged)
+    toast.warning(
+      'Removed legacy plaintext provider settings. Re-enter keys in Models & Providers and rotate keys previously stored by older builds.'
+    );
   const v = await readSettingJSON<boolean>(ONBOARDING_KEY);
   if (typeof v === 'boolean') return v;
   // localStorage fallback holds the raw JSON string
@@ -125,7 +147,10 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   prevStep: () =>
     set((s) => ({ step: Math.max(1, s.step - 1), direction: -1 })),
   goToStep: (n) =>
-    set((s) => ({ step: Math.max(1, Math.min(10, n)), direction: n > s.step ? 1 : -1 })),
+    set((s) => ({
+      step: Math.max(1, Math.min(10, n)),
+      direction: n > s.step ? 1 : -1,
+    })),
 
   setDetections: (d) => set(d),
   setModelChoice: (modelChoice) => set({ modelChoice }),
@@ -138,7 +163,10 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
   },
   setBudget: (n) => {
     // snap to the nearest allowed step
-    const closest = BUDGET_STEPS.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a), 5);
+    const closest = BUDGET_STEPS.reduce(
+      (a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a),
+      5
+    );
     set({ budget: closest });
   },
   toggleIntegration: (id) =>
@@ -162,11 +190,27 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
 
   finishOnboarding: async () => {
     const s = get();
-    await writeSettingJSON(ONBOARDING_KEY, true);
     await writeSettingJSON(ONBOARDED_AT_KEY, Date.now());
     await writeSettingJSON('xr.user.name', s.userName || 'You');
     await writeSettingJSON(BUDGET_KEY, s.budget);
-    await writeSettingJSON(MODEL_KEY, s.modelChoice);
+    const { useEngineStore } = await import('@/stores/engineStore');
+    const { saveProviderKeyToEngine, setEngineDefault } =
+      await import('@/engine/providers');
+    const prepared = await prepareModelSetup(s.modelChoice, {
+      saveSecret: async (input) => {
+        if (useEngineStore.getState().status !== 'up')
+          throw new Error(
+            'Engine not running; no key saved. Start it and retry, or choose guest mode.'
+          );
+        return saveProviderKeyToEngine(input);
+      },
+      setDefault: async (providerId, model) => {
+        if (useEngineStore.getState().status === 'up')
+          await setEngineDefault(providerId, model);
+      },
+    });
+    if (prepared.selection)
+      await writeSettingJSON(MODEL_KEY, prepared.selection);
     // Phase 13: the slider value becomes the enforced monthly limit.
     try {
       const { budgetBackend } = await import('@/budget/api');
@@ -182,24 +226,10 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     });
     await writeSettingJSON(INTEGRATIONS_KEY, s.desiredIntegrations);
     applyTheme(s.theme);
-    // Phase 14: the model choice reaches the engine, which is what actually
-    // answers. Best effort — when the engine is not up yet the desktop
-    // default still applies and Settings → Models can finish the job.
-    try {
-      const { useEngineStore } = await import('@/stores/engineStore');
-      if (useEngineStore.getState().status === 'up') {
-        const { saveProviderKeyToEngine, setEngineDefault, inferProviderFromKey } = await import('@/engine/providers');
-        if (s.modelChoice.source === 'local') {
-          await setEngineDefault('ollama', s.modelChoice.model);
-        } else if (s.modelChoice.source === 'cloud' && s.modelChoice.apiKey?.trim()) {
-          const providerId = inferProviderFromKey(s.modelChoice.apiKey);
-          if (providerId) await saveProviderKeyToEngine({ providerId, apiKey: s.modelChoice.apiKey.trim(), setDefault: true, probe: false });
-        }
-      }
-    } catch {
-      /* engine not reachable — Settings → Models & Providers can set it later */
-    }
-    set({ complete: true });
+    // Completion is after the engine's acknowledgement, never after a swallowed
+    // failed secret save. Transient key text is removed from wizard state.
+    await writeSettingJSON(ONBOARDING_KEY, true);
+    set({ complete: true, modelChoice: prepared.durableChoice });
   },
 }));
 

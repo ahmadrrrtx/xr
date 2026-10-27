@@ -12,9 +12,13 @@
  * The historical name `runAgent` is retained as a deprecated alias for
  * out-of-tree callers and is scheduled for removal in 2.0.0 (ADR-0002).
  */
+import { chatAttempt, streamAttempt } from "../providers/attempts.ts";
+import { attemptControls, ProviderBudgetAdmissionError } from "./model-accounting.ts";
+import { priceFor } from "../cost/pricing.ts";
 import { boundedHistory } from "./agent-history.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type {
+  ChatOptions,
   ApprovalRequest,
   Message,
   Mode,
@@ -84,10 +88,11 @@ export interface AgentDeps {
   approve(req: ApprovalRequest): Promise<boolean>;
   /** UI hook: budget exceeded — ask whether to raise it / stop. Returns extra budget or null to stop. */
   onOverBudget?(meter: string, reason: string): Promise<{ usd?: number; tokens?: number } | null>;
-  /** Spend ceiling for this task. */
+  /** Estimated spend/token admission thresholds; not a provider invoice ceiling. */
   budget?: Budget;
   /** Pricing for the active model. */
   pricing?: Pricing;
+  pricingOverrides?: Record<string, Pricing>;
   /** Safety rail: max loop iterations (prevents runaway). */
   maxSteps?: number;
   /** Domains the agent may contact (egress allow-list). */
@@ -312,6 +317,7 @@ function estimateTurnUsage(turn: ModelTurn, messages: Message[]): { inTokens: nu
 function finalizeTurn(turn: ModelTurn): ModelTurn {
   const hasContent = (turn.message ?? "").trim().length > 0;
   const hasToolCalls = (turn.toolCalls ?? []).length > 0;
+  if (turn.toolCalls.length > 64) turn.error = "Model returned too many tool calls; none executed";
   if (!hasContent && !hasToolCalls && !turn.error) {
     turn.done = false;
     turn.error = emptyTurnError(turn.status ?? "empty");
@@ -331,6 +337,7 @@ async function runModelTurn(
    * every consumer to correlate by position.
    */
   ids?: { sessionId: string; seqBase: number },
+  controls?: ChatOptions,
 ): Promise<{ turn: ModelTurn; streamed: boolean }> {
   const sink = deps.onStreamEvent;
   const toolCallId = (ordinal: number) =>
@@ -349,35 +356,38 @@ async function runModelTurn(
     const toolCalls: ToolCall[] = [];
     let usage: { inTokens: number; outTokens: number } | undefined;
     let finish = false;
+    let reportedDone: boolean | undefined, error: string | undefined, native: ModelTurn["native"], usageSource: ModelTurn["usageSource"], executing: ModelTurn["executing"];
 
-    const addToolCall = (tool: string, args: Record<string, unknown>) => {
-      const existing = toolCalls.some(
-        (t) => t.tool === tool && JSON.stringify(t.args) === JSON.stringify(args),
-      );
-      if (existing) return;
-      toolCalls.push({ tool, args });
-      sink?.({ type: "tool_call", id: toolCallId(toolCalls.length), tool, args });
+    const addToolCall = (tc: ToolCall) => {
+      if (tc.id && toolCalls.some(t => t.id === tc.id)) return;
+      toolCalls.push(tc);
+      sink?.({ type: "tool_call", id: toolCallId(toolCalls.length), tool: tc.tool, args: tc.args });
     };
-
-    for await (const chunk of chatStream.call(provider, messages, tools, { signal: deps.signal })) {
+    const stream = provider.managesAttempts ? chatStream!.call(provider, messages, tools, controls) : streamAttempt(provider, messages, tools, controls);
+    for await (const chunk of stream) {
       if (chunk.text) {
         text += chunk.text;
         sink?.({ type: "token", text: chunk.text });
       }
-      if (chunk.toolCall) addToolCall(chunk.toolCall.tool, chunk.toolCall.args);
+      if (chunk.toolCall) addToolCall(chunk.toolCall);
       if (chunk.usage) usage = chunk.usage;
       if (chunk.finish) finish = true;
+      if (chunk.native) native = chunk.native;
+      if (chunk.done !== undefined) reportedDone = chunk.done;
+      if (chunk.error) error = chunk.error;
+      if (chunk.usageSource) usageSource = chunk.usageSource;
+      if (chunk.providerId) executing = { providerId: chunk.providerId, modelId: chunk.model };
     }
 
     // Parse the accumulated envelope for the authoritative done/message/tool calls.
-    let done = finish;
+    let done = reportedDone ?? finish;
     let message = text;
     let status: ModelTurn["status"] = toolCalls.length > 0 ? "parsed" : "empty";
     try {
       const parsed = repairToTurn(text);
       status = parsed.status ?? status;
-      if (parsed.toolCalls.length > 0) {
-        for (const tc of parsed.toolCalls) addToolCall(tc.tool, tc.args);
+      if (!native && toolCalls.length === 0 && parsed.toolCalls.length > 0) {
+        for (const tc of parsed.toolCalls) addToolCall(tc);
       }
       // Phase 1 · turn contract reconciliation: `parsed.done` is authoritative
       // ONLY when we actually decoded an envelope (status === "parsed"). When the
@@ -386,8 +396,8 @@ async function runModelTurn(
       // transport's completion signal (`finish`) as `done` — the model did
       // produce real content, and overwriting it with repairToTurn's done:false
       // would loop every native/plain provider to max_steps.
-      if (typeof parsed.done === "boolean" && parsed.status === "parsed") done = parsed.done;
-      if (parsed.message) message = parsed.message;
+      if (!native && reportedDone === undefined && typeof parsed.done === "boolean" && parsed.status === "parsed") done = parsed.done;
+      if (!native && parsed.message) message = parsed.message;
       usage = usage ?? parsed.usage;
       // If there is real content but it produced no decodable turn, still a turn.
       if (message.trim().length > 0) status = "parsed";
@@ -395,18 +405,16 @@ async function runModelTurn(
       // Keep accumulated text + finish-based semantics.
     }
 
-    const turn: ModelTurn = finalizeTurn({ message, toolCalls, done, usage, status });
-    sink?.({ type: "usage", usage: { inTokens: turn.usage?.inTokens ?? 0, outTokens: turn.usage?.outTokens ?? 0 } });
+    const turn: ModelTurn = finalizeTurn({ message, toolCalls, done, usage, status, error, native, usageSource, executing });
     return { turn, streamed: true };
   }
 
   // Non-streaming path (honours streaming:false).
-  const turn = await provider.chat(messages, tools, { signal: deps.signal });
+  const turn = await (provider.managesAttempts ? provider.chat(messages, tools, controls) : chatAttempt(provider, messages, tools, controls));
   if (turn.message) sink?.({ type: "token", text: turn.message });
   for (const [i, tc] of (turn.toolCalls ?? []).entries()) {
     sink?.({ type: "tool_call", id: toolCallId(i + 1), tool: tc.tool, args: tc.args });
   }
-  if (turn.usage) sink?.({ type: "usage", usage: turn.usage });
   return { turn: finalizeTurn(turn), streamed: false };
 }
 
@@ -431,13 +439,15 @@ export function trimMessagesForCheckpoint(
   budgetChars = 40_000,
 ): { keep: Message[]; dropped: number } {
   const size = (arr: readonly Message[]): number =>
-    arr.reduce((n, m) => n + (m.content?.length ?? 0) + 24, 0);
+    arr.reduce((n, m) => n + JSON.stringify(m).length + 24, 0);
   let dropped = 0;
   const keep = [...messages];
   while (keep.length > 1 && size(keep) > budgetChars) {
     keep.shift();
     dropped++;
+    while (keep[0]?.role === "tool") { keep.shift(); dropped++; }
   }
+  if (!keep.length && dropped) keep.push({ role: "system", content: "Prior tool exchange omitted from checkpoint due to size. Re-check relevant state through authorized tools; do not assume omitted effects." });
   return { keep, dropped };
 }
 
@@ -487,9 +497,10 @@ export async function runAgentLoop(
   // the same SQLite connection), so global caps are race-safe across
   // processes from the very first step.
   const reservationRepo = new ReservationRepo(costStore instanceof CostRepo ? costStore.store : costStore);
+  const pricingTarget = { id: provider.id, model: provider.modelId };
   const governor = new CostGovernor(
     deps.budget ?? {},
-    deps.pricing ?? { inPerMTok: 0, outPerMTok: 0 },
+    deps.pricing ?? priceFor(provider.id, provider.modelId ?? ""),
     budgetManager,
     reservationRepo,
     sessionId,
@@ -884,7 +895,7 @@ export async function runAgentLoop(
       // must correspond to something actually happening.
       deps.onStreamEvent?.({ type: "status", status: "compacting_context" });
       const compacted = compact(messages, { maxChars: 16000, keepRecent: 6 });
-      deps.onStreamEvent?.({ type: "status", status: "generating" });
+      // Actual request admission emits generating once, with the executing identity.
       // GAP-001 — hand the caller's cancellation token to the transport itself.
       // Loop checkpoints alone could not interrupt an in-flight model call, so
       // a stalled provider was unrecoverable (reproduced live: Ctrl+C printed
@@ -893,7 +904,8 @@ export async function runAgentLoop(
       // Phase 05 — the turn prefers the provider's streaming variant so real
       // token deltas flow to the surface (see runModelTurn).
       const turnIds = { sessionId, seqBase: toolCallSeq };
-      let { turn, streamed } = await runModelTurn(provider, compacted, tools, deps, turnIds);
+      const controls = attemptControls({ provider, pricingTarget, pricing: deps.pricing, pricingOverrides: deps.pricingOverrides, budget: deps.budget, governor, sessionId, step: stepIdx, messages: compacted, tools, signal: deps.signal, sink: deps.onStreamEvent, audit: (e, d) => auditStore.audit(e, d, sessionId), recordCost: (p, m, i, o, usd, source) => costStore.recordCost(sessionId, p, m, i, o, usd, source) });
+      let { turn, streamed } = await runModelTurn(provider, compacted, tools, deps, turnIds, controls);
 
       // ── Phase 14 — empty turn with a tool catalog attached ─────────────────
       // Small local models (reproduced live with qwen2.5:0.5b on Ollama) often
@@ -913,7 +925,7 @@ export async function runAgentLoop(
         auditStore.audit("turn.empty_retry", { step: stepIdx, reason: "empty turn with tools; retrying without tools" }, sessionId);
         say(`\x1b[2m▸ retry  (step ${stepIdx + 1}/${maxSteps}) · empty turn — retrying without tools\x1b[0m`);
         deps.onStreamEvent?.({ type: "status", status: "generating", message: "Empty reply with tools attached — retrying without tools" });
-        ({ turn, streamed } = await runModelTurn(provider, compacted, [], deps, turnIds));
+        ({ turn, streamed } = await runModelTurn(provider, compacted, [], deps, turnIds, controls));
       }
 
       // ── Phase 1 · F-02/M-02/M-06 — strict turn contract ─────────────────────
@@ -953,41 +965,15 @@ export async function runAgentLoop(
       // the model produced real content. The strict turn contract only fails on
       // a turn with NO content AND NO tool calls, which `finalizeTurn` already
       // converts to `turn.error` (empty/undecodable) above.
-      // estimate it and flag it. A buggy/hostile provider cannot meter $0.
-      if (turn.usage) {
-        governor.record(turn.usage.inTokens, turn.usage.outTokens);
-        try {
-          const stepUsd =
-            (turn.usage.inTokens / 1_000_000) * (deps.pricing?.inPerMTok ?? 0) +
-            (turn.usage.outTokens / 1_000_000) * (deps.pricing?.outPerMTok ?? 0);
-          costStore.recordCost(sessionId, provider.id, provider.label, turn.usage.inTokens, turn.usage.outTokens, stepUsd, "provider");
-        } catch {
-          /* best-effort */
-        }
-      } else {
-        const est = estimateTurnUsage(turn, messages);
-        governor.record(est.inTokens, est.outTokens);
-        try {
-          const stepUsd =
-            (est.inTokens / 1_000_000) * (deps.pricing?.inPerMTok ?? 0) +
-            (est.outTokens / 1_000_000) * (deps.pricing?.outPerMTok ?? 0);
-          costStore.recordCost(sessionId, provider.id, provider.label, est.inTokens, est.outTokens, stepUsd, "estimated");
-        } catch {
-          /* best-effort */
-        }
-        auditStore.audit(
-          "usage.estimated",
-          { step: stepIdx, inTokens: est.inTokens, outTokens: est.outTokens },
-          sessionId,
-        );
-      }
+      // Every primary/retry/fallback was already metered by attemptControls,
+      // including errors and empty turns. Do not bill the final turn twice.
       sessionStore.addStep(`st_${randomUUID().slice(0, 8)}`, sessionId, stepIdx, "think", null, {
         message: turn.message,
         toolCalls: turn.toolCalls.map((c) => c.tool),
       });
 
       if (turn.message && !streamed) say(`\x1b[36m◆ ${turn.message}\x1b[0m`);
-      messages.push({ role: "assistant", content: JSON.stringify({ message: turn.message, tool_calls: turn.toolCalls, done: turn.done }) });
+      messages.push({ role: "assistant", content: JSON.stringify({ message: turn.message, tool_calls: turn.toolCalls, done: turn.done }), toolCalls: turn.toolCalls, native: turn.native });
 
       // A-19 — an abort that landed while the model turn was in flight takes
       // effect HERE, before any of its tool calls run.
@@ -1046,7 +1032,7 @@ export async function runAgentLoop(
           const msg = `tool "${call.tool}" blocked by capability policy: ${gated.gate.reason}`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, gated.gate.reason, "denied:policy") });
-          messages.push({ role: "tool", name: call.tool, content: msg });
+          messages.push({ role: "tool", name: call.tool, toolCallId: call.id, content: msg });
           continue;
         }
 
@@ -1061,7 +1047,7 @@ export async function runAgentLoop(
           const msg = `tool "${call.tool}" is not available in ${mode} mode`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, msg, "invalid:unknown-tool") });
-          messages.push({ role: "tool", name: call.tool, content: msg });
+          messages.push({ role: "tool", name: call.tool, toolCallId: call.id, content: msg });
           // Phase 06 — `tool.blocked` contract; `reason` = WHY (unknown tool: malformed, non-retryable).
           auditStore.audit("tool.blocked", { tool: call.tool, mode, reason: "unknown_tool" }, sessionId);
           continue;
@@ -1077,7 +1063,7 @@ export async function runAgentLoop(
           const msg = `tool "${call.tool}" received invalid arguments (expected an object)`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, msg, "invalid:arguments") });
-          messages.push({ role: "tool", name: call.tool, content: msg });
+          messages.push({ role: "tool", name: call.tool, toolCallId: call.id, content: msg });
           auditStore.audit("tool.malformed_call", { tool: call.tool, reason: "invalid_arguments" }, sessionId);
           continue;
         }
@@ -1115,13 +1101,13 @@ export async function runAgentLoop(
               sessionId,
             );
           }
-          messages.push({ role: "tool", name: call.tool, content: framed.content });
+          messages.push({ role: "tool", name: call.tool, toolCallId: call.id, content: framed.content });
           toolCtx.onToolUse?.({ tool: call.tool, ok: result.ok });
         } catch (e) {
           const msg = `tool error: ${(e as Error).message}`;
           say(`  \x1b[31m✗ ${msg}\x1b[0m`);
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, ...toolFailure(call.tool, (e as Error).message, "error:exception") });
-          messages.push({ role: "tool", name: call.tool, content: msg });
+          messages.push({ role: "tool", name: call.tool, toolCallId: call.id, content: msg });
           auditStore.audit("tool.error", { tool: call.tool, error: (e as Error).message }, sessionId);
           toolCtx.onToolUse?.({ tool: call.tool, ok: false, error: (e as Error).message });
         }
@@ -1171,7 +1157,15 @@ export async function runAgentLoop(
     // call can reject with ProviderAbortError; reporting that as a generic
     // error would be exactly the fake/false outcome XR forbids (the loop's own
     // contract is success | failed | cancelled, honestly stamped).
-    if (isCancellation(e)) return cancelledResult(stepIdx);
+    if (isCancellation(e) || (deps.signal?.aborted && (e as Error)?.name === "AbortError")) return cancelledResult(stepIdx);
+    if (e instanceof ProviderBudgetAdmissionError) {
+      sessionStore.endSession(sessionId, "stopped");
+      auditStore.audit("budget.stop", { reason: e.message, snapshot: governor.snapshot(), beforeRequest: true }, sessionId);
+      deps.onStreamEvent?.({ type: "status", status: "budget_stopped", message: e.message });
+      fireTask("budget_block", { reason: e.message });
+      return { sessionId, finalMessage: e.message, steps: stepIdx, stopped: "budget", meter: governor.meter(), routingDecisionId: deps.routingDecision?.decisionId };
+    }
+    deps.onStreamEvent?.({ type: "error", code: "provider.failure", message: (e as Error).message });
     sessionStore.endSession(sessionId, "error");
     fireTask("fail", { error: (e as Error).message.slice(0, 300) });
     auditStore.audit("session.error", { error: (e as Error).message }, sessionId);

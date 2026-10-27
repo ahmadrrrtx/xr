@@ -14,18 +14,22 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const ORIGINAL_HOME = process.env.XR_HOME;
 const TEST_HOME = mkdtempSync(join(tmpdir(), "xr-envovr-test-"));
 process.env.XR_HOME = TEST_HOME;
 
 const { applyEnvOverrides, ConfigSchema } = await import("../../src/config/config.ts");
 const { invalidateConfigCache, stopWatcher } = await import("../../src/config/cache.ts");
 const { buildProvider } = await import("../../src/providers/factory.ts");
+const { registerRuntimeSecretResolver } = await import("../../src/security/secret-broker.ts");
 
 const ENV_KEYS = [
   "XR_TEST_TARGET",
   "XR_TEST_BAD",
   "XR_TRUST_HARDENED",
   "OPENROUTER_BASE_URL",
+  "OPENROUTER_API_KEY",
+  "XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER",
 ];
 
 function savedEnv(): Map<string, string | undefined> {
@@ -176,9 +180,13 @@ describe("envOverrides — end-to-end run path (F3 regression)", () => {
         });
       },
     });
+    const unregister = registerRuntimeSecretResolver(() => "fixture-only-not-a-real-key");
     try {
       process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${server.port}/v1`;
+      process.env.OPENROUTER_API_KEY = "fixture-only-not-a-real-key";
+      process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER = "1";
       const mapped = ConfigSchema.parse({
+        defaults: {provider:"openrouter",model:"stub-model"},
         providers: { openrouter: { baseUrl: "https://openrouter.ai/api/v1" } },
         envOverrides: { "providers.openrouter.baseUrl": "OPENROUTER_BASE_URL" },
       });
@@ -190,6 +198,7 @@ describe("envOverrides — end-to-end run path (F3 regression)", () => {
       expect(turn.message).toContain("env override honored on the run path");
       expect(hits.some((h) => h.startsWith("POST /v1/chat/completions"))).toBe(true);
     } finally {
+      unregister();
       server.stop(true);
       restoreEnv(saved);
     }
@@ -197,6 +206,7 @@ describe("envOverrides — end-to-end run path (F3 regression)", () => {
 });
 
 afterAll(() => {
+  if (ORIGINAL_HOME === undefined) delete process.env.XR_HOME; else process.env.XR_HOME = ORIGINAL_HOME;
   stopWatcher();
   rmSync(TEST_HOME, { recursive: true, force: true });
 });

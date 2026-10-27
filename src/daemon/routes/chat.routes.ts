@@ -212,7 +212,7 @@ export function chatRoutes(): DaemonRoute[] {
                     send({ type: "tool_result", id: ev.id, tool: ev.tool, ok: ev.ok, result: ev.result, error: ev.error, reason: ev.reason, next: ev.next });
                     break;
                   case "usage":
-                    send({ type: "usage", usage: ev.usage });
+                    send({ type: "usage", usage: ev.usage, source: ev.source, provider: ev.provider, model: ev.model, usdEstimate: ev.usdEstimate ?? null, rateSource: ev.rateSource });
                     break;
                   case "status":
                     send({ type: "status", status: ev.status, provider: ev.provider, model: ev.model, message: ev.message });

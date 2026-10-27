@@ -1,3 +1,4 @@
+import { outputLimit, usagePair } from "./history.ts";
 /**
  * XR — Native Cohere Provider
  * 
@@ -111,6 +112,7 @@ export class CohereProvider implements Provider {
 
     const body: Record<string, unknown> = {
       model: this.model,
+      max_tokens: outputLimit(options?.maxOutputTokens),
       messages: cohereMessages,
       temperature: 0.3,
     };
@@ -123,7 +125,7 @@ export class CohereProvider implements Provider {
       // GAP-001 — bounded + cancellable (was: no signal, no timeout).
       const res = await guardedRequest(this.id, options, (signal) =>
         fetch(`${this.baseUrl}/chat`, {
-          method: "POST",
+          method: "POST", redirect: "error",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
@@ -134,16 +136,7 @@ export class CohereProvider implements Provider {
         }),
       );
 
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        try {
-          const err = JSON.parse(txt);
-          throw new Error(`Cohere API error: ${err.message ?? `HTTP ${res.status}`}`);
-        } catch (e) {
-          if ((e as Error).message.includes("Cohere")) throw e;
-          throw new Error(`Cohere ${res.status}: ${txt.slice(0, 200)}`);
-        }
-      }
+      if (!res.ok) { await res.body?.cancel(); throw new Error(`${this.id} API HTTP ${res.status}`); }
 
       const json: any = await res.json();
       
@@ -178,7 +171,7 @@ export class CohereProvider implements Provider {
       }
 
       const usage = json.meta?.tokens
-        ? { inTokens: json.meta.tokens.inputTokens ?? 0, outTokens: json.meta.tokens.outputTokens ?? 0 }
+        ? usagePair(json.meta.tokens.inputTokens, json.meta.tokens.outputTokens)
         : undefined;
 
       return {
@@ -188,67 +181,11 @@ export class CohereProvider implements Provider {
         usage,
       };
     } catch (e) {
-      // GAP-001 — this fallback was unconditional, so a user cancellation or a
-      // timeout silently issued a SECOND request to the v1 endpoint. Aborts
-      // are terminal.
       if (e instanceof ProviderAbortError) throw e;
-      // Fall back to /chat endpoint (v1)
-      return this.chatV1(messages, tools, apiKey);
+      // No hidden API-version/account/request fallback. A distinct transport
+      // must be explicitly configured and metered as its own attempt.
+      throw normalizeProviderError(e, this.id, this.model);
     }
-  }
-
-  private async chatV1(messages: Message[], tools: Tool[], apiKey: string): Promise<ModelTurn> {
-    const v1Messages: Array<{ role: string; content: string }> = [];
-
-    for (const msg of messages) {
-      if (msg.role === "system") {
-        v1Messages.push({ role: "system", content: msg.content });
-      } else if (msg.role === "tool") {
-        v1Messages.push({ role: "user", content: `[tool:${msg.name}] ${msg.content}` });
-      } else {
-        v1Messages.push({ role: msg.role, content: msg.content });
-      }
-    }
-
-    const body: Record<string, unknown> = {
-      model: this.model,
-      messages: v1Messages,
-      temperature: 0.3,
-    };
-
-    if (tools.length > 0) {
-      body.tools = tools.map(t => ({
-        name: t.name,
-        description: t.description,
-        parameter: { type: "object", properties: t.parameters },
-      }));
-    }
-
-    const res = await fetch("https://api.cohere.ai/v1/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`Cohere v1 ${res.status}: ${txt.slice(0, 200)}`);
-    }
-
-    const json: any = await res.json();
-    let message = json.text ?? "";
-    const toolCalls: { tool: string; args: Record<string, unknown> }[] = [];
-
-    if (json.tool_calls) {
-      for (const tc of json.tool_calls) {
-        toolCalls.push({ tool: tc.name, args: tc.parameters ?? {} });
-      }
-    }
-
-    return { ...repairToTurn(JSON.stringify({ message, tool_calls: toolCalls, done: toolCalls.length === 0 })), usage: undefined };
   }
 
   async *chatStream(
@@ -280,7 +217,7 @@ export class CohereProvider implements Provider {
     const start = Date.now();
     try {
       const res = await fetch(`${this.baseUrl}/models`, {
-        method: "GET",
+        method: "GET", redirect: "error",
         headers: { "Authorization": `Bearer ${apiKey}` },
       });
 

@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useBudgetStore } from '@/stores/budgetStore';
 
 import { CapsTab } from './components/CapsTab';
+import { EngineBudgetSummary } from './components/EngineBudgetSummary';
 import { HistoryTab } from './components/HistoryTab';
 import { ModelsTab } from './components/ModelsTab';
 import { OverviewTab } from './components/OverviewTab';
@@ -127,6 +128,7 @@ export default function BudgetScreen() {
   return (
     <div className="relative flex h-full min-h-0 flex-col" data-screen="budget">
       {/* Header */}
+      <EngineBudgetSummary />
       <div className="bg-bg-void sticky top-0 z-20 shrink-0">
         <div className="flex items-start justify-between gap-4 px-4 pt-4 pb-2">
           <div className="min-w-0">
@@ -134,8 +136,8 @@ export default function BudgetScreen() {
               Budget
             </h2>
             <p className="text-text-tertiary text-[13px]">
-              Spend caps are code-enforced — XR will never surprise you with a
-              bill.
+              Estimated admission guards, not a provider invoice ceiling. Engine
+              limits remain authoritative; the desktop can add restrictions.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">

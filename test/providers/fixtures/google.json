@@ -2,8 +2,8 @@
   "id": "google",
   "label": "Google Gemini",
   "kind": "hosted",
-  "tier": "free",
-  "transport": "openai-compat",
+  "tier": "cheap",
+  "transport": "gemini-generate-content",
   "capabilities": {
     "chat": true,
     "streaming": true,
@@ -15,5 +15,5 @@
   "usageReporting": "provider-reported with estimated fallback (F-13)",
   "keyEnv": "GOOGLE_API_KEY",
   "authType": "apiKey",
-  "note": "VCR-style capability contract fixture, generated from the provider catalog so it cannot drift. Offline contract tests validate declarations against the in-tree stub; live confirmation is provider-canaries when a key is configured."
+  "note": "Offline declaration/protocol fixture only. Free-tier eligibility is account dependent; native Gemini transport emits buffered whole turns, not SSE token timing."
 }

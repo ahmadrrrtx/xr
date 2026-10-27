@@ -11,8 +11,8 @@ const PublisherSchema = z.object({
   name: z.string().min(1).max(180),
   description: z.string().optional(),
   website: z.string().optional(),
-  verified: z.boolean().default(false),
-  trustLevel: z.enum(["unknown", "community", "reviewed", "verified", "official"]).default("unknown"),
+  verified: z.boolean().prefault(false),
+  trustLevel: z.enum(["unknown", "community", "reviewed", "verified", "official"]).prefault("unknown"),
   publicKeyPem: z.string().optional(),
   keyId: z.string().optional(),
 });
@@ -38,11 +38,11 @@ const VersionSchema = z.object({
 const SkillSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  description: z.string().default(""),
+  description: z.string().prefault(""),
   publisherId: z.string().min(1),
-  categories: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
-  versions: z.array(VersionSchema).default([]),
+  categories: z.array(z.string()).prefault([]),
+  tags: z.array(z.string()).prefault([]),
+  versions: z.array(VersionSchema).prefault([]),
   featured: z.boolean().optional(),
   verified: z.boolean().optional(),
   updatedAt: z.number(),
@@ -54,8 +54,8 @@ const RegistrySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   generatedAt: z.number(),
-  publishers: z.array(PublisherSchema).default([]),
-  skills: z.array(SkillSchema).default([]),
+  publishers: z.array(PublisherSchema).prefault([]),
+  skills: z.array(SkillSchema).prefault([]),
 });
 
 function isProbablyUrl(input: string): boolean {

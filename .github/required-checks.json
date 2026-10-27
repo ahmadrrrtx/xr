@@ -15,8 +15,8 @@
   ],
   "nonGatingLegs": [
     { "workflow": "journey.yml", "job": "cli", "leg": "windows-11-arm", "reason": "Windows ARM64 reported only (D4/D7)" },
-    { "workflow": "journey.yml", "job": "cli", "leg": "ubuntu-24.04-arm", "reason": "Linux ARM64 reported only: file tools fail closed there (blocked:filesystem-unsupported), disclosed in SUPPORT_MATRIX.md" },
-    { "workflow": "journey.yml", "job": "docker", "leg": "arm64", "reason": "Linux ARM64 reported only: file tools fail closed there (blocked:filesystem-unsupported), disclosed in SUPPORT_MATRIX.md" },
+    { "workflow": "journey.yml", "job": "cli", "leg": "ubuntu-24.04-arm", "reason": "Linux ARM64 reported only (owner decision 2026-10-22): prior file-authority failures; native evidence for the ABI correction is pending" },
+    { "workflow": "journey.yml", "job": "docker", "leg": "arm64", "reason": "Linux ARM64 reported only (owner decision 2026-10-22): prior file-authority failures; native evidence for the ABI correction is pending" },
     { "workflow": "desktop-app.yml", "job": "bundle", "leg": "windows-arm64", "reason": "Windows ARM64 reported only (D4/D7)" },
     { "workflow": "desktop-app.yml", "job": "journey", "leg": "windows-arm64", "reason": "Windows ARM64 reported only (D4/D7)" }
   ],

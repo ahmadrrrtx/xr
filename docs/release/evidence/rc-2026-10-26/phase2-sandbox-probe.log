@@ -1,0 +1,14 @@
+$ bun /home/user/xr-evidence/probe-sandbox.ts
+{
+  "available": true,
+  "privateTmpWrite": {
+    "ok": true,
+    "hostSibling": "SIBLING"
+  },
+  "readonlyRemount": {
+    "ok": false,
+    "exitCode": 32,
+    "stderr": "mount: /tmp/xr-audit-sandbox-UcGKGx/ro: permission denied.\n       dmesg(1) may have more information after failed mount system call.\n",
+    "hostCanary": "ORIGINAL"
+  }
+}

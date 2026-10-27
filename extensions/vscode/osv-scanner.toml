@@ -1,9 +1,23 @@
 # osv-scanner policy for extensions/vscode/package-lock.json (Supply Chain workflow).
 #
-# Same discipline as website/osv-scanner.toml: the ignore names its evidence and
+# Same discipline as website/osv-scanner.toml: every ignore names its evidence and
 # EXPIRES, so it is re-argued rather than forgotten.
+#
+# EMPTY ON PURPOSE (2026-10-27): the only entry here was GHSA-vfj7-8cjw-p6xm
+# (braces <=3.0.3 stack exhaustion). The advisory was WITHDRAWN upstream on
+# 2026-10-23, so osv-scanner no longer reports it and now fails the scan for an
+# unused ignore. Re-add an [[IgnoredVulns]] block only with a live advisory id,
+# an expiry date and the reason the finding is not reachable.
+
+# ── 2026-10-27 CI gate finding (published 2026-10-23) ────────────────────────
+# The advisory's fix (msal-node 7.1.0) is a MAJOR bump; the locked 5.x copy is
+# what @azure/identity's current release range asks for, and @azure/identity is
+# only reached through @vscode/vsce (the packaging tool, a devDependency). It is
+# never bundled into the .vsix and never ships to a user; the affected flow is
+# the packaging account's interactive browser login, not extension code. Remove
+# when @vscode/vsce moves to an @azure/identity that accepts msal-node 7.
 
 [[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
+id = "GHSA-xcx6-jx8p-x3h5"
 ignoreUntil = 2027-01-31
-reason = "braces <=3.0.3 stack-exhaustion DoS via deeply nested patterns (CVE-2026-93687). No fixed release on npm as of 2026-10-10 (3.0.3 is latest). Reached only through @vscode/vsce (packaging tool, devDependency) -> secretlint -> globby -> fast-glob -> micromatch. It is not bundled into the .vsix, and no untrusted input reaches the pattern strings. Remove when vsce drops that chain or braces ships a fix; re-argue at expiry."
+reason = "@azure/msal-node 5.6.0 — authorization-code flow parameter disclosure, fixed in 7.1.0 (major). Pulled only by @azure/identity <- @vscode/vsce (devDependency, packaging tool). No msal code is bundled into the .vsix and no extension code path calls it; the exposure is confined to the publisher's local `vsce` login. Major-bump tracking is upstream (@vscode/vsce -> @azure/identity range). Re-argue at expiry."

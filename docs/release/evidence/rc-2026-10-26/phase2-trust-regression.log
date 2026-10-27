@@ -1,0 +1,252 @@
+$ bun test test/trust
+bun test v1.4.2 (744846f84)
+
+test/trust.test.ts:
+(pass) estimate: local model is $0 [0.44ms]
+(pass) estimate: cloud model has nonzero cost and scales with steps [0.04ms]
+(pass) benchmark report can be signed and re-verified [17.96ms]
+
+test/trust/os-sandbox.test.ts:
+(pass) XR-LAUNCH-003 · native sandboxes are opt-in and remediation fits the OS > opt-in is off unless XR_OS_SANDBOX=experimental [0.04ms]
+(pass) XR-LAUNCH-003 · native sandboxes are opt-in and remediation fits the OS > macOS/Windows remediation never says to install bubblewrap [0.12ms]
+(pass) Seatbelt profile > deny-by-default, no network rule, paths only as parameters [0.14ms]
+(pass) Seatbelt profile > argv passes realpath'd roots via -D [0.55ms]
+(pass) Windows argument quoting (MSVCRT rules) > "plain" → "plain" [0.14ms]
+(pass) Windows argument quoting (MSVCRT rules) > "with space" → "\"with space\"" [0.01ms]
+(pass) Windows argument quoting (MSVCRT rules) > "say \"hi\"" → "\"say \\\"hi\\\"\""
+(pass) Windows argument quoting (MSVCRT rules) > "C:\\dir with space\\" → "\"C:\\dir with space\\\\\""
+(pass) Windows argument quoting (MSVCRT rules) > "" → "\"\""
+(skip) native sandbox smoke (linux) > (unnamed)
+(skip) native sandbox smoke (linux) > the mechanism is detected (self-check passed)
+(skip) native sandbox smoke (linux) > echo works
+(skip) native sandbox smoke (linux) > git status works in the workspace
+(skip) native sandbox smoke (linux) > in-workspace write succeeds
+(skip) native sandbox smoke (linux) > write beside the workspace is denied
+(skip) native sandbox smoke (linux) > reading a sibling secret is denied
+(skip) native sandbox smoke (linux) > network is denied
+(skip) native sandbox smoke (linux) > (unnamed)
+
+test/trust/namespace-confinement.test.ts:
+(pass) namespace sandbox (unshare) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged [105.03ms]
+(pass) namespace sandbox (unshare) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged [99.78ms]
+(pass) namespace sandbox (unshare) confines the filesystem > HOME, /root and other /home entries are absent [52.36ms]
+(pass) namespace sandbox (unshare) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch [104.66ms]
+(pass) namespace sandbox (unshare) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing [58.65ms]
+(pass) namespace sandbox (unshare) confines the filesystem > readonly grant cannot be remounted writable; mapped-root cannot regain capabilities [126.69ms]
+(pass) namespace sandbox (unshare) confines the filesystem > invalid limits and a blocked subtree never execute a host marker [3.51ms]
+(pass) namespace sandbox (unshare) confines the filesystem > hard CPU/address-space/process limits are applied and cannot be raised [50.96ms]
+(pass) namespace sandbox (unshare) confines the filesystem > aborting an isolated action kills its delayed descendant, with no later host effect [583.95ms]
+(pass) namespace sandbox (unshare) confines the filesystem > network is none [57.02ms]
+(skip) namespace sandbox (bwrap) confines the filesystem > bwrap unavailable on this host — nothing to verify
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > HOME, /root and other /home entries are absent
+(skip) namespace sandbox (bwrap) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch
+(skip) namespace sandbox (bwrap) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing
+(skip) namespace sandbox (bwrap) confines the filesystem > readonly grant cannot be remounted writable; mapped-root cannot regain capabilities
+(skip) namespace sandbox (bwrap) confines the filesystem > invalid limits and a blocked subtree never execute a host marker
+(skip) namespace sandbox (bwrap) confines the filesystem > hard CPU/address-space/process limits are applied and cannot be raised
+(skip) namespace sandbox (bwrap) confines the filesystem > aborting an isolated action kills its delayed descendant, with no later host effect
+(skip) namespace sandbox (bwrap) confines the filesystem > network is none
+(pass) unshare setup fails closed > no staging mountpoint → the script refuses before mounting anything [0.22ms]
+(pass) unshare setup fails closed > every mount step is checked (no '|| true' on a confinement step) [0.35ms]
+(pass) unshare setup fails closed > a setup failure is reported as a refusal and the command never runs [68.65ms]
+
+test/trust/migration-rollback.test.ts:
+(pass) XR 4.2 migration & rollback safety > a 4.1-shaped record (no trust field) still loads (backward-compatible read) [22.55ms]
+(pass) XR 4.2 migration & rollback safety > rollback safety: the Tier-1 fallback flag can NEVER enable an unsafe high-risk fallback [0.37ms]
+(pass) XR 4.2 migration & rollback safety > rollback safety: low-risk work still uses the fast in-process path [0.71ms]
+(pass) XR 4.2 migration & rollback safety > high-risk work stays blocked even without any trust config (default fail-closed) [0.10ms]
+
+test/trust/execution-integration.test.ts:
+(pass) XR 4.2 execution-fabric trust integration > without opts.trust, behavior is unchanged (XR 4.1 fast path) [5.66ms]
+(pass) XR 4.2 execution-fabric trust integration > Tier 0 trusted action stays on the fast in-process path [2.05ms]
+(pass) XR 4.2 execution-fabric trust integration > Tier 2 shell runs INSIDE the namespace sandbox with a verified boundary [58.95ms]
+(pass) XR 4.2 execution-fabric trust integration > a high-risk action with NO isolated path is BLOCKED (fail closed, run not called) [1.93ms]
+(pass) XR 4.2 execution-fabric trust integration > credentials are scoped, injected, redacted from the record, and revoked [52.80ms]
+(pass) XR 4.2 execution-fabric trust integration > high-risk action is BLOCKED when no Tier-2 backend is available (no silent in-process) [2.04ms]
+
+test/trust/verify.test.ts:
+(pass) XR 4.2 isolation verification (fail closed) > strong backend + contained cwd + net=none verifies for Tier 2 [0.18ms]
+(pass) XR 4.2 isolation verification (fail closed) > placement mismatch fails verification [0.06ms]
+(pass) XR 4.2 isolation verification (fail closed) > Tier 2 on a backend without a kernel boundary fails verification [0.04ms]
+(pass) XR 4.2 isolation verification (fail closed) > cwd outside the granted writable roots fails verification [0.14ms]
+(pass) XR 4.2 isolation verification (fail closed) > a granted path hitting a blocked sensitive path fails verification [0.12ms]
+(pass) XR 4.2 isolation verification (fail closed) > a Tier-2 network ALLOWLIST is not enforceable by local backends → fails closed [0.09ms]
+(pass) XR 4.2 isolation verification (fail closed) > missing required credentials fails verification [0.05ms]
+
+test/trust/ux.test.ts:
+{"ts":"2026-10-26T05:41:00.655Z","level":"info","event":"http.request","route":"trust.get","method":"GET","mount":"legacy","status":200,"duration_ms":73}
+(pass) XR 4.2 daemon trust routes > GET /api/trust reports backend availability + health (secret-free) [100.55ms]
+{"ts":"2026-10-26T05:41:00.668Z","level":"info","event":"http.request","route":"trust.get","method":"GET","mount":"legacy","status":401,"duration_ms":1}
+(pass) XR 4.2 daemon trust routes > GET /api/trust requires auth [12.26ms]
+{"ts":"2026-10-26T05:41:00.746Z","level":"info","event":"http.request","route":"trust.classify.post","method":"POST","mount":"legacy","status":200,"duration_ms":66}
+(pass) XR 4.2 daemon trust routes > POST /api/trust/classify returns tier + placement for a shell command [78.48ms]
+(pass) XR 4.2 `xr trust` CLI command > `xr trust` prints backend availability [73.91ms]
+(pass) XR 4.2 `xr trust` CLI command > `xr trust classify <cmd>` prints the risk tier + placement [72.76ms]
+(pass) XR 4.2 `xr trust` CLI command > `xr trust --json` emits stable JSON [74.55ms]
+
+test/trust/authority.test.ts:
+(pass) XR 4.2 task-scoped authority grants > a grant is bounded to execution, workspace, tier, and a TTL [0.09ms]
+(pass) XR 4.2 task-scoped authority grants > valid within window for the matching execution + workspace [0.12ms]
+(pass) XR 4.2 task-scoped authority grants > expired grant is invalid (stale authority) [0.06ms]
+(pass) XR 4.2 task-scoped authority grants > grant bound to a different execution is invalid (approval/action mismatch) [0.05ms]
+(pass) XR 4.2 task-scoped authority grants > grant bound to a different workspace is invalid (workspace switch) [0.02ms]
+(pass) XR 4.2 task-scoped authority grants > registry revoke invalidates a grant [0.03ms]
+(pass) XR 4.2 task-scoped authority grants > revokeWorkspace revokes every grant for a workspace only [0.09ms]
+(pass) XR 4.2 task-scoped authority grants > prune drops expired/revoked grants [0.03ms]
+
+test/trust/lattice.test.ts:
+(pass) Phase 4 · T1 — restrictiveness lattice ordering > the total order is firecracker > gvisor > container > namespace > restricted > in-process [0.03ms]
+(pass) Phase 4 · T1 — restrictiveness lattice ordering > atLeastAsRestrictive is reflexive and transitive [0.03ms]
+(pass) Phase 4 · T1 — escalate-only merge > mergePlacements always picks the more restrictive element [0.03ms]
+(pass) Phase 4 · T1 — escalate-only merge > mergeAllPlacements folds a list to the strongest [0.03ms]
+(pass) Phase 4 · T1 — escalate-only merge > a later weaker request can never downgrade the merged placement [0.10ms]
+(pass) Phase 4 · T1 — effective tier (classified × declared × run) > a capability-declared minimum can only raise the effective tier [0.09ms]
+(pass) Phase 4 · T1 — effective tier (classified × declared × run) > run escalation is monotone: once escalated, never downgraded [0.02ms]
+(pass) Phase 4 · T1 — effective tier (classified × declared × run) > the max of all three inputs wins [0.03ms]
+(pass) Phase 4 · T1 — tier sufficiency > tier2 never accepts in-process or restricted placements [0.03ms]
+(pass) Phase 4 · T1 — tier sufficiency > tier1 accepts restricted and above, never in-process [0.01ms]
+(pass) Phase 4 · T1 — tier sufficiency > escalateOnly refuses a downgrade below the required tier [0.07ms]
+(pass) Phase 4 · T1 — placement decision honors the lattice > tier2 with only in-process/restricted available is BLOCKED [0.03ms]
+(pass) Phase 4 · T1 — placement decision honors the lattice > gVisor/Firecracker are selected only when actually available (fail-closed) [0.04ms]
+(pass) Phase 4 · T1 — placement decision honors the lattice > hardened mode refuses the tier1 in-process fallback even when configured [0.05ms]
+
+test/trust/namespace.test.ts:
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > backend detects and claims an honest kernel boundary [0.08ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > filesystem is confined: workspace is writable, host paths are ABSENT [51.36ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > network is blocked inside the sandbox (no routes, no DNS) [62.52ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > ambient host environment is NOT inherited [52.12ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > output is bounded (truncation raises a boundary event) [54.08ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > task-scoped credentials are injected then revoked on cleanup [53.38ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > a Tier-2 network allowlist is refused (not enforceable inside the boundary) [0.39ms]
+
+test/trust/canonical-shell-isolation.test.ts:
+(pass) Phase 4 · T1/T3 — canonical-path shell isolation > a shell call through the real agent loop runs inside the namespace sandbox [173.49ms]
+(pass) Phase 4 · T1/T3 — canonical-path shell isolation > hardened mode: no enforceable backend → the command is BLOCKED and provably never runs [14.29ms]
+(pass) Phase 4 · T1/T3 — canonical-path shell isolation > hardened OFF remains the explicit, audited legacy path (compat) [20.01ms]
+
+test/trust/mcp-isolation.test.ts:
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + sandbox → isolated [0.05ms]
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + no sandbox + no ack → BLOCKED (fail closed)
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + no sandbox + explicit ack (hardened OFF) → confined (warned) [0.01ms]
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + no sandbox + explicit ack (hardened ON) → BLOCKED
+(pass) XR 4.2 MCP stdio placement decision (pure) > low-risk + sandbox + force → isolated; otherwise confined [0.02ms]
+(pass) XR 4.2 MCP server risk classification > stdio + apiKeyEnv → high [0.03ms]
+(pass) XR 4.2 MCP server risk classification > stdio + sensitive env key → high [0.05ms]
+(pass) XR 4.2 MCP server risk classification > stdio plain → low; http with key → low (network client, egress-gated elsewhere) [0.01ms]
+(pass) XR 4.2 isolated stdio spawn (real boundary) > buildIsolatedStdioSpawn produces a confined bwrap argv [0.09ms]
+(pass) XR 4.2 isolated stdio spawn (real boundary) > a spawned isolated stdio process is confined (host secret absent, no network) and passes stdio through [0.09ms]
+(pass) XR 4.2 isolated stdio spawn (real boundary) > a high-risk MCP stdio server connects INSIDE the sandbox (isIsolated=true) [0.05ms]
+
+test/trust/adapters-risk.test.ts:
+(pass) XR 4.2 adapter risk classification > MCP tool → Tier 1; MCP resource/prompt → Tier 0 [0.24ms]
+(pass) XR 4.2 adapter risk classification > control safe → Tier 0; sensitive → Tier 1; destructive → Tier 2 (host authority) [0.10ms]
+(pass) XR 4.2 adapter risk classification > plugin & skill operations → Tier 1 (VM/worker is not a hard boundary) [0.06ms]
+(pass) XR 4.2 adapter risk classification > a destructive control action is admitted in-process (host-authority gate), NOT blocked [71.70ms]
+
+test/trust/shell-tool.test.ts:
+(pass) XR 4.2 shell tool isolation wiring > uses the isolated runner with a Tier-2 request when available [2.17ms]
+(pass) XR 4.2 shell tool isolation wiring > fails closed when the isolated runner reports blocked [2.17ms]
+(pass) XR 4.2 shell tool isolation wiring > denied approval never reaches the runner [1.99ms]
+(pass) XR 4.2 shell tool isolation wiring > hardened mode: no runner wired → BLOCKED (never host-authority bash) [2.10ms]
+(pass) XR 4.2 shell tool isolation wiring > hardened OFF: falls back to the legacy in-process path when no runner is wired [6.71ms]
+
+test/trust/plugin-risk.test.ts:
+(pass) XR 4.2 plugin capability tier model > hard-boundary capabilities (shell/control/browser) are Tier 2 [0.05ms]
+(pass) XR 4.2 plugin capability tier model > secrets (credentials) is Tier 2; net is Tier 1 (egress-gated); reads are Tier 0 [0.03ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > a DECLARED shell the plugin is not granted is membrane-blocked and does not raise effective tier [0.11ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > granted net + fs:write → effective Tier 1 [0.02ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > granted secrets → effective Tier 2 with credential access [0.01ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > declared shell+control with nothing granted → all membrane-blocked, effective Tier 0 [0.02ms]
+(pass) XR 4.2 plugin trust request from permissions > granted secrets → credential-bearing, destructive classification [0.07ms]
+(pass) XR 4.2 plugin trust request from permissions > declared shell but only fs:read granted → NOT credential-bearing, classified by effective (granted) risk [0.03ms]
+
+test/trust/credentials.test.ts:
+(pass) XR 4.2 credential broker (reference-only, redacting) > register returns a reference that carries NO raw value [0.06ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > scopeFor exposes env var NAMES only, never values (safe to persist) [0.04ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > prepareInjection yields the raw value transiently for the sandbox env only [0.03ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > revoke deletes the raw value (has() false, injection empty) [0.03ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > redact scrubs a registered secret value from arbitrary text [0.03ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > redact scrubs generic secret shapes (AWS key, JWT) even if unregistered [0.17ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > assertClean throws when a registered secret leaks into serialized output [0.30ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > expired refs are not injected [0.10ms]
+
+test/trust/policy.test.ts:
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 0 always uses the fast in-process path [0.33ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 2 selects the namespace sandbox when available [0.12ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 2 selects a container when only a container is available [0.09ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > preferContainer chooses container when both are available [0.04ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 2 with NO enforceable backend is BLOCKED (never silently in-process) [0.03ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 1 uses the restricted process when available [0.03ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 1 without a process sandbox fails closed by default [0.03ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 1 may use an explicit, logged in-process fallback only when enabled [0.03ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > running as root voids restricted/isolated placement (refused) [0.04ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > the decision for Tier 2 is NEVER an admitted in_process placement [0.08ms]
+
+test/trust/tool-risk.test.ts:
+(pass) XR 4.2 requiresHostAuthority refinement > sandboxable Tier-2 with no executable is BLOCKED [0.19ms]
+(pass) XR 4.2 requiresHostAuthority refinement > Tier-2 that requires host authority is admitted in-process (elevated gate), NOT blocked [0.11ms]
+(pass) XR 4.2 requiresHostAuthority refinement > requiresHostAuthority is admitted in-process EVEN WITH NO sandbox backend (Windows scenario) [0.13ms]
+(pass) XR 4.2 per-tool risk declarations > read_file → Tier 0 [0.06ms]
+(pass) XR 4.2 per-tool risk declarations > write_file → Tier 1 [0.11ms]
+(pass) XR 4.2 per-tool risk declarations > fetch_url → Tier 1 with a network allowlist [0.10ms]
+(pass) XR 4.2 per-tool risk declarations > git_status → Tier 0; git_commit → Tier 1 [0.08ms]
+(pass) XR 4.2 tools execute through the trust gate (end-to-end, non-blocking) > read_file runs and is recorded as Tier 0 / in_process_ok [2.81ms]
+(pass) XR 4.2 tools execute through the trust gate (end-to-end, non-blocking) > write_file runs and is recorded as Tier 1 policy-only (admitted, not blocked) [4.53ms]
+
+test/trust/classify.test.ts:
+(pass) XR 4.2 deterministic risk classifier > read-only / pure action is Tier 0 (fast path) [0.08ms]
+(pass) XR 4.2 deterministic risk classifier > workspace filesystem write escalates to at least Tier 1 [0.06ms]
+(pass) XR 4.2 deterministic risk classifier > shell / process spawn is Tier 2 [0.05ms]
+(pass) XR 4.2 deterministic risk classifier > arbitrary/interpreted code is Tier 2 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > credential requirement is Tier 2 with task-scoped credentials [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > irreversible external write is Tier 2 + elevated approval [0.04ms]
+(pass) XR 4.2 deterministic risk classifier > untrusted/hostile content is Tier 2 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > control-plane 'destructive' maps to Tier 2; 'sensitive' to at least Tier 1 [1.28ms]
+(pass) XR 4.2 deterministic risk classifier > network access (without higher triggers) is at least Tier 1 with an allowlist [0.11ms]
+(pass) XR 4.2 deterministic risk classifier > touching paths outside the workspace escalates to at least Tier 1 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > dry-run performs no side effects and stays Tier 0 [0.03ms]
+(pass) XR 4.2 deterministic risk classifier > classification is deterministic (same input → same tier and reasons) [0.04ms]
+(pass) XR 4.2 deterministic risk classifier > a model cannot supply a tier to downgrade (no tier input field; objective facts decide) [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > blocked paths include sensitive host credential locations [0.05ms]
+(pass) XR 4.2 deterministic risk classifier > Tier 2 derives stricter resource limits than Tier 0 [0.04ms]
+
+test/trust/guarantee-matrix.test.ts:
+(pass) Phase 4 · T2 — guarantee matrix from live probes > rows are consistent with the live policy decision on THIS host [135.96ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > no unsupported claim: a backend that reports no kernel boundary never shows one [65.91ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > tier2 with NO enforceable backend reports fail-closed=true [0.15ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > backends list matches the manager's live availability [128.65ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > committed matrix doc is machine-generated and structurally complete (drift guard) [73.65ms]
+
+test/trust/persistence.test.ts:
+(pass) XR 4.2 trust metadata durability > trust block (tier, decision, verification, cleanup) round-trips through the repo [55.54ms]
+[suite-tmp] 9 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 9
+
+20 tests skipped:
+(skip) native sandbox smoke (linux) > (unnamed)
+(skip) native sandbox smoke (linux) > the mechanism is detected (self-check passed)
+(skip) native sandbox smoke (linux) > echo works
+(skip) native sandbox smoke (linux) > git status works in the workspace
+(skip) native sandbox smoke (linux) > in-workspace write succeeds
+(skip) native sandbox smoke (linux) > write beside the workspace is denied
+(skip) native sandbox smoke (linux) > reading a sibling secret is denied
+(skip) native sandbox smoke (linux) > network is denied
+(skip) native sandbox smoke (linux) > (unnamed)
+(skip) namespace sandbox (bwrap) confines the filesystem > bwrap unavailable on this host — nothing to verify
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > HOME, /root and other /home entries are absent
+(skip) namespace sandbox (bwrap) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch
+(skip) namespace sandbox (bwrap) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing
+(skip) namespace sandbox (bwrap) confines the filesystem > readonly grant cannot be remounted writable; mapped-root cannot regain capabilities
+(skip) namespace sandbox (bwrap) confines the filesystem > invalid limits and a blocked subtree never execute a host marker
+(skip) namespace sandbox (bwrap) confines the filesystem > hard CPU/address-space/process limits are applied and cannot be raised
+(skip) namespace sandbox (bwrap) confines the filesystem > aborting an isolated action kills its delayed descendant, with no later host effect
+(skip) namespace sandbox (bwrap) confines the filesystem > network is none
+
+ 156 pass
+ 20 skip
+ 0 fail
+ 534 expect() calls
+Ran 176 tests across 21 files. [4.13s]

@@ -75,7 +75,7 @@ describe("Phase 5 · locality invariant on the new routing-quality paths", () =>
       }
     } else {
       // honest refusal, never silent cloud
-      expect(decision.selected?.providerId).not.toMatch(/openai|anthropic|groq|google|mistral/);
+      expect(decision.selected).toBeUndefined();
       expect(decision.humanHandoff?.required).toBe(true);
     }
   });

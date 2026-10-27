@@ -35,9 +35,9 @@
  * - getSecretAsync uses non-blocking subprocesses for OS backends.
  */
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from "node:crypto";
 import { envSecretCompatEnabled } from "./env-compat.ts";
 import { detectOsBackend, osBackendFor, type OsBackendId, type OsSecretBackend } from "./secret-backends.ts";
 
@@ -84,14 +84,27 @@ export function __setOsBackendForTests(backend: OsSecretBackend | null | undefin
   clearSecretMemo();
 }
 
+/** Desktop launches explicitly opt into a per-home OS-store service. Separate
+ * directories alone do NOT isolate macOS/Linux global keychain entries. CLI
+ * behavior remains compatible; no shared CLI entry is copied/deleted. */
+export function secretServiceNamespace(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.XR_SECRET_NAMESPACE === "desktop") {
+    const home = resolve(env.XR_HOME ?? join(homedir(), ".xr-desktop"));
+    return `xr-desktop-${createHash("sha256").update(home).digest("hex").slice(0, 24)}`;
+  }
+  if (env.XR_SECRET_NAMESPACE && env.XR_SECRET_NAMESPACE !== "cli") throw new Error("Unsupported credential namespace; refusing ambiguous OS-store access");
+  return "xr";
+}
+
 /** The OS backend writes go to, or null (file mode / no usable OS store). Spawn-free. */
 export function activeOsBackend(): OsSecretBackend | null {
   if (secretBackendMode() === "file") return null;
   if (osOverride !== undefined) return osOverride;
-  const key = `${process.platform}|${process.env.PATH ?? ""}`;
+  const service = secretServiceNamespace();
+  const key = `${process.platform}|${process.env.PATH ?? ""}|${service}`;
   if (!osCache || osCache.key !== key) {
     const id = detectOsBackend();
-    osCache = { key, backend: id ? osBackendFor(id, secretDir) : null };
+    osCache = { key, backend: id ? osBackendFor(id, secretDir, service) : null };
   }
   return osCache.backend;
 }
@@ -476,20 +489,31 @@ function forget(name: string): void {
   delete process.env[name];
 }
 
+/** Removal is acknowledged only after the recorded OS backend confirms it.
+ * Never erase the index/memo and claim success after a locked/unavailable OS
+ * store refused deletion. This cannot revoke vendor keys or erase backups. */
 export async function removeSecretAsync(name: string): Promise<SecretBackend> {
   assertSafeName(name);
+  const recorded = readSecretIndex().entries[name];
   const os = activeOsBackend();
-  if (os) await os.remove(name).catch(() => false);
+  if (recorded && recorded !== "file" && os?.id !== recorded) throw new Error(`Stored credential backend ${recorded} is unavailable; removal was not confirmed`);
+  if (os && (recorded === os.id || await os.get(name))) {
+    if (!(await os.remove(name)) || await os.get(name)) throw new Error("OS credential deletion was not confirmed; saved metadata retained for recovery");
+  }
   forget(name);
-  return os?.id ?? "file";
+  return recorded ?? os?.id ?? "file";
 }
 
 export function removeSecret(name: string): SecretBackend {
   assertSafeName(name);
+  const recorded = readSecretIndex().entries[name];
   const os = activeOsBackend();
-  if (os) { try { os.removeSync(name); } catch {} }
+  if (recorded && recorded !== "file" && os?.id !== recorded) throw new Error(`Stored credential backend ${recorded} is unavailable; removal was not confirmed`);
+  if (os && (recorded === os.id || os.getSync(name))) {
+    if (!os.removeSync(name) || os.getSync(name)) throw new Error("OS credential deletion was not confirmed; saved metadata retained for recovery");
+  }
   forget(name);
-  return os?.id ?? "file";
+  return recorded ?? os?.id ?? "file";
 }
 
 export function clearSecretMemo(): void {

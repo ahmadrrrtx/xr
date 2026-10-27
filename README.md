@@ -7,7 +7,7 @@
 **An AI agent runtime you can actually audit.**
 
 *Give it a task. It plans, uses tools, and changes real things on your machine — under a policy
-gate, your approval, a spend ceiling, and a hash-chained log you can verify offline.*
+gate, your approval, estimated-spend admission checks, and a hash-chained log you can verify offline.*
 
 [![CI](https://github.com/ahmadrrrtx/xr/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/ci.yml)
 [![Cross-platform](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml)
@@ -27,28 +27,20 @@ gate, your approval, a spend ceiling, and a hash-chained log you can verify offl
 <!-- XR:RELEASE-IDENTITY:BEGIN -->
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
-**Version:** `1.1.0 (Graphite)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+**Version:** `1.1.1-rc.1 (Graphite)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
-> **Status: Public beta.** @rrrtx/xr is labelled beta until every launch gate in
-> [docs/release/launch-gates.json](docs/release/launch-gates.json) is green (decision D2; enforced by
-> `bun run claim-lint`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)
-> and the [known-limitations register](docs/release/1.1.0/known-limitations.md) before relying on it
-> for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on `PATH`;
-> the installer binaries do not. Desktop app builds are not code-signed yet. On macOS and Windows the
-> agent's shell commands need Docker/Podman (or the experimental `XR_OS_SANDBOX=experimental` sandbox)
-> and are refused otherwise; never approve commands in a repository you do not trust. Feedback goes
-> through the [beta loop](docs/release/BETA.md).
+> **Status: Developer preview.** APIs and behavior may change without a deprecation cycle. Check the [known-limitations register](docs/release/1.1.1-rc.1/known-limitations.md) and [candidate evidence](docs/release/RELEASE_CANDIDATE_REPORT.md); a preview label does not imply native-platform or signing validation.
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
 > is stamped from that one file, and CI fails the build if any of them drift
 > (Constitution Article XXII.1).
 
-XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.
+XR — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.
 
 **Bundled skills:** 65 (counted from `skills/` at release time.)
 
-> **Install channels currently serve `1.0.0`.** `1.1.0` is the in-development line on
+> **Install channels currently serve `1.0.0`.** `1.1.1-rc.1` is the in-development line on
 > `main`: it is not published to npm, Homebrew, WinGet, Scoop or Docker, and the installers below
 > install `1.0.0`. See [docs/release/CHANNELS.md](docs/release/CHANNELS.md#public-version).
 <!-- XR:RELEASE-IDENTITY:END -->
@@ -61,7 +53,7 @@ XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tam
 
 **The desktop shell, real build.** Every action below passes the same approval, policy and
 budget gates — no matter which surface you are on.
-[All five desktop bundle legs (Windows x64/arm64, macOS arm64/x64, Linux) build green in CI.](docs/release/DESKTOP-SUPPORT-MATRIX.md)
+[Historical desktop packaging evidence](docs/release/DESKTOP-SUPPORT-MATRIX.md) does not validate this modified candidate. Native platform/signing results are blocked or not run; see the [candidate report](docs/release/RELEASE_CANDIDATE_REPORT.md).
 
 </div>
 

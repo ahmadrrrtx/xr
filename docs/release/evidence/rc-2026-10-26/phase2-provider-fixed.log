@@ -1,0 +1,502 @@
+$ bun test test/providers test/supply-chain test/api
+bun test v1.4.2 (744846f84)
+
+test/supply-chain/supply-chain.test.ts:
+(pass) Phase 4 · T6 — SBOM generation > the locked dependency set parses with integrity hashes [1.73ms]
+(pass) Phase 4 · T6 — SBOM generation > renderCycloneDx emits a valid CycloneDX 1.5 document [0.60ms]
+(pass) Phase 4 · T6 — SBOM generation > the CLI generator runs end to end [16.35ms]
+(pass) Phase 4 · T6 — release verification > a tampered artifact FAILS the sha256 check [1.31ms]
+(pass) Phase 4 · T6 — release verification > an untouched artifact PASSES integrity + a local Ed25519 signature [5.07ms]
+(pass) Phase 4 · T6 — release verification > a wrong local signature FAILS [0.57ms]
+(pass) Phase 4 · T6 — release verification > no signature input → NO claim is made (fails closed) [0.20ms]
+
+test/supply-chain/audit-parser.test.ts:
+(pass) RC-207 scanner output fails closed > accepts explicit empty success and structured high findings [0.18ms]
+(pass) RC-207 scanner output fails closed > transport errors, missing severity, invalid envelopes and unknown levels are never zero findings [0.19ms]
+
+test/api/compat.test.ts:
+(pass) BREAKING: removed operation is flagged [0.51ms]
+(pass) BREAKING: response property removed is flagged [0.06ms]
+(pass) BREAKING: request property becomes required is flagged [0.09ms]
+(pass) BREAKING: property type change is flagged [0.29ms]
+(pass) COMPATIBLE: new operation + new optional field + new response field pass [0.07ms]
+(pass) LIVE: committed contract produces zero breaking changes against the registry [54.33ms]
+
+test/api/recovery-status.test.ts:
+{"ts":"2026-10-26T05:49:57.118Z","level":"info","event":"http.request","route":"recovery.status.get","method":"GET","mount":"legacy","status":200,"duration_ms":4}
+(pass) Phase 06 · recovery.status.get (spec steps 34/35) > returns recovery list + summary + honest rpoRto [9.31ms]
+{"ts":"2026-10-26T05:49:57.120Z","level":"info","event":"http.request","route":"recovery.status.get","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:57.125Z","level":"info","event":"http.request","route":"recovery.status.get","method":"GET","mount":"v1","status":200,"duration_ms":1}
+(pass) Phase 06 · recovery.status.get (spec steps 34/35) > legacy /api/v1 mount resolves identically (Phase 02 invariant preserved) [5.83ms]
+{"ts":"2026-10-26T05:49:57.126Z","level":"info","event":"http.request","route":"recovery.status.get","method":"GET","mount":"legacy","status":401,"duration_ms":1}
+(pass) Phase 06 · recovery.status.get (spec steps 34/35) > auth enforced: no token → 401 [1.09ms]
+
+test/api/dashboard-routes.test.ts:
+(pass) dashboard route coverage > the parser actually found the dashboard's call sites [0.05ms]
+(pass) dashboard route coverage > every dashboard call site resolves to a served route (no dashboard 404s) [1.12ms]
+(pass) dashboard route coverage > the pre-existing unrouted allowlist never grows, and every entry is still real [0.30ms]
+(pass) dashboard route coverage > every dashboard call site ALSO works on the legacy mount (compat safety net) [0.74ms]
+(pass) dashboard route coverage > the dashboard only calls /api paths (no absolute or cross-origin URLs) [0.27ms]
+(pass) dashboard route coverage > the client's v1() rewrite is idempotent and never double-prefixes [0.28ms]
+(pass) dashboard route coverage > skills and plugins call sites specifically resolve under the v1 mount [0.56ms]
+
+test/api/contract.test.ts:
+{"ts":"2026-10-26T05:49:57.243Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":98}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/skills → 200 JSON (never a silent 404) [102.39ms]
+{"ts":"2026-10-26T05:49:57.266Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":20}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/skills/health → 200 JSON (never a silent 404) [20.29ms]
+{"ts":"2026-10-26T05:49:57.327Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":61}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/skills/marketplace → 200 JSON (never a silent 404) [64.07ms]
+{"ts":"2026-10-26T05:49:57.332Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":1}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/plugins → 200 JSON (never a silent 404) [1.86ms]
+{"ts":"2026-10-26T05:49:57.333Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":1}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/plugins/catalog → 200 JSON (never a silent 404) [1.05ms]
+{"ts":"2026-10-26T05:49:57.380Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":47}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/skills returns the skills runtime shape [48.47ms]
+{"ts":"2026-10-26T05:49:57.401Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":19}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/skills/health returns the runtime health envelope [19.50ms]
+{"ts":"2026-10-26T05:49:57.464Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":63}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/skills/marketplace returns marketplace aggregates [65.25ms]
+{"ts":"2026-10-26T05:49:57.467Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/plugins returns the plugin summary shape [1.33ms]
+{"ts":"2026-10-26T05:49:57.468Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression) > GET /api/v1/plugins/catalog resolves the CATALOG route, not plugin id 'catalog' [0.95ms]
+{"ts":"2026-10-26T05:49:57.512Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":43}
+(pass) Phase 02 — legacy mount stays functional, with deprecation headers > GET /api/skills → 200 + deprecation headers [44.60ms]
+{"ts":"2026-10-26T05:49:57.530Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":16}
+(pass) Phase 02 — legacy mount stays functional, with deprecation headers > GET /api/skills/health → 200 + deprecation headers [17.17ms]
+{"ts":"2026-10-26T05:49:57.583Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":52}
+(pass) Phase 02 — legacy mount stays functional, with deprecation headers > GET /api/skills/marketplace → 200 + deprecation headers [53.07ms]
+{"ts":"2026-10-26T05:49:57.584Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+(pass) Phase 02 — legacy mount stays functional, with deprecation headers > GET /api/plugins → 200 + deprecation headers [0.78ms]
+{"ts":"2026-10-26T05:49:57.585Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":1}
+(pass) Phase 02 — legacy mount stays functional, with deprecation headers > GET /api/plugins/catalog → 200 + deprecation headers [0.73ms]
+{"ts":"2026-10-26T05:49:57.631Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":46}
+(pass) Phase 02 — legacy mount stays functional, with deprecation headers > legacy Link header advertises the v1 alternate for the SAME resource [47.24ms]
+{"ts":"2026-10-26T05:49:57.668Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":35}
+(pass) Phase 02 — legacy mount stays functional, with deprecation headers > v1 responses carry NO deprecation headers [36.37ms]
+{"ts":"2026-10-26T05:49:57.711Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":42}
+{"ts":"2026-10-26T05:49:57.748Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":36}
+(pass) Phase 02 — canonicalization equivalence (v1 ≡ legacy) > /api/v1/skills and /api/skills resolve to the same canonical route [80.66ms]
+{"ts":"2026-10-26T05:49:57.764Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":14}
+{"ts":"2026-10-26T05:49:57.788Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":24}
+(pass) Phase 02 — canonicalization equivalence (v1 ≡ legacy) > /api/v1/skills/health and /api/skills/health resolve to the same canonical route [38.82ms]
+{"ts":"2026-10-26T05:49:57.832Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":44}
+{"ts":"2026-10-26T05:49:57.887Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":49}
+(pass) Phase 02 — canonicalization equivalence (v1 ≡ legacy) > /api/v1/skills/marketplace and /api/skills/marketplace resolve to the same canonical route [102.68ms]
+{"ts":"2026-10-26T05:49:57.892Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:57.892Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+(pass) Phase 02 — canonicalization equivalence (v1 ≡ legacy) > /api/v1/plugins and /api/plugins resolve to the same canonical route [1.68ms]
+{"ts":"2026-10-26T05:49:57.893Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:57.894Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":1}
+(pass) Phase 02 — canonicalization equivalence (v1 ≡ legacy) > /api/v1/plugins/catalog and /api/plugins/catalog resolve to the same canonical route [1.50ms]
+{"ts":"2026-10-26T05:49:57.899Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":404,"duration_ms":4}
+(pass) Phase 02 — unknown sub-paths are explicit, not silent > unknown skills sub-path → adapter's own 404 envelope (not the router fallback) [4.78ms]
+{"ts":"2026-10-26T05:49:57.900Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":404,"duration_ms":1}
+(pass) Phase 02 — unknown sub-paths are explicit, not silent > unknown plugins sub-path → adapter's own 404 envelope [1.10ms]
+{"ts":"2026-10-26T05:49:57.901Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+(pass) Phase 02 — unknown sub-paths are explicit, not silent > a genuinely unknown namespace still gets the router 404 [1.76ms]
+{"ts":"2026-10-26T05:49:57.902Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/v1/skills without a bearer token → 401 [0.81ms]
+{"ts":"2026-10-26T05:49:57.903Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/v1/skills/health without a bearer token → 401 [0.78ms]
+{"ts":"2026-10-26T05:49:57.904Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/v1/skills/marketplace without a bearer token → 401 [0.82ms]
+{"ts":"2026-10-26T05:49:57.905Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":401,"duration_ms":1}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/v1/plugins without a bearer token → 401 [0.65ms]
+{"ts":"2026-10-26T05:49:57.905Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/v1/plugins/catalog without a bearer token → 401 [0.75ms]
+{"ts":"2026-10-26T05:49:57.906Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/skills without a bearer token → 401 [0.68ms]
+{"ts":"2026-10-26T05:49:57.907Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/skills/health without a bearer token → 401 [0.64ms]
+{"ts":"2026-10-26T05:49:57.907Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/skills/marketplace without a bearer token → 401 [0.85ms]
+{"ts":"2026-10-26T05:49:57.908Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/plugins without a bearer token → 401 [0.52ms]
+{"ts":"2026-10-26T05:49:57.909Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > GET /api/plugins/catalog without a bearer token → 401 [0.60ms]
+{"ts":"2026-10-26T05:49:57.910Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"legacy","status":200,"duration_ms":1}
+{"ts":"2026-10-26T05:49:57.910Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > health remains the ONLY open API path, on both mounts [1.75ms]
+{"ts":"2026-10-26T05:49:57.911Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":401,"duration_ms":0}
+(pass) Phase 02 — authentication is unchanged by canonicalization > an invalid token is rejected on the fixed v1 skills route [0.70ms]
+{"ts":"2026-10-26T05:49:57.997Z","level":"info","event":"http.request","route":"overview.get","method":"GET","mount":"v1","status":200,"duration_ms":85}
+(pass) Phase 02 — no route confusion / traversal via the mount prefix > a traversal attempt cannot escape the skills namespace into another handler [85.92ms]
+{"ts":"2026-10-26T05:49:58.007Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+(pass) Phase 02 — no route confusion / traversal via the mount prefix > a doubled version prefix is NOT silently accepted as canonical [10.19ms]
+{"ts":"2026-10-26T05:49:58.010Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":404,"duration_ms":2}
+(pass) Phase 02 — no route confusion / traversal via the mount prefix > the v1 prefix is not honoured mid-path [2.36ms]
+
+test/api/perf-sanity.test.ts:
+{"ts":"2026-10-26T05:49:58.094Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":70}
+{"ts":"2026-10-26T05:49:58.140Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:49:58.182Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":41}
+{"ts":"2026-10-26T05:49:58.233Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":51}
+{"ts":"2026-10-26T05:49:58.278Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:49:58.319Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":41}
+{"ts":"2026-10-26T05:49:58.365Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:49:58.405Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":39}
+{"ts":"2026-10-26T05:49:58.449Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":43}
+{"ts":"2026-10-26T05:49:58.488Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":39}
+{"ts":"2026-10-26T05:49:58.533Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:49:58.583Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":50}
+{"ts":"2026-10-26T05:49:58.619Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":36}
+{"ts":"2026-10-26T05:49:58.653Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":34}
+{"ts":"2026-10-26T05:49:58.700Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":46}
+{"ts":"2026-10-26T05:49:58.738Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":38}
+{"ts":"2026-10-26T05:49:58.776Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":38}
+{"ts":"2026-10-26T05:49:58.829Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":52}
+{"ts":"2026-10-26T05:49:58.878Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":48}
+{"ts":"2026-10-26T05:49:58.929Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":51}
+{"ts":"2026-10-26T05:49:58.982Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":52}
+[perf-sanity] /api/v1/skills p95=52.3ms budget=500ms
+(pass) Phase 02 performance sanity (PASS/FAIL only) > /api/v1/skills p95 < 500ms [958.49ms]
+{"ts":"2026-10-26T05:49:58.983Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-26T05:49:58.983Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.984Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-26T05:49:58.984Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.984Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.985Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.986Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-26T05:49:58.986Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.986Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.987Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.988Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.988Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.989Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.989Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.990Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.990Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.991Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-26T05:49:58.991Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.992Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.992Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:58.993Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"v1","status":200,"duration_ms":1}
+[perf-sanity] /api/v1/plugins p95=0.5ms budget=500ms
+(pass) Phase 02 performance sanity (PASS/FAIL only) > /api/v1/plugins p95 < 500ms [10.73ms]
+{"ts":"2026-10-26T05:49:59.036Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":43}
+{"ts":"2026-10-26T05:49:59.085Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":48}
+{"ts":"2026-10-26T05:49:59.142Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":55}
+{"ts":"2026-10-26T05:49:59.191Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":49}
+{"ts":"2026-10-26T05:49:59.235Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":44}
+{"ts":"2026-10-26T05:49:59.293Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":58}
+{"ts":"2026-10-26T05:49:59.334Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":40}
+{"ts":"2026-10-26T05:49:59.369Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":35}
+{"ts":"2026-10-26T05:49:59.421Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":52}
+{"ts":"2026-10-26T05:49:59.465Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":44}
+{"ts":"2026-10-26T05:49:59.509Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":43}
+{"ts":"2026-10-26T05:49:59.557Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":48}
+{"ts":"2026-10-26T05:49:59.599Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":42}
+{"ts":"2026-10-26T05:49:59.637Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":38}
+{"ts":"2026-10-26T05:49:59.684Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":46}
+{"ts":"2026-10-26T05:49:59.725Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":41}
+{"ts":"2026-10-26T05:49:59.775Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":49}
+{"ts":"2026-10-26T05:49:59.813Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":37}
+{"ts":"2026-10-26T05:49:59.856Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":43}
+{"ts":"2026-10-26T05:49:59.895Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":39}
+{"ts":"2026-10-26T05:49:59.937Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":41}
+[perf-sanity] /api/skills p95=56.7ms budget=500ms
+(pass) Phase 02 performance sanity (PASS/FAIL only) > /api/skills p95 < 500ms [944.59ms]
+{"ts":"2026-10-26T05:49:59.938Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.938Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.939Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.940Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":1}
+{"ts":"2026-10-26T05:49:59.940Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.940Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.941Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.941Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.942Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.942Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.943Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.943Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.944Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.944Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.945Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":1}
+{"ts":"2026-10-26T05:49:59.945Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.945Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.946Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.946Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.946Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:49:59.947Z","level":"info","event":"http.request","route":"plugins.api","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+[perf-sanity] /api/plugins p95=0.6ms budget=500ms
+(pass) Phase 02 performance sanity (PASS/FAIL only) > /api/plugins p95 < 500ms [9.51ms]
+{"ts":"2026-10-26T05:50:00.003Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":56}
+{"ts":"2026-10-26T05:50:00.049Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":46}
+{"ts":"2026-10-26T05:50:00.092Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":43}
+{"ts":"2026-10-26T05:50:00.149Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":57}
+{"ts":"2026-10-26T05:50:00.200Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":51}
+{"ts":"2026-10-26T05:50:00.244Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":44}
+{"ts":"2026-10-26T05:50:00.300Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":56}
+{"ts":"2026-10-26T05:50:00.348Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":47}
+{"ts":"2026-10-26T05:50:00.391Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":42}
+{"ts":"2026-10-26T05:50:00.447Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":54}
+{"ts":"2026-10-26T05:50:00.495Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":48}
+{"ts":"2026-10-26T05:50:00.535Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":40}
+{"ts":"2026-10-26T05:50:00.585Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":49}
+{"ts":"2026-10-26T05:50:00.626Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":40}
+{"ts":"2026-10-26T05:50:00.661Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":35}
+{"ts":"2026-10-26T05:50:00.715Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":54}
+{"ts":"2026-10-26T05:50:00.762Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":46}
+{"ts":"2026-10-26T05:50:00.808Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:50:00.865Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":57}
+{"ts":"2026-10-26T05:50:00.911Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":46}
+{"ts":"2026-10-26T05:50:00.951Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":40}
+{"ts":"2026-10-26T05:50:01.002Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":51}
+{"ts":"2026-10-26T05:50:01.042Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":39}
+{"ts":"2026-10-26T05:50:01.082Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":39}
+{"ts":"2026-10-26T05:50:01.135Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":53}
+{"ts":"2026-10-26T05:50:01.178Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":43}
+{"ts":"2026-10-26T05:50:01.223Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:50:01.274Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":51}
+{"ts":"2026-10-26T05:50:01.316Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":42}
+{"ts":"2026-10-26T05:50:01.356Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":40}
+{"ts":"2026-10-26T05:50:01.410Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":54}
+{"ts":"2026-10-26T05:50:01.455Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:50:01.494Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":38}
+{"ts":"2026-10-26T05:50:01.548Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":54}
+{"ts":"2026-10-26T05:50:01.589Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":40}
+{"ts":"2026-10-26T05:50:01.627Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":38}
+{"ts":"2026-10-26T05:50:01.672Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":45}
+{"ts":"2026-10-26T05:50:01.712Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":39}
+{"ts":"2026-10-26T05:50:01.763Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":51}
+{"ts":"2026-10-26T05:50:01.799Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":36}
+{"ts":"2026-10-26T05:50:01.844Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":44}
+{"ts":"2026-10-26T05:50:01.893Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"legacy","status":200,"duration_ms":49}
+[perf-sanity] mount delta: v1=56.5ms legacy=53.7ms
+(pass) Phase 02 performance sanity (PASS/FAIL only) > the v1 mount adds no material overhead over the legacy mount [1946.32ms]
+
+test/api/v1-versioning.test.ts:
+{"ts":"2026-10-26T05:50:01.966Z","level":"info","event":"http.request","route":"overview.get","method":"GET","mount":"v1","status":200,"duration_ms":53}
+(pass) every API operation answers under /api/v1 with the v1 marker header [72.59ms]
+{"ts":"2026-10-26T05:50:02.031Z","level":"info","event":"http.request","route":"overview.get","method":"GET","mount":"legacy","status":200,"duration_ms":54}
+(pass) legacy /api mount still answers, WITH deprecation headers (announce→warn window) [65.22ms]
+{"ts":"2026-10-26T05:50:02.088Z","level":"info","event":"http.request","route":"overview.get","method":"GET","mount":"v1","status":200,"duration_ms":47}
+(pass) v1 responses carry NO deprecation headers [56.46ms]
+{"ts":"2026-10-26T05:50:02.100Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.100Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) health answers at BOTH mounts without auth (canary-safe) [12.02ms]
+{"ts":"2026-10-26T05:50:02.111Z","level":"info","event":"http.request","route":"meta.apiRoot.get","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) API index is served at /api/v1 with contract links + legacy sunset [11.53ms]
+{"ts":"2026-10-26T05:50:02.146Z","level":"info","event":"http.request","route":"meta.openapi.get","method":"GET","mount":"v1","status":200,"duration_ms":23}
+(pass) OpenAPI document is served at /api/v1/openapi.json and matches the registry [38.72ms]
+{"ts":"2026-10-26T05:50:02.160Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+(pass) unknown v1 route → 404 with legacy-compatible error body [9.85ms]
+{"ts":"2026-10-26T05:50:02.170Z","level":"info","event":"http.request","route":"control.approve","method":"POST","mount":"v1","status":400,"duration_ms":1}
+(pass) schema validation rejects malformed bodies (400 problem+json, fail-closed) [10.38ms]
+{"ts":"2026-10-26T05:50:02.183Z","level":"info","event":"http.request","route":"control.approve","method":"POST","mount":"legacy","status":400,"duration_ms":1}
+(pass) legacy mount applies the SAME schema validation [12.16ms]
+{"ts":"2026-10-26T05:50:02.192Z","level":"info","event":"http.request","route":"dashboard.get","method":"GET","mount":"surface","status":200,"duration_ms":0}
+(pass) dashboard surface routes are NOT version-mounted (pages unchanged) [9.88ms]
+(pass) registry: every served API route id has contract metadata (completeness) [8.54ms]
+
+test/api/client.test.ts:
+(pass) generated client instantiates with the expected typed methods [10.39ms]
+{"ts":"2026-10-26T05:50:02.223Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) healthGet round-trips the real health contract [10.30ms]
+{"ts":"2026-10-26T05:50:02.290Z","level":"info","event":"http.request","route":"overview.get","method":"GET","mount":"v1","status":200,"duration_ms":57}
+(pass) overviewGet returns the mission-control aggregate [67.03ms]
+{"ts":"2026-10-26T05:50:02.300Z","level":"info","event":"http.request","route":"control.approve","method":"POST","mount":"v1","status":400,"duration_ms":0}
+(pass) typed error surface: XRApiError carries status + problem envelope [9.96ms]
+{"ts":"2026-10-26T05:50:02.314Z","level":"info","event":"http.request","route":"budget.get","method":"GET","mount":"v1","status":200,"duration_ms":4}
+{"ts":"2026-10-26T05:50:02.317Z","level":"info","event":"http.request","route":"budget.set","method":"POST","mount":"v1","status":200,"duration_ms":2}
+{"ts":"2026-10-26T05:50:02.317Z","level":"info","event":"http.request","route":"budget.get","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) mutating round trip: budgetGet → budgetSet → budgetGet reflects effects [17.05ms]
+(pass) client library is generated from the registry (drift gate equivalent) [9.00ms]
+
+test/api/unmatched-observability.test.ts:
+{"ts":"2026-10-26T05:50:02.336Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+(pass) unmatched-route counter > an unmatched API request increments the counter [0.72ms]
+{"ts":"2026-10-26T05:50:02.414Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":77}
+(pass) unmatched-route counter > a MATCHED request does not increment it [78.14ms]
+{"ts":"2026-10-26T05:50:02.416Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":404,"duration_ms":1}
+(pass) unmatched-route counter > a handler-level 404 (known namespace, unknown sub-path) is not counted as unmatched [1.99ms]
+{"ts":"2026-10-26T05:50:02.417Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"legacy","status":404,"duration_ms":0}
+(pass) unmatched-route counter > unmatched requests on the legacy mount are counted too, labelled by mount [0.72ms]
+{"ts":"2026-10-26T05:50:02.417Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"surface","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.418Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"surface","status":404,"duration_ms":0}
+(pass) unmatched-route counter > non-API surface misses (e.g. favicon) are NOT counted as API route misses [0.54ms]
+(pass) label cardinality is bounded by construction > unmatchedCategory folds unknown namespaces into a fixed set [0.73ms]
+{"ts":"2026-10-26T05:50:02.419Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.420Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.420Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.420Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.422Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.423Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":1}
+{"ts":"2026-10-26T05:50:02.423Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.424Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.424Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.424Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.425Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.425Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.425Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.426Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.426Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.426Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.427Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.427Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.428Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.428Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.428Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.429Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":1}
+{"ts":"2026-10-26T05:50:02.429Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.432Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.432Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.433Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.433Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.434Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":1}
+{"ts":"2026-10-26T05:50:02.434Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.434Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.435Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.435Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.436Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.436Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.436Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.436Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.437Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.437Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.437Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.438Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":1}
+{"ts":"2026-10-26T05:50:02.438Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.438Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.439Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.439Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.439Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.439Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.440Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.440Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.440Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.441Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.441Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.441Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.442Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.442Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.442Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.443Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.443Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.443Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.444Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+{"ts":"2026-10-26T05:50:02.444Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+(pass) label cardinality is bounded by construction > attacker-controlled paths cannot mint unbounded series [25.85ms]
+{"ts":"2026-10-26T05:50:02.487Z","level":"info","event":"http.request","route":"skills.api","method":"GET","mount":"v1","status":200,"duration_ms":42}
+(pass) label cardinality is bounded by construction > category is never the raw path, even for a known namespace [43.22ms]
+{"ts":"2026-10-26T05:50:02.488Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"v1","status":404,"duration_ms":0}
+(pass) no secret or high-cardinality leakage into telemetry > query strings, tokens and headers never reach the labels [1.73ms]
+(pass) no secret or high-cardinality leakage into telemetry > the counter is registered with only the expected label keys [0.05ms]
+(pass) no secret or high-cardinality leakage into telemetry > the metric is exposed with help text in the Prometheus rendering [0.52ms]
+
+test/api/chat-stream.test.ts:
+(pass) loop streams real token deltas in order and produces the final fullText [13.44ms]
+(pass) loop emits a provider_ready status event before the first token [9.80ms]
+(pass) tool_call → tool execution → tool_result → continue generation → done [10.97ms]
+(pass) a failing tool emits tool_result ok:false and generation continues [10.20ms]
+(pass) already-aborted signal returns cancelled and never calls the provider [8.89ms]
+(pass) cancellation mid-turn aborts the provider and stops the run as cancelled [39.46ms]
+(pass) prompt-injection-looking tool output is framed as DATA and flagged [0.10ms]
+(pass) retryable errors are retryable, non-retryable are not [0.13ms]
+(pass) SSE: stream opens immediately with ack = provider_selection (no silent wait) [1.44ms]
+(pass) SSE: token events are ordered, carry event_id, and end with one done/fullText + one [DONE] [0.48ms]
+(pass) SSE: exactly one [DONE] terminal frame [0.33ms]
+(pass) SSE: tool_call and tool_result events surface tool activity truthfully [0.29ms]
+(pass) SSE: no token events are emitted after the terminal done (coherent protocol) [0.32ms]
+(pass) SSE: a run error is reported as a truthful stream error event (no silent hang) [0.38ms]
+
+test/api/openapi.test.ts:
+(pass) spec contains every registered operation under /api/v1 paths [12.61ms]
+(pass) all paths are versioned; operationIds are unique; required fields present [10.32ms]
+(pass) generation is deterministic (byte-identical across runs) [29.56ms]
+(pass) committed artifact matches the live registry (drift gate equivalent) [15.23ms]
+(pass) request validation schemas appear as JSON-Schema request bodies [7.60ms]
+(pass) stability levels are declared per operation (experimental ≠ stable) [8.80ms]
+(pass) versioning policy is embedded (contract extension block) [13.22ms]
+(pass) Phase 02: every served route id has contract metadata (no undocumented routes) [0.21ms]
+(pass) Phase 02: every contract entry maps to a route the router actually serves [0.29ms]
+(pass) Phase 02: every public API operation carries complete metadata [1.65ms]
+(pass) Phase 02: prefix-matched routes declare a template, and every {param} is documented [6.41ms]
+(pass) Phase 02: the skills and plugins sub-APIs are represented in the contract [7.98ms]
+
+test/providers/request-guard.test.ts:
+(pass) GAP-001 — timeout resolution > defaults to the built-in ceiling; never unbounded [1.91ms]
+(pass) GAP-001 — timeout resolution > explicit > env > config > default [0.05ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > a stalled request times out instead of hanging [302.26ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > timeout is reported as a timeout, not as a cancellation [200.83ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > a caller signal aborts an in-flight request promptly [150.85ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > an already-aborted signal never opens a connection [0.18ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > successful requests are unaffected [0.88ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() against a stalling endpoint rejects on timeout [301.54ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() honors a caller AbortSignal [150.67ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() still works normally with the guard in place [1.15ms]
+
+test/providers/credential-boundary.test.ts:
+(pass) RC-203 credential and complete-request boundary > auth/rate/server errors never send vendor credentials or prompts to ANTHROPIC_BASE_URL [1.77ms]
+(pass) RC-203 credential and complete-request boundary > redacting api_key=value never reinserts the secret as a replacement capture [0.06ms]
+(pass) RC-203 credential and complete-request boundary > deadline extends beyond response headers through a stalled body [30.60ms]
+(pass) RC-203 credential and complete-request boundary > cancellation after headers aborts body consumption and remains cancellation [0.27ms]
+
+test/providers/capability-fixtures.test.ts:
+(pass) Phase 10 · provider capability-contract fixtures > manifest exists and declares catalog presets only [0.15ms]
+(pass) Phase 10 · provider capability-contract fixtures > every fixture is a real catalog preset and catalog-consistent (no drift) [0.20ms]
+(pass) Phase 10 · provider capability-contract fixtures > no capability drift between fixtures and the catalog (matrix gate) [0.32ms]
+(pass) Phase 10 · provider capability-contract fixtures > each fixture declares a usage-reporting policy (F-13 honesty) [0.09ms]
+
+test/providers/malformed-response.test.ts:
+(pass) Phase 06 · malformed provider response (spec step 29) > invalid JSON body → malformed_response error, not a silent success [9.14ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > missing required field (no choices[]) → malformed_response, never empty success [3.38ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > valid response still parses normally (no over-blocking) [2.28ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > HTTP error stays an error (not misclassified as malformed) [2.19ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > malformed factory redacts secrets from the detail [0.06ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > streaming: garbage SSE lines are skipped without corrupting the stream [4.16ms]
+
+test/providers/gateway.test.ts:
+(pass) Provider Registry > registry has builtins [0.09ms]
+(pass) Provider Registry > getPreset returns preset [0.02ms]
+(pass) Provider Registry > resolve valid provider [0.05ms]
+(pass) Provider Registry > resolve invalid provider throws [0.12ms]
+(pass) Provider Registry > duplicate registration deterministically replaces [0.08ms]
+(pass) Provider Registry > registerOrThrow fails on duplicate [0.05ms]
+(pass) Provider Gateway > gateway list includes builtins [1.42ms]
+(pass) Provider Gateway > gateway getPreset [0.04ms]
+(pass) Provider Gateway > gateway has [0.03ms]
+(pass) Provider Gateway > gateway capabilities [0.09ms]
+(pass) Provider Gateway > gateway credential status for local provider (no key required) [0.03ms]
+(pass) Provider Gateway > gateway resolveModel [2.14ms]
+(pass) Provider Gateway > gateway catalog [0.28ms]
+(pass) Provider Gateway > gateway catalog fingerprint changes with config [0.28ms]
+(pass) Capability Resolver > supports boolean capabilities [0.03ms]
+(pass) Capability Resolver > local execution capability [0.02ms]
+(pass) Capability Resolver > filterByCapabilities [0.18ms]
+(pass) Capability Resolver > supportsModelClass [0.14ms]
+(pass) Provider Error Normalization > auth failure [0.04ms]
+(pass) Provider Error Normalization > rate limit [0.02ms]
+(pass) Provider Error Normalization > model unavailable [0.01ms]
+(pass) Provider Error Normalization > timeout [0.29ms]
+(pass) Provider Error Normalization > unknown failure [0.07ms]
+(pass) Provider Error Normalization > safe json redacts secrets [0.05ms]
+(pass) Provider Error Normalization > non-retryable errors are not retried [0.02ms]
+(pass) Provider Error Normalization > retryable errors [0.01ms]
+(pass) Fallback Chain > primary only when no fallback allowed [0.35ms]
+(pass) Fallback Chain > includes fallbackProvider when configured [9.04ms]
+(pass) Fallback Chain > chain explanation is auditable [0.11ms]
+(pass) Fallback Chain > deduplicates identical steps [0.07ms]
+(pass) Provider Health > health bounded and cached [1.27ms]
+(pass) Provider Health > healthAll parallel [1.65ms]
+(pass) Streaming > mock success provider streaming yields chunks [0.26ms]
+(pass) Streaming > gateway stream fallback when no chatStream [2.16ms]
+(pass) Usage Normalization > normalizeUsage [0.05ms]
+(pass) Usage Normalization > normalizeUsage with totalTokens [0.01ms]
+(pass) Provider Switching > model switch state machine preflight fails for unknown provider [0.89ms]
+(pass) Provider Switching > model switch rollback on swap failure [0.45ms]
+(pass) BYOK > credential status for provider requiring key [0.06ms]
+(pass) BYOK > resolve credential never throws [0.04ms]
+(pass) BYOK > credential not exposed in health [0.14ms]
+(pass) Retry Policy > retryable errors should be retried, non-retryable should not [0.05ms]
+(pass) Contract: Same task different provider structure > same messages produce same normalized ModelTurn structure via different providers [0.13ms]
+(pass) Phase 05 — Gateway Fallback Execution > a retryable primary failure falls back to the fallback provider (bounded, auditable) [0.60ms]
+(pass) Phase 05 — Gateway Fallback Execution > a NON-retryable (auth) failure is NOT blindly retried or fallen-back [0.27ms]
+(pass) Phase 05 — Gateway Fallback Execution > fallback is bounded: it does not fall back on cancellation (user stop wins) [0.31ms]
+[suite-tmp] 21 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 21
+
+ 194 pass
+ 0 fail
+ 3710 expect() calls
+Ran 194 tests across 17 files. [7.12s]

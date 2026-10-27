@@ -1,0 +1,14 @@
+$ bun /home/user/xr-evidence/probe-sandbox.ts
+{
+  "available": true,
+  "privateTmpWrite": {
+    "ok": true,
+    "hostSibling": "SIBLING"
+  },
+  "readonlyRemount": {
+    "ok": true,
+    "exitCode": 0,
+    "stderr": "",
+    "hostCanary": "CHANGED"
+  }
+}

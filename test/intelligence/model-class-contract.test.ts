@@ -27,7 +27,7 @@ const saved: Record<string, string | undefined> = {};
 
 function configWithSynthetic(): XRConfig {
   return ConfigSchema.parse({
-    defaults: { provider: "ollama", model: "qwen2.5:7b" },
+    defaults: { provider: "synthex", model: "synthex-temporal-1" },
     providerEngine: {
       routingStrategy: "hybrid",
       customProviders: [

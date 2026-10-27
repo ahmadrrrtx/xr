@@ -1,0 +1,170 @@
+{
+  "scope": "Selected exact local results and external blockers; local digests are NOT publisher authentication.",
+  "files": [
+    {
+      "file": "agent-benchmark-final.json",
+      "sha256": "e31970aeb99d7ad995a5518f756da87501b0b2b22cb35c366adcb5e13cff8041",
+      "bytes": 13859
+    },
+    {
+      "file": "artifact-inspection-final.json",
+      "sha256": "d403813d83755df7a251f41ed5207ff6086220e250c60a9a25c9acee9a754771",
+      "bytes": 1283
+    },
+    {
+      "file": "cli-binary-final.json",
+      "sha256": "9e8ec923882770a86605e153761c02247f8e61642be65711e52388ed20aa10a9",
+      "bytes": 1443
+    },
+    {
+      "file": "cli-npm-final.json",
+      "sha256": "c55dd04fad3f06d13ce98800d326acf595a06e54e80bb38902d3aab48f4c6387",
+      "bytes": 1419
+    },
+    {
+      "file": "closure-existing-quarantine.log",
+      "sha256": "8658c15db00161eea714c835ea144f3922bbd6a5db54b505a9157d37c13354e3",
+      "bytes": 5935
+    },
+    {
+      "file": "closure-final-doc-check.log",
+      "sha256": "20c9db4dd647307d78a7c3a1a946b719a74c7d5980861d32bccc101dca44acb6",
+      "bytes": 2287
+    },
+    {
+      "file": "closure-security.log",
+      "sha256": "32b727ad76a98d16dc6bbbed3fa41b59e27e280ec9deea378f53c5eae5f20d35",
+      "bytes": 887599
+    },
+    {
+      "file": "code-inputs.json",
+      "sha256": "e947e1d383cd325a17d7f49dec3a76b35d2a7db88dadd1d629efc946555334eb",
+      "bytes": 508837
+    },
+    {
+      "file": "commands.json",
+      "sha256": "e0634ce6ef9073d655b5a5054e677d64f97c2820ddde31928694d4aaf89c1a03",
+      "bytes": 13565
+    },
+    {
+      "file": "final-native-pure-modules.log",
+      "sha256": "550b8ba3c500f2c255c07cb8a4aab18c84848cba6fc2ff97f4dd425f0ca0ae34",
+      "bytes": 3554
+    },
+    {
+      "file": "final-security-verified.log",
+      "sha256": "b10a6e4f027666126b5c53cfd442bd7eea90393e3063a7c4220ade167717ce94",
+      "bytes": 887405
+    },
+    {
+      "file": "handoff-agent-benchmark.log",
+      "sha256": "359b094b9ac28620441de8c5c69f2e1c78c7e0462a3cbf86d8baaee687f34ef7",
+      "bytes": 14513
+    },
+    {
+      "file": "handoff-authentication-blocker.log",
+      "sha256": "a1aa80c31d7780399166c1236694e2490ff01edd448998e18c6bb0a36692e970",
+      "bytes": 1397
+    },
+    {
+      "file": "handoff-cli-binary-journey.log",
+      "sha256": "89b1b0c9094a28be70b3df2d691e8254dc5370cea93f69c2f0828c73b1cbabd7",
+      "bytes": 1885
+    },
+    {
+      "file": "handoff-cli-npm-journey.log",
+      "sha256": "4bc942b6c49eebc90b9e107ef852b7ba85d66c4247a85028a2719584b14718b1",
+      "bytes": 1831
+    },
+    {
+      "file": "handoff-closed-docs.log",
+      "sha256": "360e2f322e4ac9631882ffa12f52183665233134b390ba123f9bcb7deaf3a333",
+      "bytes": 1701
+    },
+    {
+      "file": "handoff-current-artifact-check.log",
+      "sha256": "6570617037557ae63534cf3e069daa6983f42eb58e0f56646e7d2a0e5c45b5b7",
+      "bytes": 1343
+    },
+    {
+      "file": "handoff-current-source-binary.log",
+      "sha256": "b9923724a3f383c35c614388c98d881c124657915480821b2d75c57ba6d621be",
+      "bytes": 1089
+    },
+    {
+      "file": "handoff-debian-version-regression.log",
+      "sha256": "7bac9c9952280dd22e4e30ae87207840160ac03645f31abd6e9f567076f36060",
+      "bytes": 2595
+    },
+    {
+      "file": "handoff-final-core-types.log",
+      "sha256": "aaaccf287598cb77cd111ece5f2c2a9f5c049927dd4b423fbfb7304528c550b5",
+      "bytes": 99
+    },
+    {
+      "file": "handoff-latest-blackbox.log",
+      "sha256": "3bb4434f7529459b5e8e75b883b6129bc19c0c16b6459a9b5cf62326e5067154",
+      "bytes": 12092
+    },
+    {
+      "file": "handoff-native-prerequisites.log",
+      "sha256": "071e882636fa0b4c33a3fa8fa69207758c9dae7cc9ffe1bfb50df4e05ee0aafc",
+      "bytes": 350
+    },
+    {
+      "file": "handoff-owner-signing-preflight.log",
+      "sha256": "7befbdebf1c7ee9034ae415e241bda9c1cb14b65507da5f89cf4c20c0c6ffc9d",
+      "bytes": 230
+    },
+    {
+      "file": "handoff-production-seed-gate.log",
+      "sha256": "1e8965389e0c48b108c0662124434c9b88514dc8bc755c631d9b9e97a045d965",
+      "bytes": 114
+    },
+    {
+      "file": "handoff-renderer-build.log",
+      "sha256": "d305918aed10f53cf4e8ac9919ff096dd8f56d4812f1d9f5514e73c91be4225e",
+      "bytes": 12589
+    },
+    {
+      "file": "handoff-renderer-lint.log",
+      "sha256": "f666254e599bdc39a1b99ea23a82b5e499d7f54ab72488977e4d0084788fc0a0",
+      "bytes": 48
+    },
+    {
+      "file": "handoff-sbom-schema.log",
+      "sha256": "89eb109d9881da06139cd876922e52c537e08f859c899f01637949795273864c",
+      "bytes": 706
+    },
+    {
+      "file": "handoff-support-matrix-refresh.log",
+      "sha256": "af496a24dc20730bbff56643fbf3e2d82942122451831be2b13d3ed0933ad79d",
+      "bytes": 277
+    },
+    {
+      "file": "handoff-tarball-scope.log",
+      "sha256": "6a1f2930eb4f1dd4e8691be8c2921b4a3c6c5f025462324d91792e57af831c2c",
+      "bytes": 204
+    },
+    {
+      "file": "public-latest-observation-final.json",
+      "sha256": "04302cb5a3c9db18a17eb8fb9ccb5268e70a9d10afd1ae503bfec8f54098c0bc",
+      "bytes": 325
+    },
+    {
+      "file": "sbom-schema-provenance.json",
+      "sha256": "f45f61ac997c4c2a8d32a18dc66a121bf67a2ac8c6e9ffdfa955e26071d1940c",
+      "bytes": 649
+    },
+    {
+      "file": "security-closure.json",
+      "sha256": "a2d6828a0d19ea3fac53d30fb5c7c3ec0e21dee35d274207b0ddad1fec55551b",
+      "bytes": 2184
+    },
+    {
+      "file": "security-gate-verified.json",
+      "sha256": "8cc596676e0afc0c549d2bceafc74ffc46533345e0db4f306f8bfc05ff87bcf0",
+      "bytes": 2194
+    }
+  ]
+}

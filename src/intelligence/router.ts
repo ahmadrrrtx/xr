@@ -148,19 +148,20 @@ export function policyFromConfig(config: XRConfig): PolicyConstraints {
    * preferred_with_fallback — XR never roams the catalog on its own. This was
    * previously dead config (G1 in docs/historical/phases/phase5-routing/01-AUDIT-REPORT.md).
    */
-  if (intel?.enableAutomatic === false && routingMode === "automatic") {
+  if (intel?.enableAutomatic !== true && routingMode === "automatic") {
     routingMode = "preferred_with_fallback";
   }
 
   const allowFallback =
     intel?.allowFallback !== undefined
       ? !!intel.allowFallback
-      : routingMode !== "manual";
+      : false;
 
   return {
     routingMode,
     localityPolicy,
     allowFallback,
+    allowCrossProviderFallback: intel?.allowCrossProviderFallback === true,
     allowCloudFallback:
       intel?.allowCloudFallback !== undefined
         ? !!intel.allowCloudFallback
@@ -214,6 +215,7 @@ export function mergeRequirements(
     allowFallback:
       partial?.allowFallback ??
       (hasExplicitPin ? false : policy.allowFallback),
+    allowCrossProviderFallback: partial?.allowCrossProviderFallback ?? policy.allowCrossProviderFallback,
     allowCloudFallback: partial?.allowCloudFallback ?? policy.allowCloudFallback,
     disableHistorical: partial?.disableHistorical ?? policy.disableHistorical,
     summary: partial?.summary,
@@ -225,7 +227,7 @@ export function mergeRequirements(
   };
 
   // Manual mode without pin → use defaults as preferred pin (non-strict if fallback on)
-  if (mode === "manual" && !req.pin?.providerId && policy.defaultProviderId) {
+  if ((mode === "manual" || mode === "preferred_with_fallback") && !req.pin?.providerId && policy.defaultProviderId) {
     req.pin = {
       providerId: policy.defaultProviderId,
       modelId: policy.defaultModelId,
@@ -324,29 +326,12 @@ export class IntelligenceRouter {
     _request: RouteRequest,
     difficulty: DifficultyEstimate,
   ): RouteResult {
+    const explicitPin = !!(_request.provider || _request.model || _request.requirements?.pin || policy.routingMode === "manual");
     const providerId = requirements.pin!.providerId!;
     const modelId = requirements.pin!.modelId;
     const model = findModel(catalog, providerId, modelId);
 
     if (!model) {
-      // Pin missing — optional fallback if allowed
-      if (requirements.allowFallback || requirements.pin?.strict === false) {
-        const auto = this.routeAutomatic(catalog, {
-          ...requirements,
-          pin: undefined,
-          preferred: { providerId, modelId },
-        }, policy, difficulty);
-        if (auto.decision.selected) {
-          auto.decision.factors = [
-            `pin ${providerId}/${modelId ?? "?"} unavailable — fell back`,
-            ...auto.decision.factors,
-          ];
-          auto.decision.explanation =
-            `Pinned provider/model unavailable; selected fallback ${auto.decision.selected.providerId}/${auto.decision.selected.modelId}.`;
-          auto.decision.manual = false;
-          return finalize(auto.decision);
-        }
-      }
       return this.unavailable(
         requirements,
         policy,
@@ -363,7 +348,7 @@ export class IntelligenceRouter {
     // (Charter §9.5: manual override is always available — the user is the
     // authority over possibly-stale metadata, e.g. a seeded bad override);
     // every overridden declaration is surfaced as a factor warning.
-    const pinEvalRequirements = { ...requirements, minFidelity: undefined, require: undefined };
+    const pinEvalRequirements = { ...requirements, minFidelity: undefined };
     const evals = evaluateAll([model], pinEvalRequirements, {
       ...policy,
       // For pin eval, don't apply pin-strict rejection to itself
@@ -396,20 +381,6 @@ export class IntelligenceRouter {
     }
 
     if (!ev.compatible) {
-      if (requirements.allowFallback) {
-        const auto = this.routeAutomatic(
-          catalog,
-          { ...requirements, pin: undefined },
-          policy,
-          difficulty,
-        );
-        if (auto.decision.selected) {
-          auto.decision.factors.unshift(
-            `pin rejected: ${ev.rejections.map((r) => r.message).join("; ")}`,
-          );
-          return auto;
-        }
-      }
       return this.unavailable(
         requirements,
         policy,
@@ -441,7 +412,8 @@ export class IntelligenceRouter {
 
     // Measured-fidelity warning for the pin (informational, not a rejection —
     // manual override is complete).
-    const pinFactors = ["explicit provider/model pin", `locality=${model.locality.locality}`];
+    const pinFactors = [explicitPin ? "explicit provider/model pin" : "workspace default provider; automatic roaming disabled", `class=${requirements.modelClass}; tool-use capable=${model.capabilities.toolUse}`, `difficulty=${difficultyLabel(difficulty.score)}`, `locality=${model.locality.locality}`, "Reachability and live agent validation are independent of this offline selection"];
+    if (model.evidence) pinFactors.push(`metadata=${model.evidence.lifecycle}; source=${model.evidence.source}; agentValidated=${model.evidence.agentValidated}`);
     if (overriddenDeclarations.length) {
       pinFactors.push(`pin overrides capability declaration(s): ${overriddenDeclarations.join(", ")}`);
     }
@@ -459,7 +431,7 @@ export class IntelligenceRouter {
       version: 1,
       decisionId: decisionId(),
       timestamp: Date.now(),
-      mode: "manual",
+      mode: explicitPin ? "manual" : policy.routingMode,
       requirements,
       constraints: policy,
       selected: {
@@ -470,9 +442,9 @@ export class IntelligenceRouter {
       fallbackChain: fb.steps,
       rejected: [],
       considered: [],
-      manual: true,
+      manual: explicitPin,
       unavailable: false,
-      explanation: `Manual pin: ${model.providerId}/${model.modelId}`,
+      explanation: `${explicitPin ? "Manual pin" : "Configured primary"}: ${model.providerId}/${model.modelId}`,
       factors: pinFactors,
       confidence: 1,
       humanHandoff: fb.humanHandoff,
@@ -552,7 +524,7 @@ export class IntelligenceRouter {
       return this.unavailable(
         requirements,
         policy,
-        `No compatible model for task requirements and policy (difficulty ${difficultyLabel(difficulty.score)}, fidelity floor ${difficulty.requiredFidelity.toFixed(2)})`,
+        `No compatible model for task requirements and policy (difficulty=${difficultyLabel(difficulty.score)}, fidelity floor ${difficulty.requiredFidelity.toFixed(2)})`,
         false,
         rejected,
         difficulty,
@@ -562,7 +534,7 @@ export class IntelligenceRouter {
     const fb = buildFallbackChain(compatible, best.model, requirements, policy, 3, this.opts.health);
 
     // Seed configured fallback provider into chain if compatible and not selected
-    if (policy.fallbackProviderId && policy.fallbackProviderId !== best.model.providerId) {
+    if (fb.allowed && policy.fallbackProviderId && policy.fallbackProviderId !== best.model.providerId) {
       const fbModel = findModel(
         { ...catalog, models: withCreds },
         policy.fallbackProviderId,
@@ -570,7 +542,7 @@ export class IntelligenceRouter {
       );
       if (fbModel && !fb.steps.some((s) => s.providerId === fbModel.providerId && s.modelId === fbModel.modelId)) {
         const fbEval = evaluateAll([fbModel], requirements, policy)[0];
-        if (fbEval?.compatible) {
+        if (fbEval?.compatible && buildFallbackChain([fbEval], best.model, requirements, policy, 1, this.opts.health).steps.length) {
           fb.steps.unshift({
             providerId: fbModel.providerId,
             modelId: fbModel.modelId,

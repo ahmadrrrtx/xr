@@ -110,19 +110,12 @@ export const shellTool: Tool = {
     // host-authority fallback exists only with hardened mode explicitly OFF
     // (compat path), and is audited as a degraded execution.
     if (ctx.runIsolated) {
-      /**
-       * Phase 06 · Step 18 — DOCUMENTED LIMITATION: the isolated runner
-       * (Trust service environments) does not currently accept an
-       * AbortSignal, so cancellation of an in-flight isolated command takes
-       * effect at the loop's next checkpoint, not inside the environment.
-       * We do NOT pretend the environment stopped; it runs to its own
-       * timeout. This is an honest capability gap, not a silent success.
-       */
       let filesystemAuthority;
       try { filesystemAuthority = ctx.filesystem?.descriptor() ?? withFilesystem(ctx.cwd, "model-tool", fs => fs.descriptor()); }
       catch (e) { return { ok: false, output: filesystemMessage(e), reason: filesystemReason(e) }; }
       const { request, executable } = shellTrustSpec(cmd, ctx.cwd, {
         timeoutMs: 120_000,
+        signal: ctx.signal,
         maxOutputBytes: 4 * 1024 * 1024,
         networkTargets: ctx.egressAllowlist ?? [],
         filesystemAuthority,

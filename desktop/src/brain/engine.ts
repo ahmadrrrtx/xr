@@ -52,7 +52,8 @@ export interface EngineRunRecorder {
 
 export function toolCategory(tool: string): SpanCategory {
   const t = tool.toLowerCase();
-  if (/file|dir|glob|grep|read|write|list|delete|move|mkdir/.test(t)) return 'file';
+  if (/file|dir|glob|grep|read|write|list|delete|move|mkdir/.test(t))
+    return 'file';
   if (/shell|exec|bash|cmd|process|run_command/.test(t)) return 'shell';
   if (/http|fetch|web|url|search|browser|curl|net/.test(t)) return 'network';
   return 'tool';
@@ -61,7 +62,10 @@ export function toolCategory(tool: string): SpanCategory {
 function shortId(id: string): string {
   // Engine ids look like `run_abc123…` — surface the last 4 chars so the
   // Runs table can refer to it ("#a1f3") without pretending it is a counter.
-  const tail = id.replace(/[^a-z0-9]/gi, '').slice(-4).toLowerCase();
+  const tail = id
+    .replace(/[^a-z0-9]/gi, '')
+    .slice(-4)
+    .toLowerCase();
   return `#${tail || '????'}`;
 }
 
@@ -71,7 +75,7 @@ const CHARS_PER_TOKEN = 4;
 export function createEngineRecorder(
   runId: string,
   hooks: StreamHooks,
-  meta: EngineRunMeta,
+  meta: EngineRunMeta
 ): EngineRunRecorder {
   const rootId = `${runId}:root`;
   let seq = 0;
@@ -82,16 +86,28 @@ export function createEngineRecorder(
   let model = meta.model;
 
   /** Current generation span (null between steps). */
-  let llm: { id: string; text: string; estTokens: number; startedAt: number } | null = null;
+  let llm: {
+    id: string;
+    text: string;
+    estTokens: number;
+    startedAt: number;
+  } | null = null;
   /** Open tool spans by engine tool-call id. */
-  const tools = new Map<string, { spanId: string; tool: string; startedAt: number; approvalSpanId?: string }>();
+  const tools = new Map<
+    string,
+    { spanId: string; tool: string; startedAt: number; approvalSpanId?: string }
+  >();
   /** Order-based fallback when the engine's tool_result id does not match. */
   const toolOrder: string[] = [];
   let realUsage: { inTokens: number; outTokens: number } | null = null;
   let fullText = '';
   let lastError: string | null = null;
 
-  const span = (partial: Omit<Span, 'startedAt' | 'endedAt' | 'durationMs' | 'status'> & { startedAt?: number }): Span => ({
+  const span = (
+    partial: Omit<Span, 'startedAt' | 'endedAt' | 'durationMs' | 'status'> & {
+      startedAt?: number;
+    }
+  ): Span => ({
     status: 'running',
     startedAt: partial.startedAt ?? Date.now(),
     endedAt: null,
@@ -134,9 +150,13 @@ export function createEngineRecorder(
         ...(meta.sessionId ? { sessionId: meta.sessionId } : {}),
       },
       metadata: { source: 'engine' },
-    }),
+    })
   );
-  hooks.onLog(rootId, 'system', `engine run requested (mode=${meta.mode ?? 'agent'}, model=${meta.model})`);
+  hooks.onLog(
+    rootId,
+    'system',
+    `engine run requested (mode=${meta.mode ?? 'agent'}, model=${meta.model})`
+  );
 
   const openLlm = (): void => {
     if (llm) return;
@@ -153,7 +173,7 @@ export function createEngineRecorder(
         model,
         inputs: { model, ...(provider ? { provider } : {}) },
         metadata: { source: 'engine' },
-      }),
+      })
     );
   };
 
@@ -178,9 +198,17 @@ export function createEngineRecorder(
 
   const closeTool = (
     key: string | null,
-    e: { output?: string; status: 'done' | 'error'; denied?: boolean; blocked?: boolean },
+    e: {
+      output?: string;
+      status: 'done' | 'error';
+      denied?: boolean;
+      blocked?: boolean;
+    }
   ): void => {
-    const k = key && tools.has(key) ? key : toolOrder.find((id) => tools.has(id)) ?? null;
+    const k =
+      key && tools.has(key)
+        ? key
+        : (toolOrder.find((id) => tools.has(id)) ?? null);
     if (!k) return;
     const t = tools.get(k)!;
     tools.delete(k);
@@ -190,7 +218,11 @@ export function createEngineRecorder(
         status: e.denied || e.blocked ? 'failed' : 'completed',
         endedAt,
         durationMs: endedAt - t.startedAt,
-        outputs: e.denied ? 'denied' : e.blocked ? 'blocked by policy' : 'approved',
+        outputs: e.denied
+          ? 'denied'
+          : e.blocked
+            ? 'blocked by policy'
+            : 'approved',
       });
       hooks.onRunStatus?.('running');
     }
@@ -204,26 +236,45 @@ export function createEngineRecorder(
         ? {
             error: {
               name: e.denied ? 'Denied' : e.blocked ? 'Blocked' : 'ToolError',
-              message: e.output || (e.denied ? 'Denied by the user' : 'Tool failed'),
+              message:
+                e.output || (e.denied ? 'Denied by the user' : 'Tool failed'),
             },
           }
         : {}),
     });
-    hooks.onLog(t.spanId, failed ? 'stderr' : 'stdout', `${t.tool} ${failed ? 'failed' : 'ok'}${e.output ? `: ${e.output.slice(0, 400)}` : ''}`);
+    hooks.onLog(
+      t.spanId,
+      failed ? 'stderr' : 'stdout',
+      `${t.tool} ${failed ? 'failed' : 'ok'}${e.output ? `: ${e.output.slice(0, 400)}` : ''}`
+    );
   };
 
-  const end = (status: SpanStatus, extra?: { errorSummary?: string; killedBy?: 'budget' }): void => {
+  const end = (
+    status: SpanStatus,
+    extra?: { errorSummary?: string; killedBy?: 'budget' }
+  ): void => {
     if (ended) return;
     ended = true;
     const endedAt = Date.now();
-    for (const k of [...tools.keys()]) closeTool(k, { status: 'error', output: status === 'killed' ? 'stopped' : 'interrupted' });
+    for (const k of [...tools.keys()])
+      closeTool(k, {
+        status: 'error',
+        output: status === 'killed' ? 'stopped' : 'interrupted',
+      });
     closeLlm(status === 'completed' ? 'completed' : status);
     hooks.onSpanEnd(rootId, {
       status,
       endedAt,
       durationMs: endedAt - meta.startedAt,
       outputs: fullText || undefined,
-      ...(extra?.errorSummary ? { error: { name: status === 'killed' ? 'Stopped' : 'Error', message: extra.errorSummary } } : {}),
+      ...(extra?.errorSummary
+        ? {
+            error: {
+              name: status === 'killed' ? 'Stopped' : 'Error',
+              message: extra.errorSummary,
+            },
+          }
+        : {}),
     });
     hooks.onRunEnd({ status, endedAt, ...extra });
   };
@@ -241,7 +292,12 @@ export function createEngineRecorder(
         if (e.status === 'generating') openLlm();
         if (e.status === 'awaiting_approval') hooks.onRunStatus?.('waiting');
         if (e.message) hooks.onLog(llm?.id ?? rootId, 'system', e.message);
-        else hooks.onLog(llm?.id ?? rootId, 'system', `status: ${e.status}${e.model ? ` (${e.model})` : ''}`);
+        else
+          hooks.onLog(
+            llm?.id ?? rootId,
+            'system',
+            `status: ${e.status}${e.model ? ` (${e.model})` : ''}`
+          );
         return;
       }
       case 'token': {
@@ -279,7 +335,7 @@ export function createEngineRecorder(
             startedAt,
             inputs: e.call.input,
             metadata: { source: 'engine', summary: e.call.summary },
-          }),
+          })
         );
         hooks.onLog(id, 'system', `${e.call.tool} ${e.call.summary}`);
         return;
@@ -297,7 +353,7 @@ export function createEngineRecorder(
             category: 'approval',
             inputs: { tool: t.tool, approvalId: e.approvalId },
             metadata: { source: 'engine' },
-          }),
+          })
         );
         hooks.onLog(id, 'system', `waiting for approval (${e.approvalId})`);
         hooks.onRunStatus?.('waiting');
@@ -308,16 +364,25 @@ export function createEngineRecorder(
         return;
       case 'model_switched':
         model = e.to;
-        hooks.onLog(rootId, 'system', `budget governor switched ${e.from} → ${e.to}${e.why ? `: ${e.why}` : ''}`);
+        hooks.onLog(
+          rootId,
+          'system',
+          `budget governor switched ${e.from} → ${e.to}${e.why ? `: ${e.why}` : ''}`
+        );
         return;
       case 'budget_cutoff':
         hooks.onLog(rootId, 'system', `budget cutoff: ${e.reason}`);
         return;
       case 'budget_charged':
-        if (e.costUsd > 0) hooks.onTokenTick(llm?.id ?? rootId, 0, e.costUsd);
+        if (e.costUsd !== null && e.costUsd > 0)
+          hooks.onTokenTick(llm?.id ?? rootId, 0, e.costUsd);
         return;
       case 'budget_blocked':
-        hooks.onLog(rootId, 'stderr', `blocked by the budget governor: ${e.reason}`);
+        hooks.onLog(
+          rootId,
+          'stderr',
+          `blocked by the budget governor: ${e.reason}`
+        );
         end('killed', { errorSummary: e.reason, killedBy: 'budget' });
         return;
       case 'error':
@@ -326,10 +391,24 @@ export function createEngineRecorder(
         return;
       case 'done': {
         const stopped = e.stopped ?? 'done';
-        if (stopped === 'budget') end('killed', { errorSummary: lastError ?? 'Stopped by the budget cap', killedBy: 'budget' });
-        else if (stopped === 'cancelled') end('killed', { errorSummary: 'Stopped by the user' });
-        else if (stopped === 'error') end('failed', { errorSummary: lastError ?? 'The engine reported an error' });
-        else end('completed', stopped === 'max_steps' ? { errorSummary: 'Step limit reached' } : undefined);
+        if (stopped === 'budget')
+          end('killed', {
+            errorSummary: lastError ?? 'Stopped by the budget cap',
+            killedBy: 'budget',
+          });
+        else if (stopped === 'cancelled')
+          end('killed', { errorSummary: 'Stopped by the user' });
+        else if (stopped === 'error')
+          end('failed', {
+            errorSummary: lastError ?? 'The engine reported an error',
+          });
+        else
+          end(
+            'completed',
+            stopped === 'max_steps'
+              ? { errorSummary: 'Step limit reached' }
+              : undefined
+          );
         return;
       }
       default:
@@ -340,7 +419,8 @@ export function createEngineRecorder(
   return {
     feed,
     engineRunId: () => engineRunId,
-    finish: (status, errorSummary) => end(status, errorSummary ? { errorSummary } : undefined),
+    finish: (status, errorSummary) =>
+      end(status, errorSummary ? { errorSummary } : undefined),
     ended: () => ended,
   };
 }

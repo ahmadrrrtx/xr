@@ -370,7 +370,10 @@ describe("channel-publish-verify (what publish-channels.yml pushes)", () => {
     const publish = readFileSync(join(ROOT, ".github", "workflows", "publish-channels.yml"), "utf8");
     expect(publish).toContain("cosign verify-blob");
     expect(publish).toContain("scripts/channel-publish-verify.ts");
-    expect(publish).toContain("wingetcreate.exe submit");
+    expect(publish).toContain("scripts/publish-winget.ts --submit");
+    expect(publish).not.toContain("--token $env:WINGET_TOKEN");
+    expect(publish).not.toContain("aka.ms/wingetcreate/latest");
+    expect(publish).toContain("scripts/release-ci-evidence.ts");
     expect(publish).not.toMatch(/manifests\/r\//);
     const release = readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf8");
     // The tag run no longer pushes the tap before the release is verified.

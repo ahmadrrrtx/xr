@@ -1,0 +1,5 @@
+$ bash -c bun run support-matrix && bun run support-matrix --check
+$ bun run scripts/support-matrix.ts
+[support-matrix] updated docs/release/SUPPORT_MATRIX.md from 4 evidence record(s)
+$ bun run scripts/support-matrix.ts --check
+[support-matrix] current (4 evidence record(s))

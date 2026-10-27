@@ -1,0 +1,27 @@
+$ bun test test/release/channels.test.ts test/release/identity-hardening.test.ts
+bun test v1.4.2 (744846f84)
+
+test/release/identity-hardening.test.ts:
+(pass) RC-101 release identity is checked, never silently repaired > SemVer 2 precedence includes numeric prerelease identifiers and ignores build metadata [1.01ms]
+(pass) RC-101 release identity is checked, never silently repaired > desktop JS package and root Cargo lock identity are mandatory declared targets [2.69ms]
+(pass) RC-101 release identity is checked, never silently repaired > lock stamping preserves every dependency byte and refuses missing/duplicate roots [0.08ms]
+(pass) RC-101 release identity is checked, never silently repaired > native builds depend on gates and no post-build version rewrite is permitted [0.23ms]
+(pass) RC-101 release identity is checked, never silently repaired > tag must match committed identity, cannot be withdrawn or falsely stable [0.60ms]
+
+test/release/channels.test.ts:
+(pass) Phase 9 · T3 — one canonical build, many channels > every installer-facing URL points at the canonical release of the manifest version [0.43ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > committed packaging templates equal the generator output (no channel drift) [0.12ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > Homebrew formula binds all four macOS/Linux targets with stamped sha256 [0.12ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > stamping fails closed when a target is missing from the sums (no unsigned drift) [0.16ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > stamping fails closed on a malformed checksum [0.04ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > WinGet + Scoop manifests bind the canonical windows zip sha256 (x64 AND arm64 — L-004) [0.14ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > launch-audit L-004 — winget/scoop fail closed when the arm64 zip is missing from the sums [0.09ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > .deb round-trips: ar structure, control fields, payload identical to the canonical binary [5.45ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > SHA256SUMS parse/serialize round-trip is deterministic [0.88ms]
+(pass) preview identity never changes canonical stable formula/manifests/URLs; public authority wins [0.23ms]
+(pass) Debian prerelease version is derived and sorts before stable, without a second product authority [20.87ms]
+
+ 16 pass
+ 0 fail
+ 96 expect() calls
+Ran 16 tests across 2 files. [105.00ms]

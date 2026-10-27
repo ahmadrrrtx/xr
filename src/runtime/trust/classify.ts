@@ -109,7 +109,7 @@ function deriveResources(tier: RiskTier): ResourcePolicy {
     memoryBytes: 256 * 1024 * 1024,
     maxOutputBytes: Math.min(TRUST_BOUNDS.DEFAULT_MAX_OUTPUT_BYTES, 512_000),
     maxTempBytes: 64 * 1024 * 1024,
-    maxFiles: 4096,
+    // No file-count quota is promised: workspace disk usage is not capped.
   };
 }
 

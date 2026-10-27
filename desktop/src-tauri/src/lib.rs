@@ -16,6 +16,8 @@ mod commands;
 mod data_safety;
 /// Phase 14 — engine sidecar lifecycle (spawn, pair, restart, stderr tail).
 mod engine;
+mod desktop_home;
+mod legacy_credentials;
 /// Banner parsing / bounded stderr tail / probe cache (pure std, unit-tested).
 mod engine_state;
 mod events;
@@ -80,6 +82,8 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
+            // Refuse a relative/unresolvable desktop state root before any write.
+            crate::desktop_home::resolve().map_err(std::io::Error::other)?;
             // XR-WIN-BOOT-001 — manage every in-memory state BEFORE any other
             // setup step. The main window's WebView2 bootstrap is asynchronous:
             // on a slow machine (real-world Windows 11 with AV scanning) the

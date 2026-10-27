@@ -21,7 +21,7 @@ function baseConfig(over: Record<string, unknown> = {}): XRConfig {
   return ConfigSchema.parse({
     defaults: { provider: "ollama", model: "qwen2.5:7b" },
     providerEngine: { routingStrategy: "hybrid" },
-    intelligencePlane: {},
+    intelligencePlane: { enableAutomatic: true },
     ...over,
   });
 }
@@ -213,7 +213,7 @@ describe("XR 4.4 intelligence router", () => {
     const plan = buildFallbackChain(
       ranked as any,
       local,
-      { modelClass: "chat", allowFallback: true, allowCloudFallback: false },
+      { modelClass: "chat", allowFallback: true, allowCrossProviderFallback: true, allowCloudFallback: false },
       policy,
     );
     expect(plan.steps.every((s) => s.providerId !== "openai")).toBe(true);

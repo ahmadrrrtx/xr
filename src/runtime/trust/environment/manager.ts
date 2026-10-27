@@ -186,13 +186,14 @@ export class EnvironmentManager {
     const injection = this.broker.prepareInjection(grant.credentials.refs);
     const augmentedExec: EnvironmentExecutable = {
       ...exec,
-      // Carry grant limits for backends that enforce them (ulimit/--memory).
-      ...({
-        cpuSeconds: grant.resources.cpuSeconds,
-        memoryBytes: grant.resources.memoryBytes,
-        maxProcesses: grant.proc.maxProcesses,
-      } as Record<string, unknown>),
-    } as EnvironmentExecutable;
+      // Grant ceilings (including expiry) override a caller's wider request.
+      timeoutMs: Math.min(exec.timeoutMs, grant.resources.wallClockMs, Math.max(1, grant.expiresAt - Date.now())),
+      maxOutputBytes: Math.min(exec.maxOutputBytes, grant.resources.maxOutputBytes),
+      cpuSeconds: grant.resources.cpuSeconds,
+      memoryBytes: grant.resources.memoryBytes,
+      maxProcesses: grant.proc.maxProcesses,
+      maxTempBytes: grant.resources.maxTempBytes,
+    };
 
     let result: EnvironmentRunResult;
     let quarantined = false;
@@ -221,6 +222,9 @@ export class EnvironmentManager {
       this.activeEnvironments = Math.max(0, this.activeEnvironments - 1);
     }
 
+    // Scrub while broker values still exist. Revoking first made echoing an
+    // injected non-standard secret leak through observation/audit persistence.
+    result = { ...result, stdout: this.broker.redact(result.stdout), stderr: this.broker.redact(result.stderr), boundaryDetail: result.boundaryDetail ? this.broker.redact(result.boundaryDetail) : undefined };
     // Cleanup: revoke credentials (ephemeral backends tear themselves down).
     const revoked = this.broker.revoke(grant.credentials.refs);
     // Quarantine on uncertain/boundary states to prevent unsafe reuse.
@@ -234,7 +238,7 @@ export class EnvironmentManager {
 
     const cleanup: CleanupResult = {
       state: revoked >= grant.credentials.refs.length ? "succeeded" : "partial",
-      processesKilled: result.boundaryEvent ? 1 : 0,
+      processesKilled: null, // no fabricated count from an exit/boundary flag
       credentialsRevoked: revoked,
       tempRemoved: true, // ephemeral tmpfs is destroyed with the sandbox
       detail: quarantined ? result.boundaryDetail : undefined,

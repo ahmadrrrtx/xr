@@ -7,12 +7,13 @@
  * desktop/.xr-dev/token — the file the Vite proxy reads on every request. The
  * token never enters the browser bundle; it only travels proxy → daemon.
  *
- *   bun run engine                # port 3141, XR_HOME = ~/.xr (the real install)
- *   XR_HOME=~/.xr-dev bun run engine --port 3142
+ *   bun run engine                # port 3141, state = ~/.xr-desktop (independent of CLI)
+ *   XR_DESKTOP_HOME=~/.xr-desktop-dev bun run engine --port 3142
  *
  * The packaged app does not use this: the Tauri shell spawns the compiled
  * sidecar itself (src-tauri/src/commands/engine.rs).
  */
+import { desktopEngineHome } from './engine-home';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,14 +24,20 @@ const tokenDir = resolve(here, '..', '.xr-dev');
 const tokenFile = resolve(tokenDir, 'token');
 
 const args = process.argv.slice(2);
-if (!args.includes('--port')) args.push('--port', process.env.XR_DEV_PORT ?? '3141');
+if (!args.includes('--port'))
+  args.push('--port', process.env.XR_DEV_PORT ?? '3141');
 
-mkdirSync(tokenDir, { recursive: true });
+mkdirSync(tokenDir, { recursive: true, mode: 0o700 });
 rmSync(tokenFile, { force: true });
 
 const child = Bun.spawn(['bun', 'run', 'src/index.ts', 'serve', ...args], {
   cwd: repoRoot,
-  env: { ...process.env, NO_COLOR: '1' },
+  env: {
+    ...process.env,
+    XR_HOME: desktopEngineHome(),
+    XR_SECRET_NAMESPACE: 'desktop',
+    NO_COLOR: '1',
+  },
   stdout: 'pipe',
   stderr: 'inherit',
 });
@@ -46,12 +53,14 @@ let buffer = '';
       const line = buffer.slice(0, nl);
       buffer = buffer.slice(nl + 1);
       // Never echo the token to a shared terminal more than the daemon already does.
-      console.log(line);
+      if (!/Token:\s*[0-9a-f]{32,}/.test(line)) console.log(line);
       const m = /Token:\s*([0-9a-f]{32,})/.exec(line);
       if (m && !wrote) {
         writeFileSync(tokenFile, m[1], { mode: 0o600 });
         wrote = true;
-        console.log(`[dev-engine] token written to ${tokenFile} (read by the Vite proxy)`);
+        console.log(
+          `[dev-engine] token written to ${tokenFile} (read by the Vite proxy)`
+        );
       }
     }
   }

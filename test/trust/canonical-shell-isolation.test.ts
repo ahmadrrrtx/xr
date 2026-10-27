@@ -126,6 +126,9 @@ describe("Phase 4 · T1/T3 — canonical-path shell isolation", () => {
       const turn2: ModelTurn = { message: "done", toolCalls: [], done: true };
       const deps = {
         provider: scriptedProvider([turn1, turn2]),
+        // Test transport has no market price. Explicit synthetic rates keep
+        // admission honest and let this fixture reach the shell boundary.
+        pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
         store,
         cwd,
         approve: async () => true,
@@ -166,6 +169,9 @@ describe("Phase 4 · T1/T3 — canonical-path shell isolation", () => {
       const turn2: ModelTurn = { message: "done", toolCalls: [], done: true };
       const deps = {
         provider: scriptedProvider([turn1, turn2]),
+        // Test transport has no market price. Explicit synthetic rates keep
+        // admission honest and let this fixture reach the shell boundary.
+        pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
         store,
         cwd,
         approve: async () => true,
@@ -200,6 +206,9 @@ describe("Phase 4 · T1/T3 — canonical-path shell isolation", () => {
       const turn2: ModelTurn = { message: "done", toolCalls: [], done: true };
       const deps = {
         provider: scriptedProvider([turn1, turn2]),
+        // Test transport has no market price. Explicit synthetic rates keep
+        // admission honest and let this fixture reach the shell boundary.
+        pricing: { inPerMTok: 0, outPerMTok: 0, source: "deterministic no-network fixture" },
         store,
         cwd,
         approve: async () => true,

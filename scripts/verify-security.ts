@@ -1,227 +1,177 @@
 #!/usr/bin/env bun
-
-/**
- * XR Security Verification Script
- * 
- * This script verifies that all security fixes are properly implemented.
- * Run this after deploying the security fixes.
- */
-
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║            XR Security Verification Script                        ║
-╚══════════════════════════════════════════════════════════════╝
-
-Checking security fixes for:
-1. Plugin sandbox bypass (regex → VM isolation)
-2. Browser --no-sandbox flag (disabled → enabled by default)
-3. MCP environment leakage (full env → allow-list)
-
-`);
-
-let passed = 0;
-let failed = 0;
-
-function check(name: string, checkFn: () => boolean) {
-  const result = checkFn();
-  if (result) {
-    console.log(`✅ PASS: ${name}`);
-    passed++;
-  } else {
-    console.log(`❌ FAIL: ${name}`);
-    failed++;
-  }
-}
-
-// ── Check 1: Plugin Loader ────────────────────────────────────────
-
-console.log(`\n[1] Plugin Loader Security\n${"=".repeat(50)}`);
-
-const loaderSource = readFileSync(join(__dirname, "../src/plugins/loader.ts"), "utf8");
-
-check("VM isolation function exists", () => {
-  return loaderSource.includes("loadInIsolatedContext");
-});
-
-check("createContext is used", () => {
-  return loaderSource.includes("createContext");
-});
-
-check("VM context is frozen", () => {
-  return loaderSource.includes("Object.freeze(context)");
-});
-
-check("Plugin timeout is set", () => {
-  return loaderSource.includes("timeout: 5000");
-});
-
-check("No direct import() without VM", () => {
-  // Should use loadInIsolatedContext, not direct import
-  const lines = loaderSource.split("\n");
-  let inIsolatedContext = false;
-  for (const line of lines) {
-    if (line.includes("loadInIsolatedContext")) inIsolatedContext = true;
-    if (inIsolatedContext && line.includes("import(") && !line.includes("//")) {
-      return false;
-    }
-  }
-  return true;
-});
-
-// ── Check 2: Browser Security ─────────────────────────────────────
-
-console.log(`\n[2] Browser Security\n${"=".repeat(50)}`);
-
-const browserSource = readFileSync(join(__dirname, "../src/control/browser.ts"), "utf8");
-
-check("No --no-sandbox in default config", () => {
-  // Should not have --no-sandbox outside of unsafe mode check
-  const lines = browserSource.split("\n");
-  let inUnsafeCheck = false;
-  for (const line of lines) {
-    if (line.includes("XR_BROWSER_UNSAFE")) inUnsafeCheck = true;
-    if (line.includes("--no-sandbox") && !inUnsafeCheck) {
-      return false;
-    }
-  }
-  return true;
-});
-
-check("Sandbox enabled by default", () => {
-  return browserSource.includes("--enable-sandbox");
-});
-
-check("XR_BROWSER_UNSAFE opt-in exists", () => {
-  return browserSource.includes("XR_BROWSER_UNSAFE");
-});
-
-check("Warning logged when sandbox disabled", () => {
-  return browserSource.includes("WARNING: Browser sandbox is DISABLED");
-});
-
-check("URL validation present", () => {
-  return browserSource.includes("Unsupported protocol");
-});
-
-// ── Check 3: MCP Client Security ──────────────────────────────────
-
-console.log(`\n[3] MCP Client Security\n${"=".repeat(50)}`);
-
-const mcpSource = readFileSync(join(__dirname, "../src/mcp/client.ts"), "utf8");
-
-check("Environment allow-list exists", () => {
-  return mcpSource.includes("createAllowedEnvironment");
-});
-
-check("ALLOWED_ENV_PREFIXES defined", () => {
-  return mcpSource.includes("ALLOWED_ENV_PREFIXES");
-});
-
-check("ALLOWED_ENV_EXACT defined", () => {
-  return mcpSource.includes("ALLOWED_ENV_EXACT");
-});
-
-check("No full process.env inheritance", () => {
-  return !mcpSource.includes("...process.env,");
-});
-
-check("shell: false used", () => {
-  return mcpSource.includes("shell: false");
-});
-
-check("Command validation present", () => {
-  return mcpSource.includes("Potentially unsafe command");
-});
-
-check("sanitizeObject function exists", () => {
-  return mcpSource.includes("sanitizeObject");
-});
-
-check("Prototype pollution prevention", () => {
-  return mcpSource.includes("__proto__") && mcpSource.includes("constructor");
-});
-
-// ── Check 4: Host Security ───────────────────────────────────────
-
-console.log(`\n[4] Plugin Host Security\n${"=".repeat(50)}`);
-
-const hostSource = readFileSync(join(__dirname, "../src/plugins/host.ts"), "utf8");
-
-check("Path normalization present", () => {
-  return hostSource.includes("normalize(rel)");
-});
-
-check("Path traversal prevention", () => {
-  return hostSource.includes("Path traversal detected");
-});
-
-check("Host object is frozen", () => {
-  return hostSource.includes("Object.freeze(host)");
-});
-
-check("Input validation present", () => {
-  return hostSource.includes("Invalid path") && hostSource.includes("Invalid content");
-});
-
-check("Audit logging present", () => {
-  return hostSource.includes("audit(");
-});
-
-check("Sensitive data redaction", () => {
-  return hostSource.includes("redactLine");
-});
-
-// ── Check 5: Documentation ────────────────────────────────────────
-
-console.log(`\n[5] Security Documentation\n${"=".repeat(50)}`);
-
-try {
-  const securityDoc = readFileSync(join(__dirname, "../SECURITY.md"), "utf8");
-  check("SECURITY.md exists", () => true);
-  check("SECURITY.md has threat model", () => {
-    return securityDoc.includes("Threat Model");
-  });
-  check("SECURITY.md has architecture", () => {
-    return securityDoc.includes("Security Architecture");
-  });
-} catch {
-  check("SECURITY.md exists", () => false);
+/** Behavioral gate replacing the historical source.includes() checklist.
+ * Linux must actually pass a kernel namespace self-check. Mock tests alone
+ * cannot make this gate green. Online dependency audit is mandatory by default. */
+import {
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { boundedCheck } from "./lib/bounded-check";
+const ROOT = resolve(import.meta.dir, ".."),
+  args = process.argv.slice(2),
+  outIndex = args.indexOf("--out");
+if (
+  args.some(
+    (a, i) =>
+      !["--offline", "--full", "--out"].includes(a) &&
+      !(outIndex >= 0 && i === outIndex + 1),
+  ) ||
+  (outIndex >= 0 &&
+    (!args[outIndex + 1] || args[outIndex + 1]!.startsWith("--")))
+)
+  throw new Error(
+    "Usage: bun scripts/verify-security.ts [--out report.json] [--full (canonical segmented parity, blackboxes separate)] [--offline (incomplete, nonzero)]",
+  );
+const saved = { ...process.env },
+  home = mkdtempSync(join(tmpdir(), "xr-security-gate-"));
+const allowed = new Set([
+  "PATH",
+  "Path",
+  "SystemRoot",
+  "WINDIR",
+  "COMSPEC",
+  "PATHEXT",
+  "TEMP",
+  "TMP",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "CI",
+  "GITHUB_REF_TYPE",
+  "GITHUB_REF_NAME",
+  "XR_TEST_BWRAP_PATH",
+  "XR_SEG_TIMEOUT",
+  "BUN_RUNTIME_TRANSPILER_CACHE_PATH",
+]);
+for (const k of Object.keys(process.env))
+  if (!allowed.has(k)) delete process.env[k];
+process.env.HOME = home;
+process.env.XR_HOME = home;
+process.env.XR_SECRET_BACKEND = "file";
+process.env.XR_NETWORK_PROBES = "off";
+process.env.XR_SECRET_NAMESPACE = "desktop";
+type Stage = {
+  name: string;
+  status: "PASS" | "FAIL" | "BLOCKED" | "NOT RUN" | "NOT APPLICABLE";
+  exitCode: number | null;
+  wallMs: number;
+  detail?: string;
+  command?: string[];
+};
+const stages: Stage[] = [],
+  start = performance.now();
+async function command(name: string, command: string[], timeout = 120_000): Promise<void> {
+  console.log(`\n=== ${name}: ${command.join(" ")} ===`);
+  const r = await boundedCheck(command,{cwd:ROOT,env:process.env,timeoutMs:timeout,onOutput:text=>process.stdout.write(text)});
+  stages.push({name,status:r.exitCode===0&&!r.error&&!r.timedOut&&!r.outputTruncated?"PASS":"FAIL",exitCode:r.exitCode,wallMs:r.wallMs,command,...(r.error||r.timedOut||r.outputTruncated?{detail:r.error??(r.timedOut?"bounded process-group timeout":"output ceiling exceeded")}:{})});
 }
 
 try {
-  const migrationDoc = readFileSync(join(__dirname, "../MIGRATION.md"), "utf8");
-  check("MIGRATION.md exists", () => true);
-  check("MIGRATION.md has steps", () => {
-    return migrationDoc.includes("Migration Steps");
+  const expected = await Bun.file(join(ROOT, ".bun-version")).text();
+  stages.push({
+    name: "pinned-bun",
+    status: Bun.version === expected.trim() ? "PASS" : "FAIL",
+    exitCode: null,
+    wallMs: 0,
+    detail: `actual ${Bun.version}; expected ${expected.trim()}`,
   });
-} catch {
-  check("MIGRATION.md exists", () => false);
-}
-
-// ── Summary ───────────────────────────────────────────────────────
-
-console.log(`\n${"=".repeat(60)}`);
-console.log(`SECURITY VERIFICATION SUMMARY`);
-console.log(`${"=".repeat(60)}\n`);
-
-console.log(`✅ Passed: ${passed}`);
-console.log(`❌ Failed: ${failed}`);
-console.log(`📊 Total:  ${passed + failed}`);
-
-if (failed === 0) {
-  console.log(`\n🎉 ALL SECURITY CHECKS PASSED!`);
-  console.log(`\nXR is now secure against:`);
-  console.log(`  - Plugin sandbox bypass (RCE)`);
-  console.log(`  - Browser --no-sandbox (RCE)`);
-  console.log(`  - MCP environment leakage (Info Disclosure)`);
-  console.log(`\n✅ Safe to deploy to production.`);
-  process.exit(0);
-} else {
-  console.log(`\n⚠️  SOME SECURITY CHECKS FAILED!`);
-  console.log(`\nPlease review the failed checks above.`);
-  console.log(`Do NOT deploy to production until all checks pass.`);
-  process.exit(1);
+  if (process.platform === "linux") {
+    const { NamespaceSandboxBackend } =
+      await import("../src/runtime/trust/environment/namespace");
+    const t = performance.now(),
+      unshare = new NamespaceSandboxBackend({ only: "unshare" }),
+      bwrap = new NamespaceSandboxBackend({
+        only: "bwrap",
+        ...(process.env.XR_TEST_BWRAP_PATH
+          ? { bwrapPath: process.env.XR_TEST_BWRAP_PATH }
+          : {}),
+      });
+    const a = await unshare.detect(),
+      b = await bwrap.detect();
+    stages.push({
+      name: "linux-kernel-isolation",
+      status: a || b ? "PASS" : "BLOCKED",
+      exitCode: null,
+      wallMs: performance.now() - t,
+      detail: `real self-check: unshare=${a},bwrap=${b}; at least one mandatory; behavioral effect tests follow`,
+    });
+  } else
+    stages.push({
+      name: "linux-kernel-isolation",
+      status: "NOT APPLICABLE",
+      exitCode: null,
+      wallMs: 0,
+      detail:
+        "Not Linux; this does not validate native macOS/Windows containment",
+    });
+  await command("release-identity", [
+    process.execPath,
+    "scripts/release-manifest.ts",
+    "--check",
+  ]);
+  if (process.platform === "linux")
+    await command(
+      "linux-isolation-effects",
+      [
+        process.execPath,
+        "test",
+        "test/trust/namespace-confinement.test.ts",
+        "test/trust/inherited-submount.test.ts",
+        "test/trust/process-bounds.test.ts",
+      ],
+      60_000,
+    );
+  await command("behavioral-security", args.includes("--full") ? ["bash","scripts/parity-suite-runner.sh",process.platform,"--exclude","^test/e2e-blackbox/"] : [
+    process.execPath,"test","test/trust","test/security","test/providers","test/daemon","test/phase1/turn-contract.test.ts","test/reliability/agent-benchmark.test.ts","test/release","test/supply-chain"
+  ], args.includes("--full") ? 600_000 : 120_000);
+  await command("agent-smoke", [
+    process.execPath,
+    "scripts/agent-benchmark.ts",
+    "--smoke",
+  ]);
+  if (args.includes("--offline"))
+    stages.push({
+      name: "online-dependency-audit",
+      status: "NOT RUN",
+      exitCode: null,
+      wallMs: 0,
+      detail: "Offline explicitly requested; gate remains INCOMPLETE/nonzero",
+    });
+  else
+    await command(
+      "online-dependency-audit",
+      ["bash", "scripts/audit-deps.sh", ".", "desktop"],
+      120_000,
+    );
+  const complete = !stages.some((s) =>
+    ["FAIL", "BLOCKED", "NOT RUN"].includes(s.status),
+  );
+  const report = {
+    schemaVersion: 1,
+    gate: "xr-behavioral-security",
+    status: complete ? "PASS" : "NOT READY",
+    platform: process.platform,
+    arch: process.arch,
+    bun: Bun.version,
+    wallMs: performance.now() - start,
+    scope:
+      "Executed source/runtime security regressions + Linux kernel self-check + governed fixture smoke + dependency audit. NOT native GUI, production signatures, live providers or whole-machine absence of effects.",
+    stages,
+  };
+  if (outIndex >= 0) {
+    const path = resolve(args[outIndex + 1]!);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(report, null, 2) + "\n");
+  }
+  console.log(JSON.stringify(report, null, 2));
+  process.exitCode = complete ? 0 : 1;
+} finally {
+  for (const k of Object.keys(process.env)) delete process.env[k];
+  Object.assign(process.env, saved);
+  rmSync(home, { recursive: true, force: true });
 }

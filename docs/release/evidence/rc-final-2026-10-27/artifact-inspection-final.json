@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "version": "1.1.1-rc.1",
+  "publicVersion": "1.0.0",
+  "tarballFiles": 1671,
+  "tarballIdentitySurfacesMatched": 3,
+  "privateArtifactPathTripwires": "PASS (names only; not a whole-content secret certification)",
+  "debianVersion": "1.1.1~rc.1",
+  "debianPrereleaseOrdersBeforeStable": true,
+  "debPayloadMatchesCompiledBinary": true,
+  "extractedBinaryRunsWithoutGlobalBunOnPath": true,
+  "binaryVersionOutput": "v1.1.1-rc.1 (Graphite)",
+  "publisherAuthentication": "BLOCKED: no production signature/provenance; checksums alone do not authenticate publisher",
+  "platform": "Linux x64",
+  "files": [
+    {
+      "name": "rrrtx-xr-1.1.1-rc.1.tgz",
+      "bytes": 2433065,
+      "sha256": "94a4127f3331f10eb156ad27696af4bf7b8dee143385e7fa4554eb19163755b6"
+    },
+    {
+      "name": "xr-linux-x64",
+      "bytes": 88421856,
+      "sha256": "c0fb6dc759c0af25dab686b380aaa57cdef21d33d50d321a14537905d11f7475"
+    },
+    {
+      "name": "xr_1.1.1-rc.1_amd64.deb",
+      "bytes": 38116614,
+      "sha256": "19ab7a0bf0e3976b3c9315264b3f106e1bc6648368e5891ea7ed85ccd9356696"
+    },
+    {
+      "name": "sbom.cyclonedx.json",
+      "bytes": 669789,
+      "sha256": "27a7260d208a01da7ffb0638401e65a6e834424d76ac9592271317269f845acf"
+    }
+  ]
+}

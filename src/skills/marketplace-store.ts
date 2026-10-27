@@ -28,13 +28,13 @@ export function ensureSkillsHome(): void {
 }
 
 const MarketplaceRegistrySchema = z.object({
-  version: z.literal(1).default(1),
-  installations: z.record(InstallationSchema).default({}),
-  publishers: z.record(PublisherSchema).default({}),
-  reviews: z.record(ReviewSchema).default({}),
-  disabledBundled: z.array(z.string()).default([]),
-  favorites: z.array(z.string()).default([]),
-  analytics: z.record(z.object({ installs: z.number().int().default(0), runs: z.number().int().default(0), lastRunAt: z.number().int().optional() })).default({}),
+  version: z.literal(1).prefault(1),
+  installations: z.record(z.string(), InstallationSchema).prefault({}),
+  publishers: z.record(z.string(), PublisherSchema).prefault({}),
+  reviews: z.record(z.string(), ReviewSchema).prefault({}),
+  disabledBundled: z.array(z.string()).prefault([]),
+  favorites: z.array(z.string()).prefault([]),
+  analytics: z.record(z.string(), z.object({ installs: z.number().int().prefault(0), runs: z.number().int().prefault(0), lastRunAt: z.number().int().optional() })).prefault({}),
 });
 
 type MarketplaceRegistry = z.infer<typeof MarketplaceRegistrySchema>;

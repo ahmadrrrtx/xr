@@ -27,10 +27,19 @@ import {
   startMeter,
   type Meter,
 } from '@/budget/enforce';
-import { estimateCost } from '@/budget/models';
+import { UsageAccumulator } from './usage';
+import { budgetBackend } from '@/budget/api';
+import { catalogQuote } from './catalog';
+import { tightenEngineLimits } from './budget';
+import { useEngineStore } from '@/stores/engineStore';
 import type { PreCallCheck } from '@/budget/types';
 import type { ToolCallRecord } from '@/lib/chat-db';
-import type { ChatTurn, StreamErrorKind, StreamEvent, StreamOptions } from '@/lib/llm';
+import type {
+  ChatTurn,
+  StreamErrorKind,
+  StreamEvent,
+  StreamOptions,
+} from '@/lib/llm';
 import { useBudgetStore } from '@/stores/budgetStore';
 import { bridgeEngineApproval } from './approvals';
 import { EnvelopeDecoder } from './envelope';
@@ -77,7 +86,9 @@ function errorKindFor(status: number): StreamErrorKind {
   return 'model';
 }
 
-async function readErrorBody(res: Response): Promise<{ message: string; retryable: boolean; code?: string }> {
+async function readErrorBody(
+  res: Response
+): Promise<{ message: string; retryable: boolean; code?: string }> {
   let message = `Engine answered ${res.status}`;
   let retryable = res.status === 429 || res.status >= 500;
   let code: string | undefined;
@@ -101,24 +112,68 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     if (!controller.signal.aborted || e.type === 'budget_charged') onEvent(e);
   };
   const onOuterAbort = (): void => controller.abort();
-  if (opts.signal.aborted) controller.abort();
+  if (opts.signal.aborted) return;
   else opts.signal.addEventListener('abort', onOuterAbort, { once: true });
 
   const { message, history, system } = splitTurns(opts.messages);
   if (!message.trim()) {
     emit({ type: 'error', message: 'Nothing to send.', kind: 'request' });
+    opts.signal.removeEventListener('abort', onOuterAbort);
     return;
   }
   const context = [opts.context?.trim(), system].filter(Boolean).join('\n\n');
-  const tokensIn = opts.messages.reduce((t, m) => t + estimateTokens(m.content), 0);
+  const tokensIn = opts.messages.reduce(
+    (t, m) => t + estimateTokens(m.content),
+    0
+  );
 
   // ── Local budget governor (same gate as every surface) ────────────────
   let check: PreCallCheck | null = null;
   let meter: Meter | null = null;
-  let model = opts.model;
+  const model = opts.model;
+  let engineTaskCap = Number.POSITIVE_INFINITY;
   if (opts.budget) {
+    try {
+      const advisory = await budgetBackend().init(
+        new Date().getTimezoneOffset()
+      );
+      useBudgetStore.setState({
+        settings: advisory.settings,
+        overview: advisory,
+        error: null,
+      });
+      await useEngineStore.getState().loadCatalog();
+      const ledger = await tightenEngineLimits(
+        useBudgetStore.getState().settings
+      );
+      if ((ledger.config.perTaskUsd ?? 0) > 0)
+        engineTaskCap = ledger.config.perTaskUsd!;
+    } catch (e) {
+      emit({
+        type: 'error',
+        kind: 'request',
+        message:
+          e instanceof Error
+            ? e.message
+            : 'Engine policy unavailable; nothing sent',
+      });
+      opts.signal.removeEventListener('abort', onOuterAbort);
+      return;
+    }
+    const target = resolveEngineModel(model);
+    const provider =
+      target.provider ?? useEngineStore.getState().providers?.primary ?? '';
+    const quote = catalogQuote(
+      useEngineStore.getState().catalog,
+      provider,
+      target.model ?? '',
+      tokensIn,
+      PRE_CALL_OUT_TOKENS
+    );
     check = await budgetGate({
       model,
+      allowDownshift: false,
+      estimatedCost: quote,
       estimatedTokensIn: tokensIn,
       estimatedTokensOut: PRE_CALL_OUT_TOKENS,
       agent: opts.budget.agent ?? 'main',
@@ -127,23 +182,40 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
       surface: opts.budget.surface,
     });
     if (!check.allowed) {
-      emit({ type: 'budget_blocked', code: check.code, reason: check.reason ?? 'Budget limit reached.' });
+      emit({
+        type: 'budget_blocked',
+        code: check.code,
+        reason: check.reason ?? 'Budget limit reached.',
+      });
+      opts.signal.removeEventListener('abort', onOuterAbort);
       return;
     }
-    if (check.downgradedToModel) {
-      emit({ type: 'model_switched', from: model, to: check.downgradedToModel, why: check.downshiftWhy });
-      model = check.downgradedToModel;
+    if (check.model !== model || check.downgradedToModel) {
+      emit({
+        type: 'error',
+        kind: 'request',
+        message:
+          'A secondary budget guard attempted to change the pinned model. Nothing sent; choose a different target explicitly.',
+      });
+      opts.signal.removeEventListener('abort', onOuterAbort);
+      return;
     }
     meter = startMeter(check);
   }
 
-  // The engine's own hard stop for this task: the per-request cap, tightened
+  // Engine estimated-admission threshold for this task (not a billing ceiling): the per-request cap, tightened
   // by whatever is left under the hard cap.
   const settings = useBudgetStore.getState().settings;
   const governorCap = opts.budget
     ? Math.max(
         0,
-        Math.min(settings.perRequestLimit, check?.hardRemaining ?? Number.POSITIVE_INFINITY),
+        Math.min(
+          settings.perRequestLimit > 0
+            ? settings.perRequestLimit
+            : Number.POSITIVE_INFINITY,
+          engineTaskCap,
+          check?.hardRemaining ?? Number.POSITIVE_INFINITY
+        )
       )
     : undefined;
   // Phase 19: an agent's own per-run cap tightens (never loosens) the stop.
@@ -152,7 +224,8 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
       ? Math.min(opts.budgetUsd, governorCap ?? Number.POSITIVE_INFINITY)
       : governorCap;
 
-  let usage: { inTokens: number; outTokens: number } | null = null;
+  const usage = new UsageAccumulator();
+  let doneUsage: { inTokens: number; outTokens: number } | undefined;
   let runId: string | null = null;
   let settled = false;
   const settle = (): void => {
@@ -161,28 +234,44 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     const b = opts.budget;
     const c = check;
     const m = meter;
-    const inTok = usage?.inTokens ?? tokensIn;
-    const outTok = usage?.outTokens ?? m?.tokensOut ?? 0;
+    const sum = usage.summary(
+      doneUsage,
+      finished && !controller.signal.aborted && !lastError
+    );
+    if (sum.usdEstimate === null) {
+      // No guessed tariff, no invented zero. The engine persists conservatively
+      // settled attempts even when this client lost the usage frame on cancel.
+      emit({ type: 'budget_charged', costUsd: null, model: c.model });
+      return;
+    }
     void recordSpend({
       kind: 'llm_call',
       agent: b.agent ?? 'main',
       workspace: b.workspace ?? null,
       sessionId: b.sessionId,
       model: c.model,
-      tokensIn: inTok,
-      tokensOut: outTok,
-      costUsd: estimateCost(c.model, inTok, outTok),
+      tokensIn: sum.inTokens,
+      tokensOut: sum.outTokens,
+      costUsd: sum.usdEstimate,
       category: 'llm',
       detail: {
         surface: b.surface,
         engine: true,
         ...(runId ? { runId } : {}),
-        ...(usage ? { measured: true } : { estimated: true }),
+        attempts: usage.attempts,
+        costSource: 'engine-attempt-settlement',
+        guarantee:
+          'estimated token cost; engine ledger authoritative; not an invoice ceiling',
         ...(m?.cutoff ? { cutoff: true } : {}),
         ...(c.downgradedToModel ? { from: opts.model } : {}),
       },
     }).then((res) => {
-      if (res) emit({ type: 'budget_charged', costUsd: res.event.costUsd, model: c.model });
+      if (res)
+        emit({
+          type: 'budget_charged',
+          costUsd: res.event.costUsd,
+          model: c.model,
+        });
     });
   };
 
@@ -196,7 +285,9 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     ...(opts.sessionId ? { sessionId: opts.sessionId } : {}),
     ...(target.provider ? { provider: target.provider } : {}),
     ...(target.model ? { model: target.model } : {}),
-    ...(perTaskUsd !== undefined && Number.isFinite(perTaskUsd) ? { budget: perTaskUsd } : {}),
+    ...(perTaskUsd !== undefined && Number.isFinite(perTaskUsd)
+      ? { budget: perTaskUsd }
+      : {}),
     ...(opts.maxSteps ? { maxSteps: opts.maxSteps } : {}),
     ...(opts.toolsAllow?.length ? { toolsAllow: opts.toolsAllow } : {}),
     ...(opts.toolsDeny?.length ? { toolsDeny: opts.toolsDeny } : {}),
@@ -223,7 +314,12 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
       });
       return;
     }
-    emit({ type: 'error', kind: 'engine_down', message: 'Engine unreachable', retryable: true });
+    emit({
+      type: 'error',
+      kind: 'engine_down',
+      message: 'Engine unreachable',
+      retryable: true,
+    });
     return;
   }
 
@@ -244,10 +340,17 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
   const decoder = new EnvelopeDecoder();
   let shown = ''; // what the UI has been given so far
   const calls = new Map<string, ToolCallRecord>();
-  const approvalOutcome = new Map<string, { approved: boolean; blocked: boolean; reason?: string }>();
+  const approvalOutcome = new Map<
+    string,
+    { approved: boolean; blocked: boolean; reason?: string }
+  >();
   const approvalWaits: Promise<unknown>[] = [];
   let finished = false;
-  let lastError: { message: string; code?: string; retryable?: boolean } | null = null;
+  let lastError: {
+    message: string;
+    code?: string;
+    retryable?: boolean;
+  } | null = null;
   let budgetStopMessage: string | null = null;
   let maxStepsHit = false;
 
@@ -278,17 +381,27 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
       const a = frame.approval_required;
       // The loop emits tool_call before it asks; pair by tool name (newest
       // still-running call) so the card shows the pending state.
-      const waiting = [...calls.values()].reverse().find((c) => c.tool === a.tool && c.status === 'running');
+      const waiting = [...calls.values()]
+        .reverse()
+        .find((c) => c.tool === a.tool && c.status === 'running');
       if (waiting) {
         waiting.status = 'waiting-approval';
         waiting.approvalId = a.id;
         emit({ type: 'tool_waiting', id: waiting.id, approvalId: a.id });
       }
-      emit({ type: 'status', status: 'awaiting_approval', message: `Waiting for your approval: ${a.tool}` });
+      emit({
+        type: 'status',
+        status: 'awaiting_approval',
+        message: `Waiting for your approval: ${a.tool}`,
+      });
       approvalWaits.push(
         bridgeEngineApproval(a, controller.signal).then((o) => {
-          approvalOutcome.set(a.tool, { approved: o.approved, blocked: o.blocked === true, reason: o.reason });
-        }),
+          approvalOutcome.set(a.tool, {
+            approved: o.approved,
+            blocked: o.blocked === true,
+            reason: o.reason,
+          });
+        })
       );
       return;
     }
@@ -300,7 +413,8 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
           runId = frame.runId;
           emit({ type: 'run', runId });
         }
-        if (frame.status === 'budget_stopped') budgetStopMessage = frame.message ?? 'Stopped at the budget cap.';
+        if (frame.status === 'budget_stopped')
+          budgetStopMessage = frame.message ?? 'Stopped at the budget cap.';
         emit({
           type: 'status',
           status: frame.status,
@@ -340,7 +454,11 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
       case 'tool_result': {
         const call = calls.get(frame.id);
         const outcome = approvalOutcome.get(frame.tool);
-        const denied = !frame.ok && !!call?.approvalId && outcome !== undefined && !outcome.approved;
+        const denied =
+          !frame.ok &&
+          !!call?.approvalId &&
+          outcome !== undefined &&
+          !outcome.approved;
         const output = frame.ok
           ? (frame.result ?? '')
           : (frame.error ?? frame.result ?? 'Tool failed.');
@@ -357,18 +475,22 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
         return;
       }
       case 'usage': {
-        // Local runtimes report 0/0 — that is "not measured", not "free of tokens".
-        if (frame.usage && ((frame.usage.inTokens ?? 0) > 0 || (frame.usage.outTokens ?? 0) > 0)) {
-          usage = { inTokens: frame.usage.inTokens ?? 0, outTokens: frame.usage.outTokens ?? 0 };
-          emit({ type: 'usage', ...usage });
-        }
+        usage.add(frame);
+        const sum = usage.summary();
+        emit({
+          type: 'usage',
+          inTokens: sum.inTokens,
+          outTokens: sum.outTokens,
+        });
         return;
       }
       case 'error': {
         lastError = {
           message: frame.message ?? frame.error ?? 'The model run failed.',
           ...(frame.code ? { code: frame.code } : {}),
-          ...(typeof frame.retryable === 'boolean' ? { retryable: frame.retryable } : {}),
+          ...(typeof frame.retryable === 'boolean'
+            ? { retryable: frame.retryable }
+            : {}),
         };
         return;
       }
@@ -378,10 +500,13 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
           runId = frame.runId;
           emit({ type: 'run', runId });
         }
-        if (frame.usage && ((frame.usage.inTokens ?? 0) > 0 || (frame.usage.outTokens ?? 0) > 0)) {
-          usage = { inTokens: frame.usage.inTokens ?? 0, outTokens: frame.usage.outTokens ?? 0 };
-          emit({ type: 'usage', ...usage });
-        }
+        doneUsage = frame.usage;
+        const sum = usage.summary(doneUsage);
+        emit({
+          type: 'usage',
+          inTokens: sum.inTokens,
+          outTokens: sum.outTokens,
+        });
         const full = (frame.fullText ?? frame.finalMessage ?? '').trim();
         // The engine's extracted text is authoritative; a different streamed
         // preview (envelope guess, think tags) is replaced, never appended.
@@ -400,7 +525,12 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     if (!controller.signal.aborted) {
       opts.signal.removeEventListener('abort', onOuterAbort);
       settle();
-      emit({ type: 'error', kind: 'interrupted', message: e instanceof Error ? e.message : 'Stream interrupted.', retryable: true });
+      emit({
+        type: 'error',
+        kind: 'interrupted',
+        message: e instanceof Error ? e.message : 'Stream interrupted.',
+        retryable: true,
+      });
       return;
     }
   } finally {
@@ -415,27 +545,41 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
   // Terminal frame → honest outcome. Order matters: budget, model error,
   // then the normal completion.
   if (budgetStopMessage) {
-    if (shown.trim()) emit({ type: 'budget_cutoff', reason: budgetStopMessage });
-    else emit({ type: 'budget_blocked', code: 'engine-cap', reason: budgetStopMessage });
+    if (shown.trim())
+      emit({ type: 'budget_cutoff', reason: budgetStopMessage });
+    else
+      emit({
+        type: 'budget_blocked',
+        code: 'engine-cap',
+        reason: budgetStopMessage,
+      });
     emit({ type: 'done', stopped: 'budget' });
     settle();
     return;
   }
   if (lastError && !shown.trim() && calls.size === 0) {
     settle();
-    const err: { message: string; code?: string; retryable?: boolean } = lastError;
+    const err: { message: string; code?: string; retryable?: boolean } =
+      lastError;
     emit({
       type: 'error',
       kind: 'model',
       message: err.message,
       ...(err.code ? { code: err.code } : {}),
-      ...(typeof err.retryable === 'boolean' ? { retryable: err.retryable } : {}),
+      ...(typeof err.retryable === 'boolean'
+        ? { retryable: err.retryable }
+        : {}),
     });
     return;
   }
   if (!finished) {
     settle();
-    emit({ type: 'error', kind: 'interrupted', message: 'The engine closed the stream before the reply finished.', retryable: true });
+    emit({
+      type: 'error',
+      kind: 'interrupted',
+      message: 'The engine closed the stream before the reply finished.',
+      retryable: true,
+    });
     return;
   }
   if (lastError) {
@@ -444,7 +588,11 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     emit({ type: 'status', status: 'error', message: err.message });
   }
   if (maxStepsHit) {
-    emit({ type: 'status', status: 'done', message: 'Stopped at the step limit for this turn.' });
+    emit({
+      type: 'status',
+      status: 'done',
+      message: 'Stopped at the step limit for this turn.',
+    });
   }
   emit({ type: 'done', stopped: lastError ? 'error' : 'done' });
   settle();

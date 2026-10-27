@@ -1,0 +1,16 @@
+$ bash -c bun run release:check && bun run channel:check
+$ bun run scripts/release-manifest.ts --check
+  ok    package.json                 in sync at 1.1.0
+  ok    src/core/version.ts          in sync at 1.1.0
+  ok    website/src/lib/site.ts      in sync at 1.1.0
+  ok    README.md                    in sync at 1.1.0
+  ok    install.sh                   in sync at public 1.0.0
+  ok    install.ps1                  in sync at public 1.0.0
+  ok    desktop/src-tauri/tauri.conf.json in sync at 1.1.0
+  ok    desktop/src-tauri/Cargo.toml in sync at 1.1.0
+  ok    desktop/package.json         in sync at 1.1.0
+  ok    desktop/src-tauri/Cargo.lock in sync at 1.1.0
+
+[release-manifest] all 10 surfaces in sync at 1.1.0 (Graphite)
+$ bun run scripts/channel-manifest.ts --check
+[channel:check] ok — 5 channel configs in sync with release v1.1.0 (one canonical build, many channels)

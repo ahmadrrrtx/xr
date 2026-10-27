@@ -1,0 +1,47 @@
+$ bun test test/daemon/phase2b.test.ts
+bun test v1.4.2 (744846f84)
+
+test/daemon/phase2b.test.ts:
+{"ts":"2026-10-27T07:58:20.320Z","level":"info","event":"http.request","route":"files.write","method":"POST","mount":"v1","status":400,"duration_ms":4}
+(pass) Phase 2B · T-1 — files.write is approval-gated and scope-enforced > rejects path traversal BEFORE raising any approval [5.20ms]
+{"ts":"2026-10-27T07:58:20.322Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-27T07:58:20.322Z","level":"info","event":"http.request","route":"files.write","method":"POST","mount":"v1","status":400,"duration_ms":1}
+{"ts":"2026-10-27T07:58:20.348Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":0}
+(pass) Phase 2B · T-1 — files.write is approval-gated and scope-enforced > the approval wait fails fast with the request's own status (no opaque timeout) [27.81ms]
+{"ts":"2026-10-27T07:58:20.355Z","level":"info","event":"http.request","route":"files.write","method":"POST","mount":"v1","status":413,"duration_ms":6}
+(pass) Phase 2B · T-1 — files.write is approval-gated and scope-enforced > rejects oversized content (413) without an approval [7.37ms]
+{"ts":"2026-10-27T07:58:20.360Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":3}
+{"ts":"2026-10-27T07:58:20.386Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-27T07:58:20.389Z","level":"info","event":"http.request","route":"approvals.decide","method":"POST","mount":"v1","status":200,"duration_ms":3}
+{"ts":"2026-10-27T07:58:20.389Z","level":"info","event":"http.request","route":"files.write","method":"POST","mount":"v1","status":200,"duration_ms":33}
+(pass) Phase 2B · T-1 — files.write is approval-gated and scope-enforced > nothing touches disk until a human approves; approval → applied + audited [33.53ms]
+{"ts":"2026-10-27T07:58:20.391Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-27T07:58:20.417Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-27T07:58:20.418Z","level":"info","event":"http.request","route":"approvals.decide","method":"POST","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-27T07:58:20.418Z","level":"info","event":"http.request","route":"files.write","method":"POST","mount":"v1","status":200,"duration_ms":28}
+(pass) Phase 2B · T-1 — files.write is approval-gated and scope-enforced > denial is fail-closed: applied=false, disk untouched, audited [29.08ms]
+{"ts":"2026-10-27T07:58:20.419Z","level":"info","event":"http.request","route":"files.write","method":"POST","mount":"v1","status":409,"duration_ms":0}
+(pass) Phase 2B · T-1 — files.write is approval-gated and scope-enforced > staleness guard: a wrong baseMtimeMs is a 409, no approval raised [1.36ms]
+{"ts":"2026-10-27T07:58:20.422Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":2}
+{"ts":"2026-10-27T07:58:20.448Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-27T07:58:20.450Z","level":"info","event":"http.request","route":"approvals.decide","method":"POST","mount":"v1","status":200,"duration_ms":1}
+{"ts":"2026-10-27T07:58:20.450Z","level":"info","event":"http.request","route":"files.write","method":"POST","mount":"v1","status":200,"duration_ms":30}
+(pass) Phase 2B · T-1 — files.write is approval-gated and scope-enforced > creates new files (and parent dirs) only after approval [30.71ms]
+{"ts":"2026-10-27T07:58:20.454Z","level":"info","event":"http.request","route":"terminal.run","method":"POST","mount":"v1","status":403,"duration_ms":3}
+(pass) Phase 2B · T-2 — terminal.run is policy-first, approval-gated, streamed > dangerous commands are blocked by policy BEFORE any human is asked (403) [3.72ms]
+{"ts":"2026-10-27T07:58:20.455Z","level":"info","event":"http.request","route":"terminal.run","method":"POST","mount":"v1","status":400,"duration_ms":1}
+(pass) Phase 2B · T-2 — terminal.run is policy-first, approval-gated, streamed > empty command is a 400 [0.80ms]
+{"ts":"2026-10-27T07:58:20.460Z","level":"info","event":"http.request","route":"terminal.run","method":"POST","mount":"v1","status":200,"duration_ms":5}
+{"ts":"2026-10-27T07:58:20.461Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-27T07:58:20.463Z","level":"info","event":"http.request","route":"approvals.decide","method":"POST","mount":"v1","status":200,"duration_ms":2}
+(pass) Phase 2B · T-2 — terminal.run is policy-first, approval-gated, streamed > approved command streams output + exit over SSE and is audited [10.81ms]
+{"ts":"2026-10-27T07:58:20.471Z","level":"info","event":"http.request","route":"terminal.run","method":"POST","mount":"v1","status":200,"duration_ms":5}
+{"ts":"2026-10-27T07:58:20.472Z","level":"info","event":"http.request","route":"approvals.list","method":"GET","mount":"v1","status":200,"duration_ms":0}
+{"ts":"2026-10-27T07:58:20.473Z","level":"info","event":"http.request","route":"approvals.decide","method":"POST","mount":"v1","status":200,"duration_ms":1}
+(pass) Phase 2B · T-2 — terminal.run is policy-first, approval-gated, streamed > denial streams a denied status and never spawns anything [7.25ms]
+[suite-tmp] 1 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 1
+
+ 11 pass
+ 0 fail
+ 41 expect() calls
+Ran 11 tests across 1 file. [443.00ms]

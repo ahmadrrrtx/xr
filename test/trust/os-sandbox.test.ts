@@ -77,8 +77,26 @@ describe("Windows argument quoting (MSVCRT rules)", () => {
 });
 
 // ── Hardware/CI smoke (darwin, win32 with the opt-in) ─────────────────────
-const smoke = (process.platform === "darwin" || process.platform === "win32") && osSandboxOptIn();
-describe.if(smoke)(`native sandbox smoke (${process.platform})`, () => {
+//
+// `detect()` is resolved ONCE, here: the smoke below may only claim the
+// containment results for a mechanism the product actually offers on this
+// host. `namespace.ts` refuses the AppContainer mechanism outright until its
+// per-run SID/ACL lifecycle is verified (a shared SID accumulates workspace ACL
+// grants across runs), so on Windows the honest smoke is "the mechanism is
+// unavailable and every Tier-2 run is refused" — not a pretend pass and not a
+// red lane for a deliberate product decision. A SELF-CHECK FAILURE (a mechanism
+// that should work but does not) still fails: only the documented policy reason
+// is treated as an expected skip.
+const nativeHost = process.platform === "darwin" || process.platform === "win32";
+const optIn = osSandboxOptIn();
+const backend = new NamespaceSandboxBackend();
+const detected = nativeHost && optIn ? await backend.detect() : false;
+const detectionReason = nativeHost && optIn && !detected ? nativeSelfCheckDiagnostic() : "";
+const policyDisabled = detectionReason.includes(
+  "pending per-execution SID/ACL lifecycle verification",
+);
+const smoke = nativeHost && optIn && detected;
+describe.if(nativeHost && optIn)(`native sandbox smoke (${process.platform})`, () => {
   let base = "", ws = "", secret = "";
   beforeAll(() => {
     base = mkdtempSync(join(tmpdir(), "xr-os-smoke-"));
@@ -89,7 +107,6 @@ describe.if(smoke)(`native sandbox smoke (${process.platform})`, () => {
     spawnSync("git", ["init", "-q", ws]);
   });
   afterAll(() => rmSync(base, { recursive: true, force: true }));
-  const backend = new NamespaceSandboxBackend();
   const win = process.platform === "win32";
   const run = (argv: string[]) =>
     backend.run(
@@ -104,10 +121,39 @@ describe.if(smoke)(`native sandbox smoke (${process.platform})`, () => {
     return r as Awaited<ReturnType<typeof run>>;
   };
 
+  if (!smoke) {
+    // Either the mechanism failed its own self-check, or the product refuses it
+    // by policy. Both are "no native boundary on this host" and both must mean
+    // fail closed at the ONE place that matters: the run itself.
+    test("a Tier-2 run is REFUSED when no native mechanism is available", async () => {
+      const r = await shell("echo refused");
+      expect(r.ok).toBe(false);
+      // Fail closed at the boundary: a refusal, not a silent unsandboxed run.
+      expect(String(r.stderr)).toContain("namespace sandbox refused");
+      expect(String(r.stdout)).toBe("");
+      expect((r as { exitCode?: number | null }).exitCode ?? null).toBeNull();
+      console.error(`[os-sandbox] ${process.platform}: no native mechanism — ${detectionReason || "self-check failed"}`);
+    });
+    if (policyDisabled) {
+      test.skip(
+        `native ${win ? "AppContainer" : "Seatbelt"} policy-disabled: ${detectionReason}`,
+        () => {},
+      );
+    } else {
+      // A mechanism that SHOULD exist on this host but fails its self-check is a
+      // defect: never a skip. Name what the product reported.
+      test("the mechanism self-check FAILED (not a policy disable)", () => {
+        expect({ detected, reason: detectionReason }).toEqual({
+          detected: true,
+          reason: "",
+        });
+      });
+    }
+    return;
+  }
+
   test("the mechanism is detected (self-check passed)", async () => {
-    const ok = await backend.detect();
-    if (!ok) console.error(`[os-sandbox] self-check failed: ${nativeSelfCheckDiagnostic()}`);
-    expect(ok).toBe(true);
+    expect(detected).toBe(true);
     expect(backend.activeMechanism).toBe(win ? "appcontainer" : "seatbelt");
   });
   test("echo works", async () => {

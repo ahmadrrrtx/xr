@@ -105,7 +105,7 @@ export const CAPABILITY_KINDS = [
 export type PluginCapabilityKind = (typeof CAPABILITY_KINDS)[number];
 
 export const SourceSchema = z.object({
-  kind: z.enum(["local", "builtin", "catalog", "git", "url", "mcpb", "unknown"]).default("unknown"),
+  kind: z.enum(["local", "builtin", "catalog", "git", "url", "mcpb", "unknown"]).prefault("unknown"),
   url: z.string().max(800).optional(),
   ref: z.string().max(120).optional(),
   registry: z.string().max(200).optional(),
@@ -126,12 +126,12 @@ export const UiHookSchema = z.object({
 
 export const McpServerSchema = z.object({
   id: z.string().min(1).max(80).regex(/^[a-z0-9._:-]+$/i),
-  transport: z.enum(["http", "stdio"]).default("http"),
+  transport: z.enum(["http", "stdio"]).prefault("http"),
   url: z.string().url().optional(),
   command: z.string().max(240).optional(),
-  args: z.array(z.string().max(300)).default([]),
+  args: z.array(z.string().max(300)).prefault([]),
   apiKeyEnv: z.string().max(120).optional(),
-  tools: z.array(z.string().max(120)).default([]),
+  tools: z.array(z.string().max(120)).prefault([]),
   description: z.string().max(500).optional(),
 });
 
@@ -143,7 +143,7 @@ const REL_PATH = z
   .refine((p) => !p.startsWith("/") && !p.startsWith("\\") && !p.includes(".."), "must be a contained relative path");
 
 export const ManifestSchema = z.object({
-  schemaVersion: z.literal(1).default(1),
+  schemaVersion: z.literal(1).prefault(1),
   id: z
     .string()
     .min(2)
@@ -151,19 +151,19 @@ export const ManifestSchema = z.object({
     .regex(/^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i, "invalid plugin id"),
   name: z.string().min(1).max(160),
   version: z.string().min(1).max(40),
-  author: z.string().max(200).default("unknown"),
-  description: z.string().max(2000).default(""),
-  type: z.enum(PLUGIN_TYPES).default("tool"),
-  entrypoint: REL_PATH.default("index.ts"),
-  permissions: z.array(z.enum(PERMISSION_SCOPES)).default([]),
-  capabilities: z.array(CapabilitySchema).default([]),
-  dependencies: z.array(z.string().max(96)).default([]),
-  compatibility: z.string().max(64).regex(SEMVER_RANGE, "invalid compatibility range").default("*"),
-  apiVersion: z.number().int().min(1).default(1),
+  author: z.string().max(200).prefault("unknown"),
+  description: z.string().max(2000).prefault(""),
+  type: z.enum(PLUGIN_TYPES).prefault("tool"),
+  entrypoint: REL_PATH.prefault("index.ts"),
+  permissions: z.array(z.enum(PERMISSION_SCOPES)).prefault([]),
+  capabilities: z.array(CapabilitySchema).prefault([]),
+  dependencies: z.array(z.string().max(96)).prefault([]),
+  compatibility: z.string().max(64).regex(SEMVER_RANGE, "invalid compatibility range").prefault("*"),
+  apiVersion: z.number().int().min(1).prefault(1),
   source: z.union([z.string().max(800), SourceSchema]).optional(),
   sourceUrl: z.string().max(800).optional(),
   updateSource: z.string().max(800).optional(),
-  trustLevel: z.enum(TRUST_LEVELS).default("unknown"),
+  trustLevel: z.enum(TRUST_LEVELS).prefault("unknown"),
   trust: z
     .object({
       sha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
@@ -173,15 +173,15 @@ export const ManifestSchema = z.object({
       reviewedBy: z.string().max(200).optional(),
       reviewedAt: z.string().max(80).optional(),
     })
-    .default({}),
-  uiHooks: z.array(UiHookSchema).default([]),
-  commandHooks: z.array(z.string().min(1).max(80).regex(/^[a-z0-9._:-]+$/i)).default([]),
-  toolHooks: z.array(z.string().min(1).max(80).regex(/^[a-z0-9._:-]+$/i)).default([]),
-  mcpServers: z.array(McpServerSchema).default([]),
-  skillPaths: z.array(REL_PATH).default([]),
+    .prefault({}),
+  uiHooks: z.array(UiHookSchema).prefault([]),
+  commandHooks: z.array(z.string().min(1).max(80).regex(/^[a-z0-9._:-]+$/i)).prefault([]),
+  toolHooks: z.array(z.string().min(1).max(80).regex(/^[a-z0-9._:-]+$/i)).prefault([]),
+  mcpServers: z.array(McpServerSchema).prefault([]),
+  skillPaths: z.array(REL_PATH).prefault([]),
   homepage: z.string().max(800).optional(),
   license: z.string().max(80).optional(),
-  keywords: z.array(z.string().max(40)).default([]),
+  keywords: z.array(z.string().max(40)).prefault([]),
   // ── Phase 7 · T4 — additive manifest-security fields (all optional) ──────
   /** Bill-of-materials reference (SPDX/CycloneDX JSON path). */
   sbom: z.object({ ref: z.string().max(800), format: z.string().max(40).optional() }).optional(),

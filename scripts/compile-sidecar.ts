@@ -12,8 +12,8 @@
  *     gated dynamic imports (src/control/browser.ts probes availability before
  *     use). In the compiled sidecar the browser-automation capability reports
  *     unavailable; everything else is embedded.
- *   · The sidecar serves from the user's XR_HOME (default ~/.xr) like any
- *     engine install — it does not carry repo dev state.
+ *   · Native desktop passes its independent governed XR_DESKTOP_HOME as the
+ *     child XR_HOME; it does not require a global CLI or copy CLI state.
  *
  * Cross-compile (launch-audit L-002/L-003): a bun compile `--target` exists
  * for every Rust triple XR ships, so SIDECAR_TRIPLE selects a REAL cross
@@ -22,11 +22,19 @@
  * prevent by omission). Host vs target equality decides whether the binary is
  * runnable here; scripts/smoke-sidecar.sh enforces that distinction.
  *
- * `--if-missing` skips the (slow) compile when the binary is already there —
+ * `--if-missing` reuses only a matching source/tool/target/binary cache —
  * `tauri dev` needs it to exist because tauri-build validates bundle.externalBin.
  */
-import { existsSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  lstatSync,
+  writeFileSync,
+} from "node:fs";
+import { resolve, join, relative } from "node:path";
 
 // cwd-independent: `bun run dev:tauri` in desktop/ and CI at the repo root
 // both land on the same paths.
@@ -59,12 +67,71 @@ export function tripleExt(triple: string): string {
 }
 
 /** Argv/env-driven resolution, exported so tests pin the matrix without compiling. */
-export function resolveCompile(hostKey: string, requested?: string): { triple: string; bunTarget: string; ext: string; cross: boolean } {
-  const triple = requested ?? TRIPLES[hostKey];
-  if (!triple) throw new Error(`unsupported host ${hostKey} — set SIDECAR_TRIPLE`);
+export function resolveCompile(
+  hostKey: string,
+  requested?: string,
+): { triple: string; bunTarget: string; ext: string; cross: boolean } {
+  // Node/Bun report win32; preserve the existing windows-* build vocabulary.
+  const canonicalHostKey = hostKey.replace(/^win32-/, "windows-");
+  const triple = requested ?? TRIPLES[canonicalHostKey];
+  if (!triple)
+    throw new Error(`unsupported host ${hostKey} — set SIDECAR_TRIPLE`);
   const bunTarget = TRIPLE_TO_BUN_TARGET[triple];
   if (!bunTarget) throw new Error(`no bun compile target for triple ${triple}`);
-  return { triple, bunTarget, ext: tripleExt(triple), cross: TRIPLES[hostKey] !== triple };
+  return {
+    triple,
+    bunTarget,
+    ext: tripleExt(triple),
+    cross: TRIPLES[canonicalHostKey] !== triple,
+  };
+}
+
+/** Cheap stale/damaged cache detection, NOT publisher authentication. */
+export function sidecarFingerprint(
+  repo: string,
+  target: string,
+  version = Bun.version,
+): string {
+  const h = createHash("sha256");
+  h.update(JSON.stringify({ schema: 1, target, bun: version }));
+  const files = ["package.json", "bun.lock", ".bun-version"];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir).sort()) {
+      const p = join(dir, name),
+        st = lstatSync(p);
+      if (st.isSymbolicLink())
+        throw new Error(
+          "sidecar inputs contain a symlink; refuse an unverifiable cache",
+        );
+      if (st.isDirectory()) walk(p);
+      else files.push(relative(repo, p));
+    }
+  };
+  walk(join(repo, "src"));
+  walk(join(repo, "scripts"));
+  for (const file of files.sort()) {
+    h.update(file);
+    h.update("\0");
+    h.update(readFileSync(join(repo, file)));
+    h.update("\0");
+  }
+  return h.digest("hex");
+}
+export function sidecarCacheMatches(
+  binary: string,
+  fingerprint: string,
+): boolean {
+  try {
+    const c = JSON.parse(readFileSync(binary + ".build.json", "utf8"));
+    return (
+      c.schemaVersion === 1 &&
+      c.inputsSha256 === fingerprint &&
+      c.binarySha256 ===
+        createHash("sha256").update(readFileSync(binary)).digest("hex")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function main(): void {
@@ -73,22 +140,32 @@ function main(): void {
   try {
     plan = resolveCompile(hostKey, process.env.SIDECAR_TRIPLE);
   } catch (err) {
-    console.error(`[sidecar] ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `[sidecar] ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exit(1);
   }
   const { triple, bunTarget, ext, cross } = plan;
-  const out = resolve(root, `desktop/src-tauri/binaries/xr-engine-${triple}${ext}`);
+  const out = resolve(
+    root,
+    `desktop/src-tauri/binaries/xr-engine-${triple}${ext}`,
+  );
   mkdirSync(resolve(root, "desktop/src-tauri/binaries"), { recursive: true });
 
-  if (ifMissing && existsSync(out)) {
-    console.log(`[sidecar] present, skipping (--if-missing): ${out}`);
+  const fingerprint = sidecarFingerprint(root, bunTarget);
+  if (ifMissing && sidecarCacheMatches(out, fingerprint)) {
+    console.log(
+      `[sidecar] matching source/tool/target/binary cache, skipping (--if-missing): ${out}`,
+    );
     process.exit(0);
   }
 
-  console.log(`[sidecar] compiling engine → ${out} (${bunTarget}${cross ? ", cross" : ""})`);
+  console.log(
+    `[sidecar] compiling engine → ${out} (${bunTarget}${cross ? ", cross" : ""})`,
+  );
   const proc = Bun.spawnSync(
     [
-      "bun",
+      process.execPath,
       "build",
       "src/index.ts",
       "--compile",
@@ -105,9 +182,27 @@ function main(): void {
   );
   if (proc.exitCode !== 0) process.exit(proc.exitCode);
   if (!existsSync(out)) {
-    console.error(`[sidecar] FAIL: compile reported success but no binary at ${out}`);
+    console.error(
+      `[sidecar] FAIL: compile reported success but no binary at ${out}`,
+    );
     process.exit(1);
   }
+  writeFileSync(
+    out + ".build.json",
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        inputsSha256: fingerprint,
+        binarySha256: createHash("sha256")
+          .update(readFileSync(out))
+          .digest("hex"),
+        bun: Bun.version,
+        target: bunTarget,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
   console.log(`[sidecar] done: ${out}`);
 }
 

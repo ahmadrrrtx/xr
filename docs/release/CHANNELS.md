@@ -1,5 +1,15 @@
 # Channel Authoring Guide (Phase 9)
 
+> **Current candidate authority (2026-10-27):** development1.1.1-rc.1 is not
+> published; public defaults remain1.0.0. Tag pushes prepare only private drafts.
+> Explicit owner publication stages beta/candidate/version artifacts; default
+> promotion is separately owner-dispatched in Publish Channels, with exact
+> signed metadata bytes/native CI/immutable registry proof. Preview never moves
+> stable/latest/updater defaults. See [current verification](VERIFYING_RELEASES.md)
+> and [candidate report](RELEASE_CANDIDATE_REPORT.md); these supersede historical
+> automatic tag-publication assumptions below.
+
+
 One canonical build → many channels. Every channel file is **generated** by
 `scripts/channel-manifest.ts` from `release.manifest.json`; never edit
 generated files by hand — `bun run channel:check` fails CI on drift, and the

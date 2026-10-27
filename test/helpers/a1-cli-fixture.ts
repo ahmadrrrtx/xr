@@ -31,7 +31,7 @@ export async function a1Fixture(tool: string, args: Record<string, unknown>) {
   writeConfig(home, {
     version: 22, defaults: { provider: "a1-loopback", model: "stub-model" },
     budget: { perTaskUsd: 0.5, perTaskTokens: 250_000 }, memory: { enabled: false },
-    providerEngine: { routingStrategy: "primary", customProviders: [{ id: "a1-loopback", label: "Synthetic local fixture", baseUrl: `http://127.0.0.1:${port}/v1`, defaultModel: "stub-model", capabilities: { chat: true, streaming: false, toolUse: true, functionCalling: true } }], providerCapabilities: {} },
+    providerEngine: { routingStrategy: "primary", customProviders: [{ id: "a1-loopback", label: "Synthetic local fixture", baseUrl: `http://127.0.0.1:${port}/v1`, defaultModel: "stub-model", capabilities: { chat: true, streaming: false, toolUse: true, functionCalling: true } }], providerCapabilities: {"a1-loopback":{models:{"stub-model":{cost:{inPerMTok:1,outPerMTok:1,known:true,source:"synthetic A1 fixture; no provider billing"}}}}} },
     security: { egressAllowlist: [], hardened: true },
   });
   const permissions = (deny: string[] = []) => writeFileSync(join(home, "cli.json"), JSON.stringify({ provider: "a1-loopback", model: "stub-model", permissions: { allow: ["edit:*", "shell:*"], deny } }));

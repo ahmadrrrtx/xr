@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "scope": "Standard/declared token-price estimates, not invoice ceilings or live account/model validation",
+  "cases": [
+    {
+      "id": "luna",
+      "model": "openai::gpt-6-luna",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.0006
+    },
+    {
+      "id": "sol",
+      "model": "openai::gpt-6.1-sol",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.012
+    },
+    {
+      "id": "sonnet",
+      "model": "anthropic::claude-sonnet-5-5",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.012
+    },
+    {
+      "id": "opus",
+      "model": "anthropic::claude-opus-5-5",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 40000,
+      "output": 8000,
+      "usd": 0.32
+    },
+    {
+      "id": "flash-current",
+      "model": "google::gemini-3.8-flash",
+      "now": "2026-12-31T23:59:59.999Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.0045
+    },
+    {
+      "id": "flash-next",
+      "model": "google::gemini-3.8-flash",
+      "now": "2027-01-01T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.009
+    },
+    {
+      "id": "argon-current",
+      "model": "google::gemini-4-argon",
+      "now": "2026-11-30T23:59:59.999Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.012
+    },
+    {
+      "id": "argon-next",
+      "model": "google::gemini-4-argon",
+      "now": "2026-12-01T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.024
+    },
+    {
+      "id": "luna-long-context",
+      "model": "openai::gpt-6-luna",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 300000,
+      "output": 1000,
+      "usd": 0.06075
+    },
+    {
+      "id": "from-rate-unavailable",
+      "model": "anthropic::claude-haiku-5-5",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": null
+    },
+    {
+      "id": "unverified-legacy",
+      "model": "anthropic::claude-sonnet-4.5",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": null
+    },
+    {
+      "id": "unknown",
+      "model": "vendor::mystery-9000",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": null
+    },
+    {
+      "id": "not-local-by-model-name",
+      "model": "vendor::llama3.1:8b",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": null
+    },
+    {
+      "id": "local-token-fee",
+      "model": "ollama::llama3.1:8b",
+      "now": "2027-01-25T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0
+    },
+    {
+      "id": "registry-expired",
+      "model": "openai::gpt-6-luna",
+      "now": "2027-01-25T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": null
+    },
+    {
+      "id": "deprecated-manual-price-not-auto",
+      "model": "openai::gpt-4o-mini",
+      "now": "2026-10-26T00:00:00Z",
+      "input": 2000,
+      "output": 800,
+      "usd": 0.00078
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "XR Daemon API",
-    "version": "1.1.0",
+    "version": "1.1.1-rc.1",
     "summary": "The local-first daemon API of the XR AI agent runtime.",
     "description": "Versioned surface mounted at /api/v1. Legacy /api/* mounts serve during the deprecation window with Deprecation/Sunset headers and are removed no earlier than XR 2.0.0. Compatibility policy: docs/api/COMPATIBILITY.md. Authentication: local bearer token (x-session bootstrap cookie for browsers).",
     "license": {
@@ -2596,33 +2596,21 @@
                             "type": "string"
                           },
                           "taskId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "runId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "sessionId": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
+                            "type": [
+                              "string",
+                              "null"
                             ]
                           },
                           "tool": {
@@ -2632,17 +2620,17 @@
                             "type": "string"
                           },
                           "reason": {
-                            "description": "Model-shaped reason text — untrusted, framed as data.",
-                            "type": "string"
+                            "type": "string",
+                            "description": "Model-shaped reason text — untrusted, framed as data."
                           },
                           "preview": {
-                            "description": "Structured preview (diff / interpreted command / redacted args).",
                             "anyOf": [
                               {},
                               {
                                 "type": "null"
                               }
-                            ]
+                            ],
+                            "description": "Structured preview (diff / interpreted command / redacted args)."
                           },
                           "riskTier": {
                             "type": "string"
@@ -2785,8 +2773,8 @@
                 "type": "object",
                 "properties": {
                   "approved": {
-                    "description": "True = approve the pending action; false = deny.",
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "True = approve the pending action; false = deny."
                   },
                   "userId": {
                     "description": "Ignored (XR-LAUNCH-030): the daemon records the authenticated caller — local:token, browser:<session label> or mobile:<device id>.",
@@ -3199,6 +3187,10 @@
                   "warningsEnabled": {
                     "type": "boolean"
                   },
+                  "tightenOnly": {
+                    "description": "Atomically lower monthly/daily caps only; never raise policy or change the per-task default.",
+                    "type": "boolean"
+                  },
                   "autoFallback": {
                     "type": "boolean"
                   }
@@ -3436,10 +3428,10 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "description": "Absolute folder to open as a project (must exist; never /, $HOME or XR's state dir).",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 4000
+                    "maxLength": 4000,
+                    "description": "Absolute folder to open as a project (must exist; never /, $HOME or XR's state dir)."
                   },
                   "name": {
                     "description": "Display name (defaults to the folder name).",
@@ -3464,27 +3456,23 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "description": "Stable id (hash of the real path); every other Builder route is keyed by it.",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Stable id (hash of the real path); every other Builder route is keyed by it."
                     },
                     "name": {
                       "type": "string"
                     },
                     "root": {
-                      "description": "Real, absolute project root.",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Real, absolute project root."
                     },
                     "git": {
                       "type": "object",
                       "properties": {
                         "branch": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
+                          "type": [
+                            "string",
+                            "null"
                           ]
                         },
                         "dirty": {
@@ -3615,9 +3603,9 @@
                     "maxLength": 2000
                   },
                   "patch": {
-                    "description": "Unified diff for THIS file (≤ 512 KB); loose `@@` headers are tolerated.",
                     "type": "string",
-                    "maxLength": 524288
+                    "maxLength": 524288,
+                    "description": "Unified diff for THIS file (≤ 512 KB); loose `@@` headers are tolerated."
                   },
                   "hunks": {
                     "description": "0-based hunk indexes to apply (default: all).",
@@ -3701,13 +3689,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -3725,13 +3709,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -3861,13 +3841,9 @@
                           ]
                         },
                         "cmd": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
+                          "type": [
+                            "string",
+                            "null"
                           ]
                         },
                         "pm": {
@@ -3923,74 +3899,46 @@
                               "type": "boolean"
                             },
                             "kind": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "cmd": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "pid": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "port": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "url": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "startedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "readyMs": {
                               "description": "Spawn → first printed local URL, measured by the engine.",
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "exit": {
@@ -3999,23 +3947,15 @@
                                   "type": "object",
                                   "properties": {
                                     "code": {
-                                      "anyOf": [
-                                        {
-                                          "type": "number"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
+                                      "type": [
+                                        "number",
+                                        "null"
                                       ]
                                     },
                                     "signal": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
+                                      "type": [
+                                        "string",
+                                        "null"
                                       ]
                                     }
                                   },
@@ -4243,13 +4183,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -4267,13 +4203,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -4450,13 +4382,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -4474,13 +4402,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -4608,74 +4532,46 @@
                               "type": "boolean"
                             },
                             "kind": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "cmd": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "pid": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "port": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "url": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "startedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "readyMs": {
                               "description": "Spawn → first printed local URL, measured by the engine.",
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "exit": {
@@ -4684,23 +4580,15 @@
                                   "type": "object",
                                   "properties": {
                                     "code": {
-                                      "anyOf": [
-                                        {
-                                          "type": "number"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
+                                      "type": [
+                                        "number",
+                                        "null"
                                       ]
                                     },
                                     "signal": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
+                                      "type": [
+                                        "string",
+                                        "null"
                                       ]
                                     }
                                   },
@@ -4847,8 +4735,8 @@
                     "maxLength": 2000
                   },
                   "content": {
-                    "description": "Current editor buffer (≤ 512 KB).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Current editor buffer (≤ 512 KB)."
                   }
                 },
                 "required": [
@@ -4869,8 +4757,8 @@
                   "type": "object",
                   "properties": {
                     "available": {
-                      "description": "False when the project has no node_modules/typescript — never guessed.",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "False when the project has no node_modules/typescript — never guessed."
                     },
                     "reason": {
                       "type": "string"
@@ -5030,8 +4918,8 @@
                       "maximum": 9007199254740991
                     },
                     "type": {
-                      "description": "hello | ping | dev-server:log | dev-server:ready | dev-server:exit | dev-server:status | fs:changed",
-                      "type": "string"
+                      "type": "string",
+                      "description": "hello | ping | dev-server:log | dev-server:ready | dev-server:exit | dev-server:status | fs:changed"
                     },
                     "projectId": {
                       "type": "string"
@@ -5149,9 +5037,9 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "description": "Path relative to the project root (must be inside).",
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "Path relative to the project root (must be inside)."
                   }
                 },
                 "required": [
@@ -5174,8 +5062,8 @@
                       "type": "string"
                     },
                     "content": {
-                      "description": "Empty for binary files (isText=false).",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Empty for binary files (isText=false)."
                     },
                     "size": {
                       "type": "number"
@@ -5187,8 +5075,8 @@
                       "type": "boolean"
                     },
                     "truncated": {
-                      "description": "True when only the first 512 KB were returned.",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "True when only the first 512 KB were returned."
                     }
                   },
                   "required": [
@@ -5382,13 +5270,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -5406,13 +5290,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -5519,9 +5399,9 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "description": "File or folder; folders are deleted recursively and the approval says so.",
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "File or folder; folders are deleted recursively and the approval says so."
                   }
                 },
                 "required": [
@@ -5592,13 +5472,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -5616,13 +5492,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -5806,13 +5678,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -5830,13 +5698,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -5947,8 +5811,8 @@
                     "maxLength": 2000
                   },
                   "content": {
-                    "description": "Full new content (UTF-8, ≤ 1 MB).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Full new content (UTF-8, ≤ 1 MB)."
                   },
                   "baseMtimeMs": {
                     "description": "mtimeMs the editor loaded; a mismatch answers 409 instead of clobbering.",
@@ -6024,13 +5888,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -6048,13 +5908,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -6162,13 +6018,9 @@
                   "type": "object",
                   "properties": {
                     "branch": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "dirty": {
@@ -6178,7 +6030,6 @@
                       "type": "boolean"
                     },
                     "files": {
-                      "description": "Per-path badges (folders inherit a dot from their children).",
                       "type": "object",
                       "propertyNames": {
                         "type": "string"
@@ -6193,7 +6044,8 @@
                           "deleted",
                           "renamed"
                         ]
-                      }
+                      },
+                      "description": "Per-path badges (folders inherit a dot from their children)."
                     }
                   },
                   "required": [
@@ -6352,20 +6204,16 @@
                       }
                     },
                     "truncated": {
-                      "description": "True when the 4 000-entry cap cut the walk short (top level is always complete).",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "True when the 4 000-entry cap cut the walk short (top level is always complete)."
                     },
                     "git": {
                       "type": "object",
                       "properties": {
                         "branch": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
+                          "type": [
+                            "string",
+                            "null"
                           ]
                         },
                         "dirty": {
@@ -6375,7 +6223,6 @@
                           "type": "boolean"
                         },
                         "files": {
-                          "description": "Per-path badges (folders inherit a dot from their children).",
                           "type": "object",
                           "propertyNames": {
                             "type": "string"
@@ -6390,7 +6237,8 @@
                               "deleted",
                               "renamed"
                             ]
-                          }
+                          },
+                          "description": "Per-path badges (folders inherit a dot from their children)."
                         }
                       },
                       "required": [
@@ -6516,9 +6364,9 @@
                     "maxLength": 2000
                   },
                   "backupId": {
-                    "description": "backupId returned by apply-diff.",
                     "type": "string",
-                    "maxLength": 200
+                    "maxLength": 200,
+                    "description": "backupId returned by apply-diff."
                   }
                 },
                 "required": [
@@ -6590,13 +6438,9 @@
                       "type": "string"
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -6614,13 +6458,9 @@
                     },
                     "backupId": {
                       "description": "Handle for undo (apply-diff only).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -11158,8 +10998,8 @@
                 "type": "object",
                 "properties": {
                   "guildId": {
-                    "description": "Discord server id (snowflake).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Discord server id (snowflake)."
                   }
                 },
                 "required": [
@@ -11268,12 +11108,12 @@
                 "type": "object",
                 "properties": {
                   "guildId": {
-                    "description": "Discord server id (snowflake).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Discord server id (snowflake)."
                   },
                   "channelId": {
-                    "description": "Discord text channel id (snowflake).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Discord text channel id (snowflake)."
                   }
                 },
                 "required": [
@@ -11383,12 +11223,12 @@
                 "type": "object",
                 "properties": {
                   "guildId": {
-                    "description": "Discord server id (snowflake).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Discord server id (snowflake)."
                   },
                   "channelId": {
-                    "description": "Discord text channel id (snowflake).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Discord text channel id (snowflake)."
                   }
                 },
                 "required": [
@@ -11498,10 +11338,10 @@
                 "type": "object",
                 "properties": {
                   "token": {
-                    "description": "Bot token from the Discord Developer Portal. Stored in the OS keychain, never echoed back.",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 200
+                    "maxLength": 200,
+                    "description": "Bot token from the Discord Developer Portal. Stored in the OS keychain, never echoed back."
                   }
                 },
                 "required": [
@@ -11610,8 +11450,8 @@
                 "type": "object",
                 "properties": {
                   "confirm": {
-                    "description": "Must be true. Stops the bot, removes the token, pairings and the channel allow-list.",
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Must be true. Stops the bot, removes the token, pairings and the channel allow-list."
                   }
                 },
                 "required": [
@@ -12131,24 +11971,16 @@
                   },
                   "webhookUrl": {
                     "description": "Public HTTPS base URL for interactions-webhook mode, or null for the gateway.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   },
                   "devGuildId": {
                     "description": "Register slash commands in one server for instant propagation.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   }
                 },
@@ -12526,13 +12358,9 @@
                 "properties": {
                   "userId": {
                     "description": "Discord user id to remove from the paired list.",
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string"
-                      }
+                    "type": [
+                      "number",
+                      "string"
                     ]
                   }
                 },
@@ -13383,12 +13211,12 @@
                   "type": "object",
                   "properties": {
                     "root": {
-                      "description": "Absolute project root being browsed (process.cwd()).",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Absolute project root being browsed (process.cwd())."
                     },
                     "cwd": {
-                      "description": "Relative path currently listed ('' = root).",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Relative path currently listed ('' = root)."
                     },
                     "entries": {
                       "type": "array",
@@ -13399,8 +13227,8 @@
                             "type": "string"
                           },
                           "rel": {
-                            "description": "Path relative to root ('' = root itself).",
-                            "type": "string"
+                            "type": "string",
+                            "description": "Path relative to root ('' = root itself)."
                           },
                           "type": {
                             "type": "string",
@@ -13410,15 +13238,14 @@
                             ]
                           },
                           "size": {
-                            "description": "Bytes; 0 for directories.",
-                            "type": "number"
+                            "type": "number",
+                            "description": "Bytes; 0 for directories."
                           },
                           "mtime": {
-                            "description": "Last-modified epoch ms.",
-                            "type": "number"
+                            "type": "number",
+                            "description": "Last-modified epoch ms."
                           },
                           "git": {
-                            "description": "Per-file git status from the real porcelain output; null when not a git repo.",
                             "anyOf": [
                               {
                                 "type": "string",
@@ -13434,7 +13261,8 @@
                               {
                                 "type": "null"
                               }
-                            ]
+                            ],
+                            "description": "Per-file git status from the real porcelain output; null when not a git repo."
                           },
                           "isText": {
                             "description": "Best-effort text detection for files.",
@@ -13457,13 +13285,9 @@
                       "type": "object",
                       "properties": {
                         "branch": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
+                          "type": [
+                            "string",
+                            "null"
                           ]
                         },
                         "dirty": {
@@ -13477,8 +13301,8 @@
                       "additionalProperties": {}
                     },
                     "truncated": {
-                      "description": "True when the entry list was capped for safety.",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "True when the entry list was capped for safety."
                     }
                   },
                   "required": [
@@ -13579,9 +13403,9 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "description": "Path relative to the project root (must be inside).",
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "Path relative to the project root (must be inside)."
                   }
                 },
                 "required": [
@@ -13604,8 +13428,8 @@
                       "type": "string"
                     },
                     "diff": {
-                      "description": "Real `git diff -- <path>` output; empty for untracked files.",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Real `git diff -- <path>` output; empty for untracked files."
                     },
                     "ok": {
                       "type": "boolean"
@@ -13620,18 +13444,18 @@
                         "type": "object",
                         "properties": {
                           "id": {
-                            "description": "Content-addressed hunk id (sha256 of old-side start + body, 12 hex). Stable while the hunk's content is; changes when it changes.",
-                            "type": "string"
+                            "type": "string",
+                            "description": "Content-addressed hunk id (sha256 of old-side start + body, 12 hex). Stable while the hunk's content is; changes when it changes."
                           },
                           "index": {
-                            "description": "0-based position in the file's diff.",
                             "type": "integer",
                             "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
+                            "maximum": 9007199254740991,
+                            "description": "0-based position in the file's diff."
                           },
                           "header": {
-                            "description": "The `@@ -a,b +c,d @@ …` line as git printed it.",
-                            "type": "string"
+                            "type": "string",
+                            "description": "The `@@ -a,b +c,d @@ …` line as git printed it."
                           },
                           "oldStart": {
                             "type": "integer",
@@ -13664,11 +13488,11 @@
                             "maximum": 9007199254740991
                           },
                           "lines": {
-                            "description": "Body lines with their leading ' ', '+', '-' or '\\' marker.",
                             "type": "array",
                             "items": {
                               "type": "string"
-                            }
+                            },
+                            "description": "Body lines with their leading ' ', '+', '-' or '\\' marker."
                           }
                         },
                         "required": [
@@ -13785,19 +13609,19 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "description": "Path relative to the project root (must be inside).",
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "Path relative to the project root (must be inside)."
                   },
                   "hunkIds": {
-                    "description": "Hunk ids from files.diff to REVERT (reverse-apply). Unknown/stale ids → 409.",
                     "minItems": 1,
                     "maxItems": 500,
                     "type": "array",
                     "items": {
                       "type": "string",
                       "minLength": 1
-                    }
+                    },
+                    "description": "Hunk ids from files.diff to REVERT (reverse-apply). Unknown/stale ids → 409."
                   },
                   "baseMtimeMs": {
                     "description": "mtimeMs the editor loaded; a mismatch returns 409 instead of reverting under a changed file.",
@@ -13822,21 +13646,17 @@
                   "type": "object",
                   "properties": {
                     "applied": {
-                      "description": "True only after a human approved AND git reverse-applied the hunks.",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "True only after a human approved AND git reverse-applied the hunks."
                     },
                     "approvalId": {
                       "type": "string"
                     },
                     "decision": {
                       "description": "denied | timed_out when applied=false",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "path": {
@@ -13863,18 +13683,18 @@
                         "type": "object",
                         "properties": {
                           "id": {
-                            "description": "Content-addressed hunk id (sha256 of old-side start + body, 12 hex). Stable while the hunk's content is; changes when it changes.",
-                            "type": "string"
+                            "type": "string",
+                            "description": "Content-addressed hunk id (sha256 of old-side start + body, 12 hex). Stable while the hunk's content is; changes when it changes."
                           },
                           "index": {
-                            "description": "0-based position in the file's diff.",
                             "type": "integer",
                             "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
+                            "maximum": 9007199254740991,
+                            "description": "0-based position in the file's diff."
                           },
                           "header": {
-                            "description": "The `@@ -a,b +c,d @@ …` line as git printed it.",
-                            "type": "string"
+                            "type": "string",
+                            "description": "The `@@ -a,b +c,d @@ …` line as git printed it."
                           },
                           "oldStart": {
                             "type": "integer",
@@ -13907,11 +13727,11 @@
                             "maximum": 9007199254740991
                           },
                           "lines": {
-                            "description": "Body lines with their leading ' ', '+', '-' or '\\' marker.",
                             "type": "array",
                             "items": {
                               "type": "string"
-                            }
+                            },
+                            "description": "Body lines with their leading ' ', '+', '-' or '\\' marker."
                           }
                         },
                         "required": [
@@ -14041,9 +13861,9 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "description": "Path relative to the project root.",
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "Path relative to the project root."
                   }
                 },
                 "required": [
@@ -14072,8 +13892,8 @@
                       "type": "number"
                     },
                     "truncated": {
-                      "description": "True when the file was capped at the read limit.",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "True when the file was capped at the read limit."
                     },
                     "isText": {
                       "type": "boolean"
@@ -14182,13 +14002,13 @@
                 "type": "object",
                 "properties": {
                   "path": {
-                    "description": "Path relative to the project root (must be inside).",
                     "type": "string",
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "Path relative to the project root (must be inside)."
                   },
                   "content": {
-                    "description": "Full new file content (UTF-8 text only, ≤ 1 MB).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "Full new file content (UTF-8 text only, ≤ 1 MB)."
                   },
                   "baseMtimeMs": {
                     "description": "mtimeMs the editor loaded; a mismatch returns 409 instead of clobbering.",
@@ -14213,8 +14033,8 @@
                   "type": "object",
                   "properties": {
                     "applied": {
-                      "description": "True only after a human approved AND the bytes hit disk.",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "True only after a human approved AND the bytes hit disk."
                     },
                     "approvalId": {
                       "type": "string"
@@ -14230,13 +14050,9 @@
                     },
                     "decision": {
                       "description": "denied | timed_out when applied=false",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     }
                   },
@@ -14335,10 +14151,10 @@
                 "type": "object",
                 "properties": {
                   "message": {
-                    "description": "Commit message; executed only after durable human approval.",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "Commit message; executed only after durable human approval."
                   }
                 },
                 "required": [
@@ -14537,7 +14353,6 @@
                 "type": "object",
                 "properties": {
                   "paths": {
-                    "description": "Path(s) relative to the project root; each must be inside it.",
                     "anyOf": [
                       {
                         "type": "string"
@@ -14549,7 +14364,8 @@
                           "type": "string"
                         }
                       }
-                    ]
+                    ],
+                    "description": "Path(s) relative to the project root; each must be inside it."
                   }
                 },
                 "required": [
@@ -18531,10 +18347,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "No request fields.",
                 "type": "object",
                 "properties": {},
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "No request fields."
               }
             }
           }
@@ -18645,10 +18461,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "No request fields.",
                 "type": "object",
                 "properties": {},
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "No request fields."
               }
             }
           }
@@ -18751,8 +18567,8 @@
                 "type": "object",
                 "properties": {
                   "code": {
-                    "description": "The 6-digit pairing code shown on the desktop (single-use, 10-minute TTL).",
-                    "type": "string"
+                    "type": "string",
+                    "description": "The 6-digit pairing code shown on the desktop (single-use, 10-minute TTL)."
                   },
                   "deviceName": {
                     "description": "Human device label (defaults to 'Phone', truncated at 48 chars).",
@@ -18768,19 +18584,19 @@
                     "type": "object",
                     "properties": {
                       "endpoint": {
-                        "description": "https:// push-service endpoint (validated against known providers at the handler).",
-                        "type": "string"
+                        "type": "string",
+                        "description": "https:// push-service endpoint (validated against known providers at the handler)."
                       },
                       "keys": {
                         "type": "object",
                         "properties": {
                           "p256dh": {
-                            "description": "P-256 ECDH public key (RFC 8291).",
-                            "type": "string"
+                            "type": "string",
+                            "description": "P-256 ECDH public key (RFC 8291)."
                           },
                           "auth": {
-                            "description": "P-256 auth secret.",
-                            "type": "string"
+                            "type": "string",
+                            "description": "P-256 auth secret."
                           }
                         },
                         "required": [
@@ -18900,10 +18716,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "No request fields.",
                 "type": "object",
                 "properties": {},
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "No request fields."
               }
             }
           }
@@ -19003,10 +18819,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "No request fields.",
                 "type": "object",
                 "properties": {},
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "No request fields."
               }
             }
           }
@@ -19110,19 +18926,19 @@
                     "type": "object",
                     "properties": {
                       "endpoint": {
-                        "description": "https:// push-service endpoint (validated against known providers at the handler).",
-                        "type": "string"
+                        "type": "string",
+                        "description": "https:// push-service endpoint (validated against known providers at the handler)."
                       },
                       "keys": {
                         "type": "object",
                         "properties": {
                           "p256dh": {
-                            "description": "P-256 ECDH public key (RFC 8291).",
-                            "type": "string"
+                            "type": "string",
+                            "description": "P-256 ECDH public key (RFC 8291)."
                           },
                           "auth": {
-                            "description": "P-256 auth secret.",
-                            "type": "string"
+                            "type": "string",
+                            "description": "P-256 auth secret."
                           }
                         },
                         "required": [
@@ -19246,10 +19062,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "No request fields.",
                 "type": "object",
                 "properties": {},
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "No request fields."
               }
             }
           }
@@ -19439,10 +19255,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "No request fields.",
                 "type": "object",
                 "properties": {},
-                "additionalProperties": false
+                "additionalProperties": false,
+                "description": "No request fields."
               }
             }
           }
@@ -19960,7 +19776,7 @@
     "/api/v1/onboarding/provider": {
       "post": {
         "operationId": "onboarding.provider",
-        "summary": "Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. The save succeeds even when the live probe fails — the outcome is reported honestly.",
+        "summary": "Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. A live probe is explicit opt-in; its failure does not undo a successful save — the outcome is reported honestly.",
         "tags": [
           "onboarding"
         ],
@@ -19973,16 +19789,16 @@
                 "type": "object",
                 "properties": {
                   "providerId": {
-                    "description": "Hosted provider preset id (from /api/providers).",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 80
+                    "maxLength": 80,
+                    "description": "Hosted provider preset id (from /api/providers)."
                   },
                   "apiKey": {
-                    "description": "Provider API key — stored in the OS keychain or sealed file, never returned.",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 2048
+                    "maxLength": 2048,
+                    "description": "Provider API key — stored by the engine credential backend (local AES-GCM file fallback is not an OS keychain; its key is stored beside it), never returned."
                   },
                   "model": {
                     "description": "Optional default model for this provider.",
@@ -19990,7 +19806,7 @@
                     "maxLength": 200
                   },
                   "probe": {
-                    "description": "Run a live health probe after saving (default true; the save itself never fails on probe outcome).",
+                    "description": "Explicit opt-in to a live health probe after saving (default false; saving is offline apart from local secret storage).",
                     "type": "boolean"
                   },
                   "setDefault": {
@@ -20025,11 +19841,10 @@
                       "type": "string"
                     },
                     "secretBackend": {
-                      "description": "Where the key was stored (keychain or sealed file).",
-                      "type": "string"
+                      "type": "string",
+                      "description": "Where the key was stored (keychain or sealed file)."
                     },
                     "health": {
-                      "description": "Advisory live probe result — the key is saved regardless.",
                       "anyOf": [
                         {
                           "type": "object",
@@ -20038,23 +19853,15 @@
                               "type": "boolean"
                             },
                             "detail": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "latencyMs": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             }
                           },
@@ -20068,7 +19875,8 @@
                         {
                           "type": "null"
                         }
-                      ]
+                      ],
+                      "description": "Advisory live probe result — the key is saved regardless."
                     }
                   },
                   "required": [
@@ -20077,6 +19885,138 @@
                     "model",
                     "secretBackend",
                     "health"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/onboarding/provider/remove": {
+      "post": {
+        "operationId": "onboarding.provider.remove",
+        "summary": "Remove a known engine provider credential with acknowledged backend deletion. External environment/other-install/backups and vendor-side revocation remain owner responsibilities.",
+        "tags": [
+          "onboarding"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "providerId"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "secretBackend": {
+                      "type": "string"
+                    },
+                    "notice": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "provider",
+                    "secretBackend",
+                    "notice"
                   ],
                   "additionalProperties": {}
                 }
@@ -20171,30 +20111,30 @@
                   "type": "object",
                   "properties": {
                     "needsSetup": {
-                      "description": "True when this install has no working route yet (no provider key and no running local model).",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "True when this install has no working route yet (no provider key and no running local model)."
                     },
                     "reasons": {
-                      "description": "Plain-language reasons, for the GUI's honest 'why'.",
                       "type": "array",
                       "items": {
                         "type": "string"
-                      }
+                      },
+                      "description": "Plain-language reasons, for the GUI's honest 'why'."
                     },
                     "cloud": {
                       "type": "object",
                       "properties": {
                         "configured": {
-                          "description": "Hosted providers with a stored key.",
-                          "type": "number"
+                          "type": "number",
+                          "description": "Hosted providers with a stored key."
                         },
                         "ready": {
-                          "description": "Configured providers whose health probe succeeded.",
-                          "type": "number"
+                          "type": "number",
+                          "description": "Configured providers whose health probe succeeded."
                         },
                         "count": {
-                          "description": "Total hosted provider presets.",
-                          "type": "number"
+                          "type": "number",
+                          "description": "Total hosted provider presets."
                         }
                       },
                       "required": [
@@ -20208,8 +20148,8 @@
                       "type": "object",
                       "properties": {
                         "runtime": {
-                          "description": "Active local runtime id (e.g. ollama).",
-                          "type": "string"
+                          "type": "string",
+                          "description": "Active local runtime id (e.g. ollama)."
                         },
                         "healthy": {
                           "type": "boolean"
@@ -20218,8 +20158,16 @@
                           "type": "boolean"
                         },
                         "installed": {
-                          "description": "Installed local model count.",
-                          "type": "number"
+                          "type": "number",
+                          "description": "Last fresh diagnostic model count; zero does not prove no installation."
+                        },
+                        "healthState": {
+                          "type": "string",
+                          "enum": [
+                            "unknown",
+                            "reachable",
+                            "unreachable"
+                          ]
                         }
                       },
                       "required": [
@@ -20231,8 +20179,16 @@
                       "additionalProperties": {}
                     },
                     "internet": {
-                      "description": "Best-effort reachability probe (never blocks the response).",
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "Legacy pessimistic cached reachability; inspection never probes."
+                    },
+                    "internetState": {
+                      "type": "string",
+                      "enum": [
+                        "unknown",
+                        "reachable",
+                        "unreachable"
+                      ]
                     },
                     "config": {
                       "type": "object",
@@ -21201,23 +21157,15 @@
                     "type": "string"
                   },
                   "fallbackProvider": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   },
                   "fallbackModel": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   }
                 },
@@ -22600,14 +22548,14 @@
                 "type": "object",
                 "properties": {
                   "query": {
-                    "description": "What to research. URLs inside the text are fetched directly.",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 2000
+                    "maxLength": 2000,
+                    "description": "What to research. URLs inside the text are fetched directly."
                   },
                   "depth": {
-                    "description": "Engine budget tier (DEPTH_BUDGETS).",
                     "default": "deep",
+                    "description": "Engine budget tier (DEPTH_BUDGETS).",
                     "type": "string",
                     "enum": [
                       "quick",
@@ -22645,16 +22593,16 @@
                       "type": "object",
                       "properties": {
                         "name": {
-                          "description": "Display name (PDF file name or workspace-relative path).",
                           "type": "string",
                           "minLength": 1,
-                          "maxLength": 160
+                          "maxLength": 160,
+                          "description": "Display name (PDF file name or workspace-relative path)."
                         },
                         "text": {
-                          "description": "Extracted text; joins the run as a fetched `local` source.",
                           "type": "string",
                           "minLength": 1,
-                          "maxLength": 600000
+                          "maxLength": 600000,
+                          "description": "Extracted text; joins the run as a fetched `local` source."
                         },
                         "kind": {
                           "default": "local",
@@ -22856,13 +22804,9 @@
                           "type": "string"
                         },
                         "sessionId": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
+                          "type": [
+                            "string",
+                            "null"
                           ]
                         },
                         "createdAt": {
@@ -23745,8 +23689,8 @@
                 "type": "object",
                 "properties": {
                   "allowPublicWeb": {
-                    "description": "Persisted to config.research.allowPublicWeb (research-only public-web fetch path).",
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Persisted to config.research.allowPublicWeb (research-only public-web fetch path)."
                   }
                 },
                 "required": [
@@ -24235,13 +24179,9 @@
                       "type": "boolean"
                     },
                     "memoryId": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "duplicate": {
@@ -24921,9 +24861,9 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "description": "Finding/threat id to explain.",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Finding/threat id to explain."
                   }
                 },
                 "required": [
@@ -25620,9 +25560,9 @@
                     ]
                   },
                   "type": {
-                    "description": "Entry class (e.g. process, path, signer, domain).",
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Entry class (e.g. process, path, signer, domain)."
                   },
                   "value": {
                     "type": "string",
@@ -25974,15 +25914,15 @@
                         "type": "object",
                         "properties": {
                           "key": {
-                            "description": "^[a-z][a-z0-9._-]{0,63}$",
-                            "type": "string"
+                            "type": "string",
+                            "description": "^[a-z][a-z0-9._-]{0,63}$"
                           },
                           "value": {
                             "description": "Opaque JSON the renderer owns."
                           },
                           "updatedAt": {
-                            "description": "ms since epoch, engine clock.",
-                            "type": "number"
+                            "type": "number",
+                            "description": "ms since epoch, engine clock."
                           }
                         },
                         "required": [
@@ -26088,12 +26028,12 @@
                 "type": "object",
                 "properties": {
                   "patch": {
-                    "description": "key → value (JSON, ≤ 256 KB) or null to delete. All-or-nothing: an invalid key rejects the whole patch.",
                     "type": "object",
                     "propertyNames": {
                       "type": "string"
                     },
-                    "additionalProperties": {}
+                    "additionalProperties": {},
+                    "description": "key → value (JSON, ≤ 256 KB) or null to delete. All-or-nothing: an invalid key rejects the whole patch."
                   }
                 },
                 "required": [
@@ -26229,10 +26169,10 @@
                 "type": "object",
                 "properties": {
                   "token": {
-                    "description": "Bot token from BotFather. Stored in the OS keychain, never echoed back.",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 200
+                    "maxLength": 200,
+                    "description": "Bot token from BotFather. Stored in the OS keychain, never echoed back."
                   }
                 },
                 "required": [
@@ -26341,8 +26281,8 @@
                 "type": "object",
                 "properties": {
                   "confirm": {
-                    "description": "Must be true. Stops the bot, removes the token and all paired users.",
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Must be true. Stops the bot, removes the token and all paired users."
                   }
                 },
                 "required": [
@@ -26559,13 +26499,9 @@
                 "properties": {
                   "code": {
                     "description": "Six-digit pairing code from the Telegram chat.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
+                    "type": [
+                      "string",
+                      "number"
                     ]
                   }
                 },
@@ -26774,13 +26710,9 @@
                   },
                   "webhookUrl": {
                     "description": "HTTPS webhook URL, or null to use polling.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
+                    "type": [
+                      "string",
+                      "null"
                     ]
                   },
                   "autoStart": {
@@ -27162,13 +27094,9 @@
                 "properties": {
                   "userId": {
                     "description": "Telegram user id to remove from the paired list.",
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "string"
-                      }
+                    "type": [
+                      "number",
+                      "string"
                     ]
                   }
                 },
@@ -27403,23 +27331,15 @@
                                 "type": "object",
                                 "properties": {
                                   "code": {
-                                    "anyOf": [
-                                      {
-                                        "type": "number"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
+                                    "type": [
+                                      "number",
+                                      "null"
                                     ]
                                   },
                                   "signal": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
+                                    "type": [
+                                      "string",
+                                      "null"
                                     ]
                                   }
                                 },
@@ -27454,8 +27374,8 @@
                       }
                     },
                     "cap": {
-                      "description": "Per-daemon session cap.",
-                      "type": "number"
+                      "type": "number",
+                      "description": "Per-daemon session cap."
                     }
                   },
                   "required": [
@@ -27646,34 +27566,22 @@
                     },
                     "code": {
                       "description": "Process exit code (type=exit).",
-                      "anyOf": [
-                        {
-                          "type": "number"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "number",
+                        "null"
                       ]
                     },
                     "signal": {
                       "description": "Terminating signal, e.g. SIGHUP after a close (type=exit).",
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "decision": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "string",
+                        "null"
                       ]
                     },
                     "error": {
@@ -27792,23 +27700,15 @@
                           "type": "object",
                           "properties": {
                             "code": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
                             "signal": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             }
                           },
@@ -27931,9 +27831,9 @@
                 "type": "object",
                 "properties": {
                   "data": {
-                    "description": "Keystrokes/paste to write to the terminal. ≤ 64 KB per message.",
                     "type": "string",
-                    "maxLength": 65536
+                    "maxLength": 65536,
+                    "description": "Keystrokes/paste to write to the terminal. ≤ 64 KB per message."
                   }
                 },
                 "required": [
@@ -27956,8 +27856,8 @@
                       "type": "boolean"
                     },
                     "bytes": {
-                      "description": "Bytes written.",
-                      "type": "number"
+                      "type": "number",
+                      "description": "Bytes written."
                     }
                   },
                   "required": [
@@ -28067,16 +27967,16 @@
                 "type": "object",
                 "properties": {
                   "cols": {
-                    "description": "New columns.",
                     "type": "integer",
                     "minimum": 2,
-                    "maximum": 500
+                    "maximum": 500,
+                    "description": "New columns."
                   },
                   "rows": {
-                    "description": "New rows.",
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 300
+                    "maximum": 300,
+                    "description": "New rows."
                   }
                 },
                 "required": [
@@ -28100,12 +28000,12 @@
                       "type": "boolean"
                     },
                     "cols": {
-                      "description": "Applied columns (clamped to 2..500).",
-                      "type": "number"
+                      "type": "number",
+                      "description": "Applied columns (clamped to 2..500)."
                     },
                     "rows": {
-                      "description": "Applied rows (clamped to 1..300).",
-                      "type": "number"
+                      "type": "number",
+                      "description": "Applied rows (clamped to 1..300)."
                     }
                   },
                   "required": [
@@ -28205,10 +28105,10 @@
                 "type": "object",
                 "properties": {
                   "cmd": {
-                    "description": "One command line; runs via the platform shell inside the project root.",
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 8000
+                    "maxLength": 8000,
+                    "description": "One command line; runs via the platform shell inside the project root."
                   },
                   "timeoutMs": {
                     "description": "Kill after this long (default 120000, max 600000).",
@@ -28270,13 +28170,9 @@
                     },
                     "code": {
                       "description": "Process exit code (type=exit).",
-                      "anyOf": [
-                        {
-                          "type": "number"
-                        },
-                        {
-                          "type": "null"
-                        }
+                      "type": [
+                        "number",
+                        "null"
                       ]
                     },
                     "timedOut": {
@@ -30788,10 +30684,10 @@
                 "type": "object",
                 "properties": {
                   "phone": {
-                    "description": "Contact number: digits with country code, e.g. 923001234567.",
                     "type": "string",
                     "minLength": 6,
-                    "maxLength": 20
+                    "maxLength": 20,
+                    "description": "Contact number: digits with country code, e.g. 923001234567."
                   }
                 },
                 "required": [
@@ -30900,10 +30796,10 @@
                 "type": "object",
                 "properties": {
                   "phone": {
-                    "description": "Contact number: digits with country code, e.g. 923001234567.",
                     "type": "string",
                     "minLength": 6,
-                    "maxLength": 20
+                    "maxLength": 20,
+                    "description": "Contact number: digits with country code, e.g. 923001234567."
                   }
                 },
                 "required": [
@@ -31012,9 +30908,9 @@
                 "type": "object",
                 "properties": {
                   "confirm": {
-                    "description": "Must be true. Unlinks the device and wipes the sealed credentials.",
                     "type": "boolean",
-                    "const": true
+                    "const": true,
+                    "description": "Must be true. Unlinks the device and wipes the sealed credentials."
                   }
                 },
                 "required": [
@@ -31906,9 +31802,9 @@
                 "type": "object",
                 "properties": {
                   "confirm": {
-                    "description": "Must be true. Unlinks the device and wipes the sealed credentials.",
                     "type": "boolean",
-                    "const": true
+                    "const": true,
+                    "description": "Must be true. Unlinks the device and wipes the sealed credentials."
                   }
                 },
                 "required": [
@@ -32323,23 +32219,15 @@
                               "minLength": 1
                             },
                             "sourceHandle": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "targetHandle": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             }
                           },
@@ -32568,23 +32456,15 @@
                                 "minLength": 1
                               },
                               "sourceHandle": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               },
                               "targetHandle": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               }
                             },
@@ -32829,23 +32709,15 @@
                               "minLength": 1
                             },
                             "sourceHandle": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "targetHandle": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             }
                           },
@@ -34561,23 +34433,15 @@
                                 "minLength": 1
                               },
                               "sourceHandle": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               },
                               "targetHandle": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               }
                             },
@@ -34848,23 +34712,15 @@
                               "minLength": 1
                             },
                             "sourceHandle": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             },
                             "targetHandle": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
+                              "type": [
+                                "string",
+                                "null"
                               ]
                             }
                           },
@@ -35098,23 +34954,15 @@
                                 "minLength": 1
                               },
                               "sourceHandle": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               },
                               "targetHandle": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
+                                "type": [
+                                  "string",
+                                  "null"
                                 ]
                               }
                             },
@@ -36047,8 +35895,8 @@
         "type": "object",
         "properties": {
           "error": {
-            "description": "Legacy error message (kept for compatibility).",
-            "type": "string"
+            "type": "string",
+            "description": "Legacy error message (kept for compatibility)."
           },
           "title": {
             "description": "Short problem type label (RFC 9457 style).",

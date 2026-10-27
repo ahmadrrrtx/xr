@@ -456,13 +456,18 @@ describe("Phase 31 · static tripwires (A7/A9/A11/A14/A15)", () => {
     expect(read(".github/workflows/ci.yml")).toContain("scripts/audit-deps.sh");
   });
 
-  test("A14: desktop never persists credentials to localStorage", () => {
+  test("A14: desktop refuses credential persistence through the actual extracted safety policy", async () => {
     const transport = read("desktop/src/engine/transport.ts");
     expect(transport).not.toContain("localStorage.setItem(DEV_SESSION_KEY");
     expect(transport).toContain("devSessionMemory");
     const storeSrc = read("desktop/src/lib/persistent-store.ts");
     expect(storeSrc).toContain("isSensitiveSettingKey");
-    expect(storeSrc).toMatch(/providerkeys\|api/);
+    const {isSensitiveSettingKey,assertSafeSetting}=await import("../../desktop/src/lib/persistent-safety");
+    for(const key of ["xr.providerkeys","api_key","access_token","password"]) {
+      expect(isSensitiveSettingKey(key)).toBe(true);expect(()=>assertSafeSetting(key,"fixture")).toThrow();
+    }
+    expect(isSensitiveSettingKey("xr.theme")).toBe(false);
+    expect(()=>assertSafeSetting("xr.model.default",{model:"fixture",nested:{apiKey:"fixture-not-real"}})).toThrow();
   });
 
   test("A15: Tauri CSP keeps loopback http+ws and no bare wildcards", () => {

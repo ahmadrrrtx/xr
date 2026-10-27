@@ -144,7 +144,9 @@ export function DownshiftBadge({
       <span className="truncate">{label}</span>
       {note.costUsd !== undefined && (
         <span className="text-text-tertiary shrink-0 font-mono">
-          {fmtUsd(note.costUsd, { precise: true })}
+          {note.costUsd === null
+            ? 'Cost unavailable'
+            : fmtUsd(note.costUsd, { precise: true })}
         </span>
       )}
     </span>

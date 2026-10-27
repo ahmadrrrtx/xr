@@ -117,7 +117,7 @@ describe("Phase 06 · malformed provider response (spec step 29)", () => {
     expect(e.retryable).toBe(false);
   });
 
-  test("streaming: garbage SSE lines are skipped without corrupting the stream", async () => {
+  test("streaming: malformed SSE JSON is terminal, never a fake completed stream", async () => {
     await startStub((_req, res) => {
       res.writeHead(200, { "content-type": "text/event-stream" });
       // A mix of valid deltas, invalid JSON lines, and a proper [DONE].
@@ -130,12 +130,13 @@ describe("Phase 06 · malformed provider response (spec step 29)", () => {
     const p = makeProvider();
     let text = "";
     let finished = false;
-    for await (const chunk of p.chatStream([{ role: "user", content: "hi" }], [], { timeoutMs: 5000 })) {
-      if (chunk.text) text += chunk.text;
-      if (chunk.finish) finished = true;
-    }
-    // Valid deltas survive; the broken line is skipped, not fatal.
-    expect(text).toBe("Hello");
-    expect(finished).toBe(true);
+    await expect((async () => {
+      for await (const chunk of p.chatStream([{ role: "user", content: "hi" }], [], { timeoutMs: 5000 })) {
+        if (chunk.text) text += chunk.text;
+        if (chunk.finish) finished = true;
+      }
+    })()).rejects.toMatchObject({ kind: "malformed_response", retryable: false });
+    expect(text).toBe("He"); // partial output remains honest
+    expect(finished).toBe(false);
   });
 });

@@ -177,8 +177,8 @@ export const McpServerConfigSchema = z.object({
   localOrRemote: z.enum(["local", "remote"]),
   url: z.string().url().optional(),
   command: z.string().max(300).optional(),
-  args: z.array(z.string().max(300)).default([]),
-  env: z.record(z.string()).default({}),
+  args: z.array(z.string().max(300)).prefault([]),
+  env: z.record(z.string(), z.string()).prefault({}),
   apiKeyEnv: z.string().max(120).optional(),
 
   declaredCapabilities: z.object({
@@ -187,26 +187,26 @@ export const McpServerConfigSchema = z.object({
     prompts: z.boolean().optional(),
     sampling: z.boolean().optional(),
     roots: z.boolean().optional(),
-  }).default({}),
-  declaredPermissions: z.array(z.enum(MCP_PERMISSION_SCOPES)).default([]),
-  grantedPermissions: z.array(z.enum(MCP_PERMISSION_SCOPES)).default([]).optional(),
-  tools: z.array(z.object({ name: z.string(), description: z.string().optional(), inputSchema: z.any().optional() })).default([]),
-  resources: z.array(z.object({ uri: z.string(), name: z.string().optional(), description: z.string().optional(), mimeType: z.string().optional() })).default([]),
-  prompts: z.array(z.object({ name: z.string(), description: z.string().optional(), arguments: z.array(z.any()).optional() })).default([]),
+  }).prefault({}),
+  declaredPermissions: z.array(z.enum(MCP_PERMISSION_SCOPES)).prefault([]),
+  grantedPermissions: z.array(z.enum(MCP_PERMISSION_SCOPES)).prefault([]).optional(),
+  tools: z.array(z.object({ name: z.string(), description: z.string().optional(), inputSchema: z.any().optional() })).prefault([]),
+  resources: z.array(z.object({ uri: z.string(), name: z.string().optional(), description: z.string().optional(), mimeType: z.string().optional() })).prefault([]),
+  prompts: z.array(z.object({ name: z.string(), description: z.string().optional(), arguments: z.array(z.any()).optional() })).prefault([]),
 
-  enabled: z.boolean().default(false),
-  trustLevel: z.enum(MCP_TRUST_LEVELS).default("unknown"),
+  enabled: z.boolean().prefault(false),
+  trustLevel: z.enum(MCP_TRUST_LEVELS).prefault("unknown"),
   checksum: z.string().optional(),
   lastHealthCheckAt: z.number().optional(),
-  health: z.enum(MCP_HEALTH_STATES).default("unknown"),
+  health: z.enum(MCP_HEALTH_STATES).prefault("unknown"),
   healthDetail: z.string().optional(),
   lifecycleState: z.enum(["installed", "enabled", "disabled", "quarantined", "error"]).optional(),
   quarantineReason: z.string().optional(),
 
-  invocationCount: z.number().default(0),
+  invocationCount: z.number().prefault(0),
   lastInvokedAt: z.number().optional(),
 
-  history: z.array(z.object({ at: z.number(), action: z.string(), detail: z.string().optional() })).default([]),
+  history: z.array(z.object({ at: z.number(), action: z.string(), detail: z.string().optional() })).prefault([]),
 });
 
 export type McpServerConfigInput = z.input<typeof McpServerConfigSchema>;

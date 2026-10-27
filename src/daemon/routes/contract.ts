@@ -45,6 +45,8 @@ import {
   TriggerPauseRequest,
   OnboardingStatusResponse,
   OnboardingProviderRequest,
+  OnboardingProviderRemoveRequest,
+  OnboardingProviderRemoveResponse,
   OnboardingProviderResponse,
   OnboardingCompleteRequest,
   FilesListResponse,
@@ -761,11 +763,17 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     response: OnboardingStatusResponse,
   },
   "onboarding.provider": {
-    summary: "Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. The save succeeds even when the live probe fails — the outcome is reported honestly.",
+    summary: "Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. A live probe is explicit opt-in; its failure does not undo a successful save — the outcome is reported honestly.",
     tag: "onboarding",
     stability: "experimental",
     request: OnboardingProviderRequest,
     response: OnboardingProviderResponse,
+  },
+  "onboarding.provider.remove": {
+    summary: "Remove a known engine provider credential with acknowledged backend deletion. External environment/other-install/backups and vendor-side revocation remain owner responsibilities.",
+    tag: "onboarding", stability: "experimental",
+    request: OnboardingProviderRemoveRequest,
+    response: OnboardingProviderRemoveResponse,
   },
   "onboarding.complete": {
     summary: "Record onboarding completion in the audit log (the honest completion record).",

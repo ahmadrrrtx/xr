@@ -61,7 +61,7 @@ export interface ProhibitedClaim {
 export interface StampTarget {
   id: string;
   path: string;
-  kind: "json-version" | "json-version-only" | "toml-version" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
+  kind: "json-version" | "json-version-only" | "tauri-conf" | "toml-version" | "cargo-lock-root" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
 }
 
 /**
@@ -102,7 +102,7 @@ export interface ReleaseChannels {
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
-/** Compare two semver strings (core numerically; a pre-release sorts before its release). */
+/** SemVer 2 precedence: numeric prerelease identifiers are NOT lexical (rc.9 < rc.10). */
 export function compareSemver(a: string, b: string): number {
   const [ac, ap] = splitSemver(a);
   const [bc, bp] = splitSemver(b);
@@ -112,15 +112,35 @@ export function compareSemver(a: string, b: string): number {
   if (ap === bp) return 0;
   if (ap === "") return 1;
   if (bp === "") return -1;
-  return ap < bp ? -1 : 1;
+  const aa = ap.split("."), bb = bp.split(".");
+  for (let i = 0; i < Math.max(aa.length, bb.length); i++) {
+    if (aa[i] === undefined) return -1;
+    if (bb[i] === undefined) return 1;
+    if (aa[i] === bb[i]) continue;
+    const an = /^\d+$/.test(aa[i]), bn = /^\d+$/.test(bb[i]);
+    if (an && bn) return BigInt(aa[i]) < BigInt(bb[i]) ? -1 : 1;
+    if (an !== bn) return an ? -1 : 1;
+    return aa[i] < bb[i] ? -1 : 1;
+  }
+  return 0;
 }
 
-function splitSemver(v: string): [number[], string] {
-  const clean = v.replace(/^v/, "").split("+")[0];
-  const dash = clean.indexOf("-");
-  const core = dash === -1 ? clean : clean.slice(0, dash);
-  const pre = dash === -1 ? "" : clean.slice(dash + 1);
-  return [core.split(".").map((n) => Number.parseInt(n, 10)), pre];
+function splitSemver(v: string): [bigint[], string] {
+  const match = v.replace(/^v/, "").match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/);
+  if (!match || (match[4]?.split(".").some(p => /^0\d+$/.test(p)))) throw new Error(`invalid semver: ${v}`);
+  return [[BigInt(match[1]), BigInt(match[2]), BigInt(match[3])], match[4] ?? ""];
+}
+
+/** Validate BEFORE any build. Never restamp committed identity from an arbitrary tag. */
+export function validateReleaseTag(manifest: ReleaseManifest, tag: string): void {
+  if (tag !== `v${manifest.identity.version}`) {
+    throw new Error(`release tag ${tag} does not match committed identity v${manifest.identity.version}`);
+  }
+  splitSemver(manifest.identity.version);
+  if (manifest.channels?.withdrawnTags.some(w => w.tag === tag)) throw new Error(`release tag ${tag} is withdrawn; never reuse it`);
+  const preview = manifest.identity.version.includes("-");
+  if (!preview && manifest.identity.stability !== "stable") throw new Error("stable tag requires identity.stability=stable and completed stable release gates; use a prerelease suffix for previews");
+  if (preview && manifest.identity.stability === "stable") throw new Error("preview tag cannot be labeled stable");
 }
 
 /** The version public install paths serve (falls back to identity.version for legacy manifests). */
@@ -203,6 +223,7 @@ export function loadManifest(path: string = MANIFEST_PATH): ReleaseManifest {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(id.version)) {
     throw new Error(`manifest.identity.version must be semver, got "${id.version}" (Article XXII.2)`);
   }
+  splitSemver(id.version); // Reject malformed/leading-zero prerelease identifiers too.
   if (id.stability !== undefined && !["public-beta", "developer-preview", "stable"].includes(id.stability)) {
     throw new Error(`manifest.identity.stability must be public-beta | developer-preview | stable, got "${id.stability}"`);
   }
@@ -419,7 +440,7 @@ export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number, public
     id.stability === "public-beta"
       ? `\n\n> **Status: Public beta.** ${id.name} is labelled beta until every launch gate in\n> [docs/release/launch-gates.json](docs/release/launch-gates.json) is green (decision D2; enforced by\n> \`bun run claim-lint\`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)\n> and the [known-limitations register](docs/release/${id.version}/known-limitations.md) before relying on it\n> for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on \`PATH\`;\n> the installer binaries do not. Desktop app builds are not code-signed yet. On macOS and Windows the\n> agent's shell commands need Docker/Podman (or the experimental \`XR_OS_SANDBOX=experimental\` sandbox)\n> and are refused otherwise; never approve commands in a repository you do not trust. Feedback goes\n> through the [beta loop](docs/release/BETA.md).`
       : id.stability === "developer-preview"
-        ? `\n\n> **Status: Developer Preview.** APIs and behavior may change without a deprecation cycle.`
+        ? `\n\n> **Status: ${STATUS_LABEL["developer-preview"]}.** APIs and behavior may change without a deprecation cycle. Check the [known-limitations register](docs/release/${id.version}/known-limitations.md) and [candidate evidence](docs/release/RELEASE_CANDIDATE_REPORT.md); a preview label does not imply native-platform or signing validation.`
         : `\n\n> **Status: Stable.** ${id.name} is on the 1.0.0 production line: \`latest\` moves only on a stable tag, while pre-releases keep landing on the pre-release channel (npm \`beta\` dist-tag, GitHub pre-release). Check the [support matrix](docs/release/SUPPORT_MATRIX.md) and the [known-limitations register](docs/release/${id.version}/known-limitations.md) before adopting it for anything critical; feedback goes through the [issue tracker](https://github.com/ahmadrrrtx/xr/issues).`;
   return `${README_BEGIN}
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
@@ -501,6 +522,67 @@ export function stampJsonVersionOnly(content: string, version: string): string {
 }
 
 /**
+ * WiX needs a numeric version: Tauri refuses semver pre-releases such as
+ * `1.1.1-rc.1`. The override below supplies a numeric bundler version while
+ * keeping its first three fields below those of the corresponding stable release:
+ *
+ *   1.1.1-rc.1 → 1.1.0.1
+ *   1.1.1-rc.2 → 1.1.0.2
+ *   2.1.0-rc.1 → 2.0.65535.1
+ *   2.0.0-rc.1 → 1.255.65535.1
+ *
+ * Windows Installer compares ONLY the first three ProductVersion fields. It
+ * therefore sees 1.1.0, rc.1 and rc.2 as the SAME version. The fourth field is
+ * not proof of upgrade or downgrade behavior; native lifecycle validation and
+ * a reviewed versioning policy are required before publication.
+ * https://learn.microsoft.com/en-us/windows/win32/msi/productversion
+ *
+ * Returns undefined for a stable version so a later stable bump cannot inherit
+ * a stale pre-release mapping. This affects installer metadata only — the app
+ * itself reports `identity.version`.
+ */
+export function msiWixVersion(version: string): string | undefined {
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(version);
+  if (!m) throw new Error(`not a semver version: ${version}`);
+  const [maj, min, pat] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (![maj, min, pat].every(Number.isSafeInteger) || maj > 255 || min > 255 || pat > 65535)
+    throw new Error(`MSI ProductVersion ${version} requires major/minor 0..255 and build 0..65535`);
+  const pre = m[4];
+  if (!pre) return undefined;
+  const tail = /(?:^|\.)(\d+)$/.exec(pre)?.[1];
+  const n = tail === undefined ? 1 : Number(tail);
+  if (!Number.isInteger(n) || n < 0 || n > 65535)
+    throw new Error(`pre-release counter ${tail} in ${version} is not an MSI revision field (0..65535)`);
+  if (pat > 0) return `${maj}.${min}.${pat - 1}.${n}`;
+  if (min > 0) return `${maj}.${min - 1}.65535.${n}`;
+  if (maj > 0) return `${maj - 1}.255.65535.${n}`;
+  throw new Error(`no MSI version below ${version}`);
+}
+
+/**
+ * tauri.conf.json carries the identity users see on every installer, and its
+ * Windows MSI needs the numeric pre-release mapping above. Everything else in
+ * the file is left byte-identical.
+ */
+export function stampTauriConf(content: string, version: string): string {
+  const doc = JSON.parse(stampJsonVersionOnly(content, version));
+  const wix = msiWixVersion(version);
+  const bundle = (doc.bundle ??= {});
+  if (wix === undefined) {
+    // Stable: drop any pre-release mapping so the bundler derives the version.
+    if (bundle.windows?.wix) {
+      delete bundle.windows.wix.version;
+      if (Object.keys(bundle.windows.wix).length === 0) delete bundle.windows.wix;
+      if (Object.keys(bundle.windows).length === 0) delete bundle.windows;
+    }
+  } else {
+    const windows = (bundle.windows ??= {});
+    windows.wix = { ...(windows.wix ?? {}), version: wix };
+  }
+  return JSON.stringify(doc, null, 2) + "\n";
+}
+
+/**
  * Launch-audit L-008 — stamp `version` inside the `[package]` section of a
  * Cargo.toml without touching anything else (comments, key order, spacing).
  * Fails loudly if the file has no package-version line — silent no-op
@@ -518,6 +600,17 @@ export function stampTomlPackageVersion(content: string, version: string): strin
     }
   }
   throw new Error("no [package] version line found to stamp");
+}
+
+/**
+ * Derived root-package identity only. This is an explicit release stamp, not a
+ * dependency lock regeneration: no third-party version, checksum or edge is
+ * changed. `cargo check --locked` remains the independent dependency gate.
+ */
+export function stampCargoLockRoot(content: string, version: string): string {
+  const block = /(^\[\[package\]\]\r?\nname = "xr-desktop"\r?\nversion = ")[^"]*(")/gm;
+  if ([...content.matchAll(block)].length !== 1) throw new Error("Cargo.lock must contain exactly one xr-desktop root package identity");
+  return content.replace(block, `$1${version}$2`);
 }
 
 // ── Drift detection ──────────────────────────────────────────────────────────
@@ -591,8 +684,12 @@ export function renderTarget(
       return stampPackageJson(current, id);
     case "json-version-only":
       return stampJsonVersionOnly(current, id.version);
+    case "tauri-conf":
+      return stampTauriConf(current, id.version);
     case "toml-version":
       return stampTomlPackageVersion(current, id.version);
+    case "cargo-lock-root":
+      return stampCargoLockRoot(current, id.version);
     case "generated-module":
       return buildVersionTs(id);
     case "site-identity":
@@ -651,6 +748,10 @@ async function main(): Promise<void> {
   }
 
   if (args.includes("--check")) {
+    const tagIndex = args.indexOf("--tag");
+    const tag = tagIndex >= 0 ? args[tagIndex + 1] : process.env.GITHUB_REF_TYPE === "tag" ? process.env.GITHUB_REF_NAME : undefined;
+    if (tagIndex >= 0 && (!tag || tag.startsWith("--"))) throw new Error("--tag requires a release tag");
+    if (tag !== undefined) validateReleaseTag(manifest, tag);
     const results = evaluateSurfaces(manifest);
     const drifted = results.filter((r) => !r.inSync);
     for (const r of results) {

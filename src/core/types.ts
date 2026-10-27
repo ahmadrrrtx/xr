@@ -204,6 +204,8 @@ export interface ToolResult {
 
 /** A single tool call the model wants to make. */
 export interface ToolCall {
+  /** Provider-native correlation id; never substitute the tool name. */
+  id?: string;
   tool: string;
   args: Record<string, unknown>;
 }
@@ -219,6 +221,14 @@ export interface ToolCall {
  * model-declared completion (the envelope's `done:true`, or a native
  * `finish_reason` of "stop"), never inferred from an empty tool-call list.
  */
+/** Opaque protocol continuation. Forward ONLY to this exact provider/model/format.
+ * Not displayed as user-facing reasoning and not a cross-provider prompt field. */
+export interface NativeContinuation {
+  providerId: string;
+  modelId: string;
+  format: "openai-responses" | "openai-chat" | "anthropic-messages" | "gemini-content";
+  blocks: unknown[];
+}
 export interface ModelTurn {
   /** The model's reasoning / message (shown to user). May be empty only if tool_calls or error are present. */
   message: string;
@@ -233,6 +243,8 @@ export interface ModelTurn {
   error?: string;
   /** Parse classification. `empty` ⇒ no content arrived; `undecodable` ⇒ content was not a valid turn. */
   status?: "parsed" | "empty" | "undecodable";
+  native?: NativeContinuation;
+  executing?: { providerId: string; modelId?: string };
   /** Token usage for cost accounting (Phase 1). */
   usage?: { inTokens: number; outTokens: number };
   /** Whether `usage` was provider-reported or estimated (cost honesty, F-13). */
@@ -258,6 +270,9 @@ export interface Message {
   content: string;
   /** For tool messages, which tool produced this. */
   name?: string;
+  toolCallId?: string;
+  toolCalls?: ToolCall[];
+  native?: NativeContinuation;
 }
 
 /** Abstraction over any LLM provider (BYOK or local). */
@@ -272,6 +287,11 @@ export interface ChatOptions {
   signal?: AbortSignal;
   /** Per-request ceiling in ms. Defaults to the configured provider timeout. */
   timeoutMs?: number;
+  /** Bound generated output on EVERY attempt, including retries. */
+  maxOutputTokens?: number;
+  /** Trusted admission/settlement hooks; no callbacks originate in model JSON. */
+  beforeAttempt?: (target: { providerId: string; modelId?: string; fallback: boolean }) => void | Promise<void>;
+  afterAttempt?: (attempt: { providerId: string; modelId?: string; turn?: ModelTurn; error?: unknown }) => void | Promise<void>;
 }
 
 /**
@@ -279,7 +299,12 @@ export interface ChatOptions {
  */
 export interface ProviderStreamChunk {
   text?: string;
-  toolCall?: { tool: string; args: Record<string, unknown> };
+  toolCall?: ToolCall;
+  native?: NativeContinuation;
+  done?: boolean;
+  error?: string;
+  status?: ModelTurn["status"];
+  usageSource?: ModelTurn["usageSource"];
   usage?: { inTokens: number; outTokens: number };
   finish?: boolean;
   reasoning?: string;
@@ -347,6 +372,12 @@ export type ChatStreamEvent =
     }
   | {
       type: "usage";
+      source?: "provider" | "estimated";
+      /** Standard/declared token cost for THIS actual attempt, not an invoice. */
+      usdEstimate?: number | null;
+      rateSource?: string;
+      provider?: string;
+      model?: string;
       usage: { inTokens: number; outTokens: number };
     }
   | {
@@ -370,6 +401,8 @@ export type ChatStreamEvent =
 export type StreamEventSink = (event: ChatStreamEvent) => void;
 
 export interface Provider {
+  /** Trusted composition performs per-attempt hooks itself. */
+  managesAttempts?: boolean;
   id: string;
   label: string;
   /** Run one turn of the loop. Implementations parse tool calls. */

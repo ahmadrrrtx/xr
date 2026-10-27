@@ -43,6 +43,7 @@ export function verifyEnvironment(input: VerifyInput): VerificationResult {
   if (tierAtLeast(tier, "tier2_isolated")) {
     push("tier2_kernel_boundary", g.kernelBoundary, "backend must provide a kernel-level boundary");
     push("tier2_enforced_fs", g.enforcedFilesystem, "filesystem must be OS-enforced");
+    push("tier2_enforced_process", g.enforcedProcess, "arbitrary descendants require an enforceable process boundary");
     push("tier2_enforced_net", g.enforcedNetwork, "network must be OS-enforced");
     push("tier2_no_ambient_authority", g.noAmbientAuthority, "ambient host authority must not be inherited");
   } else if (tierAtLeast(tier, "tier1_restricted")) {
@@ -79,6 +80,18 @@ export function verifyEnvironment(input: VerifyInput): VerificationResult {
   } else {
     push("credentials_satisfied", grant.credentials.mode !== "unavailable", "credential mode must not be 'unavailable'");
   }
+
+  // Grant/request bounds must be valid, and promised controls must exist.
+  const positive = (n: number) => Number.isSafeInteger(n) && n > 0;
+  const r = grant.resources, e = backend.enforcement;
+  push("grant_active", !grant.revoked && Number.isFinite(grant.expiresAt) && grant.expiresAt > Date.now());
+  push("valid_execution_bounds", positive(exec.timeoutMs) && positive(exec.maxOutputBytes) && positive(r.wallClockMs) && positive(r.maxOutputBytes));
+  push("wall_clock_enforceable", e.wallClock); push("output_enforceable", e.output);
+  for (const [name, value, enforceable] of [["cpu", r.cpuSeconds, e.cpu], ["memory", r.memoryBytes, e.memory], ["temp", r.maxTempBytes, e.temp]] as const) {
+    if (value !== undefined) push(`${name}_limit_enforceable`, positive(value) && enforceable, "requested OS limit must be enforceable, not advisory");
+  }
+  // No local backend implements a workspace inode/file-count quota.
+  if (r.maxFiles !== undefined) push("file_count_limit_enforceable", false, "file-count quotas are not implemented; do not issue this guarantee");
 
   const verified = checks.every((c) => c.ok);
   return {

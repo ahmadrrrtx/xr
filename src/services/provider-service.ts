@@ -78,53 +78,19 @@ export class ProviderService implements LifecycleHook {
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
 
-    // Gateway path: if enabled, use gateway.resolve for deterministic resolution
-    if (gatewayEnabled()) {
-      try {
-        // Sync path: we need sync but gateway.resolve is async; use sync legacy router
-        // for now but still via gateway's createProvider and catalog
-        // For measured path, prefer IntelligenceService when registered
-        const intel = this.registry.tryResolve?.(Tokens.Intelligence) ?? this.tryIntel();
-        if (intel && !overrides?.strategy) {
-          try {
-            const result = intel.resolveProvider({
-              provider: overrides?.provider,
-              model: overrides?.model,
-              mode: overrides?.mode,
-              requirements: overrides?.requirements,
-            });
-            this.lastDecision = result.decision;
-            return withTurnMetrics(result.provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
-          } catch {
-            // fall through
-          }
-        }
-
-        // Use RoutingService via gateway semantics (sync)
-        const router = new RoutingService(config);
-        const { provider, decision } = router.resolveWithDecision(overrides as ResolveOptions);
-        this.lastDecision = decision;
-        return withTurnMetrics(provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
-      } catch {
-        // Fallback to legacy
-      }
-    }
-
-    // Legacy path / fallback
-    const intel = this.registry.tryResolve?.(Tokens.Intelligence) ?? this.tryIntel();
+    // A registered authority's refusal/error is final. Only genuine absence
+    // permits the classic adapter; never turn policy or initialization errors
+    // into a different routing decision, regardless of gateway feature flag.
+    const intel = this.tryIntel();
     if (intel && !overrides?.strategy) {
-      try {
-        const result = intel.resolveProvider({
-          provider: overrides?.provider,
-          model: overrides?.model,
-          mode: overrides?.mode,
-          requirements: overrides?.requirements,
-        });
-        this.lastDecision = result.decision;
-        return withTurnMetrics(result.provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
-      } catch {
-        // Fall through to classic router
-      }
+      const result = intel.resolveProvider({
+        provider: overrides?.provider,
+        model: overrides?.model,
+        mode: overrides?.mode,
+        requirements: overrides?.requirements,
+      });
+      this.lastDecision = result.decision;
+      return withTurnMetrics(result.provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
     }
 
     const router = new RoutingService(config);
@@ -138,11 +104,7 @@ export class ProviderService implements LifecycleHook {
   }
 
   private tryIntel(): import("../intelligence/service.ts").IntelligenceService | null {
-    try {
-      return this.registry.resolve(Tokens.Intelligence);
-    } catch {
-      return null;
-    }
+    return this.registry.has(Tokens.Intelligence) ? this.registry.resolve(Tokens.Intelligence) : null;
   }
 
   route(request: RouteRequest = {}): RouteResult {

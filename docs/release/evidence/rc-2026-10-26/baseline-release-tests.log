@@ -1,0 +1,667 @@
+$ bun test test/release test/providers test/intelligence
+bun test v1.4.2 (744846f84)
+
+test/release/vscode-extension.test.ts:
+(pass) publish-vscode.yml is owner-run and secret-gated > workflow_dispatch only, read-only by default; only the release job can write [0.19ms]
+(pass) publish-vscode.yml is owner-run and secret-gated > publishing targets default off and each runs only when ticked [0.04ms]
+(pass) publish-vscode.yml is owner-run and secret-gated > secrets reach steps only through env, never interpolated into a script or argv [0.30ms]
+(pass) publish-vscode.yml is owner-run and secret-gated > a ticked target without its secret fails loudly before anything is published [0.04ms]
+(pass) publish-vscode.yml is owner-run and secret-gated > the package is built from the lockfile, tested, and checksum-verified before every upload [0.15ms]
+(pass) CI runs the extension's own checks inside the Quality Gate > ci.yml has a vscode-extension job and the gate needs it [0.52ms]
+(pass) claim-lint gate 10 — preview label until listed > the repository passes and is still unlisted [8.63ms]
+(pass) claim-lint gate 10 — preview label until listed > a README without the preview label fails [0.39ms]
+(pass) claim-lint gate 10 — preview label until listed > listing claims fail on any surface; honest 'not yet listed' lines pass; listed=true disables the gate [0.37ms]
+(pass) durable pairing: the extension reads exactly what the daemon writes > same path rule for XR_HOME and the ~/.xr default [0.09ms]
+(pass) durable pairing: the extension reads exactly what the daemon writes > a token written by the daemon module passes the extension's owner/permission guards [0.39ms]
+
+test/release/container-image.test.ts:
+(pass) XR-LAUNCH-020 · glibc container image > the base is oven/bun:<.bun-version>-slim (Debian, glibc), never Alpine/musl [0.19ms]
+(pass) XR-LAUNCH-020 · glibc container image > CI runs --version and the real file-tool smoke inside the built image (required Supply Chain gate) [0.07ms]
+(pass) XR-LAUNCH-020 · glibc container image > the image ships the probe (scripts/ is copied)
+(pass) XR-LAUNCH-020 · glibc container image > the probe passes on a glibc host: write → read round-trip, `../` refused [4.00ms]
+
+test/release/consumer-smoke.test.ts:
+(pass) Phase 3 — consumer smoke identity checks > looksStale flags the 3.x published identity, not the 1.x line [0.06ms]
+
+test/release/installer-powershell.test.ts:
+(pass) install.ps1 — remote-execution safety (iex (irm ...)) > has NO top-level param() block (the ValidateSetFailure root cause) [0.07ms]
+(pass) install.ps1 — remote-execution safety (iex (irm ...)) > does not attach a ValidateSet to a bare top-level $Mode variable [0.04ms]
+(pass) install.ps1 — remote-execution safety (iex (irm ...)) > parameters live on the Invoke-XrInstall function instead [0.06ms]
+(pass) install.ps1 — remote-execution safety (iex (irm ...)) > uses explicit, collision-resistant variable names (no generic $Mode) [0.05ms]
+(pass) install.ps1 — remote-execution safety (iex (irm ...)) > does not call exit at top level (would close the user's console under iex) [0.04ms]
+(pass) install.ps1 — remote-execution safety (iex (irm ...)) > detects Windows without reading $IsWindows unguarded (breaks on 5.1 + StrictMode) [0.03ms]
+(pass) install.ps1 — remote-execution safety (iex (irm ...)) > enables TLS 1.2 explicitly (stock 5.1 cannot reach GitHub otherwise) [0.02ms]
+(pass) install.ps1 — security posture > every remote download uses HTTPS [0.10ms]
+(pass) install.ps1 — security posture > does not pipe downloaded content into Invoke-Expression [0.04ms]
+(pass) install.ps1 — security posture > verifies the downloaded binary against published checksums [0.03ms]
+(pass) install.ps1 — security posture > the staged binary keeps its .exe extension last, so the run check can execute it [0.03ms]
+(pass) install.ps1 — security posture > temp files are uniquely named and cleaned up [0.03ms]
+(pass) install.ps1 — security posture > PATH is only appended when the entry is genuinely absent [0.06ms]
+(skip) install.ps1 — executed under powershell > the script parses with zero syntax errors
+(skip) install.ps1 — executed under powershell > Invoke-Expression of the script does NOT raise ValidateSetFailure
+(skip) install.ps1 — executed under powershell > Invoke-Expression does not pollute caller scope with installer variables
+(skip) install.ps1 — executed under powershell > a pre-existing $Mode in the caller's session is left untouched
+(skip) install.ps1 — executed under powershell > dot-sourcing defines Invoke-XrInstall and ValidateSet still rejects bad modes
+(skip) install.ps1 — executed under powershell > XR_INSTALL_BASE_URL: https / loopback mirrors are used, anything else stops the install (XR-LAUNCH-011)
+(skip) install.ps1 — executed under powershell > a valid -InstallMode binds without a validation error
+(pass) install.ps1 — environment hardening (XR-LAUNCH-025), static > XR_HOME (the data home) no longer selects the install directory [0.05ms]
+(pass) install.ps1 — environment hardening (XR-LAUNCH-025), static > there is no fallback to the current directory when the profile is missing
+(pass) install.ps1 — environment hardening (XR-LAUNCH-025), static > both launchers export XR_INSTALL_DIR so `xr uninstall` finds a custom location [0.01ms]
+(pass) install.ps1 — environment hardening (XR-LAUNCH-025), static > Bun is installed only on the source path, after extraction, pinned to the release's .bun-version [0.04ms]
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > each XR_INSTALL_DIR / XR_HOME / -TargetDirectory combination resolves or refuses
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > XR_HOME set: a notice names XR_INSTALL_DIR; a legacy marker in the data home is reported
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > no usable profile: the default target refuses instead of using the current directory
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > the launchers export XR_INSTALL_DIR (apostrophes escaped) and point at the chosen directory
+
+test/release/updater-manifest.test.ts:
+(pass) updater manifest dry-run > signed v2 artifacts map to installer-aware platform keys + repo asset URLs [0.48ms]
+(pass) updater manifest dry-run > generic windows key falls back to NSIS only when no MSI was built [0.08ms]
+(pass) updater manifest dry-run > launch-audit L-002/L-003: per-arch artifacts map to per-arch keys without collision [0.12ms]
+(pass) updater manifest dry-run > unprovisioned dir ⇒ zero platforms (publish must skip, never half-ship) [0.04ms]
+(pass) updater manifest dry-run > legacy v1Compatible shapes are NOT silently accepted (config says createUpdaterArtifacts: true) [0.16ms]
+(pass) updater manifest dry-run > release asset naming mirrors GitHub's normalisation (spaces → periods) [0.02ms]
+(pass) updater manifest dry-run > the committed tauri.conf.json is INERT until provisioned (no half-configured updater) [0.27ms]
+(pass) updater manifest dry-run > --apply provisions the whole pipeline in one step (pubkey + endpoint + createUpdaterArtifacts) [0.04ms]
+(pass) updater manifest dry-run > keygen script emits a raw-32-byte ed25519 pubkey (tauri format) [0.21ms]
+
+test/release/desktop-identity.test.ts:
+(pass) desktop version-identity surfaces (L-008) > manifest declares tauri.conf.json and Cargo.toml as stamped targets [0.43ms]
+(pass) desktop version-identity surfaces (L-008) > all desktop surfaces evaluate in sync at the manifest version [1.63ms]
+(pass) desktop version-identity surfaces (L-008) > stampJsonVersionOnly touches ONLY the version key [0.10ms]
+(pass) desktop version-identity surfaces (L-008) > stampTomlPackageVersion rewrites only the [package] version line and fails loudly without one [0.07ms]
+(pass) desktop version-identity surfaces (L-008) > Cargo.toml version equals the manifest version (the drift that shipped) [0.12ms]
+
+test/release/desktop-signing.test.ts:
+(pass) signing plan — missing secrets give an honest unsigned build > no secrets anywhere: no config, unsigned notices, never an error on PRs [0.12ms]
+(pass) signing plan — missing secrets give an honest unsigned build > pubkey committed but key missing: PR builds skip updater artifacts; tag builds fail [0.03ms]
+(pass) signing plan — missing secrets give an honest unsigned build > updater fully provisioned: artifacts on, config untouched [0.01ms]
+(pass) signing plan — missing secrets give an honest unsigned build > windows: thumbprint → Authenticode config with SHA-256 + timestamp; bad thumbprint fails [0.04ms]
+(pass) signing plan — missing secrets give an honest unsigned build > macos: a signed-but-not-notarized TAG build is refused [0.02ms]
+(pass) signing plan — missing secrets give an honest unsigned build > the workflow wires the plan, the OS verifiers and the manifest verifier [0.20ms]
+(pass) updater signatures — real Tauri minisign output > the committed fixture key parses as a minisign Ed25519 public key [0.10ms]
+(pass) updater signatures — real Tauri minisign output > a genuine signature verifies [0.31ms]
+(pass) updater signatures — real Tauri minisign output > a tampered payload is rejected [0.08ms]
+(pass) updater signatures — real Tauri minisign output > an altered trusted comment is rejected [0.17ms]
+(pass) updater signatures — real Tauri minisign output > a signature from another key is rejected (key id and math) [0.10ms]
+(pass) updater signatures — real Tauri minisign output > a raw 32-byte key (the old generate-updater-keys output) is refused [0.07ms]
+(pass) latest.json verification before publishing > the manifest built from signed artifacts verifies [0.28ms]
+(pass) latest.json verification before publishing > a tampered latest.json (URL pointing at another payload) is rejected [0.12ms]
+(pass) latest.json verification before publishing > a tampered latest.json (signature swapped) is rejected [0.08ms]
+(pass) latest.json verification before publishing > --notes is text, not a path (the tag job used to crash with ENOENT) [0.07ms]
+
+test/release/clean-tree.test.ts:
+(pass) XR-LAUNCH-033 clean-tree gate > every CI test lane ends with the clean-tree check (even after a red test step) [0.46ms]
+(pass) XR-LAUNCH-033 clean-tree gate > assert-clean-tree.sh passes on a clean repo and fails on modified, deleted or untracked files [31.96ms]
+(pass) XR-LAUNCH-033 clean-tree gate > no test writes into the tracked benchmarks/ tree via process.cwd() [11.24ms]
+
+test/release/write-sums.test.ts:
+(pass) Phase 3 — portable SHA256SUMS writer > writeSums hashes files, skips SHA256SUMS/.bundle/dirs, matches scripts/sums.parse [0.96ms]
+(pass) Phase 3 — portable SHA256SUMS writer > --print-with-manifest includes a hash of SHA256SUMS itself [0.20ms]
+
+test/release/tag-npm-invariant.test.ts:
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > historical v3/v4/v7 and backup-* tags are out of band [0.07ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > isPrerelease detects semver pre-release identifiers (stable gate binds releases only) [0.09ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > vacuous pass: no STABLE 1.x on either side (today's HEAD) [0.14ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > a lone beta git tag with no stable publish is vacuous (pre-release does not gate the stable line) [0.06ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > a STABLE v1 git tag without a matching stable npm version fails closed [0.03ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > a stable 1.x npm version without a v1 git tag fails closed [0.03ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > a stable npm 1.x with only a beta git tag still fails closed (beta does not satisfy stable) [0.10ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > matching stable 1.x sides pass even with historical tags present [0.03ms]
+(pass) Phase 3 — tag ⇔ npm invariant (1.x line) > repair commands never auto-repoint latest to a beta [0.06ms]
+
+test/release/onboarding.test.ts:
+(pass) typecheck preflight — remediation, not noise > the canonical typecheck script runs the preflight BEFORE either tsc call [0.12ms]
+(pass) typecheck preflight — remediation, not noise > preflight is portable: a plain ESM .ts module with no POSIX-only fragments [0.06ms]
+(pass) typecheck preflight — remediation, not noise > checks the REAL prerequisite (typescript/package.json), not merely any node_modules directory [0.18ms]
+(pass) typecheck preflight — remediation, not noise > remediation names the exact command a contributor must run
+
+test/release/installer-verify.test.ts:
+(pass) Phase 9 · install.sh verified-only binary path > fetches the release SHA256SUMS before installing any binary [0.03ms]
+(pass) Phase 9 · install.sh verified-only binary path > fails closed when checksums are unavailable [0.03ms]
+(pass) Phase 9 · install.sh verified-only binary path > fails closed when the checksum does not match (tamper detection)
+(pass) Phase 9 · install.sh verified-only binary path > fails closed when the artifact has no sums entry
+(pass) Phase 9 · install.sh verified-only binary path > reports verification success honestly
+(pass) Phase 9 · install.sh verified-only binary path > keeps the source-checkout fallback (alternative channel preserved)
+(pass) Phase 9 · install.ps1 verified-only binary path > fetches the release SHA256SUMS before installing any binary [0.03ms]
+(pass) Phase 9 · install.ps1 verified-only binary path > fails closed when checksums are unavailable
+(pass) Phase 9 · install.ps1 verified-only binary path > verifies sha256 and fails closed on mismatch [0.01ms]
+(pass) Phase 9 · install.ps1 verified-only binary path > reports verification success honestly
+(pass) Phase 9 · updater binary plan wires verification by default > the binary update plan verifies downloads against SHA256SUMS [0.02ms]
+(pass) Phase 9 · updater binary plan wires verification by default > the verify escape hatch is explicit and test-scoped (never silent) [0.01ms]
+
+test/release/release-workflow.test.ts:
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > triggers on v* tags [0.03ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > truth gates run BEFORE any build (release:check + claim-lint + channel:check) [0.03ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > builds the full 5-target canonical matrix across real OS runners [0.08ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > SLSA provenance is wired to REAL assemble outputs (the Phase-4 fix) [0.05ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > cosign keyless signing covers SHA256SUMS + tarball + SBOM (public Rekor) [0.04ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > release assets include all artifacts + signatures; prereleases are honest [0.03ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > npm publishes under OIDC with dist-tags (stable → latest, beta → beta) [0.32ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > docker publishes to GHCR with attestations + cosign image signature [0.04ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > channels are stamped from the signed SHA256SUMS (no unsigned drift path) [0.01ms]
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > windows channel zip (winget/scoop) is part of the canonical set
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > the .deb artifact is built from the canonical linux-x64 binary
+(pass) Phase 9 · T1/T2 — release.yml is a complete signed release pipeline > changelog is generated from git history at release time
+(pass) Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families > a single matrix drives Linux + macOS + Windows [0.02ms]
+(pass) Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families > one parity authority computes the suite per OS (no hand-picked subsets) [0.05ms]
+(pass) Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families > typecheck + golden path run on every OS [0.01ms]
+(pass) Phase 9 · T6 — nightly beta install survey on 3 OS families > survey jobs exist for all three OS families with the ≥0.99 gate [0.04ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > publish jobs are tag-gated; untagged dispatch uses the manifest version [0.10ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > SBOM is generated before SHA256SUMS; sums use write-sums.ts (no GNU sha256sum) [0.07ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > nightly uses write-sums, does not overlay $PWD on /app, and notifies on failure [0.02ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > Dockerfile copies scripts/ bin/ plugins/ so the container golden-path can run [0.01ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > canaries: keyless fixture leg must pass; live leg is an audited skip without secrets (XR-LAUNCH-012) [0.04ms]
+(pass) Phase 3 — artifact truth (release.yml + nightly + dockerfile) > supply-chain runs the 1.x tag⇔npm invariant; weekly consumer-smoke skips if unpublished [0.01ms]
+
+test/release/platform-parity.test.ts:
+(pass) Phase 9 · T4 — platform parity computation > the committed exclusion manifest validates clean (no stale/silent skips) [2.08ms]
+(pass) Phase 9 · T4 — platform parity computation > Linux (reference) runs 100% of the suite; other OSes lose only documented files [5.41ms]
+(pass) Phase 9 · T4 — platform parity computation > windows exclusions exactly match the manifest's win32 entries [2.51ms]
+(pass) Phase 9 · T4 — platform parity computation > darwin inherits POSIX-capable tests that windows excludes [2.26ms]
+(pass) Phase 9 · T4 — platform parity computation > a tampered exclusion that names no file is rejected [2.49ms]
+
+test/release/channels.test.ts:
+(pass) Phase 9 · T3 — one canonical build, many channels > every installer-facing URL points at the canonical release of the manifest version [0.29ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > committed packaging templates equal the generator output (no channel drift) [0.08ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > Homebrew formula binds all four macOS/Linux targets with stamped sha256 [0.08ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > stamping fails closed when a target is missing from the sums (no unsigned drift) [0.06ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > stamping fails closed on a malformed checksum [0.09ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > WinGet + Scoop manifests bind the canonical windows zip sha256 (x64 AND arm64 — L-004) [0.11ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > launch-audit L-004 — winget/scoop fail closed when the arm64 zip is missing from the sums [0.03ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > .deb round-trips: ar structure, control fields, payload identical to the canonical binary [2.14ms]
+(pass) Phase 9 · T3 — one canonical build, many channels > SHA256SUMS parse/serialize round-trip is deterministic [0.06ms]
+
+test/release/launch-claims.test.ts:
+(pass) gate 8 — status label (decision D2) > the repository itself is labelled Public beta and passes [5.20ms]
+(pass) gate 8 — status label (decision D2) > stable-production wording on a public surface fails while the label is beta [0.43ms]
+(pass) gate 8 — status label (decision D2) > a disclaimer is allowed [0.09ms]
+(pass) gate 8 — status label (decision D2) > the label cannot become stable while a gate is open, or green without evidence [0.20ms]
+(pass) gate 8 — status label (decision D2) > a missing gate file fails closed [0.09ms]
+(pass) gate 8 — status label (decision D2) > the site stamp writes the label [0.08ms]
+(pass) gate 9 — README channel claims > rows parse with channel and legend [0.32ms]
+(pass) gate 9 — README channel claims > the repository README maps every row and passes the static gate [0.40ms]
+(pass) gate 9 — README channel claims > a live row for an unclaimed channel, an unknown channel or a missing legend fails [0.20ms]
+(pass) gate 9 — README channel claims > --live: a row marked live for a failing channel is a violation; a passing pending row is a note [0.20ms]
+
+test/release/channel-coherence.test.ts:
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > the real manifest declares a stable public version every claimed channel must serve [0.04ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > installers and README are stamped with the public version, not the development line [0.20ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > compareSemver orders core numerically and pre-releases before releases [0.07ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > publicVersionOf falls back to identity.version for legacy manifests [0.02ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > a public version ahead of the development line is rejected [0.42ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > a pre-release public version is rejected [0.26ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > an unknown claimed channel is rejected [0.36ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > the public version cannot also be withdrawn [0.24ms]
+(pass) release.manifest.json channels block (D1: 1.0.0 stays public) > a withdrawn tag needs an evidence-backed reason [0.25ms]
+(pass) tag ⇔ npm invariant — withdrawn tags (Supply Chain gate) > a withdrawn stable tag with no npm publish is excused, and reported [0.07ms]
+(pass) tag ⇔ npm invariant — withdrawn tags (Supply Chain gate) > without the declaration the same state fails closed (today's red Supply Chain run) [0.06ms]
+(pass) tag ⇔ npm invariant — withdrawn tags (Supply Chain gate) > a withdrawn version that reaches npm is always a failure [0.03ms]
+(pass) channel-live-check against a fake registry world > a coherent world passes every claimed channel [2.00ms]
+(pass) channel-live-check against a fake registry world > today's state: v1.1.0 is GitHub Latest and not a pre-release → github-releases FAILS [0.25ms]
+(pass) channel-live-check against a fake registry world > a release missing installer assets fails (the v1.1.0 desktop-only release) [0.19ms]
+(pass) channel-live-check against a fake registry world > npm latest drift and a withdrawn version on npm both fail [0.23ms]
+(pass) channel-live-check against a fake registry world > a missing tap (today's 404) and a formula with a wrong sha both fail homebrew [0.50ms]
+(pass) channel-live-check against a fake registry world > winget not yet merged fails with a pending message; a wrong sha fails too [0.44ms]
+(pass) channel-live-check against a fake registry world > scoop manifest hash drift fails [0.22ms]
+(pass) channel-live-check against a fake registry world > docker :latest pointing elsewhere, or a missing version tag, fails [0.64ms]
+(pass) channel-live-check against a fake registry world > the check is read-only: it only issues GET/HEAD requests and never touches unpinned branches [0.39ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > stamped, pinned files that match the signed sums are publishable [0.42ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > WinGet files land under manifests/a/ (first letter of the identifier), not r/ [0.01ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > a formula sha that does not match SHA256SUMS blocks publication [0.05ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > files for a different version are refused [0.04ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > unstamped placeholders and missing manifests are refused [0.04ms]
+(pass) channel-publish-verify (what publish-channels.yml pushes) > the repository's channel workflows use the verified publisher and the correct WinGet path [0.11ms]
+
+test/release/beta-survey.test.ts:
+(pass) Phase 3 — beta-install-survey accepts space-separated flags > argValue parses --name=value and --name value [0.08ms]
+(pass) Phase 9 · T6 — Beta install survey measures install success > a healthy canonical asset set installs at 100% (gate passes) [22.90ms]
+(pass) Phase 9 · T6 — Beta install survey measures install success > a tampered artifact fails the gate (integrity step names the failure) [14.50ms]
+
+test/release/release-assets-check.test.ts:
+(pass) release asset-completeness gate (L-010) > the real v1.1.0 asset set is reported incomplete, naming the CLI set [0.34ms]
+(pass) release asset-completeness gate (L-010) > a full canonical set passes with zero missing [0.08ms]
+(pass) release asset-completeness gate (L-010) > the arm64 additions are genuinely required (v1.0.0-shaped sets now fail, loudly and precisely) [0.10ms]
+(pass) release asset-completeness gate (L-010) > required set size is stable (any edit to the canonical list is a deliberate review event) [0.01ms]
+
+test/release/ci-policy.test.ts:
+(pass) ci-policy > the repository's workflows satisfy the policy [6.79ms]
+(pass) ci-policy > required set is the D7 set [0.05ms]
+(pass) ci-policy > pins: tag refs, short SHAs and missing tag comments are violations [0.09ms]
+(pass) ci-policy > runtime (032): floating ubuntu image and Node 20-era first-party majors are violations [0.16ms]
+(pass) ci-policy > runtime (032): the pre-032 workflows would have failed rule 7 [2.25ms]
+(pass) ci-policy > a correct gate passes; each defect is caught [0.46ms]
+(pass) ci-policy > non-gating workflows must say so [0.09ms]
+(pass) quarantine > the committed quarantine is valid today [0.19ms]
+(pass) quarantine > expiry, missing owner/issue, long spans and missing files are violations [0.06ms]
+(pass) support matrix is generated from evidence > a passing record makes ✅ with its evidence class; a de-scope wins; nothing is ⏳ [0.34ms]
+(pass) support matrix is generated from evidence > the launch gate counts only gating cells without ✅/➖ [0.30ms]
+(pass) support matrix is generated from evidence > splice replaces only the generated block [0.04ms]
+(pass) support matrix is generated from evidence > the committed SUPPORT_MATRIX.md block is current [7.03ms]
+
+test/release/numeric-claims.test.ts:
+(pass) ceiling consistency — every published ceiling claim equals TREE_CEILING > the whole tree is clean: lintDocsIntegrity finds zero violations [9.71ms]
+(pass) ceiling consistency — every published ceiling claim equals TREE_CEILING > the README gates table carries the stamped marker with the real value [0.11ms]
+(pass) ceiling consistency — every published ceiling claim equals TREE_CEILING > no present-tense LOC figure outside a marker disagrees with TREE_CEILING [0.84ms]
+(pass) test-count tuple — README equals the measured baseline > the README states the tuple and it matches TEST-BASELINE.json exactly [0.12ms]
+(pass) test-count tuple — README equals the measured baseline > the baseline carries its measurement method (bun version, lane, commit, date) [0.04ms]
+(pass) doc links — every relative link in the published docs resolves > the README's generated register link target exists (1.1.0 excerpt) [0.59ms]
+(pass) doc links — every relative link in the published docs resolves > the canonical register's links all resolve in-tree [0.12ms]
+(pass) independent version surfaces — RELEASING names all four > RELEASING.md names cloud/package.json [0.02ms]
+(pass) independent version surfaces — RELEASING names all four > RELEASING.md names mobile/package.json
+(pass) independent version surfaces — RELEASING names all four > RELEASING.md names desktop/src-tauri/Cargo.toml
+(pass) independent version surfaces — RELEASING names all four > RELEASING.md names extensions/vscode/package.json
+(pass) the gates bite — in-memory documents must trip them > a drifted marker value is a numeric-claim violation [0.15ms]
+(pass) the gates bite — in-memory documents must trip them > a bare formatted ceiling outside the marker is a numeric-claim violation [0.07ms]
+(pass) the gates bite — in-memory documents must trip them > history-marked lines are exempt, and benign numbers stay unflagged [0.03ms]
+(pass) the gates bite — in-memory documents must trip them > a fabricated relative link is a doc-link violation; pending markers exempt [0.05ms]
+(pass) the gates bite — in-memory documents must trip them > fenced code is not scanned as prose [0.08ms]
+(pass) --stamp-docs — the stamp keeps every marked surface in sync and is idempotent > re-stamping a tmp tree tracks TREE_CEILING and the second pass is a no-op [1.93ms]
+(pass) XR-LAUNCH-022 — support-matrix test-file counts are single-sourced from platform-parity > a hand-typed file or exclusion count in the prose trips the gate [0.21ms]
+(pass) XR-LAUNCH-022 — support-matrix test-file counts are single-sourced from platform-parity > the generated block, history-marked lines and fenced code are exempt [0.07ms]
+(pass) XR-LAUNCH-022 — support-matrix test-file counts are single-sourced from platform-parity > the rule is scoped to SUPPORT_MATRIX.md [0.06ms]
+(pass) XR-LAUNCH-022 — support-matrix test-file counts are single-sourced from platform-parity > the real support matrix passes and points at the parity source [0.22ms]
+
+test/release/changelog.test.ts:
+(pass) Phase 9 · changelog generator > parses conventional commit subjects (type, scope, breaking) [0.11ms]
+(pass) Phase 9 · changelog generator > renders grouped, deterministic sections [0.23ms]
+(pass) Phase 9 · changelog generator > breaking changes get a prominent section [0.04ms]
+(pass) Phase 9 · changelog generator > upsert prepends a new entry without touching history [0.12ms]
+(pass) Phase 9 · changelog generator > upsert is idempotent for the same version (replacement, not duplication) [0.07ms]
+(pass) Phase 9 · changelog generator > previousTagFor picks the closest older semver tag [0.15ms]
+
+test/release/npm-ghost-versions.test.ts:
+(pass) XR-LAUNCH-023 · ghost classification (pure) > today's registry: all five 3.x versions outrank 1.0.0 and their message points to @beta [0.27ms]
+(pass) XR-LAUNCH-023 · ghost classification (pure) > versions at or below the latest major are never ghosts (0.2.0, 1.0.0-beta.1, a future 1.x rc) [0.16ms]
+(pass) XR-LAUNCH-023 · ghost classification (pure) > after the owner's fix the probe is clean and prints no commands [0.08ms]
+(pass) XR-LAUNCH-023 · ghost classification (pure) > an undeprecated ghost and a missing latest dist-tag are both problems [0.07ms]
+(pass) XR-LAUNCH-023 · the owner's commands are explicit and never run > one npm deprecate per ghost, exact versions (no ranges), message → @latest (1.x) [0.19ms]
+(pass) XR-LAUNCH-023 · the owner's commands are explicit and never run > the module has no way to execute a command or write to the registry [0.11ms]
+(pass) XR-LAUNCH-023 · the owner's commands are explicit and never run > CLI: exit 1 with --print-commands on today's registry, exit 0 once fixed, --json carries ok [18.87ms]
+(pass) XR-LAUNCH-023 · registry probe in the release gate (channel:live npm) > today's registry fails the npm channel with the owner pointer [0.51ms]
+(pass) XR-LAUNCH-023 · registry probe in the release gate (channel:live npm) > the fixed registry passes the npm channel [0.26ms]
+
+test/release/installer-behavior.test.ts:
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > the manifest pins a public version for the installer [0.17ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > missing release → non-zero exit, nothing created, no branch fallback [14.06ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > happy path installs the pinned, verified binary and writes the marker [60.02ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > checksum mismatch is fatal: no fallback, nothing installed [35.73ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > a binary missing from SHA256SUMS is refused; the verified source archive is used [62.18ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > a directory that is not an XR install is never touched [14.44ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > the dist/ left behind by an older failed installer is accepted [60.21ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > --version pins a different published release [56.21ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > an invalid --version is rejected before any download [2.85ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > --from-source installs the same release's verified source archive (frozen lockfile) [53.76ms]
+(pass) install.sh behaviour against a fake GitHub Releases (XR-LAUNCH-002) > `curl | bash` with no terminal and no --yes declines with a --yes hint (never hangs) [12.82ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > default: no XR_INSTALL_DIR / XR_HOME → ~/.xr-agent, launcher exports the install dir [59.09ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_HOME alone is the DATA home: program files still go to ~/.xr-agent, the data home is untouched [63.13ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR chooses the install dir (with and without XR_HOME); ~/.xr-agent is never created [69.52ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR + --from-source installs the source tree there [55.89ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that equals XR_HOME is refused before any download [9.36ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that equals the default data home ~/.xr is refused before any download [9.01ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that inside the data home is refused before any download [8.82ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that contains the data home is refused before any download [8.57ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that is HOME itself is refused before any download [7.94ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that is / is refused before any download [7.80ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that is relative is refused before any download [8.70ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that contains $ (launcher injection) is refused before any download [7.44ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > XR_INSTALL_DIR that contains a double quote is refused before any download [6.87ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > a legacy install inside XR_HOME is reported and left untouched [63.17ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > HOME unset → clear refusal, no download, nothing created [7.34ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > HOME empty → clear refusal, no download, nothing created [7.06ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > HOME / → clear refusal, no download, nothing created [7.25ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > HOME relative → clear refusal, no download, nothing created [7.06ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > HOME missing → clear refusal, no download, nothing created [7.34ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > HOME a file → clear refusal, no download, nothing created [7.36ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > a read-only HOME is refused (root can write anywhere, so skipped as root) [7.23ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > the binary path never needs Bun (no bun on PATH at all) [56.76ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > the source path uses the release's own .bun-version and warns on a mismatch [57.70ms]
+(pass) install.sh environment combinations (XR-LAUNCH-025) > every curl call is https-only for the request AND its redirects, with TLS >= 1.2 [0.60ms]
+
+test/release/capability-census.test.ts:
+(pass) P2-15 census completeness > the gate's skill loop no longer pre-filters on xr-skill.json [0.04ms]
+(pass) P2-15 census completeness > the gate loads legacy skills via the established readSkillManifest fallback (no bespoke parser) [0.01ms]
+(pass) P2-15 census completeness > a directory that is neither manifest nor SKILL.md fails the gate honestly [0.05ms]
+(pass) P2-15 census completeness > the headline line prints labelled categories (manifest / legacy / plugins), never a bare count [0.04ms]
+(pass) P2-15 census completeness > enumeration matches the crate tree itself: categories sum to the whole population [0.49ms]
+
+test/intelligence/router.test.ts:
+(pass) XR 4.4 intelligence router > automatic routing selects a local model when only local is credential-free [8.59ms]
+(pass) XR 4.4 intelligence router > explicit provider/model pin is never silently overridden [1.99ms]
+(pass) XR 4.4 intelligence router > local-only policy rejects cloud even if preferred [1.96ms]
+(pass) XR 4.4 intelligence router > manual pin to cloud under local-only is rejected (security) [1.38ms]
+(pass) XR 4.4 intelligence router > tool-use requirement filters incompatible models [0.61ms]
+(pass) XR 4.4 intelligence router > vision requirement rejects non-vision models [0.48ms]
+(pass) XR 4.4 intelligence router > context-limit filtering rejects small windows [0.55ms]
+(pass) XR 4.4 intelligence router > scoring is deterministic for same inputs [0.39ms]
+(pass) XR 4.4 intelligence router > cost_constrained prefers free/local [1.03ms]
+(pass) XR 4.4 intelligence router > unknown completion must not auto-fallback [0.07ms]
+(pass) XR 4.4 intelligence router > provider_outage may fallback [0.01ms]
+(pass) XR 4.4 intelligence router > fallback chain does not escalate local→cloud without allowCloudFallback [0.60ms]
+(pass) XR 4.4 intelligence router > historical metrics ignored when sparse [1.04ms]
+(pass) XR 4.4 intelligence router > historical metrics influence only with sufficient confidence [0.16ms]
+(pass) XR 4.4 intelligence router > decision record is secret-free and durable-shaped [1.04ms]
+(pass) XR 4.4 intelligence router > no compatible candidate yields human handoff [0.77ms]
+(pass) XR 4.4 intelligence router > policyFromConfig maps localModels.routing local-only [0.37ms]
+(pass) XR 4.4 intelligence router > tie-breaking is stable (lexical provider/model) [0.80ms]
+
+test/intelligence/model-class-contract.test.ts:
+(pass) Phase 5 · future model classes via the contract (T7) > a synthetic provider with a future extension capability routes when required [5.90ms]
+(pass) Phase 5 · future model classes via the contract (T7) > the same future class FAILS CLOSED when no model declares it [1.44ms]
+(pass) Phase 5 · future model classes via the contract (T7) > undeclared extension is unknown, never silently supported [1.17ms]
+(pass) Phase 5 · future model classes via the contract (T7) > provider add is ADAPTER-ONLY: no kernel/loop file routes the synthetic provider [7.82ms]
+(pass) Phase 5 · future model classes via the contract (T7) > custom provider construction works through the registry adapter path (no core edits) [0.90ms]
+
+test/intelligence/routing-slo.test.ts:
+(pass) Phase 5 · routing SLO collector > aggregates selections, fallbacks, degradations, cpq and CPR into one report [0.66ms]
+(pass) Phase 5 · routing SLO collector > empty window reports zeros and 'met' defaults (honest cold start) [0.08ms]
+(pass) Phase 5 · routing SLO collector > events persist to JSONL and are re-read by a fresh collector (no double count) [0.18ms]
+(pass) Phase 5 · routing SLO collector > old events fall outside the window [0.04ms]
+(pass) Phase 5 · routing SLO collector > LIVE measurement: 300 real routing decisions measure p95 well under the 20ms budget [41.56ms]
+(pass) Phase 5 · routing SLO collector > SELECTION_BUDGET_MS is the contracted 20ms [0.11ms]
+
+test/intelligence/performance.test.ts:
+(pass) XR 4.4 intelligence performance > catalog build is under 50ms cold [2.09ms]
+(pass) XR 4.4 intelligence performance > 100 routing decisions average under 5ms each [5.07ms]
+(pass) XR 4.4 intelligence performance > manual pin path is faster than full automatic (or comparable) [7.57ms]
+
+test/intelligence/service-v5.test.ts:
+[33m! v5primary/v5-a failed (transient). Failing over to v5fallback/v5-b [L1_equivalent_fallback, context: 1 messages preserved][0m
+(pass) Phase 5 · IntelligenceService resilience wiring > resolveProvider executes the chain: transient primary → real failover → metrics + SLO effects [5.32ms]
+[33m! v5primary/v5-a failed (permanent). Failing over to v5fallback/v5-b [L1_equivalent_fallback, context: 1 messages preserved][0m
+[33m! v5primary/v5-a failed (permanent). Failing over to v5fallback/v5-b [L1_equivalent_fallback, context: 1 messages preserved][0m
+(pass) Phase 5 · IntelligenceService resilience wiring > workspace breaker config applies: sustained outage trips breakers → authority reports HONEST unavailability [3.27ms]
+(pass) Phase 5 · IntelligenceService resilience wiring > route() records the selection SLO on the automatic path too (single choke point) [1.00ms]
+
+test/intelligence/breaker.test.ts:
+(pass) Phase 5 · rolling health + circuit breaker > injected outage trips the breaker open after minSamples errors [0.20ms]
+(pass) Phase 5 · rolling health + circuit breaker > mixed outcomes below threshold keep the breaker closed [0.09ms]
+(pass) Phase 5 · rolling health + circuit breaker > QUALITY degradation (semantic failures) trips the breaker — not just errors [0.06ms]
+(pass) Phase 5 · rolling health + circuit breaker > cooldown → half-open probe → success CLOSES the breaker [0.15ms]
+(pass) Phase 5 · rolling health + circuit breaker > failed probe re-opens with capped exponential backoff [0.13ms]
+(pass) Phase 5 · rolling health + circuit breaker > rolling score reflects measured outcomes (not binary, hysteresis via windows) [0.12ms]
+(pass) Phase 5 · rolling health + circuit breaker > breaker with zero data reports a fresh closed gate (no phantom trips) [0.02ms]
+(pass) Phase 5 · rolling health + circuit breaker > ROUTER integration: an open breaker removes the provider from selection with a reason [0.62ms]
+(pass) Phase 5 · rolling health + circuit breaker > ROUTER integration: half-open target stays eligible but down-scored [0.32ms]
+(pass) Phase 5 · rolling health + circuit breaker > breaker persistence: a tripped breaker survives process restart (same XR_HOME file) [0.41ms]
+(pass) Phase 5 · rolling health + circuit breaker > default config constants are sane and bounded [0.02ms]
+
+test/intelligence/integration.test.ts:
+(pass) XR 4.4 provider routing integration > buildProvider with explicit pin returns that provider id [1.11ms]
+(pass) XR 4.4 provider routing integration > buildProviderWithDecision attaches explainable decision [0.63ms]
+(pass) XR 4.4 provider routing integration > localFirst strategy prefers local without keys [0.69ms]
+[33m! Primary provider (primary) failed: boom. Falling back to fallback...[0m
+(pass) XR 4.4 provider routing integration > FallbackProvider exposes primary id and tries fallback on chat error [0.24ms]
+(pass) XR 4.4 provider routing integration > unknown provider pin throws [0.65ms]
+(pass) XR 4.4 provider routing integration > registry still creates openai-compat local providers [0.32ms]
+(pass) XR 4.4 provider routing integration > cheapest strategy selects free tier [0.51ms]
+
+test/intelligence/fallback-v5.test.ts:
+(pass) Phase 5 · three-tier error classification > transient: rate limits, timeouts, connection resets, 5xx [0.03ms]
+(pass) Phase 5 · three-tier error classification > permanent: auth failures, missing models, 404s [0.02ms]
+(pass) Phase 5 · three-tier error classification > semantic: invalid responses, refusals, contract violations [0.04ms]
+(pass) Phase 5 · three-tier error classification > unknown errors classify permanent (no in-place retry — the safe side)
+(pass) Phase 5 · three-tier error classification > retry backoff is jittered, exponentially growing, and budget-capped (pure) [0.07ms]
+(pass) Phase 5 · ResilientProvider chain execution > primary success: no failover, no degradation, outcome recorded [0.27ms]
+[33m! ollama/m1 failed (transient). Failing over to lmstudio/m2 [L1_equivalent_fallback, context: 1 messages preserved][0m
+(pass) Phase 5 · ResilientProvider chain execution > transient failure → one in-place retry (budget), then target-diverse failover [0.22ms]
+[33m! ollama/m1 failed (permanent). Failing over to lmstudio/m2 [L1_equivalent_fallback, context: 1 messages preserved][0m
+(pass) Phase 5 · ResilientProvider chain execution > permanent failure → NO in-place retry, straight to the diverse fallback [0.13ms]
+[33m! ollama/m1 failed (semantic). Failing over to lmstudio/m2 [L1_equivalent_fallback, context: 1 messages preserved][0m
+(pass) Phase 5 · ResilientProvider chain execution > semantic failure (invalid turn / refusal-shaped) advances and records quality degradation for the breaker [0.12ms]
+(pass) Phase 5 · ResilientProvider chain execution > LOCALITY GUARD: a chain step violating policy is skipped — never silently routed to [0.13ms]
+[33m! lmstudio/m2 failed (transient). Failing over to jan/m3 [L1_equivalent_fallback, context: 1 messages preserved][0m
+(pass) Phase 5 · ResilientProvider chain execution > breaker-open step is skipped without being called [0.34ms]
+[33m! ollama/m1 failed (permanent). Failing over to lmstudio/m2 [L1_equivalent_fallback, context: 1 messages preserved][0m
+(pass) Phase 5 · ResilientProvider chain execution > chain exhaustion throws RoutingEscalationError with a full, redacted package (no fake success) [0.34ms]
+(pass) Phase 5 · ResilientProvider chain execution > redactSecrets strips common credential shapes [0.04ms]
+
+test/intelligence/behavioral.test.ts:
+(pass) Phase 5 · behavioral contract evaluator (offline measurement) > a high-fidelity provider measures ≈1.0 across all four dimensions [1.27ms]
+(pass) Phase 5 · behavioral contract evaluator (offline measurement) > a low-fidelity provider measures LOW on the exact dimensions it fails [0.39ms]
+(pass) Phase 5 · behavioral contract evaluator (offline measurement) > an UNREACHABLE provider refuses measurement — transport failure is never recorded as measured capability (Art. IV) [0.33ms]
+(pass) Phase 5 · behavioral contract evaluator (offline measurement) > false refusals on benign prompts are measured with a pattern class [0.26ms]
+(pass) Phase 5 · behavioral contract evaluator (offline measurement) > contracts persist to a secret-free store and are re-readable by a NEW store instance [0.37ms]
+(pass) Phase 5 · capability-gated selection on measured contracts > a hard task rejects the measured-below-floor model and selects the cheapest sufficient one [0.99ms]
+(pass) Phase 5 · capability-gated selection on measured contracts > an EASY task keeps the cheap local model even when a frontier model is available (cost-per-quality) [0.71ms]
+(pass) Phase 5 · capability-gated selection on measured contracts > measured fidelity overrides the static price-tier prior in scoring (T8) [0.18ms]
+(pass) Phase 5 · capability-gated selection on measured contracts > unmeasured models are gated on static priors, not rejected (cold start) [0.53ms]
+
+test/intelligence/locality-v5.test.ts:
+(pass) Phase 5 · locality invariant on the new routing-quality paths > router + breaker: a tripped local provider under local_only yields honest unavailability, NOT a cloud fallback [1.25ms]
+(pass) Phase 5 · locality invariant on the new routing-quality paths > resilient executor: a poisoned chain can never hop to cloud under local_only (defense in depth) [0.36ms]
+(pass) Phase 5 · locality invariant on the new routing-quality paths > fallback chain builder excludes cloud candidates under local_only even when they score higher [0.51ms]
+(pass) Phase 5 · locality invariant on the new routing-quality paths > behavioral measurement honors locality: providers the policy forbids are skipped, never probed [0.10ms]
+(pass) Phase 5 · locality invariant on the new routing-quality paths > no_cloud policy: cloud AND hybrid are refused, private and local pass [0.02ms]
+(pass) Phase 5 · locality invariant on the new routing-quality paths > health/behavioral stores are local files inside XR_HOME, never egress (no network in store layer) [0.78ms]
+
+test/intelligence/failover-cpr.test.ts:
+[33m! ollama/m1 failed (transient). Failing over to lmstudio/m2 [L1_equivalent_fallback, context: 7 messages preserved][0m
+(pass) Phase 5 · failover-injection harness (ContinuityBench-style) > STATEFUL arm: mid-conversation failover preserves factual anchors — CPR ≥ 0.95 [0.81ms]
+(pass) Phase 5 · failover-injection harness (ContinuityBench-style) > STATELESS control arm: last-message-only forwarding loses the anchors — CPR ≈ 0 [0.09ms]
+[33m! ollama/m1 failed (transient). Failing over to lmstudio/m2 [L1_equivalent_fallback, context: 7 messages preserved][0m
+(pass) Phase 5 · failover-injection harness (ContinuityBench-style) > the runtime failover RECORD carries context evidence (counts, hash, no content) [0.37ms]
+(pass) Phase 5 · failover-injection harness (ContinuityBench-style) > CPR_TARGET is the contracted 0.95 [0.01ms]
+
+test/intelligence/difficulty.test.ts:
+(pass) Phase 5 · difficulty estimator > trivial short chat task scores easy with an easy floor [0.09ms]
+(pass) Phase 5 · difficulty estimator > complex multi-part analysis task scores hard with a hard floor [0.13ms]
+(pass) Phase 5 · difficulty estimator > requirements-only estimate (no task text) is medium and marked as such [0.03ms]
+(pass) Phase 5 · difficulty estimator > required capabilities raise difficulty monotonically [0.04ms]
+(pass) Phase 5 · difficulty estimator > deterministic: same inputs → identical estimate [0.02ms]
+(pass) Phase 5 · difficulty estimator > custom floors override the default mapping [0.03ms]
+(pass) Phase 5 · difficulty estimator > score is bounded 0..1 even with every signal maxed [0.06ms]
+
+test/intelligence/routing-v5.test.ts:
+(pass) Phase 5 · explainable automatic routing > representative task classes route with a structured explainable reason [1.29ms]
+(pass) Phase 5 · explainable automatic routing > difficulty signals appear in the explanation (deterministic, inspectable) [0.68ms]
+(pass) Phase 5 · explainable automatic routing > seeded BAD metadata decision is overridable by manual pin (override completeness) [0.99ms]
+(pass) Phase 5 · explainable automatic routing > restrict-to-set: only whitelisted providers are eligible (user_restriction) [0.93ms]
+(pass) Phase 5 · explainable automatic routing > enableAutomatic:false → no roaming: defaults resolve via preferred_with_fallback [0.53ms]
+(pass) Phase 5 · explainable automatic routing > enableAutomatic default (new users) routes automatically [0.35ms]
+(pass) Phase 5 · explainable automatic routing > explicit difficulty override feeds the capability gate deterministically [0.61ms]
+(pass) Phase 5 · explainable automatic routing > difficultyRouting:false leaves no fidelity floor (workspace opt-out) [0.57ms]
+(pass) Phase 5 · explainable automatic routing > minOverallFidelity config override wins over difficulty floor [0.49ms]
+(pass) Phase 5 · explainable automatic routing > local_only and private_only modes keep their override meaning [0.76ms]
+
+test/intelligence/locality-invariant.test.ts:
+(pass) T3 — one routing authority > the legacy router module no longer exists [0.16ms]
+(pass) T3 — one routing authority > RoutingService produces a decision with an explicit locality policy [0.75ms]
+(pass) T3 — localityAllowed: the one policy predicate > any permits everything [0.07ms]
+(pass) T3 — localityAllowed: the one policy predicate > local_only permits ONLY local [0.03ms]
+(pass) T3 — localityAllowed: the one policy predicate > private_only permits local and private, refuses cloud [0.02ms]
+(pass) T3 — localityAllowed: the one policy predicate > no_cloud refuses cloud AND hybrid AND unknown (ambiguity denies) [0.03ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > no_cloud: a cloud default never yields a cloud provider [0.95ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > no_cloud: an EXPLICIT cloud pin is refused (fail closed) [0.70ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > no_cloud: the violation is explainable (names policy + target) [0.58ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > private_only: a cloud default never yields a cloud provider [0.63ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > private_only: an EXPLICIT cloud pin is refused (fail closed) [0.56ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > private_only: the violation is explainable (names policy + target) [0.53ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > local_only: a cloud default never yields a cloud provider [0.54ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > local_only: an EXPLICIT cloud pin is refused (fail closed) [0.48ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > local_only: the violation is explainable (names policy + target) [0.39ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > no_cloud + local default still resolves normally (no false positive) [0.54ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > local_only resolves to a genuinely local provider [0.38ms]
+(pass) T3 — REGRESSION: a cloud default is never silently used under a restrictive policy > policy `any` still permits an explicit cloud pin (no over-blocking) [0.63ms]
+(pass) T3 — legacy strategy compatibility is preserved > strategy "primary" still resolves a provider [0.55ms]
+(pass) T3 — legacy strategy compatibility is preserved > strategy "localFirst" still resolves a provider [0.44ms]
+(pass) T3 — legacy strategy compatibility is preserved > strategy "cloudFirst" still resolves a provider [0.33ms]
+(pass) T3 — legacy strategy compatibility is preserved > strategy "hybrid" still resolves a provider [0.54ms]
+(pass) T3 — legacy strategy compatibility is preserved > strategy "cheapest" still resolves a provider [0.47ms]
+(pass) T3 — legacy strategy compatibility is preserved > strategy "fastest" still resolves a provider [0.52ms]
+(pass) T3 — legacy strategy compatibility is preserved > localModels.routing = 'local-only' is still honoured [0.78ms]
+(pass) T3 — Phase 0 · T11 fallback diversity survives the merge > a same-provider/same-model fallback is never wired [0.86ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(any, local) === true [0.04ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(any, private) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(any, cloud) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(any, hybrid) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(any, unknown) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(local_only, local) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(local_only, private) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(local_only, cloud) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(local_only, hybrid) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(local_only, unknown) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(private_only, local) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(private_only, private) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(private_only, cloud) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(private_only, hybrid) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(private_only, unknown) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(no_cloud, local) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(no_cloud, private) === true
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(no_cloud, cloud) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(no_cloud, hybrid) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > localityAllowed(no_cloud, unknown) === false
+(pass) T3 — mutation hardening: every locality branch is pinned > strategyToMode maps every legacy strategy to its exact mode [0.07ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > the decision records the policy it actually enforced [2.18ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > getLastDecision reflects the most recent decision, not a stale one [0.88ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > an explicit pin is honoured exactly (manual flag + selected target) [0.68ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > automatic routing is NOT marked manual [0.47ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > resolve() and resolveWithDecision() agree on the provider [0.91ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > FALLBACK DIVERSITY: a different MODEL on the same provider is a valid fallback [0.82ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > FALLBACK DIVERSITY: identical provider AND model is never wrapped [0.58ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > FallbackProvider.label distinguishes same-provider/different-model [0.18ms]
+[33m! Primary provider (b) failed: down. Falling back to c...[0m
+(pass) T3 — mutation hardening: every locality branch is pinned > FallbackProvider falls through to the secondary only on primary failure [0.25ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > FallbackProvider exposes the primary's id, not the fallback's [0.03ms]
+(pass) T3 — mutation hardening: every locality branch is pinned > LocalityPolicyViolation carries structured, non-empty fields [0.04ms]
+(pass) T3 — fallback-chain selection predicate > NO fallback is wired when the chain is empty [0.81ms]
+(pass) T3 — fallback-chain selection predicate > a fallback candidate identical to the selection is REJECTED [0.53ms]
+(pass) T3 — fallback-chain selection predicate > allowFallback=false suppresses the fallback entirely [0.68ms]
+(pass) T3 — legacy fallback wiring (exhaustion path) > an explicitly configured fallback provider is used when it differs [1.00ms]
+(pass) T3 — legacy fallback wiring (exhaustion path) > a cloud fallback is refused under a restrictive policy [0.81ms]
+(pass) T3 — legacy fallback wiring (exhaustion path) > no fallback provider configured and localModels disabled -> bare provider [0.72ms]
+(pass) T3 — local-preset classification (isLocal / findBestLocal) > known local runtimes classify as local [0.13ms]
+(pass) T3 — local-preset classification (isLocal / findBestLocal) > known hosted providers classify as cloud [0.07ms]
+(pass) T3 — local-preset classification (isLocal / findBestLocal) > an unknown provider id classifies as unknown and is refused [0.03ms]
+(pass) T3 — local-preset classification (isLocal / findBestLocal) > local-only workspace with a local default resolves to that runtime [0.85ms]
+(pass) T3 — exhaustion path: legacy fallback wiring > an unknown pin makes the decision unavailable [0.38ms]
+(pass) T3 — exhaustion path: legacy fallback wiring > exhaustion + local default + diverse fallback -> fallback IS wired [0.56ms]
+(pass) T3 — exhaustion path: legacy fallback wiring > exhaustion + IDENTICAL fallback target -> NO fallback wrapper [0.45ms]
+(pass) T3 — exhaustion path: legacy fallback wiring > exhaustion + CLOUD fallback under no_cloud -> fallback REFUSED [0.46ms]
+(pass) T3 — exhaustion path: legacy fallback wiring > exhaustion + CLOUD primary under no_cloud -> fails closed [0.41ms]
+(pass) T3 — exhaustion path: legacy fallback wiring > decision.unavailable is reported honestly, not masked by the fallback [0.38ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > no fallback configured -> false [0.12ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > IDENTICAL provider and model -> false (Phase 0 · T11) [0.02ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > same provider, DIFFERENT model -> true [0.01ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > different provider -> true (when policy allows) [0.01ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > LOCALITY: a diverse CLOUD fallback is refused under every restrictive policy [0.04ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > LOCALITY: the same cloud fallback IS allowed under policy `any` [0.01ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > LOCALITY: a diverse LOCAL fallback is allowed under local_only
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > BOTH guards must hold: diverse-but-forbidden and allowed-but-identical both fail [0.02ms]
+(pass) T3 — legacyFallbackAllowed: diversity AND locality, both required > an unknown fallback provider is refused under a restrictive policy [0.04ms]
+(pass) T3 — isLocalPreset / findBestLocalTarget > isLocalPreset is true for local runtimes and false for hosted ones [0.08ms]
+(pass) T3 — isLocalPreset / findBestLocalTarget > isLocalPreset is false for an unknown id (never assume local) [0.01ms]
+(pass) T3 — isLocalPreset / findBestLocalTarget > findBestLocalTarget prefers the CONFIGURED local runtime [0.07ms]
+(pass) T3 — isLocalPreset / findBestLocalTarget > findBestLocalTarget honours the `runtime` alias [0.01ms]
+(pass) T3 — isLocalPreset / findBestLocalTarget > findBestLocalTarget falls back to the default provider when it is local [0.01ms]
+(pass) T3 — isLocalPreset / findBestLocalTarget > findBestLocalTarget scans the known list when nothing local is configured [0.02ms]
+(pass) T3 — isLocalPreset / findBestLocalTarget > findBestLocalTarget never returns a hosted provider [0.03ms]
+
+test/intelligence/capability.test.ts:
+(pass) XR 4.4 capability tri-state > fromBool distinguishes unknown from unsupported [0.08ms]
+(pass) XR 4.4 capability tri-state > unknown is never treated as supported [0.08ms]
+(pass) XR 4.4 capability tri-state > legacy boolean map preserves chat and maps optionals [0.02ms]
+(pass) XR 4.4 capability tri-state > ollama preset expands to model descriptors with local locality [0.06ms]
+(pass) XR 4.4 capability tri-state > openai preset marks vision/embeddings when declared [0.04ms]
+(pass) XR 4.4 capability tri-state > embedding model id refines chat to unsupported [0.04ms]
+
+test/intelligence/stream-wrappers.test.ts:
+(pass) FallbackProvider.chatStream (legacy routing path) > forwards the primary's chunks as they arrive [0.62ms]
+(pass) FallbackProvider.chatStream (legacy routing path) > fails over only when the primary failed before any output [0.27ms]
+(pass) FallbackProvider.chatStream (legacy routing path) > a failure after partial output propagates — never stitches two models [0.44ms]
+(pass) FallbackProvider.chatStream (legacy routing path) > an abort propagates without consulting the fallback [0.19ms]
+(pass) FallbackProvider.chatStream (legacy routing path) > a fallback without chatStream is driven through chat() [0.25ms]
+(pass) ResilientProvider.chatStream (intelligence path) > streams the primary token by token [0.93ms]
+(pass) ResilientProvider.chatStream (intelligence path) > fails over before output, not after it [0.80ms]
+
+test/providers/request-guard.test.ts:
+(pass) GAP-001 — timeout resolution > defaults to the built-in ceiling; never unbounded [1.92ms]
+(pass) GAP-001 — timeout resolution > explicit > env > config > default [0.09ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > a stalled request times out instead of hanging [301.15ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > timeout is reported as a timeout, not as a cancellation [201.22ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > a caller signal aborts an in-flight request promptly [151.06ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > an already-aborted signal never opens a connection [0.21ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > successful requests are unaffected [0.61ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() against a stalling endpoint rejects on timeout [303.09ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() honors a caller AbortSignal [150.95ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() still works normally with the guard in place [1.07ms]
+
+test/providers/capability-fixtures.test.ts:
+(pass) Phase 10 · provider capability-contract fixtures > manifest exists and declares catalog presets only [0.13ms]
+(pass) Phase 10 · provider capability-contract fixtures > every fixture is a real catalog preset and catalog-consistent (no drift) [0.15ms]
+(pass) Phase 10 · provider capability-contract fixtures > no capability drift between fixtures and the catalog (matrix gate) [0.31ms]
+(pass) Phase 10 · provider capability-contract fixtures > each fixture declares a usage-reporting policy (F-13 honesty) [0.08ms]
+
+test/providers/malformed-response.test.ts:
+(pass) Phase 06 · malformed provider response (spec step 29) > invalid JSON body → malformed_response error, not a silent success [8.18ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > missing required field (no choices[]) → malformed_response, never empty success [2.90ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > valid response still parses normally (no over-blocking) [2.78ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > HTTP error stays an error (not misclassified as malformed) [2.34ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > malformed factory redacts secrets from the detail [0.10ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > streaming: garbage SSE lines are skipped without corrupting the stream [4.34ms]
+
+test/providers/gateway.test.ts:
+(pass) Provider Registry > registry has builtins [0.06ms]
+(pass) Provider Registry > getPreset returns preset [0.04ms]
+(pass) Provider Registry > resolve valid provider [0.06ms]
+(pass) Provider Registry > resolve invalid provider throws [0.06ms]
+(pass) Provider Registry > duplicate registration deterministically replaces [0.06ms]
+(pass) Provider Registry > registerOrThrow fails on duplicate [0.05ms]
+(pass) Provider Gateway > gateway list includes builtins [2.31ms]
+(pass) Provider Gateway > gateway getPreset [0.03ms]
+(pass) Provider Gateway > gateway has [0.03ms]
+(pass) Provider Gateway > gateway capabilities [0.08ms]
+(pass) Provider Gateway > gateway credential status for local provider (no key required) [0.07ms]
+(pass) Provider Gateway > gateway resolveModel [0.25ms]
+(pass) Provider Gateway > gateway catalog [0.07ms]
+(pass) Provider Gateway > gateway catalog fingerprint changes with config [0.15ms]
+(pass) Capability Resolver > supports boolean capabilities [0.02ms]
+(pass) Capability Resolver > local execution capability [0.01ms]
+(pass) Capability Resolver > filterByCapabilities [0.23ms]
+(pass) Capability Resolver > supportsModelClass [0.16ms]
+(pass) Provider Error Normalization > auth failure [0.06ms]
+(pass) Provider Error Normalization > rate limit [0.07ms]
+(pass) Provider Error Normalization > model unavailable [0.07ms]
+(pass) Provider Error Normalization > timeout [0.24ms]
+(pass) Provider Error Normalization > unknown failure [0.07ms]
+(pass) Provider Error Normalization > safe json redacts secrets [0.05ms]
+(pass) Provider Error Normalization > non-retryable errors are not retried [0.02ms]
+(pass) Provider Error Normalization > retryable errors [0.02ms]
+(pass) Fallback Chain > primary only when no fallback allowed [0.30ms]
+(pass) Fallback Chain > includes fallbackProvider when configured [9.47ms]
+(pass) Fallback Chain > chain explanation is auditable [0.12ms]
+(pass) Fallback Chain > deduplicates identical steps [0.10ms]
+(pass) Provider Health > health bounded and cached [1.22ms]
+(pass) Provider Health > healthAll parallel [1.46ms]
+(pass) Streaming > mock success provider streaming yields chunks [0.20ms]
+(pass) Streaming > gateway stream fallback when no chatStream [0.92ms]
+(pass) Usage Normalization > normalizeUsage [0.04ms]
+(pass) Usage Normalization > normalizeUsage with totalTokens [0.01ms]
+(pass) Provider Switching > model switch state machine preflight fails for unknown provider [0.70ms]
+(pass) Provider Switching > model switch rollback on swap failure [0.31ms]
+(pass) BYOK > credential status for provider requiring key [0.04ms]
+(pass) BYOK > resolve credential never throws [0.02ms]
+(pass) BYOK > credential not exposed in health [0.10ms]
+(pass) Retry Policy > retryable errors should be retried, non-retryable should not [0.03ms]
+(pass) Contract: Same task different provider structure > same messages produce same normalized ModelTurn structure via different providers [0.09ms]
+(pass) Phase 05 — Gateway Fallback Execution > a retryable primary failure falls back to the fallback provider (bounded, auditable) [0.49ms]
+(pass) Phase 05 — Gateway Fallback Execution > a NON-retryable (auth) failure is NOT blindly retried or fallen-back [0.14ms]
+(pass) Phase 05 — Gateway Fallback Execution > fallback is bounded: it does not fall back on cancellation (user stop wins) [0.26ms]
+
+11 tests skipped:
+(skip) install.ps1 — executed under powershell > the script parses with zero syntax errors
+(skip) install.ps1 — executed under powershell > Invoke-Expression of the script does NOT raise ValidateSetFailure
+(skip) install.ps1 — executed under powershell > Invoke-Expression does not pollute caller scope with installer variables
+(skip) install.ps1 — executed under powershell > a pre-existing $Mode in the caller's session is left untouched
+(skip) install.ps1 — executed under powershell > dot-sourcing defines Invoke-XrInstall and ValidateSet still rejects bad modes
+(skip) install.ps1 — executed under powershell > XR_INSTALL_BASE_URL: https / loopback mirrors are used, anything else stops the install (XR-LAUNCH-011)
+(skip) install.ps1 — executed under powershell > a valid -InstallMode binds without a validation error
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > each XR_INSTALL_DIR / XR_HOME / -TargetDirectory combination resolves or refuses
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > XR_HOME set: a notice names XR_INSTALL_DIR; a legacy marker in the data home is reported
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > no usable profile: the default target refuses instead of using the current directory
+(skip) install.ps1 — environment combinations executed (XR-LAUNCH-025) > the launchers export XR_INSTALL_DIR (apostrophes escaped) and point at the chosen directory
+
+ 533 pass
+ 11 skip
+ 0 fail
+ 2326 expect() calls
+Ran 544 tests across 45 files. [2.56s]

@@ -1,12 +1,11 @@
 /*
  * MSIX tile assets (Phase 27).
  *
- * The MSIX package is built by `packaging/windows/msix/build-msix.ps1`, which
- * cannot run here (no Windows SDK, no PowerShell on a Linux CI box). What *can*
- * be checked on any machine is the part that silently breaks a package build:
- * the manifest naming six images that must exist, at the sizes MakeAppx
- * requires, with a transparent background so the tile does not ship a black
- * square inside a Start menu.
+ * The MSIX package is built by `packaging/windows/msix/build-msix.ps1`; real
+ * Windows SDK packaging runs in the Windows bundle job. These portable tests
+ * check the manifest's six images and their required sizes/transparency. The
+ * separate PowerShell regression exercises the script with fake SDK processes
+ * without treating those stubs as native packaging evidence.
  */
 import { describe, expect, test } from 'bun:test';
 import { inflateSync } from 'node:zlib';

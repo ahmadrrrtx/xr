@@ -14,7 +14,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
     x: z.number().int().min(0).max(20000).optional(),
     y: z.number().int().min(0).max(20000).optional(),
     target: z.string().min(1).max(200).optional(),
-    button: z.enum(["left","right","double"]).default("left"),
+    button: z.enum(["left","right","double"]).prefault("left"),
   }),
   z.object({
     type: z.literal("drag_drop"),
@@ -25,7 +25,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
     holdMs: z.number().int().min(0).max(5000).optional(),
   }),
   z.object({ type: z.literal("move"), x: z.number().int().min(0).max(20000), y: z.number().int().min(0).max(20000) }),
-  z.object({ type: z.literal("scroll"), direction: z.enum(["up","down","left","right"]), amount: z.number().int().min(1).max(50).default(3) }),
+  z.object({ type: z.literal("scroll"), direction: z.enum(["up","down","left","right"]), amount: z.number().int().min(1).max(50).prefault(3) }),
   z.object({ type: z.literal("key"), keys: z.array(z.string().min(1).max(30)).min(1).max(6) }),
   z.object({ type: z.literal("wait_ms"), ms: z.number().int().min(50).max(15000) }),
   // Browser
@@ -52,14 +52,14 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("editor"),
     op: z.enum(["open"]),
-    editor: z.enum(["code","cursor","vim","auto"]).default("auto"),
+    editor: z.enum(["code","cursor","vim","auto"]).prefault("auto"),
     file: z.string().max(2000).optional(),
     line: z.number().int().min(1).max(1_000_000).optional(),
   }),
   // Screenshot
   z.object({
     type: z.literal("screenshot"),
-    target: z.enum(["screen","window","browser"]).default("screen"),
+    target: z.enum(["screen","window","browser"]).prefault("screen"),
     savePath: z.string().max(2000).optional(),
   }),
   // System

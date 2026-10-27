@@ -65,19 +65,19 @@ describe("FallbackProvider.chatStream (legacy routing path)", () => {
   test("forwards the primary's chunks as they arrive", async () => {
     const primary = streaming("ollama", [{ text: "one" }, { text: " two" }, { finish: true }]);
     const fallback = streaming("jan", [{ text: "NEVER" }, { finish: true }]);
-    const fp = new FallbackProvider(primary, fallback);
-    const chunks = await collect(fp.chatStream(MSGS, []));
+    const fp = new FallbackProvider(primary, fallback, { canFallback: () => true });
+    const chunks = await collect(fp.chatStream(MSGS, [], { beforeAttempt: () => {} }));
     expect(chunks.map((c) => c.text ?? (c.finish ? "<finish>" : "?"))).toEqual(["one", " two", "<finish>"]);
   });
 
   test("fails over only when the primary failed before any output", async () => {
     const primary = streaming("ollama", [new Error("ECONNREFUSED")]);
     const fallback = streaming("jan", [{ text: "from fallback" }, { finish: true }]);
-    const fp = new FallbackProvider(primary, fallback);
+    const fp = new FallbackProvider(primary, fallback, { canFallback: () => true });
     const warn = console.warn;
     console.warn = () => {};
     try {
-      const chunks = await collect(fp.chatStream(MSGS, []));
+      const chunks = await collect(fp.chatStream(MSGS, [], { beforeAttempt: () => {} }));
       expect(chunks[0]?.text).toBe("from fallback");
     } finally {
       console.warn = warn;
@@ -87,11 +87,11 @@ describe("FallbackProvider.chatStream (legacy routing path)", () => {
   test("a failure after partial output propagates — never stitches two models", async () => {
     const primary = streaming("ollama", [{ text: "partial" }, new Error("stream reset")]);
     const fallback = streaming("jan", [{ text: "NEVER" }, { finish: true }]);
-    const fp = new FallbackProvider(primary, fallback);
+    const fp = new FallbackProvider(primary, fallback, { canFallback: () => true });
     const seen: string[] = [];
     await expect(
       (async () => {
-        for await (const c of fp.chatStream(MSGS, [])) if (c.text) seen.push(c.text);
+        for await (const c of fp.chatStream(MSGS, [], { beforeAttempt: () => {} })) if (c.text) seen.push(c.text);
       })(),
     ).rejects.toThrow("stream reset");
     expect(seen).toEqual(["partial"]);
@@ -107,24 +107,24 @@ describe("FallbackProvider.chatStream (legacy routing path)", () => {
         yield { text: "NEVER" } as ProviderStreamChunk;
       },
     } as unknown as Provider;
-    const fp = new FallbackProvider(primary, fallback);
-    await expect(collect(fp.chatStream(MSGS, []))).rejects.toBeInstanceOf(ProviderAbortError);
+    const fp = new FallbackProvider(primary, fallback, { canFallback: () => true });
+    await expect(collect(fp.chatStream(MSGS, [], { beforeAttempt: () => {} }))).rejects.toBeInstanceOf(ProviderAbortError);
     expect(fallbackAsked).toBe(false);
   });
 
   test("a fallback without chatStream is driven through chat()", async () => {
-    const primary = streaming("ollama", [new Error("down")]);
+    const primary = streaming("ollama", [new Error("HTTP 503")]);
     const fallback = chatOnly("jan", {
       message: "complete turn",
       toolCalls: [{ tool: "read_file", args: { path: "a" } }],
       done: true,
       usage: { inTokens: 3, outTokens: 2 },
     });
-    const fp = new FallbackProvider(primary, fallback);
+    const fp = new FallbackProvider(primary, fallback, { canFallback: () => true });
     const warn = console.warn;
     console.warn = () => {};
     try {
-      const chunks = await collect(fp.chatStream(MSGS, []));
+      const chunks = await collect(fp.chatStream(MSGS, [], { beforeAttempt: () => {} }));
       expect(chunks.find((c) => c.text)?.text).toBe("complete turn");
       expect(chunks.find((c) => c.toolCall)?.toolCall?.tool).toBe("read_file");
       expect(chunks.find((c) => c.usage)?.usage).toEqual({ inTokens: 3, outTokens: 2 });
@@ -141,6 +141,7 @@ describe("ResilientProvider.chatStream (intelligence path)", () => {
       health: new RoutingHealth(),
       construct: () => fallback,
       localityGuard: () => true,
+      canFallback: () => true,
       sleep: async () => {},
       warn: () => {},
     });
@@ -151,7 +152,7 @@ describe("ResilientProvider.chatStream (intelligence path)", () => {
       streaming("ollama", [{ text: "a" }, { text: "b" }, { usage: { inTokens: 1, outTokens: 2 } }, { finish: true }]),
       streaming("lmstudio", [{ text: "NEVER" }, { finish: true }]),
     );
-    const chunks = await collect(rp.chatStream(MSGS, []));
+    const chunks = await collect(rp.chatStream(MSGS, [], { beforeAttempt: () => {} }));
     expect(chunks.filter((c) => c.text).map((c) => c.text)).toEqual(["a", "b"]);
     expect(chunks.at(-1)?.finish).toBe(true);
   });
@@ -161,7 +162,7 @@ describe("ResilientProvider.chatStream (intelligence path)", () => {
       streaming("ollama", [new Error("ECONNREFUSED")]),
       streaming("lmstudio", [{ text: "fallback" }, { finish: true }]),
     );
-    const got = await collect(before.chatStream(MSGS, []));
+    const got = await collect(before.chatStream(MSGS, [], { beforeAttempt: () => {} }));
     expect(got.find((c) => c.text)?.text).toBe("fallback");
 
     const after = resilient(
@@ -171,7 +172,7 @@ describe("ResilientProvider.chatStream (intelligence path)", () => {
     const seen: string[] = [];
     await expect(
       (async () => {
-        for await (const c of after.chatStream(MSGS, [])) if (c.text) seen.push(c.text);
+        for await (const c of after.chatStream(MSGS, [], { beforeAttempt: () => {} })) if (c.text) seen.push(c.text);
       })(),
     ).rejects.toThrow();
     expect(seen).toEqual(["half"]);

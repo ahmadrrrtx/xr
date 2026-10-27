@@ -83,6 +83,9 @@ export interface ContextLimits {
 }
 
 export interface CostProfile {
+  known?: boolean;
+  source?: string;
+  verifiedAt?: string;
   tier: CostTier;
   /** USD per 1M input tokens when known. */
   inPerMTok?: number;
@@ -119,9 +122,11 @@ export interface LocalityProfile {
 }
 
 export interface HealthSnapshot {
-  ok: boolean;
-  authOk: boolean;
-  available: boolean;
+  /** Undefined until a real reachability/outcome probe exists. Credentials are not health. */
+  ok?: boolean;
+  /** Undefined until actual authentication/reachability evidence exists. */
+  authOk?: boolean;
+  available?: boolean;
   latencyMs?: number;
   detail?: string;
   /** When this snapshot was taken. */
@@ -164,6 +169,8 @@ export interface ModelDescriptor {
   key: string;
   providerId: string;
   modelId: string;
+  /** Configured credential presence, independent of live authentication. */
+  credentialAvailable?: boolean;
   label: string;
   /** Primary model classes this model serves. */
   classes: ModelClass[];
@@ -175,6 +182,19 @@ export interface ModelDescriptor {
   quality: QualityProfile;
   locality: LocalityProfile;
   hardware?: HardwareRequirements;
+  /** Independent facts: listing/configuration never imply live validation. */
+  evidence?: {
+    registryVersion: string;
+    source: string;
+    verifiedAt: string;
+    lifecycle: "active" | "deprecated" | "legacy" | "unknown";
+    configured: boolean;
+    reachable: "unknown" | "pass" | "fail";
+    compatible: "unknown" | "contract-tested";
+    agentValidated: boolean;
+    recommended: boolean;
+    stale: boolean;
+  };
   /** Known limitations (safe strings). */
   limitations: string[];
   /** Whether the model is the provider default. */
@@ -260,6 +280,7 @@ export interface TaskRequirements {
   };
   /** Allow automatic fallback when primary fails. */
   allowFallback?: boolean;
+  allowCrossProviderFallback?: boolean;
   /** Allow cloud when local unavailable (requires explicit true under local defaults). */
   allowCloudFallback?: boolean;
   /** Disable historical score influence. */
@@ -274,6 +295,7 @@ export interface PolicyConstraints {
   routingMode: RoutingMode;
   localityPolicy: "any" | "local_only" | "private_only" | "no_cloud";
   allowFallback: boolean;
+  allowCrossProviderFallback?: boolean;
   allowCloudFallback: boolean;
   preferFree: boolean;
   maxCostUsd?: number;

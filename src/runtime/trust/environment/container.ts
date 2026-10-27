@@ -14,6 +14,7 @@ import {
   hitsBlockedPath,
   isWithin,
   runChild,
+  runDisposableContainer,
 } from "./backend.ts";
 import { NO_ENFORCEMENT, type ResourceEnforcement } from "../resources.ts";
 import type { EnvironmentExecutable, EnvironmentRunResult, PlacementGuarantees } from "../types.ts";
@@ -78,43 +79,49 @@ export class ContainerBackend implements EnvironmentBackend {
       return refused(`cwd ${exec.cwd} is a blocked sensitive path`);
     }
 
+    if ([...writable, ...grant.fs.readOnlyRoots].some(r => r === "/" || grant.fs.blockedPaths.some(b => isWithin(b, r)))) return refused("mount grant overlaps a blocked sensitive path");
+    const positive = (n: number | undefined) => n === undefined || (Number.isSafeInteger(n) && n > 0);
+    if (![exec.cpuSeconds, exec.memoryBytes, exec.maxProcesses, exec.maxTempBytes].every(positive)) return refused("invalid resource limit");
+    const scratch = Math.floor((exec.maxTempBytes ?? 64 * 1024 * 1024) / 2);
     const args: string[] = [
       this.runtime, "run", "--rm", "-i",
       "--network", "none",
-      "--read-only",
-      "--tmpfs", "/tmp",
+      "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+      "--tmpfs", `/tmp:rw,nosuid,nodev,size=${scratch}`, "--shm-size", String(scratch),
       "--workdir", exec.cwd,
       "--pids-limit", String((exec as { maxProcesses?: number }).maxProcesses ?? 64),
     ];
     const mem = (exec as { memoryBytes?: number }).memoryBytes;
     if (typeof mem === "number") args.push("--memory", String(mem));
     const cpu = (exec as { cpuSeconds?: number }).cpuSeconds;
-    if (typeof cpu === "number") args.push("--cpus", String(Math.max(1, Math.ceil(cpu / 60))));
+    if (typeof cpu === "number") args.push("--ulimit", `cpu=${cpu}:${cpu}`);
     for (const r of writable) args.push("-v", `${r}:${r}:rw`);
     for (const r of grant.fs.readOnlyRoots) args.push("-v", `${r}:${r}:ro`);
     const env = { PATH: "/usr/bin:/bin", HOME: "/tmp", ...exec.env, ...ctx.envInject };
     for (const [k, v] of Object.entries(env)) args.push("-e", `${k}=${v}`);
     args.push(this.image, ...exec.argv);
 
-    const raw = await runChild({
+    const raw = await runDisposableContainer({
       argv: args,
       cwd: "/",
       env: { PATH: "/usr/bin:/bin:/usr/local/bin" },
-      timeoutMs: exec.timeoutMs + 10000,
+      timeoutMs: exec.timeoutMs,
       maxOutputBytes: exec.maxOutputBytes,
       stdin: exec.stdin,
+      signal: exec.signal,
     });
 
     return {
-      ok: raw.exitCode === 0 && !raw.timedOut && raw.spawnError === undefined,
+      ok: raw.exitCode === 0 && !raw.timedOut && !raw.cancelled && !raw.outputTruncated && raw.spawnError === undefined,
       exitCode: raw.exitCode,
       stdout: raw.stdout,
       stderr: raw.stderr,
       timedOut: raw.timedOut,
+      cancelled: raw.cancelled,
       outputTruncated: raw.outputTruncated,
       durationMs: raw.durationMs,
-      boundaryEvent: raw.outputTruncated || raw.timedOut || raw.spawnError !== undefined,
-      boundaryDetail: raw.spawnError ?? (raw.timedOut ? "timeout" : raw.outputTruncated ? "output limit" : undefined),
+      boundaryEvent: raw.outputTruncated || raw.timedOut || !!raw.cancelled || raw.spawnError !== undefined,
+      boundaryDetail: raw.spawnError ?? (raw.cancelled ? "cancelled" : raw.timedOut ? "timeout" : raw.outputTruncated ? "output limit" : undefined),
     };
   }
 

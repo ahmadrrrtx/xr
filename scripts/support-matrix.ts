@@ -31,10 +31,21 @@ export interface Target { id: string; surface: string; label: string; gating?: b
 export interface Targets { steps: StepName[]; targets: Target[] }
 export type Cell = { kind: "pass"; classes: string[]; commit: string } | { kind: "fail"; detail: string } | { kind: "descoped"; reason: string } | { kind: "none" };
 
+/**
+ * Directory entries in a FIXED order. `readdirSync` returns filesystem order
+ * (hash order on ext4, name order on APFS, insertion order on NTFS), so an
+ * unsorted walk renders the evidence column differently per platform and
+ * `--check` fails on a matrix that is actually current. Sorting here makes the
+ * generated block byte-identical on Linux, macOS and Windows.
+ */
+function entries(dir: string): string[] {
+  return readdirSync(dir).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 export function loadEvidence(dir: string): JourneyEvidence[] {
   const out: JourneyEvidence[] = [];
   if (!existsSync(dir)) return out;
-  for (const f of readdirSync(dir)) {
+  for (const f of entries(dir)) {
     const p = join(dir, f);
     if (statSync(p).isDirectory()) out.push(...loadEvidence(p));
     else if (f.endsWith(".json")) {
@@ -84,7 +95,7 @@ export function render(targets: Targets, evidence: JourneyEvidence[]): { markdow
       if (c.kind === "fail") return `❌ [${note(c.detail.slice(0, 200))}]`;
       return "⏳";
     });
-    const commits = [...new Set(evidence.filter((e) => e.target === t.id).map((e) => `${e.evidenceClass} ${e.commit.slice(0, 8)}${e.dirty ? "+local changes" : ""}${e.runUrl ? ` ([run](${e.runUrl}))` : ""}`))];
+    const commits = [...new Set(evidence.filter((e) => e.target === t.id).map((e) => `${e.evidenceClass} ${e.commit.slice(0, 8)}${e.dirty ? "+local changes" : ""}${e.runUrl ? ` ([run](${e.runUrl}))` : ""}`))].sort();
     return `| ${t.surface} | ${t.label}${t.gating === false ? " ¹" : ""} | ${cells.join(" | ")} | ${commits.join("<br>") || "—"} |`;
   });
   const md = [

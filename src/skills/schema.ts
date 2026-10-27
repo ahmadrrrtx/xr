@@ -74,10 +74,10 @@ export type SkillPermissionScope = (typeof SKILL_PERMISSION_SCOPES)[number];
 export const SkillPermissionSchema = z.object({
   scope: z.enum(SKILL_PERMISSION_SCOPES),
   reason: z.string().min(1).max(800),
-  optional: z.boolean().default(false),
-  dangerous: z.boolean().default(false),
-  paths: z.array(RelPath).default([]),
-  domains: z.array(z.string().min(1).max(240)).default([]),
+  optional: z.boolean().prefault(false),
+  dangerous: z.boolean().prefault(false),
+  paths: z.array(RelPath).prefault([]),
+  domains: z.array(z.string().min(1).max(240)).prefault([]),
 });
 export type SkillPermission = z.infer<typeof SkillPermissionSchema>;
 
@@ -85,7 +85,7 @@ export const SkillDependencySchema = z.object({
   kind: z.enum(["skill", "plugin", "mcp", "provider", "binary", "npm", "python", "model", "memory-template"]),
   id: z.string().min(1).max(160),
   version: z.string().min(1).max(120).optional(),
-  optional: z.boolean().default(false),
+  optional: z.boolean().prefault(false),
   reason: z.string().max(800).optional(),
 });
 export type SkillDependency = z.infer<typeof SkillDependencySchema>;
@@ -93,7 +93,7 @@ export type SkillDependency = z.infer<typeof SkillDependencySchema>;
 export const SkillCommandSchema = z.object({
   name: Slug,
   title: z.string().min(1).max(120),
-  description: z.string().max(800).default(""),
+  description: z.string().max(800).prefault(""),
   usage: z.string().max(300).optional(),
   prompt: z.string().max(4000).optional(),
 });
@@ -103,23 +103,23 @@ export const SkillVoiceIntentSchema = z.object({
   id: Slug,
   utterances: z.array(z.string().min(1).max(200)).min(1).max(40),
   action: z.string().min(1).max(160),
-  confirmation: z.enum(["never", "risky", "always"]).default("risky"),
+  confirmation: z.enum(["never", "risky", "always"]).prefault("risky"),
 });
 export type SkillVoiceIntent = z.infer<typeof SkillVoiceIntentSchema>;
 
 export const SkillActionSchema = z.object({
   id: Slug,
   title: z.string().min(1).max(120),
-  description: z.string().max(800).default(""),
+  description: z.string().max(800).prefault(""),
   prompt: z.string().max(4000).optional(),
-  requiredPermissions: z.array(z.enum(SKILL_PERMISSION_SCOPES)).default([]),
+  requiredPermissions: z.array(z.enum(SKILL_PERMISSION_SCOPES)).prefault([]),
 });
 export type SkillAction = z.infer<typeof SkillActionSchema>;
 
 export const SkillWorkflowSchema = z.object({
   id: Slug,
   title: z.string().min(1).max(140),
-  description: z.string().max(1000).default(""),
+  description: z.string().max(1000).prefault(""),
   steps: z.array(z.object({
     id: Slug,
     title: z.string().min(1).max(160),
@@ -133,7 +133,7 @@ export const SkillUiPanelSchema = z.object({
   id: Slug,
   surface: z.enum(["dashboard", "sidebar", "settings", "command-palette", "chat", "report"]),
   title: z.string().min(1).max(140),
-  description: z.string().max(800).default(""),
+  description: z.string().max(800).prefault(""),
   markdown: z.string().max(8000).optional(),
 });
 export type SkillUiPanel = z.infer<typeof SkillUiPanelSchema>;
@@ -142,93 +142,93 @@ export const SkillMemoryTemplateSchema = z.object({
   id: Slug,
   category: z.enum(["preference", "project", "workflow", "fact", "exclusion"]),
   contentTemplate: z.string().min(1).max(1000),
-  scope: z.enum(["global", "project"]).default("project"),
-  importance: z.number().int().min(1).max(5).default(3),
+  scope: z.enum(["global", "project"]).prefault("project"),
+  importance: z.number().int().min(1).max(5).prefault(3),
 });
 export type SkillMemoryTemplate = z.infer<typeof SkillMemoryTemplateSchema>;
 
 export const SkillManifestSchema = z.object({
-  schemaVersion: z.literal(SKILL_SCHEMA_VERSION).default(SKILL_SCHEMA_VERSION),
+  schemaVersion: z.literal(SKILL_SCHEMA_VERSION).prefault(SKILL_SCHEMA_VERSION),
   id: Identifier,
   name: z.string().min(1).max(180),
   version: Semver,
   description: z.string().min(1).max(2400),
   longDescription: z.string().max(12000).optional(),
-  publisher: z.string().min(1).max(160).default("xr"),
-  license: z.string().min(1).max(80).default("MIT"),
+  publisher: z.string().min(1).max(160).prefault("xr"),
+  license: z.string().min(1).max(80).prefault("MIT"),
   homepage: z.string().max(800).optional(),
   repository: z.string().max(800).optional(),
   icon: RelPath.optional(),
   categories: z.array(z.enum(SKILL_CATEGORIES)).min(1).max(6),
-  tags: z.array(z.string().min(1).max(48)).default([]),
-  keywords: z.array(z.string().min(1).max(48)).default([]),
+  tags: z.array(z.string().min(1).max(48)).prefault([]),
+  keywords: z.array(z.string().min(1).max(48)).prefault([]),
   compatibility: z.object({
-    xr: SemverRange.default(">=1.0.0"),
-    os: z.array(z.enum(["linux", "darwin", "win32", "any"])).default(["any"]),
-    providers: z.array(z.string().min(1).max(120)).default([]),
-    modes: z.array(z.enum(["agent", "plan", "ask"])).default(["agent", "plan", "ask"]),
-  }).default({}),
+    xr: SemverRange.prefault(">=1.0.0"),
+    os: z.array(z.enum(["linux", "darwin", "win32", "any"])).prefault(["any"]),
+    providers: z.array(z.string().min(1).max(120)).prefault([]),
+    modes: z.array(z.enum(["agent", "plan", "ask"])).prefault(["agent", "plan", "ask"]),
+  }).prefault({}),
   activation: z.object({
-    phrases: z.array(z.string().min(1).max(160)).default([]),
-    intents: z.array(Slug).default([]),
-    fileGlobs: z.array(z.string().min(1).max(160)).default([]),
-    slashCommands: z.array(Slug).default([]),
-    auto: z.boolean().default(true),
-  }).default({}),
+    phrases: z.array(z.string().min(1).max(160)).prefault([]),
+    intents: z.array(Slug).prefault([]),
+    fileGlobs: z.array(z.string().min(1).max(160)).prefault([]),
+    slashCommands: z.array(Slug).prefault([]),
+    auto: z.boolean().prefault(true),
+  }).prefault({}),
   content: z.object({
-    instructions: RelPath.default("SKILL.md"),
+    instructions: RelPath.prefault("SKILL.md"),
     reasoning: RelPath.optional(),
-    knowledge: z.array(RelPath).default([]),
-    promptTemplates: z.array(RelPath).default([]),
-    examples: z.array(RelPath).default([]),
-    tests: z.array(RelPath).default([]),
-    docs: z.array(RelPath).default(["README.md"]),
-    assets: z.array(RelPath).default([]),
-  }).default({}),
+    knowledge: z.array(RelPath).prefault([]),
+    promptTemplates: z.array(RelPath).prefault([]),
+    examples: z.array(RelPath).prefault([]),
+    tests: z.array(RelPath).prefault([]),
+    docs: z.array(RelPath).prefault(["README.md"]),
+    assets: z.array(RelPath).prefault([]),
+  }).prefault({}),
   contributions: z.object({
-    commands: z.array(SkillCommandSchema).default([]),
-    voiceIntents: z.array(SkillVoiceIntentSchema).default([]),
-    chatActions: z.array(SkillActionSchema).default([]),
-    slashCommands: z.array(SkillCommandSchema).default([]),
-    computerActions: z.array(SkillActionSchema).default([]),
-    researchModes: z.array(SkillActionSchema).default([]),
-    planners: z.array(SkillActionSchema).default([]),
-    agentBehaviors: z.array(SkillActionSchema).default([]),
-    workflows: z.array(SkillWorkflowSchema).default([]),
-    uiPanels: z.array(SkillUiPanelSchema).default([]),
-    dashboardWidgets: z.array(SkillUiPanelSchema).default([]),
-  }).default({}),
-  tools: z.array(z.string().min(1).max(120)).default([]),
+    commands: z.array(SkillCommandSchema).prefault([]),
+    voiceIntents: z.array(SkillVoiceIntentSchema).prefault([]),
+    chatActions: z.array(SkillActionSchema).prefault([]),
+    slashCommands: z.array(SkillCommandSchema).prefault([]),
+    computerActions: z.array(SkillActionSchema).prefault([]),
+    researchModes: z.array(SkillActionSchema).prefault([]),
+    planners: z.array(SkillActionSchema).prefault([]),
+    agentBehaviors: z.array(SkillActionSchema).prefault([]),
+    workflows: z.array(SkillWorkflowSchema).prefault([]),
+    uiPanels: z.array(SkillUiPanelSchema).prefault([]),
+    dashboardWidgets: z.array(SkillUiPanelSchema).prefault([]),
+  }).prefault({}),
+  tools: z.array(z.string().min(1).max(120)).prefault([]),
   mcp: z.array(z.object({
     id: z.string().min(1).max(120),
-    required: z.boolean().default(false),
-    tools: z.array(z.string().min(1).max(120)).default([]),
+    required: z.boolean().prefault(false),
+    tools: z.array(z.string().min(1).max(120)).prefault([]),
     reason: z.string().max(800).optional(),
-  })).default([]),
+  })).prefault([]),
   plugins: z.array(z.object({
     id: z.string().min(1).max(120),
-    required: z.boolean().default(false),
+    required: z.boolean().prefault(false),
     reason: z.string().max(800).optional(),
-  })).default([]),
-  memoryTemplates: z.array(SkillMemoryTemplateSchema).default([]),
-  dependencies: z.array(SkillDependencySchema).default([]),
-  permissions: z.array(SkillPermissionSchema).default([]),
+  })).prefault([]),
+  memoryTemplates: z.array(SkillMemoryTemplateSchema).prefault([]),
+  dependencies: z.array(SkillDependencySchema).prefault([]),
+  permissions: z.array(SkillPermissionSchema).prefault([]),
   settings: z.array(z.object({
     key: Slug,
     title: z.string().min(1).max(140),
-    description: z.string().max(800).default(""),
+    description: z.string().max(800).prefault(""),
     type: z.enum(["string", "number", "boolean", "enum", "secret"]),
-    required: z.boolean().default(false),
+    required: z.boolean().prefault(false),
     default: z.union([z.string(), z.number(), z.boolean()]).optional(),
-    options: z.array(z.string()).default([]),
-  })).default([]),
+    options: z.array(z.string()).prefault([]),
+  })).prefault([]),
   verification: z.object({
-    level: z.enum(["unverified", "community", "reviewed", "verified", "official"]).default("unverified"),
+    level: z.enum(["unverified", "community", "reviewed", "verified", "official"]).prefault("unverified"),
     checksum: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
     signature: z.string().max(4000).optional(),
     reviewedBy: z.string().max(160).optional(),
     reviewedAt: z.string().max(80).optional(),
-  }).default({}),
+  }).prefault({}),
   // ── Phase 7 · T4 — additive manifest-security fields (all optional) ──────
   sbom: z.object({ ref: z.string().max(800), format: z.string().max(40).optional() }).optional(),
   dependencyLocks: z.array(z.object({ id: z.string().min(1).max(160), version: z.string().min(1).max(120), hash: z.string().regex(/^[a-f0-9]{64}$/i).optional() })).optional(),
@@ -252,10 +252,10 @@ export type SkillManifest = z.infer<typeof SkillManifestSchema>;
 export const PublisherSchema = z.object({
   id: Identifier,
   name: z.string().min(1).max(180),
-  description: z.string().max(2000).default(""),
+  description: z.string().max(2000).prefault(""),
   website: z.string().max(800).optional(),
-  verified: z.boolean().default(false),
-  trustLevel: z.enum(["unknown", "community", "reviewed", "verified", "official"]).default("unknown"),
+  verified: z.boolean().prefault(false),
+  trustLevel: z.enum(["unknown", "community", "reviewed", "verified", "official"]).prefault("unknown"),
 });
 export type Publisher = z.infer<typeof PublisherSchema>;
 
@@ -265,8 +265,8 @@ export const ReviewSchema = z.object({
   version: Semver,
   author: z.string().min(1).max(160),
   rating: z.number().int().min(1).max(5),
-  title: z.string().max(160).default(""),
-  body: z.string().max(5000).default(""),
+  title: z.string().max(160).prefault(""),
+  body: z.string().max(5000).prefault(""),
   createdAt: z.number().int(),
 });
 export type SkillReview = z.infer<typeof ReviewSchema>;
@@ -280,7 +280,7 @@ export type SkillReview = z.infer<typeof ReviewSchema>;
 export const SkillQuarantineSchema = z.object({
   until: z.number().int(),
   reason: z.string().max(400).optional(),
-  pendingGrants: z.array(z.enum(SKILL_PERMISSION_SCOPES)).default([]),
+  pendingGrants: z.array(z.enum(SKILL_PERMISSION_SCOPES)).prefault([]),
   quarantinedAt: z.number().int(),
 });
 export type SkillQuarantine = z.infer<typeof SkillQuarantineSchema>;
@@ -291,15 +291,15 @@ export const InstallationSchema = z.object({
   source: z.enum(["bundled", "local", "git", "url", "package", "marketplace"]),
   sourceUrl: z.string().max(1000).optional(),
   dir: z.string().min(1).max(1200),
-  enabled: z.boolean().default(true),
-  pinned: z.boolean().default(false),
-  favorite: z.boolean().default(false),
-  grantedPermissions: z.array(z.enum(SKILL_PERMISSION_SCOPES)).default([]),
+  enabled: z.boolean().prefault(true),
+  pinned: z.boolean().prefault(false),
+  favorite: z.boolean().prefault(false),
+  grantedPermissions: z.array(z.enum(SKILL_PERMISSION_SCOPES)).prefault([]),
   installedAt: z.number().int(),
   updatedAt: z.number().int(),
   lastUsedAt: z.number().int().optional(),
   quarantine: SkillQuarantineSchema.optional(),
-  rollback: z.array(z.object({ version: Semver, dir: z.string().min(1).max(1200), at: z.number().int() })).default([]),
+  rollback: z.array(z.object({ version: Semver, dir: z.string().min(1).max(1200), at: z.number().int() })).prefault([]),
 });
 export type SkillInstallation = z.infer<typeof InstallationSchema>;
 

@@ -1,0 +1,43 @@
+$ bun test test/trust/namespace-confinement.test.ts test/trust/namespace.test.ts test/trust/environments.test.ts
+bun test v1.4.2 (744846f84)
+
+test/trust/namespace-confinement.test.ts:
+(pass) namespace sandbox (unshare) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged [102.55ms]
+(pass) namespace sandbox (unshare) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged [103.13ms]
+(pass) namespace sandbox (unshare) confines the filesystem > HOME, /root and other /home entries are absent [53.66ms]
+(pass) namespace sandbox (unshare) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch [54.95ms]
+(pass) namespace sandbox (unshare) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing [50.64ms]
+(pass) namespace sandbox (unshare) confines the filesystem > readonly grant cannot be remounted writable; mapped-root cannot regain capabilities [119.11ms]
+(pass) namespace sandbox (unshare) confines the filesystem > invalid limits and a blocked subtree never execute a host marker [0.84ms]
+(pass) namespace sandbox (unshare) confines the filesystem > hard CPU/address-space/process limits are applied and cannot be raised [55.42ms]
+(pass) namespace sandbox (unshare) confines the filesystem > aborting an isolated action kills its delayed descendant, with no later host effect [583.74ms]
+(pass) namespace sandbox (unshare) confines the filesystem > network is none [56.74ms]
+(skip) namespace sandbox (bwrap) confines the filesystem > bwrap unavailable on this host — nothing to verify
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > HOME, /root and other /home entries are absent
+(skip) namespace sandbox (bwrap) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch
+(skip) namespace sandbox (bwrap) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing
+(skip) namespace sandbox (bwrap) confines the filesystem > readonly grant cannot be remounted writable; mapped-root cannot regain capabilities
+(skip) namespace sandbox (bwrap) confines the filesystem > invalid limits and a blocked subtree never execute a host marker
+(skip) namespace sandbox (bwrap) confines the filesystem > hard CPU/address-space/process limits are applied and cannot be raised
+(skip) namespace sandbox (bwrap) confines the filesystem > aborting an isolated action kills its delayed descendant, with no later host effect
+(skip) namespace sandbox (bwrap) confines the filesystem > network is none
+(pass) unshare setup fails closed > no staging mountpoint → the script refuses before mounting anything [0.16ms]
+(pass) unshare setup fails closed > every mount step is checked (no '|| true' on a confinement step) [0.38ms]
+(pass) unshare setup fails closed > a setup failure is reported as a refusal and the command never runs [65.71ms]
+
+test/trust/namespace.test.ts:
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > backend detects and claims an honest kernel boundary [0.04ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > filesystem is confined: workspace is writable, host paths are ABSENT [0.10ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > network is blocked inside the sandbox (no routes, no DNS) [0.10ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > ambient host environment is NOT inherited [0.08ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > output is bounded (truncation raises a boundary event) [0.05ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > task-scoped credentials are injected then revoked on cleanup [0.27ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > a Tier-2 network allowlist is refused (not enforceable inside the boundary) [0.09ms]
+
+ 20 pass
+ 11 skip
+ 0 fail
+ 68 expect() calls
+Ran 31 tests across 2 files. [1427.00ms]

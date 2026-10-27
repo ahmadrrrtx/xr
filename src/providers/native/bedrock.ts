@@ -1,3 +1,5 @@
+import { toolParameters } from "./schemas.ts";
+import { outputLimit, usagePair } from "./history.ts";
 /**
  * XR — Native AWS Bedrock Provider
  * 
@@ -198,13 +200,14 @@ export class BedrockProvider implements Provider {
       endpoint = `https://bedrock-runtime.${this.region}/model/${modelId}/invoke`;
     }
 
+    if ("max_gen_len" in body) body.max_gen_len = outputLimit(options?.maxOutputTokens); else body.max_tokens = outputLimit(options?.maxOutputTokens);
     try {
       const signedHeaders = await this.signRequest();
       
       // GAP-001 — bounded + cancellable (was: no signal, no timeout).
       const res = await guardedRequest(this.id, options, (signal) =>
         fetch(endpoint, {
-          method: "POST",
+          method: "POST", redirect: "error",
           headers: {
             "Content-Type": "application/json",
             "Authorization": signedHeaders,
@@ -216,10 +219,7 @@ export class BedrockProvider implements Provider {
         }),
       );
 
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(`Bedrock ${res.status}: ${txt.slice(0, 200)}`);
-      }
+      if (!res.ok) { await res.body?.cancel(); throw new Error(`${this.id} API HTTP ${res.status}`); }
 
       const json: any = await res.json();
       
@@ -277,7 +277,7 @@ export class BedrockProvider implements Provider {
     const toolsList = tools.length > 0 ? tools.map(t => ({
       name: t.name,
       description: t.description,
-      input_schema: { type: "object", properties: t.parameters },
+      input_schema: toolParameters(t.parameters),
     })) : undefined;
 
     return {
@@ -337,7 +337,7 @@ export class BedrockProvider implements Provider {
       message,
       toolCalls,
       done: toolCalls.length === 0,
-      usage: json.usage ? { inTokens: json.usage.input_tokens, outTokens: json.usage.output_tokens } : undefined,
+      usage: json.usage ? usagePair(json.usage.input_tokens, json.usage.output_tokens) : undefined,
     };
   }
 

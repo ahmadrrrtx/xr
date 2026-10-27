@@ -55,3 +55,7 @@
 *.woff2 binary
 *.ttf   binary
 *.otf   binary
+
+# Exact dated execution evidence: preserve observed bytes, including terminal
+# whitespace/line endings. This does not relax source/config whitespace checks.
+docs/release/evidence/**/*.log -text -whitespace

@@ -68,6 +68,7 @@ function scriptedProvider(afterCrash: ModelTurn[]): Provider & { phase(): void; 
   ];
   return {
     id: "fake-llm",
+    modelId: "canned-1",
     label: "Ckpt Fake",
     async health() {
       return { ok: true };
@@ -102,6 +103,7 @@ function wiredRegistry(provider: Provider): ServiceRegistry {
     {
       get: () => ({
         defaults: { provider: "fake-llm", model: "canned-1" },
+      providerEngine: {providerCapabilities:{"fake-llm":{models:{"canned-1":{cost:{inPerMTok:0,outPerMTok:0,known:true,source:"synthetic service fixture; no provider billing"}}}}}},
         budget: { perTaskUsd: 5, perTaskTokens: 250_000 },
         security: { egressAllowlist: [], requireApproval: [] },
         memory: { enabled: false, injectInChat: false, recallLimit: 5, semanticRecall: false, saveSessionSummaries: false, sessionSummaryMinTurns: 6 },
@@ -281,6 +283,7 @@ describe("checkpoint → crash → resume", () => {
       {
         get: () => ({
           defaults: { provider: "fake-llm", model: "canned-1" },
+      providerEngine: {providerCapabilities:{"fake-llm":{models:{"canned-1":{cost:{inPerMTok:0,outPerMTok:0,known:true,source:"synthetic service fixture; no provider billing"}}}}}},
           budget: { perTaskUsd: 5, perTaskTokens: 250_000 },
           security: { egressAllowlist: [], requireApproval: [] },
           memory: { enabled: false, injectInChat: false, recallLimit: 5, semanticRecall: false, saveSessionSummaries: false, sessionSummaryMinTurns: 6 },

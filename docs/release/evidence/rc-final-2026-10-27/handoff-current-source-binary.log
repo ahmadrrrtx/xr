@@ -1,0 +1,12 @@
+$ bash -c bun scripts/compile-sidecar.ts --if-missing && bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu && cp desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu /home/user/.cache/xr-rc-artifacts/xr-linux-x64 && bun scripts/build-deb.ts --bin /home/user/.cache/xr-rc-artifacts/xr-linux-x64 --out /home/user/.cache/xr-rc-artifacts/xr_1.1.1-rc.1_amd64.deb && bun scripts/write-sums.ts /home/user/.cache/xr-rc-artifacts
+[sidecar] compiling engine → /home/user/xr/desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu (bun-linux-x64)
+ [272ms]  bundle  863 modules
+ [420ms] compile  /home/user/xr/desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu
+[sidecar] done: /home/user/xr/desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu
+[smoke] --version
+v1.1.1-rc.1 (Graphite)
+[smoke] booting serve on :39417 (isolated XR_HOME)
+[smoke] health OK — token handshake banner present:
+[smoke] PASS
+{"ok":true,"deb":"/home/user/.cache/xr-rc-artifacts/xr_1.1.1-rc.1_amd64.deb","bytes":38116614}
+wrote /home/user/.cache/xr-rc-artifacts/SHA256SUMS (4 files)

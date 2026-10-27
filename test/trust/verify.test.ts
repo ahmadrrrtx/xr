@@ -11,7 +11,7 @@ function fakeBackend(g: PlacementGuarantees, placement: PlacementKind = "namespa
     id: "fake",
     placement,
     guarantees: g,
-    enforcement: { ...NO_ENFORCEMENT },
+    enforcement: { ...NO_ENFORCEMENT, wallClock: true, output: true, cpu: true, memory: true, temp: true, processTree: true },
     async detect() {
       return true;
     },
