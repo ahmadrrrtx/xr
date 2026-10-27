@@ -54,7 +54,9 @@ try {
   $env:XR_TEST_MANIFEST = Join-Path $fixture 'captured.xml'
   $make = Join-Path $bin 'MakeAppx.exe'
   $sign = Join-Path $bin 'signtool.exe'
-  [IO.File]::WriteAllText($make, @'
+  # Git checks out PowerShell as CRLF even on Linux. Unix shebangs and shell
+  # scripts require LF, so normalize the embedded native-process fixtures.
+  $makeScript = @'
 #!/bin/sh
 stage= output=
 while [ "$#" -gt 0 ]; do
@@ -70,12 +72,14 @@ cp "$stage/AppxManifest.xml" "$XR_TEST_MANIFEST"
 [ "${XR_TEST_PACK_FAIL:-0}" = 0 ] || exit "$XR_TEST_PACK_FAIL"
 [ "${XR_TEST_NO_OUTPUT:-0}" = 0 ] || exit 0
 printf 'fixture package' > "$output"
-'@ + "`n")
-  [IO.File]::WriteAllText($sign, @'
+'@
+  [IO.File]::WriteAllText($make, ($makeScript -replace "`r`n", "`n") + "`n")
+  $signScript = @'
 #!/bin/sh
 printf 'sign\n' >> "$XR_TEST_CALLS"
 exit "${XR_TEST_SIGN_FAIL:-0}"
-'@ + "`n")
+'@
+  [IO.File]::WriteAllText($sign, ($signScript -replace "`r`n", "`n") + "`n")
   & chmod +x $make $sign
   if ($LASTEXITCODE -ne 0) { throw 'Could not make SDK stubs executable' }
   $env:PATH = "$bin$([IO.Path]::PathSeparator)$oldPath"
