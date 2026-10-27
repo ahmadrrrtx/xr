@@ -111,6 +111,48 @@ describe("XR-LAUNCH-028 strict command flags (unit)", () => {
   });
 });
 
+describe("coding-first help without removing shared engine commands", () => {
+  test("default help focuses on coding; legacy discovery and serve remain available", () =>
+    withHome((home) => {
+      const focused = xr(["--help"], home);
+      expect(focused.code).toBe(0);
+      expect(focused.stdout).toContain("coding agent");
+      expect(focused.stdout).toContain('xr "');
+      expect(focused.stdout).toContain("--provider");
+      expect(focused.stdout).toContain("--dry-run");
+      expect(focused.stdout).toContain("xr help --all");
+      expect(focused.stdout).not.toContain("xr research");
+      expect(focused.stdout).not.toContain("xr serve");
+      const all = xr(["help", "--all"], home);
+      expect(all.code).toBe(0);
+      expect(all.stdout).toContain("xr research");
+      expect(all.stdout).toContain("xr serve");
+      const serve = xr(["serve", "--help"], home);
+      expect(serve.code).toBe(0);
+      expect(serve.stdout).toContain("xr serve");
+      // Existing machine consumers still receive the full command catalog.
+      const json = xr(["--json", "--help"], home);
+      expect(json.code).toBe(0);
+      const data = JSON.parse(json.stdout) as { commands: Array<{ name: string }> };
+      expect(data.commands.some((c) => c.name === "serve")).toBe(true);
+      expect(data.commands.some((c) => c.name === "research")).toBe(true);
+    }));
+});
+
+describe("honest CLI budget guidance", () => {
+  test("real run help describes the USD limit as estimated, not a hard spend cap", () =>
+    withHome((home) => {
+      const r = xr(["run", "--help"], home);
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain("estimated per-task USD limit");
+      expect(r.stdout.toLowerCase()).not.toContain("hard spend cap");
+      const budget = xr(["help", "budget"], home);
+      expect(budget.code).toBe(0);
+      expect(budget.stdout).toContain("can overshoot");
+      expect(budget.stdout).toContain("unknown pricing");
+    }));
+});
+
 describe("XR-LAUNCH-028 no dropped flags", () => {
   test("the global --dry-run is re-attached for commands that read it from their args", () => {
     const flags = parseGlobalFlags(["memory", "summarize", "--dry-run", "--yes"]);

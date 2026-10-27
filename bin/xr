@@ -1,93 +1,95 @@
 #!/usr/bin/env node
-/**
- * XR — universal launcher (plain ESM JavaScript: runs under Node 20+ AND Bun).
- *
- * Distribution paths, in order:
- *
- *   1. Compiled binary (default distribution path): when dist/<platform>
- *      contains the standalone binary (installed by install.sh / install.ps1
- *      / the release pipeline, or by `xr update`), exec it — one process,
- *      no runtime download, no spawn tax.
- *
- *   2. Bun from source (contributor / npm path): the CLI runs from TypeScript
- *      sources, which requires Bun. If Bun is installed we run it via
- *      `bun run` (single child, stdio inherited).
- *
- *   3. No Bun: print the exact one-line fix and exit 127 — never a cryptic
- *      `env: bun: No such file or directory` (audit P0-1).
- *
- * XR_BINARY env override always wins (documented power-user escape hatch).
- */
-
-import { spawnSync } from "node:child_process";
+// XR npm launcher (Node 20+). Prefer an explicit/prebuilt XR binary, then the
+// pinned Bun platform package installed with XR. No postinstall script or
+// runtime download is performed here. A system Bun remains a warned fallback
+// for contributors and installations whose optional dependency was omitted.
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { constants as osConstants } from "node:os";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { compiledBinaryName, locateBundledRuntime } from "./bun-runtime.js";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const entry = join(ROOT, "src", "index.ts");
 
-function binaryFileName() {
-  const map = {
-    "linux-x64": "xr-linux-x64",
-    "linux-arm64": "xr-linux-arm64",
-    "darwin-arm64": "xr-darwin-arm64",
-    "darwin-x64": "xr-darwin-x64",
-    "win32-x64": "xr-windows-x64.exe",
-    "win32-arm64": "xr-windows-arm64.exe",
-  };
-  const key = `${process.platform}-${process.arch}`;
-  return map[key] ?? `xr-${process.platform}-${process.arch}`;
+function compiledBinary() {
+  // An explicitly set XR_BINARY replaces the default candidate, even if the
+  // explicit path is missing. This preserves the launcher's prior behavior.
+  const candidate = process.env.XR_BINARY ?? join(ROOT, "dist", compiledBinaryName(process.platform, process.arch));
+  return existsSync(candidate) ? candidate : null;
 }
 
 function which(cmd) {
   const probe = process.platform === "win32" ? "where" : "command";
   const args = process.platform === "win32" ? [cmd] : ["-v", cmd];
-  const res = spawnSync(probe, args, { encoding: "utf8", shell: process.platform !== "win32" });
-  if (res.status !== 0 || !res.stdout) return null;
-  return res.stdout.split(/\r?\n/).map((s) => s.trim()).find(Boolean) || null;
+  const lookup = spawnSync(probe, args, { encoding: "utf8", shell: process.platform !== "win32" });
+  if (lookup.status !== 0 || !lookup.stdout) return null;
+  return lookup.stdout.split(/\r?\n/).map((s) => s.trim()).find(Boolean) || null;
+}
+
+function runSource(bun) {
+  if (!existsSync(entry)) {
+    console.error(`XR entrypoint not found: ${entry}`);
+    process.exitCode = 1;
+    return;
+  }
+  run(bun, ["run", entry, ...process.argv.slice(2)]);
+}
+
+function run(file, args) {
+  const child = spawn(file, args, { stdio: "inherit" });
+  // A terminal Ctrl+C already reaches both processes in the foreground group.
+  // Forwarding that SIGINT again can turn one interrupt into two. For a TTY,
+  // rely on the terminal for SIGINT; a signal addressed only to the launcher
+  // while it has a TTY is therefore not relayed. Non-TTY supervisor signals
+  // and termination/hangup signals are forwarded to the child.
+  const handlers = new Map();
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    const forward = () => {
+      if (signal === "SIGINT" && process.stdin.isTTY) return;
+      try { child.kill(signal); } catch { /* child already exited */ }
+    };
+    handlers.set(signal, forward);
+    process.on(signal, forward);
+  }
+  const cleanup = () => { for (const [signal, handler] of handlers) process.off(signal, handler); };
+  child.once("error", (error) => {
+    cleanup();
+    console.error(`XR could not start ${file}: ${error.message}`);
+    process.exit(error.code === "ENOENT" ? 127 : 1);
+  });
+  child.once("exit", (status, signal) => {
+    cleanup();
+    // Follow the conventional shell exit status for a signal-terminated child.
+    process.exit(signal ? 128 + (osConstants.signals[signal] ?? 1) : (status ?? 1));
+  });
 }
 
 function main() {
-  const argv = process.argv.slice(2);
+  const binary = compiledBinary();
+  if (binary) return run(binary, process.argv.slice(2));
 
-  // 1. Compiled binary (default distribution path).
-  const binary = process.env.XR_BINARY ?? join(ROOT, "dist", binaryFileName());
-  if (existsSync(binary)) {
-    const res = spawnSync(binary, argv, { stdio: "inherit", env: process.env });
-    process.exit(res.status === null ? 1 : res.status);
+  const bundled = locateBundledRuntime(ROOT);
+  if (bundled.status === "found") return runSource(bundled.exe);
+  if (bundled.status === "invalid") {
+    console.error(`XR's bundled Bun runtime is invalid: ${bundled.detail}. Reinstall XR with optional dependencies enabled.`);
+    process.exitCode = 1;
     return;
   }
 
-  // 2. Bun from source (npm / contributor path).
   const bun = which(process.platform === "win32" ? "bun.exe" : "bun") ?? which("bun");
   if (bun) {
-    const entry = join(ROOT, "src", "index.ts");
-    if (!existsSync(entry)) {
-      console.error(`XR entrypoint not found: ${entry}`);
-      process.exit(1);
-    }
-    const res = spawnSync(bun, ["run", entry, ...argv], { stdio: "inherit", env: process.env });
-    process.exit(res.status === null ? 1 : res.status);
-    return;
+    const reason = bundled.status === "missing" ? `${bundled.name}@${bundled.expected} is not installed` : bundled.detail;
+    console.error(`XR warning: ${reason}; using Bun from PATH instead of XR's pinned runtime.`);
+    return runSource(bun);
   }
 
-  // 3. No Bun — actionable message, not a crash.
-  console.error("");
-  console.error("  XR needs the Bun runtime to run from source.");
-  console.error("");
-  console.error("  Install it (one line), then run xr again:");
-  console.error("");
-  if (process.platform === "win32") {
-    console.error('    powershell -c "irm bun.sh/install.ps1 | iex"');
-  } else {
-    console.error("    curl -fsSL https://bun.sh/install | bash");
-  }
-  console.error("");
-  console.error("  (Or install the compiled binary channel, which needs no runtime:");
-  console.error("   https://github.com/ahmadrrrtx/xr#install )");
-  console.error("");
-  process.exit(127);
+  const reason = bundled.status === "missing"
+    ? `The optional runtime package ${bundled.name}@${bundled.expected} is not installed.`
+    : bundled.detail;
+  console.error(`\n  XR could not find a usable Bun runtime. ${reason}\n\n  Reinstall XR with npm optional dependencies enabled (do not use --omit=optional).\n  Installation scripts are not required. For an unsupported platform or a\n  source checkout, an independently installed Bun on PATH can be used instead.\n`);
+  process.exitCode = 127;
 }
 
 main();

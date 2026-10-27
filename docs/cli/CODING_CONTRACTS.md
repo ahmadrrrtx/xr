@@ -60,6 +60,7 @@ The coding entry currently supports `agent`. `xr --mode plan` and `xr --mode ask
 ## Output and validation
 
 - An admitted `--json` coding turn emits JSONL events, starting with `init`; dry-run notices follow initialization.
+- The summary's `commands_run` lists shell tool calls that completed successfully, not every command that may have started. Identified failed or blocked shell calls appear separately in `commands_failed_or_blocked` with their reason. A failed command can already have caused side effects; an empty `commands_run` is **not** proof that nothing ran. Check the tool events and audit trail.
 - Interactive `--diff` renders proposals after each turn, clears the previous turn’s proposals, and reports `no edits proposed` when the next turn has none.
 - Startup/preflight validation uses the existing global CLI structured JSON error document. Consumers should not treat a preflight refusal as a started run.
 - Usage errors exit 2 before cwd changes, stdin waits, kernel/wizard/provider activity for the preflighted options. Reaching a task limit is a different runtime outcome.

@@ -1,17 +1,17 @@
 /**
  * XR Phase 4 · T6 — license compliance check.
  *
- * Reads the LOCKED dependency set (bun.lock) and, for each installed package,
- * reads its `license` field from node_modules (installed tree, not registry
- * claims). Forbidden licenses (copyleft / source-available / non-commercial)
- * fail CI; unknown licenses are reported and require an explicit allowlist
- * entry. Runs in CI after `bun install --frozen-lockfile`.
+ * Checks installed metadata for every locked dependency. A missing optional Bun
+ * platform package is exempt only when it cannot apply to the current target;
+ * installed packages and missing applicable packages are still checked. Bun's
+ * package.json says MIT, but the runtime embeds additional licensed libraries:
+ * that separate review is deliberately a release-blocking result, not a waiver.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Copyleft / source-available / non-commercial licenses that block the
- *  MIT release pipeline unless explicitly waived in the allowlist below. */
+/** Copyleft / source-available / non-commercial licenses block the MIT
+ * release pipeline unless explicitly waived in the allowlist below. */
 const FORBIDDEN = [/^GPL/, /^AGPL/, /^LGPL/, /^SSPL/, /^CC-BY-NC/, /^BUSL/, /^Elastic/i, /^MongoDB/i, /^PolyForm/i, /^Commons-Clause/i];
 
 /** Explicit waivers (name@version → reason) — owned, dated. */
@@ -25,8 +25,9 @@ interface LicenseResult {
   name: string;
   version: string;
   license: string;
-  status: "ok" | "forbidden" | "unknown" | "missing";
+  status: "ok" | "forbidden" | "unknown" | "missing" | "not-applicable" | "review-required";
 }
+interface Target { platform: string; arch: string; libc: "glibc" | "musl" | null }
 
 function licenseOf(pkgDir: string): string {
   const pj = join(pkgDir, "package.json");
@@ -42,21 +43,55 @@ function licenseOf(pkgDir: string): string {
   }
 }
 
-export function runLicenseCheck(): { results: LicenseResult[]; ok: boolean } {
+function hostTarget(): Target {
+  let libc: Target["libc"] = null;
+  if (process.platform === "linux") {
+    try {
+      const report = process.report?.getReport() as { header?: { glibcVersionRuntime?: string }; sharedObjects?: string[] } | undefined;
+      if (report?.header?.glibcVersionRuntime) libc = "glibc";
+      else if ((report?.sharedObjects ?? []).some((p) => /musl/i.test(p))) libc = "musl";
+      else {
+        const cpu = process.arch === "x64" ? "x86_64" : process.arch === "arm64" ? "aarch64" : "";
+        if (cpu && existsSync(`/lib/ld-musl-${cpu}.so.1`)) libc = "musl";
+      }
+    } catch { /* Unknown libc means neither Linux variant can be waived. */ }
+  }
+  return { platform: process.platform, arch: process.arch, libc };
+}
+
+// Only recognized, directly declared platform-specific Bun packages may be
+// marked not-applicable. A bad/missing manifest or an unknown target fails closed.
+function incompatibleOptionalRuntime(name: string, version: string, optional: Record<string, string>, target: Target): boolean {
+  const m = /^@oven\/bun-(darwin|linux|windows)-(x64|aarch64)(-musl)?$/.exec(name);
+  if (!m || optional[name] !== version || (m[3] && m[1] !== "linux")) return false;
+  const platform = m[1] === "windows" ? "win32" : m[1];
+  const arch = m[2] === "aarch64" ? "arm64" : "x64";
+  if (platform !== target.platform || arch !== target.arch) return true;
+  return platform === "linux" && target.libc !== null && (m[3] ? "musl" : "glibc") !== target.libc;
+}
+
+export function runLicenseCheck(options: { root?: string; target?: Target } = {}): { results: LicenseResult[]; ok: boolean } {
+  const root = options.root ?? ".";
+  const target = options.target ?? hostTarget();
   const lock = JSON.parse(
-    readFileSync("bun.lock", "utf8").replace(/,([\t\r\n ]*[}\]])/g, "$1"),
-  ) as { packages: Record<string, unknown[]> };
+    readFileSync(join(root, "bun.lock"), "utf8").replace(/,([\t\r\n ]*[}\]])/g, "$1"),
+  ) as { packages: Record<string, unknown[]>; workspaces?: Record<string, { optionalDependencies?: Record<string, string> }> };
+  const optional = lock.workspaces?.[""]?.optionalDependencies ?? {};
   const results: LicenseResult[] = [];
+  const bunVersions = new Set<string>();
   for (const [name, entry] of Object.entries(lock.packages)) {
     if (!Array.isArray(entry) || entry.length < 2) continue;
     const spec = String(entry[0]);
     const at = spec.lastIndexOf("@");
     const version = at > 0 ? spec.slice(at + 1) : "";
-    const pkgDir = join("node_modules", name);
+    if (/^@oven\/bun-(?:darwin|linux|windows)-(?:x64|aarch64)(?:-musl)?$/.test(name)) bunVersions.add(version);
+    const pkgDir = join(root, "node_modules", name);
     const license = licenseOf(pkgDir);
     const key = `${name}@${version}`;
     let status: LicenseResult["status"] = "ok";
-    if (license === "") {
+    if (!existsSync(pkgDir) && incompatibleOptionalRuntime(name, version, optional, target)) {
+      status = "not-applicable";
+    } else if (license === "") {
       status = ALLOWLIST[key] ? "ok" : "missing";
     } else if (FORBIDDEN.some((re) => re.test(license))) {
       status = ALLOWLIST[key] ? "ok" : "forbidden";
@@ -65,16 +100,21 @@ export function runLicenseCheck(): { results: LicenseResult[]; ok: boolean } {
     }
     results.push({ name, version, license: license || "(none)", status });
   }
-  return { results, ok: results.every((r) => r.status === "ok") };
+  for (const version of bunVersions) {
+    results.push({
+      name: "Bun embedded components", version,
+      license: `LGPL JavaScriptCore/WebKit and tinycc; see licenses/bun-v${version}-LICENSE.md and obtain legal/policy review`,
+      status: "review-required",
+    });
+  }
+  return { results, ok: results.every((r) => r.status === "ok" || r.status === "not-applicable") };
 }
 
 if (import.meta.main) {
   const { results, ok } = runLicenseCheck();
-  const bad = results.filter((r) => r.status !== "ok");
-  for (const r of results) {
-    if (r.status === "ok") continue;
-    console.log(`[license] ${r.status.toUpperCase()}: ${r.name}@${r.version} — ${r.license}`);
-  }
-  console.log(`${results.length} packages checked; ${bad.length} not clean`);
+  const bad = results.filter((r) => r.status !== "ok" && r.status !== "not-applicable");
+  for (const r of bad) console.log(`[license] ${r.status.toUpperCase()}: ${r.name}@${r.version} — ${r.license}`);
+  const skipped = results.filter((r) => r.status === "not-applicable").length;
+  console.log(`${results.length} entries reviewed; ${skipped} inapplicable optional platforms; ${bad.length} not clean`);
   process.exit(ok ? 0 : 1);
 }

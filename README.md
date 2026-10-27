@@ -136,6 +136,18 @@ them), and they refuse an install directory that is your home, a drive root, or 
 
 Per-platform support tiers: [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
+**Unpublished npm candidate:** its primary user surface is the coding agent;
+the separate desktop application remains the full app. The in-development npm
+package is designed to install its pinned Bun 1.4.2 platform package
+automatically alongside Node 20+; it does not need an install script. Leave
+optional dependencies enabled. If the runtime is missing and no system Bun is
+available, XR reports how to reinstall; an independently installed Bun on
+`PATH` is still a warned fallback. The Linux x64 runtime adds about 76 MiB
+unpacked. Bun 1.4 x64 requires SSE4.2. This candidate is not yet released or verified on
+all OS/CPU/libc combinations; the file-tool limitations above still apply.
+Upstream Bun notices and the outstanding license-review gate are in
+[`licenses/`](licenses/README.md).
+
 ### 2. First run
 
 ```bash

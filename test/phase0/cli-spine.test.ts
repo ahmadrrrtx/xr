@@ -114,10 +114,10 @@ describe.skipIf(POSIX_ONLY)("T11 · free-form routing", () => {
   });
 
   test("a one-word near-miss is not refused: it reaches the coding agent", async () => {
-    // The coding agent (Phase 23) owns free-form tasks. With no model
-    // configured in this isolated HOME it says so, instead of a usage refusal.
+    // The coding agent (Phase 23) owns free-form tasks. Its isolated-home
+    // provider preflight explains the next step, instead of a usage refusal.
     const r = await runCli(["hello"]);
-    expect(r.combined).toMatch(/No model is configured/);
+    expect(r.combined).toMatch(/No coding CLI provider or supported provider key was detected/);
     expect(r.combined).not.toMatch(/Unknown command/i);
   });
 

@@ -81,6 +81,7 @@ export class CoderSession {
   private toolCalls = new Map<string, { tool: string; args: Record<string, unknown> }>();
   private files = new Set<string>();
   private commands: string[] = [];
+  private commandsFailedOrBlocked: Array<{ command: string; reason: string }> = [];
   private denied = 0;
   private autoDenied = 0;
   private diffs: Array<{ path: string; patch: string }> = [];
@@ -112,6 +113,7 @@ export class CoderSession {
   async turn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
     this.files = new Set();
     this.commands = [];
+    this.commandsFailedOrBlocked = [];
     this.diffs = [];
     this.denied = 0;
     this.autoDenied = 0;
@@ -145,6 +147,7 @@ export class CoderSession {
       steps: result.steps,
       filesChanged: [...this.files],
       commands: [...this.commands],
+      commandsFailedOrBlocked: [...this.commandsFailedOrBlocked],
       denied: this.denied,
       autoDenied: this.autoDenied,
       ...(this.opts.dryRun ? { dryRun: true } : {}),
@@ -191,19 +194,22 @@ export class CoderSession {
       case "tool_result": {
         const call = this.toolCalls.get(e.id);
         const tool = e.tool;
-        if (tool === "write_file" && e.ok && call && !this.opts.dryRun) {
+        const failure = e.ok ? undefined : toolFailure(tool, e.error ?? e.result ?? "", e.reason);
+        if (tool === "write_file" && e.ok && call?.tool === tool && !this.opts.dryRun) {
           const path = String(call.args.path ?? "");
           this.files.add(path);
         }
-        if (tool === "shell" && call && !this.opts.dryRun) {
+        if (tool === "shell" && call?.tool === tool) {
           const cmd = shellCommandOf(call.args);
-          if (cmd !== null) this.commands.push(cmd);
+          if (cmd !== null) {
+            if (e.ok && !this.opts.dryRun) this.commands.push(cmd);
+            else if (failure) this.commandsFailedOrBlocked.push({ command: cmd, reason: failure.reason });
+          }
         }
         if (e.ok) this.ui.toolResult(e.id, tool, true, e.result ?? "");
-        else {
+        else if (failure) {
           // XR-LAUNCH-024: the tool's own message (never a bare "failed") + reason code + next step.
-          const f = toolFailure(tool, e.error ?? e.result ?? "", e.reason);
-          this.ui.toolResult(e.id, tool, false, f.error || "failed", { reason: f.reason, next: e.next ?? f.next });
+          this.ui.toolResult(e.id, tool, false, failure.error || "failed", { reason: failure.reason, next: e.next ?? failure.next });
         }
         return;
       }

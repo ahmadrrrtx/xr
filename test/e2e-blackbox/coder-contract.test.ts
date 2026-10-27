@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { auditEvents, freshHome, removeHome, runCli, writeConfig, type CliRunResult } from "./helpers.ts";
 
@@ -13,7 +13,11 @@ const T = 60_000;
 const PROVIDER = "coder-contract-fixture";
 const MARKER = "coder-contract-marker.txt";
 
-async function fixture(tool = "write_file", toolArgs: Record<string, unknown> = { path: MARKER, content: "SYNTHETIC_CODER_MARKER" }) {
+async function fixture(
+  tool = "write_file",
+  toolArgs: Record<string, unknown> = { path: MARKER, content: "SYNTHETIC_CODER_MARKER" },
+  opts: { defaultEgress?: boolean } = {},
+) {
   const home = freshHome();
   const cwd = join(home, "workspace");
   mkdirSync(cwd);
@@ -48,7 +52,7 @@ async function fixture(tool = "write_file", toolArgs: Record<string, unknown> = 
       customProviders: [{ id: PROVIDER, label: "Offline contract fixture", baseUrl: `http://127.0.0.1:${port}/v1`, defaultModel: "stub-model", capabilities: { chat: true, streaming: false, toolUse: true, functionCalling: true } }],
       providerCapabilities: { [PROVIDER]: { models: { "stub-model": { cost: { inPerMTok:1,outPerMTok:1,known:true,source:"synthetic coder fixture; not provider billing" } } } } },
     },
-    security: { egressAllowlist: [], hardened: true },
+    security: { ...(opts.defaultEgress ? {} : { egressAllowlist: [] }), hardened: true },
     memory: { enabled: false },
   });
   writeFileSync(join(home, "cli.json"), JSON.stringify({ provider: PROVIDER, model: "stub-model", permissions: { allow: ["edit:*", "shell:*"] } }));
@@ -76,6 +80,75 @@ function summary(r: CliRunResult) { return events(r).findLast((e) => e.type === 
 function expectExit(r: CliRunResult, expected: number) {
   expect({ code: r.code, timedOut: r.timedOut, stderr: r.stderr, stdout: r.stdout }).toMatchObject({ code: expected, timedOut: false });
 }
+
+describe("coding provider-selection guidance", () => {
+  test("engine-only configuration receives a truthful coding preflight diagnostic", async () => {
+    const f = await fixture("read_file", { path: "package.json" });
+    try {
+      unlinkSync(join(f.home, "cli.json"));
+      const r = await runCli(["--cwd", f.cwd, "Read the synthetic project"], {
+        home: f.home,
+        env: { CI: "1", XR_PROVIDER: "", XR_MODEL: "", ANTHROPIC_API_KEY: "", OPENAI_API_KEY: "", GROQ_API_KEY: "", XR_API_KEY: "" },
+        timeoutMs: 45_000,
+      });
+      expectExit(r, 1);
+      expect(f.calls()).toBe(0);
+      expect(r.stderr).toContain("No coding CLI provider or supported provider key was detected");
+      expect(r.stderr).toContain("engine-only configuration");
+      expect(r.stderr).toContain("--provider");
+      expect(r.stderr).not.toContain("No model is configured");
+    } finally { await f.close(); }
+  }, T);
+
+  test("a detected key is not silently substituted for the engine's configured provider", async () => {
+    const f = await fixture("read_file", { path: "package.json" });
+    try {
+      // The engine points to the loopback fixture. A synthetic OpenAI key alone
+      // must neither override that configured route nor be presented as selecting it.
+      unlinkSync(join(f.home, "cli.json"));
+      const key = "SYNTHETIC_NOT_A_REAL_KEY";
+      const r = await runCli(["--cwd", f.cwd, "--json", "Read the synthetic project"], {
+        home: f.home,
+        env: {
+          XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER: "1", CI: "1",
+          XR_PROVIDER: "", XR_MODEL: "", ANTHROPIC_API_KEY: "", GROQ_API_KEY: "", XR_API_KEY: "",
+          OPENAI_API_KEY: key,
+        },
+        timeoutMs: 45_000,
+      });
+      expectExit(r, 0);
+      expect(f.calls()).toBe(2); // The configured local provider actually ran.
+      const output = events(r);
+      expect(output[0]?.type).toBe("init");
+      const guidance = output.find((e) => e.type === "notice" && e.level === "warn");
+      expect(guidance?.message).toContain("does not select");
+      expect(guidance?.message).toContain("--provider openai");
+      expect(guidance?.message).toContain("engine");
+      expect(r.stdout + r.stderr).not.toContain(key);
+      expect(output.at(-1)?.type).toBe("summary");
+    } finally { await f.close(); }
+  }, T);
+
+  test("an explicit CLI provider is honored even when a different provider key exists", async () => {
+    const f = await fixture("read_file", { path: "package.json" });
+    try {
+      const key = "SYNTHETIC_NOT_A_REAL_KEY";
+      const r = await runCli(["--cwd", f.cwd, "--provider", PROVIDER, "--model", "stub-model", "--json", "Read the synthetic project"], {
+        home: f.home,
+        env: {
+          XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER: "1", CI: "1",
+          XR_PROVIDER: "", XR_MODEL: "", ANTHROPIC_API_KEY: "", GROQ_API_KEY: "", XR_API_KEY: "",
+          OPENAI_API_KEY: key,
+        },
+        timeoutMs: 45_000,
+      });
+      expectExit(r, 0);
+      expect(f.calls()).toBe(2);
+      expect(r.stdout).not.toContain("does not select");
+      expect(r.stdout + r.stderr).not.toContain(key);
+    } finally { await f.close(); }
+  }, T);
+});
 
 describe("coding CLI dry-run end to end", () => {
   test("ordinary approved writes still execute", async () => {
@@ -105,6 +178,22 @@ describe("coding CLI dry-run end to end", () => {
       } finally { await f.close(); }
     }, T);
   }
+
+  test("an isolation-blocked shell is never reported as a command run", async () => {
+    const cmd = "printf XR_SAFE_CONTRACT > shell-marker.txt";
+    // The default egress allowlist requests per-host filtering, which the local
+    // sandbox cannot enforce. The real engine must block rather than downgrade.
+    const f = await fixture("shell", { cmd }, { defaultEgress: true });
+    try {
+      const r = await f.run([]);
+      expectExit(r, 0); // The fixture model still said done; exit 0 is not effect proof.
+      expect(f.calls()).toBe(2);
+      expect(existsSync(join(f.cwd, "shell-marker.txt"))).toBe(false);
+      expect(events(r).find((e) => e.type === "tool" && e.tool === "shell" && e.status === "error")?.reason).toBe("blocked:isolation-unavailable");
+      expect(summary(r)?.commands_run).toEqual([]);
+      expect(summary(r)?.commands_failed_or_blocked).toEqual([{ command: cmd, reason: "blocked:isolation-unavailable" }]);
+    } finally { await f.close(); }
+  }, T);
 
   test("shell dry-run simulates without invoking the isolation executor", async () => {
     const f = await fixture("shell", { cmd: "printf '%s' XR_SAFE_CONTRACT > shell-marker.txt" });
