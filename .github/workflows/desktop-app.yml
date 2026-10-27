@@ -128,6 +128,10 @@ jobs:
         run: bun run scripts/generate-tray-icons.ts --inspect
       - name: Shell tests (tray artefacts, MSIX tiles, IPC contracts)
         run: bun test test/desktop/
+      # These stubs exercise PowerShell and native exit codes on Linux; the
+      # Windows bundle still runs the actual SDK packer and signer.
+      - name: MSIX packaging regressions (PowerShell with fake SDK processes)
+        run: pwsh -NoProfile -File test/desktop/msix-packaging.test.ps1
       - name: Renderer typecheck + lint
         working-directory: desktop
         run: |

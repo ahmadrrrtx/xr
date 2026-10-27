@@ -89,3 +89,14 @@ on a native ARM64 runner before the binary journey; the npm and Docker legs
 exercise their own payloads. All three remain non-gating under the existing
 owner decision pending reviewed native evidence. No release, tag, channel
 promotion or branch-protection change is authorized by this follow-up.
+
+The later Windows desktop bundle in that same run produced MSI and NSIS, then
+failed MSIX manifest validation because the semver prerelease was passed as a
+non-numeric Appx Identity version. That exposed two further defects: the
+version text replacement also changed `MinVersion`, and nonzero MakeAppx or
+SignTool exit codes were not immediately fatal. The packaging script now uses a
+validated numeric **test-only** identity, changes only `Package/Identity`, and
+fails closed on native tool errors. Stub-process PowerShell regressions are not
+native Windows packaging or install/update evidence; the next real Windows CI
+run must still validate the package. See [desktop signing](DESKTOP_SIGNING.md)
+for the separate MSI and MSIX version-ordering limitations.

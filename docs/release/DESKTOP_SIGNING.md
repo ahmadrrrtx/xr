@@ -104,6 +104,12 @@ The override is installer metadata only: the application, `latest.json` and
 every other surface keep reporting the real identity. `bun run release:check`
 fails if the committed value drifts from the manifest.
 
+The separately built, test-signed **MSIX** is not a production artifact.
+MSIX requires four numeric fields, so its test packaging maps both
+`1.1.1-rc.1` and `1.1.1` to `1.1.1.0`. This intentionally does not establish
+upgrade ordering or a release policy. The real Windows SDK packer and signer
+remain the native validation; Linux regressions use fake SDK processes only.
+
 # # Updates and lifecycle
 
 Current updater pubkey/endpoints are unprovisioned. Keep that state until the

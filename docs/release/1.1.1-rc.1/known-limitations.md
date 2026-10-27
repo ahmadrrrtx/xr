@@ -20,6 +20,8 @@ defaults remain1.0.0; the withdrawn1.1.0 owner repair remains outstanding.
   differing only in that field compare equal. Native upgrade/rollback tests and
   a reviewed versioning policy are required before publication; see
   [desktop signing](../DESKTOP_SIGNING.md#windows-msi-version-for-pre-release-tags).
+  Separately, the test-signed MSIX uses `1.1.1.0` for both this prerelease and
+  its stable base; that test encoding is not a publishable update policy.
 * Provider facts are sourced, not live authentication/agent-quality proof.
   Credential presence is not authentication; Auto does not upgrade that claim.
   No model weights, paid live suite or competitor benchmark were run.
