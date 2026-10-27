@@ -31,30 +31,31 @@ export function providersRoutes(): DaemonRoute[] {
       path: "/api/providers",
       method: "GET",
       handle: async ({ json, config }) => {
-        // Phase 04 — canonical provider gateway: ONE source of truth for listing + health
-        // Uses registry.list() via gateway (includes custom), health bounded 2500ms cached, credential status central.
-        // No N+1 catalog rebuilds, no 120s blocking.
+        // Listing/configuration must work offline. Only explicit health/probe
+        // actions may contact providers; a credential is not reachability.
         const presets = providerGateway.list(config);
-        const healths = await providerGateway.healthAll(config);
 
-        const healthMap = new Map(healths.map((h) => [h.id, h]));
-
+        const catalog = providerGateway.catalog(config);
         const rows = presets.map((p) => {
-          const health = healthMap.get(p.id);
+          const health = providerGateway.inspectHealth(config, p.id);
           const cred = providerGateway.credentialStatus(p.id);
           return {
             id: p.id,
             label: p.label,
             tier: p.tier,
             kind: p.kind,
+            locality: catalog.providers.find(d => d.providerId === p.id)?.locality.locality ?? "unknown",
             hasKey: cred.available,
-            authOk: health?.authOk ?? cred.available,
-            healthy: health?.ok ?? false,
+            authOk: health?.authOk ?? false,
+            healthy: health?.ok ?? false, // legacy pessimistic boolean; use healthState for unknown
+            healthState: health ? (health.ok ? "reachable" : "unreachable") : "unknown",
+            authState: health ? (health.authOk ? "verified" : "failed") : cred.available ? "unverified" : "missing_credentials",
+            checkedAt: health?.timestamp ?? null,
             latencyMs: health?.latencyMs ?? null,
             detail: health?.detail ?? null,
             capabilities: p.capabilities,
             defaultModel: p.defaultModel,
-            cached: (health as any)?.cached ?? false,
+            cached: health?.cached ?? false,
           };
         });
 
@@ -79,10 +80,14 @@ export function providersRoutes(): DaemonRoute[] {
           if (!body.provider || !allowed.has(body.provider)) return json({ error: "valid provider is required" }, 400);
           if (body.fallbackProvider && !allowed.has(body.fallbackProvider)) return json({ error: "fallbackProvider must be a known provider" }, 400);
           const next = loadConfig().config;
+          const preset = providerGateway.getPreset(body.provider);
+          const targetModel = body.model?.trim() || (next.defaults.provider === body.provider ? next.defaults.model : preset?.defaultModel);
+          if (!targetModel) return json({ error: "an explicit model is required for this provider" }, 400);
+          state.store.audit("providers.set.requested", { provider: body.provider, model: targetModel });
           next.defaults.provider = body.provider;
-          if (body.model?.trim()) next.defaults.model = body.model.trim();
+          next.defaults.model = targetModel;
           next.defaults.fallbackProvider = body.fallbackProvider || undefined;
-          next.defaults.fallbackModel = body.fallbackProvider ? (body.fallbackModel?.trim() || next.defaults.fallbackModel) : undefined;
+          next.defaults.fallbackModel = body.fallbackProvider ? (body.fallbackModel?.trim() || (config.defaults.fallbackProvider === body.fallbackProvider ? next.defaults.fallbackModel : providerGateway.getPreset(body.fallbackProvider)?.defaultModel)) : undefined;
           saveConfig(next);
           state.store.audit("providers.set", {
             provider: next.defaults.provider,
@@ -104,6 +109,7 @@ export function providersRoutes(): DaemonRoute[] {
       handle: async ({ json, config, url }) => {
         const params = url.searchParams;
         const provider = params.get("provider") ?? undefined;
+        const mode = params.get("mode") === "automatic" ? "automatic" as const : undefined;
         const model = params.get("model") ?? undefined;
         const rawClass = params.get("class") ?? "chat";
         const modelClass = (MODEL_CLASSES.has(rawClass) ? rawClass : "chat") as ModelClass;
@@ -118,6 +124,7 @@ export function providersRoutes(): DaemonRoute[] {
         const { decision, record } = router.route(config, {
           provider,
           model,
+          mode,
           requirements: {
             modelClass,
             localityPolicy: localOnly ? "local_only" : undefined,
@@ -174,6 +181,10 @@ export function providersRoutes(): DaemonRoute[] {
             modelId: m.modelId,
             isDefault: m.isDefault,
             capabilities: m.capabilities,
+            contextWindow: m.context.contextWindow,
+            locality: m.locality.locality,
+            cost: m.cost,
+            evidence: m.evidence,
           })),
           modelCount: catalog.models.length,
         });
@@ -191,7 +202,7 @@ export function providersRoutes(): DaemonRoute[] {
           if (!preset) return json({ error: `unknown provider: ${id}` }, 404);
           const caps = providerGateway.capabilities(id);
           const cred = providerGateway.credentialStatus(id);
-          const health = await providerGateway.health(config, id).catch(() => null);
+          const health = providerGateway.inspectHealth(config, id) ?? null;
           return json({
             id: preset.id,
             label: preset.label,

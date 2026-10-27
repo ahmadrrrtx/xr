@@ -26,9 +26,9 @@
  *   - It confines the process; it does not protect the host kernel itself
  *     from a kernel 0-day (no claim of absolute isolation).
  */
-import { existsSync, lstatSync, openSync, closeSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, openSync, closeSync, mkdtempSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
 import { SANDBOX_EXEC, SEATBELT_PATH, seatbeltArgv } from "./seatbelt.ts";
 import {
   type BackendRunContext,
@@ -96,24 +96,36 @@ const APPCONTAINER_GUARANTEES: PlacementGuarantees = { ...BWRAP_GUARANTEES };
 const ENFORCEMENT: ResourceEnforcement = {
   ...NO_ENFORCEMENT,
   wallClock: true,
-  cpu: true,       // ulimit -t inside the sandbox
-  memory: true,    // ulimit -v inside the sandbox
+  cpu: true,       // hard per-process RLIMIT_CPU; whole job bounded by wall clock
+  memory: true,    // hard per-process RLIMIT_AS, not a whole-job RSS/cgroup quota
   output: true,
-  temp: true,      // tmpfs scratch
+  temp: true,      // /tmp + /dev/shm bounded tmpfs; skeleton read-only
   processTree: true, // PID namespace + group kill
 };
 
 export class NamespaceSandboxBackend implements EnvironmentBackend {
   readonly id = "namespace-sandbox";
   readonly placement = "namespace_sandbox" as const;
-  readonly enforcement = ENFORCEMENT;
+  get enforcement(): ResourceEnforcement {
+    // Native experimental mechanisms do not implement Linux prlimit/tmpfs.
+    return this.mechanism === "seatbelt" || this.mechanism === "appcontainer"
+      ? { ...NO_ENFORCEMENT, wallClock: true, output: true, processTree: this.mechanism === "appcontainer" }
+      : ENFORCEMENT;
+  }
   guarantees: PlacementGuarantees = BWRAP_GUARANTEES;
 
   private mechanism: Mechanism | null = null;
   private bwrapPath = "bwrap";
 
   /** `only` restricts detection to one mechanism (tests exercise each separately). */
-  constructor(private readonly opts: { only?: Mechanism } = {}) {}
+  constructor(private readonly opts: { only?: Mechanism; bwrapPath?: string } = {}) {
+    // Trusted host/test wiring only, not model/config-selected. Allows a
+    // checksum-verified user-owned installation without a system/root install.
+    if (opts.bwrapPath) {
+      if (!isAbsolute(opts.bwrapPath)) throw new Error("bwrapPath must be absolute");
+      this.bwrapPath = opts.bwrapPath;
+    }
+  }
 
   /** The mechanism detect() selected, or null (refuse). */
   get activeMechanism(): Mechanism | null {
@@ -121,17 +133,19 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
   }
 
   async detect(): Promise<boolean> {
+    this.mechanism = null;
     if (process.platform === "darwin" || process.platform === "win32") return this.detectNative();
     if (process.getuid?.() === 0) return false; // unprivileged sandbox only
+    if (process.platform !== "linux" || !existsSync("/usr/bin/setpriv") || !existsSync("/usr/bin/prlimit")) return false;
     // Try bubblewrap first.
     const bwrap = this.opts.only === "unshare" ? { exitCode: 1 } : await runChild({
-      argv: ["bwrap", "--version"],
+      argv: [this.bwrapPath, "--version"],
       cwd: "/",
       env: { PATH: "/usr/bin:/bin" },
       timeoutMs: 5000,
       maxOutputBytes: 4096,
     });
-    if (bwrap.exitCode === 0) {
+    if (bwrap.exitCode === 0 && await linuxConfinementSelfCheck((exec, ws, ro) => this.buildBwrap(exec, ro, ws, {}, false))) {
       this.mechanism = "bwrap";
       this.guarantees = BWRAP_GUARANTEES;
       return true;
@@ -142,13 +156,13 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     }
     // Fall back to raw user namespaces.
     const un = await runChild({
-      argv: ["unshare", "-Urmnp", "--fork", "--mount-proc", "true"],
+      argv: ["unshare", "-Urimnp", "--uts", "--cgroup", "--fork", "--mount-proc", "true"],
       cwd: "/",
       env: { PATH: "/usr/bin:/bin" },
       timeoutMs: 5000,
       maxOutputBytes: 4096,
     });
-    if (un.exitCode === 0 && (await unshareConfinementSelfCheck())) {
+    if (un.exitCode === 0 && await linuxConfinementSelfCheck((exec, ws, ro) => this.buildUnshare(exec, ro, ws, {}))) {
       this.mechanism = "unshare";
       this.guarantees = UNSHARE_GUARANTEES;
       return true;
@@ -161,13 +175,17 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
   private async detectNative(): Promise<boolean> {
     this.mechanism = null;
     if (!osSandboxOptIn()) return false;
+    // A shared AppContainer SID accumulates workspace ACL grants across runs.
+    // Do not expose it as an execution boundary until unique per-run identity,
+    // ACL revocation and native descendant/output tests are verified.
+    if (process.platform === "win32") {
+      selfCheckWhy = "appcontainer: unavailable pending per-execution SID/ACL lifecycle verification";
+      return false;
+    }
     try {
       if (process.platform === "darwin" && existsSync(SANDBOX_EXEC) && process.getuid?.() !== 0 && (await nativeSelfCheck("seatbelt"))) {
         this.mechanism = "seatbelt";
         this.guarantees = SEATBELT_GUARANTEES;
-      } else if (process.platform === "win32" && process.arch === "x64" && (await nativeSelfCheck("appcontainer"))) {
-        this.mechanism = "appcontainer";
-        this.guarantees = APPCONTAINER_GUARANTEES;
       }
     } catch {
       this.mechanism = null;
@@ -195,6 +213,15 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     }
 
     const envInject = ctx.envInject;
+    if (process.platform === "linux") {
+      const roots = [...writable, ...grant.fs.readOnlyRoots];
+      // Mount destinations must not shadow the trusted setup/payload tools.
+      const reserved = ["/", "/usr", "/bin", "/sbin", "/lib", "/lib64", "/proc", "/dev", "/etc"];
+      if (roots.some(r => !isAbsolute(r) || !existsSync(r) || realpathSync(r) !== r || reserved.some(p => p === r || (p !== "/" && isWithin(r, p))))) return refused("non-canonical, missing or reserved mount root");
+      // Never expose a grant containing a higher-priority blocked subtree.
+      if (roots.some(r => grant.fs.blockedPaths.some(b => isWithin(b, r) || isWithin(r, b)))) return refused("mount grant overlaps a blocked sensitive path; use a narrower workspace");
+      try { linuxPayload(exec, envInject); } catch (e) { return refused(`invalid execution limits/environment: ${(e as Error).message}`); }
+    }
     if (this.mechanism === "seatbelt" || this.mechanism === "appcontainer") {
       return this.runNative(this.mechanism, exec, ctx, writable, envInject);
     }
@@ -214,14 +241,15 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     }
     const sandboxArgv =
       this.mechanism === "bwrap"
-        ? this.buildBwrap(exec, ctx, writable, envInject, seccompFd !== null)
-        : this.buildUnshare(exec, ctx, writable, envInject);
+        ? this.buildBwrap(exec, ctx.grant.fs.readOnlyRoots, writable, envInject, seccompFd !== null)
+        : this.buildUnshare(exec, ctx.grant.fs.readOnlyRoots, writable, envInject);
 
     const raw = await runChild({
       argv: sandboxArgv,
       cwd: "/",
       env: { PATH: "/usr/bin:/bin" }, // env for launching the sandboxer only
-      timeoutMs: exec.timeoutMs + 5000, // sandbox setup + exec budget
+      timeoutMs: exec.timeoutMs, // includes setup; never exceed the granted deadline
+      signal: exec.signal,
       maxOutputBytes: exec.maxOutputBytes,
       stdin: exec.stdin,
       ...(seccompFd !== null ? { extraFds: [seccompFd] } : {}),
@@ -241,21 +269,22 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     }
 
     const boundaryEvent =
-      raw.outputTruncated || raw.timedOut || raw.spawnError !== undefined || raw.exitCode !== 0;
+      raw.outputTruncated || raw.timedOut || raw.cancelled || raw.spawnError !== undefined || raw.exitCode !== 0;
     if (boundaryEvent && ctx.onBoundary) {
       ctx.onBoundary(raw.spawnError ?? (raw.timedOut ? "timeout" : `exit=${raw.exitCode}`));
     }
 
     return {
-      ok: raw.exitCode === 0 && !raw.timedOut && raw.spawnError === undefined,
+      ok: raw.exitCode === 0 && !raw.timedOut && !raw.cancelled && !raw.outputTruncated && raw.spawnError === undefined,
       exitCode: raw.exitCode,
       stdout: raw.stdout,
       stderr: raw.stderr,
       timedOut: raw.timedOut,
+      cancelled: raw.cancelled,
       outputTruncated: raw.outputTruncated,
       durationMs: raw.durationMs,
       boundaryEvent,
-      boundaryDetail: raw.spawnError ?? (raw.outputTruncated ? "output limit" : raw.timedOut ? "wall-clock timeout" : undefined),
+      boundaryDetail: raw.spawnError ?? (raw.cancelled ? "cancelled" : raw.outputTruncated ? "output limit" : raw.timedOut ? "wall-clock timeout" : undefined),
     };
   }
 
@@ -278,6 +307,7 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
               timeoutMs: exec.timeoutMs,
               maxOutputBytes: exec.maxOutputBytes,
               stdin: exec.stdin,
+              signal: exec.signal,
             })
           : await (await import("./appcontainer.ts")).runInAppContainer({
               argv: exec.argv,
@@ -287,19 +317,21 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
               timeoutMs: exec.timeoutMs,
               maxOutputBytes: exec.maxOutputBytes,
               stdin: exec.stdin,
+              signal: exec.signal,
             });
-      const boundaryEvent = raw.outputTruncated || raw.timedOut || raw.spawnError !== undefined || raw.exitCode !== 0;
+      const boundaryEvent = raw.outputTruncated || raw.timedOut || raw.cancelled || raw.spawnError !== undefined || raw.exitCode !== 0;
       if (boundaryEvent && ctx.onBoundary) ctx.onBoundary(raw.spawnError ?? (raw.timedOut ? "timeout" : `exit=${raw.exitCode}`));
       return {
-        ok: raw.exitCode === 0 && !raw.timedOut && raw.spawnError === undefined,
+        ok: raw.exitCode === 0 && !raw.timedOut && !raw.cancelled && !raw.outputTruncated && raw.spawnError === undefined,
         exitCode: raw.exitCode,
         stdout: raw.stdout,
         stderr: raw.stderr,
         timedOut: raw.timedOut,
+      cancelled: raw.cancelled,
         outputTruncated: raw.outputTruncated,
         durationMs: raw.durationMs,
         boundaryEvent,
-        boundaryDetail: raw.spawnError ?? (raw.outputTruncated ? "output limit" : raw.timedOut ? "wall-clock timeout" : undefined),
+        boundaryDetail: raw.spawnError ?? (raw.cancelled ? "cancelled" : raw.outputTruncated ? "output limit" : raw.timedOut ? "wall-clock timeout" : undefined),
       };
     } catch (e) {
       return refused(`${mechanism} sandbox failed to start (${(e as Error).message}); the command did not run`);
@@ -311,7 +343,7 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
   // ── bubblewrap ──────────────────────────────────────────────────────────
   private buildBwrap(
     exec: EnvironmentExecutable,
-    ctx: BackendRunContext,
+    readOnlyRoots: readonly string[],
     writableRoots: readonly string[],
     envInject: Record<string, string>,
     seccomp: boolean,
@@ -323,14 +355,14 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
       "--unshare-pid",
       "--unshare-net", // no network
       "--die-with-parent",
+      "--cap-drop", "ALL",
+      "--clearenv",
       "--new-session",
       "--proc", "/proc",
       "--dev", "/dev",
-      "--tmpfs", "/tmp",
-      "--tmpfs", "/run",
-      "--tmpfs", "/var",
-      "--tmpfs", "/home",
-      "--tmpfs", "/root",
+      "--size", String(scratchHalf(exec.maxTempBytes)), "--tmpfs", "/tmp",
+      "--size", String(scratchHalf(exec.maxTempBytes)), "--tmpfs", "/dev/shm",
+      "--dir", "/run", "--dir", "/var", "--dir", "/home", "--dir", "/root",
     ];
     // Phase 4 · T1 — seccomp blocklist (fd 3), applied before exec.
     if (seccomp) a.push("--seccomp", "3");
@@ -347,7 +379,7 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
       }
     }
     // Minimal /etc for dynamic linking + identity resolution (no broad /etc).
-    a.push("--tmpfs", "/etc");
+    a.push("--dir", "/etc");
     for (const f of [
       "/etc/ld.so.cache",
       "/etc/ld.so.conf",
@@ -364,25 +396,13 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     for (const r of writableRoots) {
       if (existsSync(r)) a.push("--bind", r, r);
     }
-    for (const r of ctx.grant.fs.readOnlyRoots) {
+    for (const r of readOnlyRoots) {
       if (existsSync(r)) a.push("--ro-bind", r, r);
     }
 
-    // Environment: stripped + explicit + broker-injected. Set PATH + HOME.
-    const env: Record<string, string> = {
-      PATH: "/usr/bin:/bin",
-      HOME: "/tmp",
-      ...exec.env,
-      ...envInject,
-    };
-    for (const [k, v] of Object.entries(env)) {
-      a.push("--setenv", k, v);
-    }
-
-    a.push("--chdir", exec.cwd);
-
-    // Resource limits via ulimit inside the sandbox, then exec the command.
-    a.push(...this.wrapWithLimits(exec));
+    a.push("--chdir", exec.cwd, "--remount-ro", "/dev", "--remount-ro", "/");
+    // Apply caller env ONLY after capabilities and hard limits are sealed.
+    a.push("--", ...linuxPayload(exec, envInject, false));
     return a;
   }
 
@@ -409,42 +429,19 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
   // the command with a weaker boundary.
   private buildUnshare(
     exec: EnvironmentExecutable,
-    ctx: BackendRunContext,
+    readOnlyRoots: readonly string[],
     writableRoots: readonly string[],
     envInject: Record<string, string>,
   ): string[] {
-    const env = { PATH: "/usr/bin:/bin", HOME: "/tmp", ...exec.env, ...envInject };
-    const exports = Object.entries(env)
-      .map(([k, v]) => `export ${k}=${shellQuote(v)}`)
-      .join("; ");
-    const limits = this.limitScript(exec);
-    const cmd = exec.argv.map(shellQuote).join(" ");
-    const setup = unshareRootScript(writableRoots, ctx.grant.fs.readOnlyRoots);
-    const script = `${setup}\n${exports}; cd ${shellQuote(exec.cwd)} || fail chdir; ${limits} exec ${cmd}`;
-    return ["unshare", "-Urmnp", "--fork", "--mount-proc", "/bin/sh", "-c", script];
-  }
-
-  private wrapWithLimits(exec: EnvironmentExecutable): string[] {
-    const limits = this.limitScript(exec);
-    if (!limits) {
-      return ["--", ...exec.argv];
-    }
-    // sh -c '<limits> exec "$0" "$@"' <cmd> <args...>
-    return ["--", "/bin/sh", "-c", `${limits} exec "$0" "$@"`, ...exec.argv];
+    const setup = unshareRootScript(writableRoots, readOnlyRoots, exec.maxTempBytes);
+    const cmd = linuxPayload(exec, envInject).map(shellQuote).join(" ");
+    const script = `${setup}\ncd ${shellQuote(exec.cwd)} || fail chdir; exec ${cmd}`;
+    return ["unshare", "-Urimnp", "--uts", "--cgroup", "--fork", "--mount-proc", "/bin/sh", "-c", script];
   }
 
   private limitScript(exec: EnvironmentExecutable): string {
-    const g = exec; // limits come from the grant via ctx in callers; here use exec.timeoutMs only
-    const parts: string[] = [];
-    // cpu/memory limits are passed through exec.env conventions by the manager.
-    const cpu = (exec as { cpuSeconds?: number }).cpuSeconds;
-    const memBytes = (exec as { memoryBytes?: number }).memoryBytes;
-    const maxProc = (exec as { maxProcesses?: number }).maxProcesses;
-    if (typeof cpu === "number") parts.push(`ulimit -t ${cpu} 2>/dev/null || true;`);
-    if (typeof memBytes === "number") parts.push(`ulimit -v ${Math.ceil(memBytes / 1024)} 2>/dev/null || true;`);
-    if (typeof maxProc === "number") parts.push(`ulimit -u ${maxProc} 2>/dev/null || true;`);
-    void g;
-    return parts.join(" ");
+    // Seatbelt only (experimental). Fail instead of silently ignoring errors.
+    return `${exec.cpuSeconds ? `ulimit -t ${exec.cpuSeconds} || exit 125;` : ""} ${exec.memoryBytes ? `ulimit -v ${Math.ceil(exec.memoryBytes / 1024)} || exit 125;` : ""}`;
   }
 
   describe(): string {
@@ -452,7 +449,7 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     if (this.mechanism === "seatbelt" || this.mechanism === "appcontainer") {
       return `${this.mechanism === "seatbelt" ? "macOS Seatbelt (sandbox-exec)" : "Windows AppContainer + Job object"} sandbox — EXPERIMENTAL (XR_OS_SANDBOX=experimental), not hardware-verified. Granted roots + scratch only; user home unreadable; network NONE; ambient env stripped.`;
     }
-    return `Linux namespace sandbox (${mech}). user+mount+pid+net+ipc+uts+cgroup namespaces; minimal rebuilt root; host home/secrets absent; network NONE; ambient env stripped; ulimit cpu/mem/proc. LIMITS: network allowlist not enforceable (net=none only); Linux-only; confines the process but makes no claim against host-kernel 0-days.`;
+    return `Linux namespace sandbox (${mech}). user+mount+pid+net+ipc+uts+cgroup namespaces; minimal rebuilt root; host home/secrets absent; network NONE; ambient env stripped; capabilities dropped + no-new-privileges; hard per-process CPU/address-space/UID process limits and bounded scratch. LIMITS: network allowlist not enforceable (net=none only); RLIMIT_NPROC is shared per real UID (not a cgroup); no whole-job RSS quota or workspace disk quota; Linux-only; confines the process but makes no claim against host-kernel 0-days.`;
   }
 }
 
@@ -522,7 +519,8 @@ const STAGING_CANDIDATES = ["/mnt", "/media", "/srv", "/opt", "/run", "/var/empt
  * POSIX-sh setup that runs as mapped-root inside `unshare -Urmnp`: builds a
  * minimal root on a tmpfs and pivot_roots into it. Exported for tests.
  */
-export function unshareRootScript(writableRoots: readonly string[], readOnlyRoots: readonly string[]): string {
+export function unshareRootScript(writableRoots: readonly string[], readOnlyRoots: readonly string[], maxTempBytes?: number): string {
+  const half = scratchHalf(maxTempBytes);
   const binds = [...writableRoots, ...readOnlyRoots];
   const within = (x: string, y: string) => x === y || x.startsWith(y.endsWith("/") ? y : y + "/");
   const related = (a: string, b: string) => within(a, b) || within(b, a);
@@ -539,28 +537,28 @@ export function unshareRootScript(writableRoots: readonly string[], readOnlyRoot
   lines.push(
     "mount --make-rprivate / || fail make-rprivate",
     `PIVOT=""; for c in /usr/sbin/pivot_root /sbin/pivot_root /usr/bin/pivot_root /bin/pivot_root; do [ -x "$c" ] && PIVOT="$c" && break; done; [ -n "$PIVOT" ] || fail no-pivot_root`,
-    `mount -t tmpfs -o mode=0755 xr-root ${q(R)} || fail root-tmpfs`,
+    `mount -t tmpfs -o mode=0755,size=8m xr-root ${q(R)} || fail root-tmpfs`,
     `mkdir -p ${q(R + "/usr")} ${q(R + "/proc")} ${q(R + "/dev")} ${q(R + "/tmp")} ${q(R + "/etc")} || fail root-dirs`,
-    `mount --rbind /usr ${q(R + "/usr")} || fail bind-usr`,
+    `mount --rbind /usr ${q(R + "/usr")} && mount -o remount,bind,ro=recursive,nosuid=recursive,nodev=recursive ${q(R + "/usr")} || fail bind-usr`,
   );
   for (const d of ["/bin", "/sbin", "/lib", "/lib64", "/lib32", "/libx32"]) {
     if (!existsSync(d)) continue;
     if (isSymlink(d)) lines.push(`ln -s ${q(readLinkTarget(d))} ${q(R + d)} || fail link-${d.slice(1)}`);
-    else lines.push(`mkdir -p ${q(R + d)} && mount --rbind ${q(d)} ${q(R + d)} || fail bind-${d.slice(1)}`);
+    else lines.push(`mkdir -p ${q(R + d)} && mount --rbind ${q(d)} ${q(R + d)} && mount -o remount,bind,ro=recursive,nosuid=recursive,nodev=recursive ${q(R + d)} || fail bind-${d.slice(1)}`);
   }
   for (const f of ["/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/nsswitch.conf", "/etc/passwd", "/etc/group", "/etc/hosts", "/etc/localtime"]) {
-    if (existsSync(f)) lines.push(`: > ${q(R + f)} && mount --bind ${q(f)} ${q(R + f)} || fail bind-etc`);
+    if (existsSync(f)) lines.push(`: > ${q(R + f)} && mount --bind ${q(f)} ${q(R + f)} && mount -o remount,bind,ro,nosuid,nodev ${q(R + f)} || fail bind-etc`);
   }
-  if (existsSync("/etc/ld.so.conf.d")) lines.push(`mkdir -p ${q(R + "/etc/ld.so.conf.d")} && mount --rbind /etc/ld.so.conf.d ${q(R + "/etc/ld.so.conf.d")} || fail bind-etc`);
+  if (existsSync("/etc/ld.so.conf.d")) lines.push(`mkdir -p ${q(R + "/etc/ld.so.conf.d")} && mount --rbind /etc/ld.so.conf.d ${q(R + "/etc/ld.so.conf.d")} && mount -o remount,bind,ro=recursive,nosuid=recursive,nodev=recursive ${q(R + "/etc/ld.so.conf.d")} || fail bind-etc`);
   // Minimal /dev: individual device nodes, no host /dev tree.
   for (const n of ["null", "zero", "full", "random", "urandom", "tty"]) {
     lines.push(`if [ -e /dev/${n} ]; then : > ${q(R + "/dev/" + n)} && mount --bind /dev/${n} ${q(R + "/dev/" + n)} || fail bind-dev; fi`);
   }
   lines.push(
     `ln -s /proc/self/fd ${q(R + "/dev/fd")}; ln -s /proc/self/fd/0 ${q(R + "/dev/stdin")}; ln -s /proc/self/fd/1 ${q(R + "/dev/stdout")}; ln -s /proc/self/fd/2 ${q(R + "/dev/stderr")}`,
-    `mkdir -p ${q(R + "/dev/shm")} && mount -t tmpfs -o mode=1777 xr-shm ${q(R + "/dev/shm")} || fail dev-shm`,
+    `mkdir -p ${q(R + "/dev/shm")} && mount -t tmpfs -o mode=1777,size=${half} xr-shm ${q(R + "/dev/shm")} || fail dev-shm`,
     `mount -t proc proc ${q(R + "/proc")} || fail proc`,
-    `mount -t tmpfs -o mode=1777 xr-tmp ${q(R + "/tmp")} || fail tmp`,
+    `mount -t tmpfs -o mode=1777,size=${half} xr-tmp ${q(R + "/tmp")} || fail tmp`,
   );
   // Writable roots after /tmp so a workspace under /tmp is bound on top of the scratch tmpfs.
   for (const r of writableRoots) {
@@ -572,7 +570,7 @@ export function unshareRootScript(writableRoots: readonly string[], readOnlyRoot
     const t = q(R + r);
     lines.push(
       `mkdir -p ${t} && mount --rbind ${q(r)} ${t} || fail bind-readonly`,
-      `{ mount -o remount,bind,ro,nosuid,nodev ${t} 2>/dev/null || mount -o remount,bind,ro,nosuid ${t} 2>/dev/null || mount -o remount,bind,ro ${t}; } || fail remount-readonly`,
+      `mount -o remount,bind,ro=recursive,nosuid=recursive,nodev=recursive ${t} || fail remount-readonly`,
       `if [ -w ${t} ]; then fail readonly-still-writable; fi`,
     );
   }
@@ -596,47 +594,50 @@ export function unshareRootScript(writableRoots: readonly string[], readOnlyRoot
  * and writing beside the workspace must fail. Any deviation → false (Tier 2 is
  * then unavailable and the trust gate refuses, fail closed).
  */
-async function unshareConfinementSelfCheck(): Promise<boolean> {
-  const { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync: exists } = await import("node:fs");
-  const { tmpdir, homedir } = await import("node:os");
+async function linuxConfinementSelfCheck(build: (exec: EnvironmentExecutable, ws: string[], ro: string[]) => readonly string[]): Promise<boolean> {
+  const { mkdirSync, writeFileSync, readFileSync, existsSync: exists } = await import("node:fs");
   const base = mkdtempSync(join(tmpdir(), "xr-ns-selfcheck-"));
-  const ws = join(base, "ws");
-  const sibling = join(base, "sibling.txt");
+  const ws = join(base, "ws"), ro = join(base, "readonly"), sibling = join(base, "sibling.txt");
   try {
-    mkdirSync(ws);
-    writeFileSync(sibling, "host");
-    const home = homedir();
-    const ancestors: string[] = [];
-    for (let a = ws; a !== "/" && a.length > 1; ) {
-      const parent = a.slice(0, a.lastIndexOf("/")) || "/";
-      ancestors.push(`[ "$(ls -A ${shellQuote(parent)})" = ${shellQuote(a.slice(a.lastIndexOf("/") + 1))} ] || exit 7`);
-      a = parent;
-    }
-    const isAncestor = (p: string) => ws === p || ws.startsWith(p + "/");
+    mkdirSync(ws); mkdirSync(ro);
+    writeFileSync(sibling, "host"); writeFileSync(join(ro, "canary"), "readonly");
+    const q = shellQuote;
     const probe = [
-      `echo ok > ${shellQuote(join(ws, "probe.txt"))} || exit 3`,
-      `[ -e ${shellQuote(sibling)} ] && exit 4`,
-      ...(isAncestor(home) || home === "/tmp" ? [] : [`[ -e ${shellQuote(home)} ] && exit 5`]),
-      ...(isAncestor("/root") ? [] : ["[ -e /root ] && exit 6"]),
-      // Every ancestor of the workspace holds exactly the next path component and
-      // nothing else, except "/" itself (the minimal root).
-      ...ancestors.filter((l) => !l.startsWith(`[ "$(ls -A '/')"`)),
+      `echo ok > ${q(join(ws, "probe.txt"))} || exit 3`,
+      `[ ! -e ${q(sibling)} ] || exit 4`,
+      // Grep sees its own post-exec state; root cannot regain caps on exec.
+      ...["Eff", "Prm", "Bnd", "Amb"].map(c => `grep -Eq '^Cap${c}:[[:space:]]+0+$' /proc/self/status || exit 5`),
+      `grep -Eq '^NoNewPrivs:[[:space:]]+1$' /proc/self/status || exit 6`,
+      `mount -o remount,bind,rw ${q(ro)} 2>/dev/null && exit 7`,
+      `printf changed > ${q(join(ro, "canary"))} 2>/dev/null && exit 8`,
       "exit 0",
     ].join("; ");
-    const script = `${unshareRootScript([ws], [])}\ncd ${shellQuote(ws)} || exit 8; ${probe}`;
-    const r = await runChild({
-      argv: ["unshare", "-Urmnp", "--fork", "--mount-proc", "/bin/sh", "-c", script],
-      cwd: "/",
-      env: { PATH: "/usr/bin:/bin" },
-      timeoutMs: 10_000,
-      maxOutputBytes: 8192,
-    });
-    return r.exitCode === 0 && exists(join(ws, "probe.txt"));
-  } catch {
-    return false;
-  } finally {
-    rmSync(base, { recursive: true, force: true });
+    const exec: EnvironmentExecutable = { argv: ["/bin/sh", "-c", probe], cwd: ws, env: {}, timeoutMs: 10_000, maxOutputBytes: 8192 };
+    const r = await runChild({ argv: build(exec, [ws], [ro]), cwd: "/", env: { PATH: "/usr/bin:/bin" }, timeoutMs: exec.timeoutMs, maxOutputBytes: exec.maxOutputBytes });
+    return r.exitCode === 0 && exists(join(ws, "probe.txt")) && readFileSync(join(ro, "canary"), "utf8") === "readonly" && readFileSync(sibling, "utf8") === "host";
+  } catch { return false; }
+  finally { rmSync(base, { recursive: true, force: true }); }
+}
+
+function scratchHalf(bytes = 64 * 1024 * 1024): number {
+  if (!Number.isSafeInteger(bytes) || bytes < 8192) throw new Error("invalid scratch byte limit");
+  return Math.floor(bytes / 8192) * 4096;
+}
+
+/** Trusted absolute binaries seal authority BEFORE interpreting caller env. */
+function linuxPayload(exec: EnvironmentExecutable, inject: Record<string, string>, dropCaps = true): string[] {
+  if (!exec.argv.length || !Number.isSafeInteger(exec.timeoutMs) || exec.timeoutMs <= 0 || !Number.isSafeInteger(exec.maxOutputBytes) || exec.maxOutputBytes <= 0) throw new Error("invalid command/time/output limit");
+  const limits: string[] = [];
+  for (const [kind, n] of [["cpu", exec.cpuSeconds], ["as", exec.memoryBytes], ["nproc", exec.maxProcesses]] as const) {
+    if (n !== undefined) {
+      if (!Number.isSafeInteger(n) || n <= 0) throw new Error(`invalid ${kind} limit`);
+      limits.push(`--${kind}=${n}:${n}`);
+    }
   }
+  const env = { PATH: "/usr/bin:/bin", HOME: "/tmp", ...exec.env, ...inject };
+  if (Object.entries(env).some(([k,v]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(k) || v.includes("\0"))) throw new Error("invalid environment name/value");
+  scratchHalf(exec.maxTempBytes);
+  return ["/usr/bin/setpriv", "--no-new-privs", ...(dropCaps ? ["--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all", "--securebits=+noroot,+noroot_locked"] : []), "--", "/usr/bin/prlimit", ...limits, "--", "/usr/bin/env", "-i", "--", ...Object.entries(env).map(([k,v]) => `${k}=${v}`), ...exec.argv];
 }
 
 function refused(reason: string): EnvironmentRunResult {

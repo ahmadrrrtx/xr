@@ -1,8 +1,8 @@
 /*
  * ProviderConfigModal (Phase 8) — configure one model provider: masked key
- * input (or Ollama host), a real list-models ping, and a keychain-backed
- * save. When the OS keychain is unavailable the key falls back to the
- * clearly-flagged local store and the caller shows a warning badge.
+ * input (or Ollama host), a real list-models ping, and an acknowledged
+ * save through the engine secret broker (OS store or explicitly reported sealed file). Generic JSON/localStorage are never
+ * credential fallbacks. A failed save keeps the form open with a repair path.
  */
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -18,7 +18,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import {
-  keychainSet,
   testProviderConnection,
   type ProviderTestResult,
 } from '@/lib/settingsApi';
@@ -72,7 +71,7 @@ export function ProviderConfigModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (input: ProviderSaveInput) => void;
-  onRemove: (id: string) => void;
+  onRemove: (id: string) => Promise<void>;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -101,7 +100,7 @@ function ProviderForm({
   entry: ProviderCatalogEntry;
   existing: ProviderConfig | null;
   onSave: (input: ProviderSaveInput) => void;
-  onRemove: (id: string) => void;
+  onRemove: (id: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [apiKey, setApiKey] = useState('');
@@ -111,7 +110,10 @@ function ProviderForm({
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const [saving, setSaving] = useState(false);
   const [setDefault, setSetDefault] = useState(false);
-  const [engineNote, setEngineNote] = useState<{ tone: 'ok' | 'warn' | 'error'; text: string } | null>(null);
+  const [engineNote, setEngineNote] = useState<{
+    tone: 'ok' | 'warn' | 'error';
+    text: string;
+  } | null>(null);
   const engineUp = useEngineStore((s) => s.status === 'up');
   const engineModel = useEngineStore((s) => s.providers?.model ?? null);
 
@@ -119,7 +121,8 @@ function ProviderForm({
   const isCustom = entry.kind === 'custom';
   const canSave = isOllama || apiKey.trim().length > 0 || existing !== null;
   // Phase 14: the engine makes the calls, so the engine must hold the key.
-  const engineTakesKey = !isOllama && !isCustom && engineKnowsProvider(entry.id);
+  const engineTakesKey =
+    !isOllama && !isCustom && engineKnowsProvider(entry.id);
 
   const runTest = (): void => {
     setTest({ status: 'testing' });
@@ -128,13 +131,14 @@ function ProviderForm({
       const started = performance.now();
       void pingEngineLocalModel('ollama', engineModel)
         .then((r) => {
-          const ms = r.result.latencyMs ?? Math.round(performance.now() - started);
+          const ms =
+            r.result.latencyMs ?? Math.round(performance.now() - started);
           setTest({
             status: 'done',
             result: {
               ok: r.result.ok,
               message: r.result.ok
-                ? `${engineModel} answered in ${ms} ms via the engine · local, $0`
+                ? `${engineModel} answered in ${ms} ms via the engine · local inference; hardware/power costs not measured`
                 : (r.result.detail ?? 'The engine could not reach this model.'),
               latencyMs: ms,
               models: [],
@@ -144,7 +148,12 @@ function ProviderForm({
         .catch((e: unknown) => {
           setTest({
             status: 'done',
-            result: { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: 0, models: [] },
+            result: {
+              ok: false,
+              message: e instanceof Error ? e.message : String(e),
+              latencyMs: 0,
+              models: [],
+            },
           });
         });
       return;
@@ -156,13 +165,12 @@ function ProviderForm({
     ).then((result) => {
       setTest({
         status: 'done',
-        result:
-          result ?? {
-            ok: false,
-            message: 'Test unavailable in the browser preview.',
-            latencyMs: 0,
-            models: [],
-          },
+        result: result ?? {
+          ok: false,
+          message: 'Test unavailable in the browser preview.',
+          latencyMs: 0,
+          models: [],
+        },
       });
     });
   };
@@ -171,6 +179,14 @@ function ProviderForm({
     setSaving(true);
     void (async () => {
       const key = apiKey.trim();
+      if (key && !engineTakesKey) {
+        setEngineNote({
+          tone: 'error',
+          text: 'Register this endpoint with the engine first. A key cannot be saved in ordinary desktop settings.',
+        });
+        setSaving(false);
+        return;
+      }
       if (engineTakesKey && key) {
         if (!engineUp) {
           setEngineNote({
@@ -181,7 +197,13 @@ function ProviderForm({
           return;
         }
         try {
-          const r = await saveProviderKeyToEngine({ providerId: entry.id, apiKey: key, setDefault });
+          const r = await saveProviderKeyToEngine({
+            providerId: entry.id,
+            apiKey: key,
+            model: model.trim() || undefined,
+            setDefault,
+            probe: false,
+          });
           const sample = r.model ? sampleExchangeUsd(r.model) : null;
           const health = r.health
             ? r.health.ok
@@ -189,35 +211,44 @@ function ProviderForm({
               : `did not answer (${r.health.detail ?? 'unknown'}) — key kept`
             : 'not probed';
           const text = `Stored by the engine (${r.secretBackend}) · ${entry.name} ${health}${
-            sample ? ` · ≈${fmtUsd(sample.usd, { precise: true })} per 1k-in/500-out exchange${sample.estimate ? ' (estimate)' : ''}` : ''
+            sample
+              ? ` · ≈${fmtUsd(sample.usd, { precise: true })} per 1k-in/500-out exchange${sample.estimate ? ' (estimate)' : ''}`
+              : ''
           }`;
-          setEngineNote({ tone: r.health && !r.health.ok ? 'warn' : 'ok', text });
+          setEngineNote({
+            tone: r.health && !r.health.ok ? 'warn' : 'ok',
+            text,
+          });
           // The parent closes the dialog on save; the toast carries the result.
-          if (r.health && !r.health.ok) toast.warning(`${entry.name} key saved, provider did not answer`, { description: text });
+          if (r.health && !r.health.ok)
+            toast.warning(`${entry.name} key saved, provider did not answer`, {
+              description: text,
+            });
           else toast(`${entry.name} key saved`, { description: text });
           void useEngineStore.getState().loadCatalog();
         } catch (e) {
-          setEngineNote({ tone: 'error', text: `The engine refused the key: ${e instanceof Error ? e.message : String(e)}` });
+          setEngineNote({
+            tone: 'error',
+            text: `The engine refused the key: ${e instanceof Error ? e.message : String(e)}`,
+          });
           setSaving(false);
           return;
         }
       }
-      const keyStorage: ProviderConfig['keyStorage'] =
-        !isOllama && key.length > 0
-          ? (await keychainSet('xr', entry.id, key)).status === 'ok'
-            ? 'keychain'
-            : 'local-insecure' // caller stores the key + shows the badge
-          : 'none';
+      const keyStorage: ProviderConfig['keyStorage'] = key
+        ? 'engine'
+        : (existing?.keyStorage ?? 'none');
       onSave({
         id: entry.id,
         kind: entry.kind,
         name: entry.name,
         baseUrl: isOllama || isCustom ? baseUrl.trim() || null : null,
         model: isCustom && model.trim() ? model.trim() : null,
-        apiKey: !isOllama && apiKey.trim() ? apiKey.trim() : null,
+        apiKey: null, // Parent receives metadata only, never a raw credential.
         keyStorage,
         test: test.status === 'done' && test.result.ok ? test.result : null,
       });
+      setApiKey('');
       setSaving(false);
     })();
   };
@@ -234,7 +265,10 @@ function ProviderForm({
       <div className="mt-2 grid gap-3.5">
         {isOllama ? (
           <div>
-            <label htmlFor="xr-provider-base" className="text-text-tertiary mb-1 block text-xs">
+            <label
+              htmlFor="xr-provider-base"
+              className="text-text-tertiary mb-1 block text-xs"
+            >
               Host URL
             </label>
             <Input
@@ -250,7 +284,10 @@ function ProviderForm({
           <>
             {isCustom ? (
               <div>
-                <label htmlFor="xr-provider-base" className="text-text-tertiary mb-1 block text-xs">
+                <label
+                  htmlFor="xr-provider-base"
+                  className="text-text-tertiary mb-1 block text-xs"
+                >
                   Base URL
                 </label>
                 <Input
@@ -264,7 +301,10 @@ function ProviderForm({
               </div>
             ) : null}
             <div>
-              <label htmlFor="xr-provider-key" className="text-text-tertiary mb-1 block text-xs">
+              <label
+                htmlFor="xr-provider-key"
+                className="text-text-tertiary mb-1 block text-xs"
+              >
                 API key
               </label>
               <div className="relative">
@@ -273,7 +313,9 @@ function ProviderForm({
                   type={revealed ? 'text' : 'password'}
                   value={apiKey}
                   onChange={(event) => setApiKey(event.target.value)}
-                  placeholder={existing ? 'Saved — enter a new key to replace' : 'sk-…'}
+                  placeholder={
+                    existing ? 'Saved — enter a new key to replace' : 'sk-…'
+                  }
                   className="bg-bg-raised h-8 pr-9 font-mono text-xs"
                   spellCheck={false}
                   autoComplete="off"
@@ -284,7 +326,11 @@ function ProviderForm({
                   onClick={() => setRevealed((v) => !v)}
                   className="text-text-tertiary hover:text-text-primary absolute top-1/2 right-2.5 -translate-y-1/2"
                 >
-                  {revealed ? <EyeOff size={14} strokeWidth={1.5} /> : <Eye size={14} strokeWidth={1.5} />}
+                  {revealed ? (
+                    <EyeOff size={14} strokeWidth={1.5} />
+                  ) : (
+                    <Eye size={14} strokeWidth={1.5} />
+                  )}
                 </button>
               </div>
               {entry.keysUrl ? (
@@ -300,7 +346,10 @@ function ProviderForm({
             </div>
             {isCustom ? (
               <div>
-                <label htmlFor="xr-provider-model" className="text-text-tertiary mb-1 block text-xs">
+                <label
+                  htmlFor="xr-provider-model"
+                  className="text-text-tertiary mb-1 block text-xs"
+                >
                   Default model
                 </label>
                 <Input
@@ -331,7 +380,8 @@ function ProviderForm({
       ) : null}
       {engineTakesKey && !engineUp ? (
         <p className="text-text-tertiary text-[11.5px]">
-          Engine not running — keys are stored by the engine, so saving needs it up.
+          Engine not running — keys are stored by the engine, so saving needs it
+          up.
         </p>
       ) : null}
       {engineNote ? (
@@ -377,9 +427,21 @@ function ProviderForm({
         {existing ? (
           <Button
             variant="ghost"
+            disabled={saving}
             onClick={() => {
-              onRemove(entry.id);
-              toast.success(`${entry.name} removed`);
+              setSaving(true);
+              void onRemove(entry.id)
+                .then(onClose)
+                .catch((e) =>
+                  setEngineNote({
+                    tone: 'error',
+                    text:
+                      e instanceof Error
+                        ? e.message
+                        : 'Removal not confirmed; entry retained',
+                  })
+                )
+                .finally(() => setSaving(false));
             }}
           >
             Remove
@@ -391,7 +453,10 @@ function ProviderForm({
         </Button>
         <Button
           variant="outline"
-          disabled={test.status === 'testing' || (!isOllama && !apiKey.trim() && !existing)}
+          disabled={
+            test.status === 'testing' ||
+            (!isOllama && !apiKey.trim() && !existing)
+          }
           onClick={runTest}
         >
           {test.status === 'testing' ? (

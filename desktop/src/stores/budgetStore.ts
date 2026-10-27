@@ -265,8 +265,9 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
               : `Monthly limit set to ${fmtUsd(settings.monthlyLimit)}.`
           );
         } else if (patch.hardCap === false) {
-          toast('Hard cap off — XR will warn instead of block.', {
-            description: 'Cloud calls can now exceed the monthly limit.',
+          toast('Desktop estimate guard off — engine limits still apply.', {
+            description:
+              'This does not waive the shared engine admission policy or guarantee provider billing.',
           });
         } else if (patch.hardCap === true) {
           toast('Hard cap on — calls over the limit are blocked.');

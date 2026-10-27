@@ -21,7 +21,11 @@ export interface EngineKeySaveResult {
   /** Where the engine stored the key (`keychain`, `secret-service`, `dpapi`, `file`). */
   secretBackend: string;
   /** Advisory probe; the key is stored regardless of its outcome. */
-  health: { ok: boolean; detail: string | null; latencyMs: number | null } | null;
+  health: {
+    ok: boolean;
+    detail: string | null;
+    latencyMs: number | null;
+  } | null;
 }
 
 /** Desktop provider ids that the engine also knows (its presets use the same ids). */
@@ -42,13 +46,31 @@ export function saveProviderKeyToEngine(input: {
     providerId: input.providerId,
     apiKey: input.apiKey,
     model: input.model ?? undefined,
-    probe: input.probe ?? true,
+    probe: input.probe ?? false,
     setDefault: input.setDefault ?? false,
   });
 }
 
+export async function removeProviderKeyFromEngine(
+  providerId: string
+): Promise<{ ok: boolean; notice: string }> {
+  const result = await enginePost<{ ok: boolean; notice: string }>(
+    '/onboarding/provider/remove',
+    { providerId }
+  );
+  if (!result.ok)
+    throw new Error(
+      'The engine did not confirm credential removal; the entry was retained.'
+    );
+  await useEngineStore.getState().loadCatalog({ force: true });
+  return result;
+}
+
 /** Make `provider` (and optionally `model`) the engine's default for new turns. */
-export async function setEngineDefault(provider: string, model?: string | null): Promise<void> {
+export async function setEngineDefault(
+  provider: string,
+  model?: string | null
+): Promise<void> {
   await enginePost('/providers/set', { provider, model: model ?? undefined });
   await useEngineStore.getState().loadCatalog();
 }
@@ -61,7 +83,10 @@ export interface EngineModelPing {
 }
 
 /** Ping a local model through the engine (real request, real latency). */
-export function pingEngineLocalModel(runtime: string, model: string): Promise<EngineModelPing> {
+export function pingEngineLocalModel(
+  runtime: string,
+  model: string
+): Promise<EngineModelPing> {
   return enginePost<EngineModelPing>('/models/test', { runtime, model });
 }
 
@@ -70,7 +95,9 @@ export function pingEngineLocalModel(runtime: string, model: string): Promise<En
  * "bring your own key" card does not ask which vendor it is for. Returns
  * null when the prefix is ambiguous; the caller then asks instead of guessing.
  */
-export function inferProviderFromKey(key: string): 'anthropic' | 'groq' | 'openai' | 'google' | 'openrouter' | 'xai' | null {
+export function inferProviderFromKey(
+  key: string
+): 'anthropic' | 'groq' | 'openai' | 'google' | 'openrouter' | 'xai' | null {
   const k = key.trim();
   if (k.startsWith('sk-ant-')) return 'anthropic';
   if (k.startsWith('sk-or-')) return 'openrouter';
@@ -86,8 +113,14 @@ export function inferProviderFromKey(key: string): 'anthropic' | 'groq' | 'opena
  * desktop rate table. Local models are $0; a model the table does not know
  * is flagged `estimate` so the UI can say so (Constitution Art. IV.5).
  */
-export function sampleExchangeUsd(model: string): { usd: number; estimate: boolean } {
+export function sampleExchangeUsd(model: string): {
+  usd: number;
+  estimate: boolean;
+} {
   const info = modelInfo(model);
   if (info.local) return { usd: 0, estimate: false };
-  return { usd: (1000 * info.inPer1M + 500 * info.outPer1M) / 1_000_000, estimate: info.estimate === true };
+  return {
+    usd: (1000 * info.inPer1M + 500 * info.outPer1M) / 1_000_000,
+    estimate: info.estimate === true,
+  };
 }

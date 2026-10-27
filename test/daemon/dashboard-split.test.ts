@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { CORE_VERSION } from "../../src/core/version.ts";
 import {
   dashboardHtml,
   DASHBOARD_CSS,
@@ -97,7 +98,10 @@ describe("T7 — dashboard split preserves behaviour exactly (Phase 4 hardened o
     expect(html).not.toContain("onclick=");
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("style=\"");
-    expect(sha256(html)).toBe(POST_PHASE4_SHA256);
+    expect(html).toContain(CORE_VERSION);
+    // Release identity is intentionally generated; normalize ONLY that exact
+    // field so the pinned post-hardening DOM/CSP stays byte-for-byte guarded.
+    expect(sha256(html.replaceAll(CORE_VERSION,"1.1.0"))).toBe(POST_PHASE4_SHA256);
   });
 
   test("the token is NOT embedded in the dashboard HTML (Phase 4 T5)", () => {

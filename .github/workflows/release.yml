@@ -2,7 +2,9 @@
 # XR Phase 9 · T1/T2 — signed, reproducible, per-target releases, automated
 # from a `v*` tag. One canonical build → many channels (Constitution Art. XXII).
 #
-# Pipeline (unattended, tag → complete signed release):
+# Pipeline: tag → verified PRIVATE draft; explicit owner workflow_dispatch publish=true → promotion after all gates.
+# Stable/public defaults never move on a preview or unverified tag.
+# Pipeline (canonical builds → authenticated artifacts):
 #   gates (release:check + claim-lint + channel:check + typecheck + test subsets)
 #     → build.matrix    per-OS canonical binaries + native smoke + windows zip
 #     → assemble        npm tarball + source archive + .deb + SHA256SUMS over
@@ -29,6 +31,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Owner-authorized promotion of a verified tagged draft (false prepares only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read # jobs escalate locally
@@ -57,13 +64,15 @@ jobs:
       # typecheck lane has always installed this step first.
       - name: Install desktop dependencies (frozen lockfile)
         working-directory: desktop
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Identity + claim + channel gates
         run: |
           bun run release:check
           bun run claim-lint
           bun run channel:check
           bun run typecheck
+      - name: Behavioral security + deterministic agent smoke (real Linux isolation required)
+        run: bun run security:check --out security-gate.json
       - name: Parity manifest validates
         run: bun run scripts/platform-parity.ts --validate
       - name: Test floor (supply chain + trust + security + release)
@@ -71,6 +80,7 @@ jobs:
 
   # ── 1. Canonical per-target builds with native smoke ───────────────────────
   build:
+    needs: [gates]
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
@@ -138,11 +148,10 @@ jobs:
       - name: Resolve release version + channel
         id: version
         run: |
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            V="${GITHUB_REF_NAME#v}"
-          else
-            V="$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version)')"
-            echo "untagged dispatch — assembling manifest version $V (npm/GH publish is tag-gated)"
+          V="$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version)')"
+          # gates validated tag == committed identity; dispatch never publishes.
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "untagged dispatch — assembling committed manifest version $V only"
           fi
           echo "value=$V" >> "$GITHUB_OUTPUT"
       - name: Prerelease channel detection (semver suffix → prerelease)
@@ -162,27 +171,10 @@ jobs:
           for f in xr-linux-x64 xr-linux-arm64 xr-darwin-arm64 xr-darwin-x64 xr-windows-x64.exe xr-windows-arm64.exe xr-windows-x64.zip xr-windows-arm64.zip; do
             test -f "dist/$f" || { echo "MISSING dist/$f"; exit 1; }
           done
-      - name: Stamp release version across all Truth surfaces (tag-derived, CI-only)
-        # The tag is the release's source of truth. The repo carries the
-        # in-development Truth line (1.0.0); a tag like v1.0.0-beta.2 must
-        # ship EXACTLY 1.0.0-beta.2 — otherwise the beta consumes the stable
-        # version string and a later v1.0.0 publish collides ("cannot publish
-        # over the previously published version"). Mutates the CI working
-        # tree only; never committed. Per Constitution XXII.1: edit the
-        # manifest, run release:stamp, fail on drift.
-        env:
-          STAMP_VERSION: ${{ steps.version.outputs.value }}
-        run: |
-          bun -e '
-            const fs = require("fs");
-            const p = "release.manifest.json";
-            const m = JSON.parse(fs.readFileSync(p, "utf8"));
-            m.identity.version = process.env.STAMP_VERSION;
-            fs.writeFileSync(p, JSON.stringify(m, null, 2) + "\n");
-            console.log("release.manifest.json → " + m.identity.version);
-          '
-          bun run release:stamp
-          bun run release:check
+      # Identity is committed and checked BEFORE building. Never mutate it
+      # after native binaries have already embedded another version.
+      - name: Verify committed identity remains unchanged
+        run: bun run release:check
       - name: Pack the npm artifact + source archive
         run: |
           # `bun pm pack --pack-destination` is not honoured by every bun
@@ -217,10 +209,18 @@ jobs:
           bun run scripts/changelog.ts --version "$V" --write
           git diff -- CHANGELOG.md
       - name: Generate CycloneDX SBOM (locked deps)
-        run: bun run scripts/sbom.ts --out dist/sbom.cyclonedx.json
+        run: bun run scripts/sbom.ts --out dist/sbom.cyclonedx.json --scope combined
       - name: Generate SHA256SUMS over every publishable artifact (incl. SBOM)
         # SBOM is generated FIRST so it is checksummed. Portable writer — no GNU sha256sum.
         run: bun run scripts/write-sums.ts dist
+      - name: Project stable channel files for this artifact only and authenticate their bytes
+        if: steps.meta.outputs.prerelease == 'false'
+        env:
+          V: ${{ steps.version.outputs.value }}
+        run: |
+          bun scripts/channel-manifest.ts --stamp --version "$V" --sums dist/SHA256SUMS --out channel-projection
+          find channel-projection -type f -exec cp {} dist/ \;
+          bun scripts/write-sums.ts dist
       - name: Emit SLSA subjects from the real artifact digests
         id: subjects
         run: |
@@ -304,10 +304,20 @@ jobs:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [assemble, sign]
+    needs: [assemble, sign, provenance, verify-release, journey, supply-chain]
     permissions:
       contents: write
     steps:
+      - name: Checkout exact tag for immutable draft guard
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Bun for draft guard
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Refuse to replace an already published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/release-ci-evidence.ts --draft-only
       - name: Download signed bundle
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -322,6 +332,11 @@ jobs:
           fi
           if [ -f bundle/CHANGELOG.md ] && [ ! -f dist/CHANGELOG.md ]; then cp bundle/CHANGELOG.md dist/CHANGELOG.md; fi
           test -f dist/SHA256SUMS
+      - name: Download verified SLSA provenance for the draft assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.provenance.outputs.provenance-name }}
+          path: provenance
       - name: Extract release notes for this version
         run: |
           V="${{ needs.assemble.outputs.version }}"
@@ -331,9 +346,11 @@ jobs:
             p { print }
           ' dist/CHANGELOG.md > RELEASE-NOTES.md || true
           test -s RELEASE-NOTES.md || echo "Release $V — see CHANGELOG.md" > RELEASE-NOTES.md
-      - name: Publish release (prerelease channel honored)
+      - name: Prepare verified PRIVATE draft (never publish on tag push)
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
+          draft: true
+          make_latest: false
           name: XR v${{ needs.assemble.outputs.version }}
           body_path: RELEASE-NOTES.md
           prerelease: ${{ needs.assemble.outputs.prerelease == 'true' }}
@@ -342,9 +359,10 @@ jobs:
           # with `already_exists` on finalize. overwrite: true makes the step
           # idempotent — an existing release for the tag is adopted, its
           # assets replaced, name/body refreshed.
-          overwrite: true
+          overwrite_files: true
           files: |
             dist/*
+            provenance/*.intoto.jsonl
       # L-010: an incomplete release must be RED, not silently shipped. The
       # gate queries the live tag's assets against the canonical set (CLI
       # binaries + zips incl. windows-arm64, source, .deb, npm tarball +
@@ -365,7 +383,7 @@ jobs:
   provenance:
     name: SLSA provenance (build level 3)
     if: github.ref_type == 'tag'
-    needs: [assemble, release]
+    needs: [assemble]
     permissions:
       actions: read
       id-token: write
@@ -373,7 +391,7 @@ jobs:
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: ${{ needs.assemble.outputs.digests }}
-      upload-assets: true
+      upload-assets: false
 
   # ── 5b. XR-LAUNCH-012: the required PR checks re-run on the tag commit ─────
   # Publishing (npm, GHCR) needs these AND the live asset-completeness check
@@ -391,13 +409,13 @@ jobs:
       security-events: write # the called scans upload SARIF
     uses: ./.github/workflows/supply-chain.yml
 
-  # ── 6. npm channel (OIDC trusted publishing; dist-tag latest|beta) ────────
+  # ── 6. npm channel (OIDC trusted publishing; candidate|beta; defaults promoted separately) ────────
   publish-npm:
     name: Publish npm (trusted publishing, provenance)
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch' && inputs.publish
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [assemble, sign, release, verify-release, journey, supply-chain]
+    needs: [assemble, sign, release, verify-release, journey, supply-chain, promote]
     environment: npm-publish
     permissions:
       id-token: write # npm OIDC trusted publishing — no long-lived token
@@ -422,46 +440,36 @@ jobs:
       - name: Setup Node (npm OIDC trusted publishing)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version: "22.22.2"
           registry-url: "https://registry.npmjs.org"
       - name: Ensure npm supports trusted publishing
         run: |
-          npm install -g npm@latest
+          npm install -g npm@12.2.1
           npm --version
-      - name: Stamp release version across all Truth surfaces (tag-derived, CI-only)
-        # Fresh checkout carries the in-development Truth line; stamp from
-        # the tag version before publish so the npm version string matches
-        # the tag (see assemble job). prepublishOnly (release:check +
-        # claim-lint) runs against the STAMPED tree and passes because all
-        # six surfaces are in sync at the stamped version.
-        env:
-          STAMP_VERSION: ${{ needs.assemble.outputs.version }}
-        run: |
-          bun -e '
-            const fs = require("fs");
-            const p = "release.manifest.json";
-            const m = JSON.parse(fs.readFileSync(p, "utf8"));
-            m.identity.version = process.env.STAMP_VERSION;
-            fs.writeFileSync(p, JSON.stringify(m, null, 2) + "\n");
-            console.log("release.manifest.json → " + m.identity.version);
-          '
-          bun run release:stamp
-          bun run release:check
+      - name: Verify the same committed identity before npm publication
+        run: bun run release:check
+      - name: Download the exact signed npm payload
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed-bundle
+          path: audited
       - name: Publish with provenance (prerelease → beta dist-tag)
         run: |
+          mapfile -t packs < <(find audited -type f -name 'rrrtx-xr-*.tgz')
+          [ "${#packs[@]}" -eq 1 ] || { echo "::error::exactly one audited npm payload required"; exit 1; }
           if [ "${{ needs.assemble.outputs.prerelease }}" = "true" ]; then
-            npm publish --provenance --access public --tag beta
+            npm publish "${packs[0]}" --provenance --access public --tag beta
           else
-            npm publish --provenance --access public --tag latest
+            npm publish "${packs[0]}" --provenance --access public --tag candidate
           fi
 
   # ── 7. Docker channel (GHCR, attestations, cosign) ────────────────────────
   publish-docker:
     name: Publish Docker (GHCR + cosign sign)
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch' && inputs.publish
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [assemble, sign, release, verify-release, journey, supply-chain]
+    needs: [assemble, sign, release, verify-release, journey, supply-chain, promote]
     permissions:
       contents: read
       packages: write
@@ -484,10 +492,9 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ needs.assemble.outputs.prerelease == 'false' }}
             type=raw,value=beta,enable=${{ needs.assemble.outputs.prerelease == 'true' }}
       - name: Build + push multi-arch image (SBOM + SLSA buildx attestations)
         id: push
@@ -508,58 +515,12 @@ jobs:
         run: cosign sign --yes "ghcr.io/${{ github.repository }}@${{ steps.push.outputs.digest }}"
 
   # ── 8. Channel stamping from the SIGNED checksums (no channel drift) ──────
-  publish-channels:
-    name: Stamp + publish channel manifests (homebrew/winget/scoop)
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    needs: [assemble, release]
-    permissions:
-      contents: write # attach stamped channel files to the GitHub Release
-    steps:
-      - name: Checkout tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: .bun-version
-      - name: Download signed bundle
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: signed-bundle
-          path: bundle
-      - name: Flatten artifact into dist/
-        run: |
-          mkdir -p dist
-          if [ -f bundle/dist/SHA256SUMS ]; then cp -a bundle/dist/. dist/
-          elif [ -f bundle/SHA256SUMS ]; then cp -a bundle/. dist/
-          else echo "::error::SHA256SUMS missing"; find bundle -maxdepth 4 -type f | head -50; exit 1
-          fi
-          test -f dist/SHA256SUMS
-      - name: Stamp all channel manifests from the signed SHA256SUMS
-        run: bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels
-      - name: Publish stamped channels as release assets (homebrew/winget/scoop)
-        run: |
-          cp -R dist/channels dist/channels-upload
-      - name: Attach channel bundle to the release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          files: |
-            dist/channels/**
-      # Homebrew/WinGet publication is deliberately NOT done here (launch audit
-      # XR-LAUNCH-001): a tag's channels are published only after the release is
-      # verified live, by running .github/workflows/publish-channels.yml for the
-      # version, then promoting release.manifest.json `channels.publicVersion`
-      # (docs/release/CHANNELS.md#public-version). Pushing the tap from the tag
-      # run is how a formula could point at a release that later failed.
-
-  # ── 9. Independent artifact verification (fresh workspace, signed bundle) ─
   verify-release:
     name: Verify signed artifacts (verify-release.ts)
     if: github.ref_type == 'tag'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [assemble, sign]
+    needs: [assemble, sign, provenance]
     permissions:
       contents: read
     steps:
@@ -584,6 +545,17 @@ jobs:
           else echo "::error::SHA256SUMS missing"; find bundle -maxdepth 4 -type f | head -50; exit 1
           fi
           test -f dist/SHA256SUMS
+      - name: Download real SLSA provenance artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.provenance.outputs.provenance-name }}
+          path: provenance
+      - name: Install checksum-pinned SLSA verifier
+        run: |
+          curl -fsSL https://github.com/slsa-framework/slsa-verifier/releases/download/v2.7.1/slsa-verifier-linux-amd64 -o "$RUNNER_TEMP/slsa-verifier"
+          echo "946dbec729094195e88ef78e1734324a27869f03e2c6bd2f61cbc06bd5350339  $RUNNER_TEMP/slsa-verifier" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/slsa-verifier"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: verify-release.ts against the signed npm tarball + SBOM + sums
@@ -593,10 +565,13 @@ jobs:
           set -- dist/rrrtx-xr-*.tgz
           ART="$1"
           bun run scripts/verify-release.ts \
+            --strict --expected-version "${{ needs.assemble.outputs.version }}" \
+            --provenance "$(find provenance -name '*.intoto.jsonl' -type f -print -quit)" \
+            --slsa-source-uri "github.com/${{ github.repository }}" --slsa-source-tag "$GITHUB_REF_NAME" \
             --artifact "$ART" \
             --sums dist/SHA256SUMS \
             --sbom dist/sbom.cyclonedx.json \
-            --cosign-identity "https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v.*"
+            --cosign-identity "https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}"
 
   # ── 10. Consumer smoke: the published npm artifact is the audited one ─────
   consumer-smoke:
@@ -618,3 +593,45 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Smoke the just-published package in a clean XR_HOME
         run: bun run scripts/consumer-smoke.ts --from-npm ${{ needs.assemble.outputs.version }}
+
+
+  native-evidence:
+    name: Exact-tag native desktop evidence (owner promotion only)
+    if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Require completed signed native packaging + journeys for THIS commit and tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/release-ci-evidence.ts --wait-seconds 7200
+
+  promote:
+    name: Owner-authorized public promotion (never automatic)
+    if: github.ref_type == 'tag' && github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [assemble, release, provenance, verify-release, journey, supply-chain, native-evidence]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release-promotion
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Validate unchanged identity before versioned publication
+        run: |
+          bun scripts/release-manifest.ts --check
+      - name: Publish the verified draft only after explicit owner dispatch and all gates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease="${{ needs.assemble.outputs.prerelease }}" --latest=false

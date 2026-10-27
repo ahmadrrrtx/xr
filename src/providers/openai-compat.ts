@@ -26,7 +26,9 @@
  *     only for local/weak profiles.
  */
 
-import type { ChatOptions, Message, ModelTurn, Provider, Tool, ProviderStreamChunk, ProviderCapabilitiesFlags } from "../core/types.ts";
+import type { ChatOptions, Message, ModelTurn, Provider, Tool, ProviderStreamChunk, ProviderCapabilitiesFlags, ToolCall } from "../core/types.ts";
+import { sseData } from "./sse.ts";
+import { assistantCalls, assistantText, nativeBlocks, outputLimit, usagePair } from "./native/history.ts";
 import { guardedRequest } from "./request-guard.ts";
 import { secretBrokerSync } from "../security/secret-broker.ts";
 import { buildEnvelopeGBNF } from "../reliability/grammar.ts";
@@ -50,7 +52,7 @@ export interface OpenAICompatOptions {
 /** A non-SSE chat-completion body or stream chunk, normalized for parsing. */
 interface NormalizedCompletion {
   content: string;
-  toolCalls: Array<{ tool: string; args: Record<string, unknown> }>;
+  toolCalls: ToolCall[];
   usage?: { inTokens: number; outTokens: number };
   finishReason?: string;
 }
@@ -68,10 +70,11 @@ function normalizedCompletionOf(json: any, extra?: { usage?: { inTokens: number;
   let usage = extra?.usage;
   if (!usage && json?.usage) {
     usage = {
-      inTokens: json.usage.prompt_tokens ?? 0,
-      outTokens: json.usage.completion_tokens ?? 0,
+      inTokens: json.usage.prompt_tokens ?? NaN,
+      outTokens: json.usage.completion_tokens ?? NaN,
     };
   }
+  if (usage) usage = usagePair(usage.inTokens, usage.outTokens);
   return { content, toolCalls, usage, finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : undefined };
 }
 
@@ -83,13 +86,14 @@ function turnFromCompletion(c: NormalizedCompletion, defaultUsage?: { inTokens: 
     return {
       message: c.content ?? "",
       toolCalls: c.toolCalls,
-      done: c.finishReason !== "tool_calls",
+      done: false,
       status: "parsed",
       usage,
     };
   }
   // Otherwise the body follows the envelope protocol (or is a plain answer).
   const turn = repairToTurn(c.content ?? "");
+  if (turn.status !== "parsed" && c.content.trim()) return { message: c.content, toolCalls: [], done: c.finishReason === "stop", status: "parsed", usage };
   return { ...turn, usage };
 }
 
@@ -189,7 +193,17 @@ export class OpenAICompatProvider implements Provider {
 
     if (native) {
       // Native function calling: the tool catalog goes in `tools`, not the prompt.
-      body.messages = [{ role: "system", content: this.nativeSystemPrompt() }, ...mapped];
+      const nativeMessages = messages.map(m => {
+        if (m.role === "assistant") {
+          const state = nativeBlocks(m, this.id, this.model, "openai-chat")?.[0];
+          if (state) return state;
+          const calls = assistantCalls(m);
+          return { role: "assistant", content: assistantText(m) || null, ...(calls.length && calls.every(c => c.id) ? { tool_calls: calls.map(c => ({ id: c.id, type: "function", function: { name: c.tool, arguments: JSON.stringify(c.args) } })) } : {}) };
+        }
+        if (m.role === "tool" && m.toolCallId) return { role: "tool", tool_call_id: m.toolCallId, content: m.content };
+        return { role: m.role === "tool" ? "user" : m.role, content: m.role === "tool" ? `[tool:${m.name}] ${m.content}` : m.content };
+      });
+      body.messages = [{ role: "system", content: this.nativeSystemPrompt() }, ...nativeMessages];
       if (tools.length > 0) {
         body.tools = toOpenAITools(tools);
         body.tool_choice = "auto";
@@ -222,21 +236,20 @@ export class OpenAICompatProvider implements Provider {
 
   async chat(messages: Message[], tools: Tool[], chatOptions?: ChatOptions): Promise<ModelTurn> {
     const body = this.buildChatBody(messages, tools, false);
+    body.max_tokens = outputLimit(chatOptions?.maxOutputTokens);
 
     try {
       const res = await guardedRequest(this.id, chatOptions, (signal) =>
         fetch(`${this.baseUrl}/chat/completions`, {
-          method: "POST",
+          method: "POST", redirect: "error",
           headers: this.headers(),
           body: JSON.stringify(body),
           signal,
         }),
       );
       if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(
-          `provider ${this.id} HTTP ${res.status}: ${txt.slice(0, 200)}`,
-        );
+        await res.body?.cancel();
+        throw new Error(`provider ${this.id} HTTP ${res.status}`);
       }
       /**
        * Phase 06 · Step 29 — malformed-response handling. Invalid JSON or a
@@ -247,21 +260,21 @@ export class OpenAICompatProvider implements Provider {
       let json: any;
       try {
         json = await res.json();
-      } catch {
+      } catch (e) {
+        if ((e as Error).name === "ProviderAbortError") throw e;
         throw malformedProviderResponseError(this.id, "response body is not valid JSON", this.model);
       }
       if (!json || typeof json !== "object" || !Array.isArray(json?.choices)) {
         throw malformedProviderResponseError(this.id, "missing required field: choices[]", this.model);
       }
-      const usage = json?.usage
-        ? {
-            inTokens: json.usage.prompt_tokens ?? 0,
-            outTokens: json.usage.completion_tokens ?? 0,
-          }
-        : undefined;
+      const usage = usagePair(json?.usage?.prompt_tokens, json?.usage?.completion_tokens);
 
       // Phase 1 · F-04 — honor native message.tool_calls (and the envelope).
-      return turnFromCompletion(normalizedCompletionOf(json), usage);
+      const turn = turnFromCompletion(normalizedCompletionOf(json), usage);
+      turn.executing = { providerId: this.id, modelId: this.model };
+      if (this.nativeFunctionCalling && json.choices?.[0]?.message) turn.native = { providerId: this.id, modelId: this.model, format: "openai-chat", blocks: [{ ...json.choices[0].message, role: "assistant" }] };
+      if (json.choices?.[0]?.finish_reason === "length") turn.error = "Provider output limit reached; no tools executed";
+      return turn;
     } catch (e) {
       throw normalizeProviderError(e, this.id, this.model);
     }
@@ -282,12 +295,14 @@ export class OpenAICompatProvider implements Provider {
     chatOptions?: ChatOptions,
   ): AsyncGenerator<ProviderStreamChunk> {
     const body = this.buildChatBody(messages, tools, true);
+    body.max_tokens = outputLimit(chatOptions?.maxOutputTokens);
+    body.stream_options = { include_usage: true };
 
     let res: Response;
     try {
       res = await guardedRequest(this.id, chatOptions, (signal) =>
         fetch(`${this.baseUrl}/chat/completions`, {
-          method: "POST",
+          method: "POST", redirect: "error",
           headers: {
             ...this.headers(),
             Accept: "text/event-stream",
@@ -301,9 +316,9 @@ export class OpenAICompatProvider implements Provider {
     }
 
     if (!res.ok) {
-      const txt = await res.text().catch(() => "");
+      await res.body?.cancel();
       throw normalizeProviderError(
-        new Error(`provider ${this.id} HTTP ${res.status}: ${txt.slice(0, 200)}`),
+        new Error(`provider ${this.id} HTTP ${res.status}`),
         this.id,
         this.model,
       );
@@ -328,143 +343,54 @@ export class OpenAICompatProvider implements Provider {
       const c = normalizedCompletionOf(json);
       if (c.content) yield { text: c.content, providerId: this.id, model: this.model };
       for (const tc of c.toolCalls) {
-        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+        yield { toolCall: tc, providerId: this.id, model: this.model };
       }
       if (c.usage) yield { usage: c.usage, providerId: this.id, model: this.model };
-      yield { finish: true, providerId: this.id, model: this.model };
+      const turn = turnFromCompletion(c);
+      yield { finish: true, done: turn.done, status: turn.status, ...(c.finishReason === "length" ? { error: "Provider output limit reached; no tools executed" } : {}), ...(this.nativeFunctionCalling && json.choices?.[0]?.message ? { native: { providerId: this.id, modelId: this.model, format: "openai-chat" as const, blocks: [{ ...json.choices[0].message, role: "assistant" }] } } : {}), providerId: this.id, model: this.model };
       return;
     }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let fullContent = "";
-    let usage: { inTokens: number; outTokens: number } | undefined;
-
+    let fullContent = "", reasoning = "", finished = false, finishReason: string | undefined;
+    let usage: ModelTurn["usage"];
+    const calls = new Map<number, { id?: string; type: "function"; function: { name: string; arguments: string } }>();
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split("\n");
-        // Keep incomplete line in buffer
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          if (!trimmed.startsWith("data:")) {
-            // Phase 1 · Step 3b — a non-`data:` line that parses as a chat
-            // completion object is a non-SSE body sneaked into the stream.
-            try {
-              const candidate = JSON.parse(trimmed);
-              if (isChatCompletionObject(candidate)) {
-                const c = normalizedCompletionOf(candidate);
-                if (c.content) yield { text: c.content, providerId: this.id, model: this.model };
-                for (const tc of c.toolCalls) {
-                  yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
-                }
-                yield { finish: true, providerId: this.id, model: this.model };
-                return;
-              }
-            } catch {
-              // not a JSON object — ignore (comment/keep-alive lines, per M-08).
-            }
-            continue;
-          }
-
-          const data = trimmed.slice(5).trim();
-          if (data === "[DONE]") {
-            // End of stream — parse full content for tool calls
-            if (fullContent) {
-              try {
-                const turn = repairToTurn(fullContent);
-                for (const tc of turn.toolCalls) {
-                  yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
-                }
-              } catch {
-                // ignore parse errors, already yielded text
-              }
-            }
-            yield { usage, finish: true, providerId: this.id, model: this.model };
-            return;
-          }
-          try {
-            const json: any = JSON.parse(data);
-            // Handle usage
-            if (json.usage) {
-              usage = {
-                inTokens: json.usage.prompt_tokens ?? 0,
-                outTokens: json.usage.completion_tokens ?? 0,
-              };
-            }
-            const choice = json.choices?.[0];
-            if (!choice) continue;
-
-            // Delta content (streaming)
-            const delta = choice.delta ?? {};
-            const content = delta.content ?? choice.message?.content ?? "";
-
-            if (content) {
-              fullContent += content;
-              // Try to yield incremental text, but avoid yielding partial JSON envelope noise
-              // We yield the raw content token
-              yield { text: content, providerId: this.id, model: this.model };
-            }
-
-            // Tool call delta (for providers supporting native tool calling)
-            if (delta.tool_calls) {
-              for (const tc of delta.tool_calls) {
-                const fn = tc.function;
-                if (fn?.name) {
-                  let args: Record<string, unknown> = {};
-                  try {
-                    args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments) : fn.arguments ?? {};
-                  } catch {
-                    args = {};
-                  }
-                  yield {
-                    toolCall: { tool: fn.name, args },
-                    providerId: this.id,
-                    model: this.model,
-                  };
-                }
-              }
-            }
-          } catch {
-            // Skip malformed SSE line
-            continue;
-          }
+      for await (const data of sseData(res.body)) {
+        if (data === "[DONE]") { finished = true; break; }
+        let j: any;
+        try { j = JSON.parse(data); } catch { throw malformedProviderResponseError(this.id, "invalid SSE JSON", this.model); }
+        if (j.error) throw malformedProviderResponseError(this.id, "upstream SSE error", this.model);
+        if (j.usage) usage = usagePair(j.usage.prompt_tokens, j.usage.completion_tokens);
+        const choice = j.choices?.[0];
+        if (!choice) continue;
+        if (choice.finish_reason) { finished = true; finishReason = choice.finish_reason; }
+        const delta = choice.delta ?? choice.message ?? {};
+        if (typeof delta.content === "string" && delta.content) { fullContent += delta.content; yield { text: delta.content, providerId: this.id, model: this.model }; }
+        if (typeof delta.reasoning_content === "string") reasoning += delta.reasoning_content;
+        for (const tc of delta.tool_calls ?? []) {
+          const index = tc.index ?? 0;
+          if (!Number.isSafeInteger(index) || index < 0 || index >= 64) throw malformedProviderResponseError(this.id, "invalid tool index", this.model);
+          const c = calls.get(index) ?? { type: "function", function: { name: "", arguments: "" } };
+          if (tc.id) { if (c.id && c.id !== tc.id) throw malformedProviderResponseError(this.id, "tool id changed", this.model); c.id = tc.id; }
+          if (tc.function?.name) c.function.name += tc.function.name;
+          if (typeof tc.function?.arguments === "string") c.function.arguments += tc.function.arguments;
+          calls.set(index, c);
         }
       }
-
-      // Stream ended without [DONE] — finalize
-      if (fullContent) {
-        try {
-          const turn = repairToTurn(fullContent);
-          for (const tc of turn.toolCalls) {
-            yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
-          }
-        } catch {
-          // ignore
-        }
-      }
-      yield { usage, finish: true, providerId: this.id, model: this.model };
-    } finally {
-      try {
-        reader.releaseLock();
-      } catch {}
-    }
+      if (!finished) throw malformedProviderResponseError(this.id, "SSE EOF before completion", this.model);
+      const rawCalls = [...calls.entries()].sort(([a], [b]) => a - b).map(([, c]) => c);
+      let toolCalls: ToolCall[];
+      try { toolCalls = parseOpenAIToolCalls(rawCalls); } catch { throw malformedProviderResponseError(this.id, "invalid streamed tool arguments", this.model); }
+      if (finishReason !== "length") for (const tc of toolCalls) yield { toolCall: tc, providerId: this.id, model: this.model };
+      const parsed = repairToTurn(fullContent);
+      const done = toolCalls.length ? false : parsed.status === "parsed" ? parsed.done : finishReason === "stop" || finished;
+      yield { usage, finish: true, done, ...(finishReason === "length" ? { error: "Provider output limit reached; no tools executed" } : {}), ...(this.nativeFunctionCalling ? { native: { providerId: this.id, modelId: this.model, format: "openai-chat" as const, blocks: [{ role: "assistant", content: fullContent || null, ...(rawCalls.length ? { tool_calls: rawCalls } : {}), ...(reasoning ? { reasoning_content: reasoning } : {}) }] } } : {}), providerId: this.id, model: this.model };
+    } catch (e) { throw normalizeProviderError(e, this.id, this.model); }
   }
 
   async listModels(): Promise<string[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/models`, {
-        headers: this.headers(),
-        signal: AbortSignal.timeout(8000),
-      });
+      const res = await guardedRequest(this.id, { timeoutMs: 8000 }, signal => fetch(`${this.baseUrl}/models`, { headers: this.headers(), signal, redirect: "error" }));
       if (!res.ok) return [];
       const json: any = await res.json();
       if (Array.isArray(json.data)) {
@@ -485,10 +411,7 @@ export class OpenAICompatProvider implements Provider {
 
     // Probe 1: /models (most OpenAI-compatible servers expose it)
     try {
-      const res = await fetch(`${this.baseUrl}/models`, {
-        headers: this.headers(),
-        signal: AbortSignal.timeout(8000),
-      });
+      const res = await guardedRequest(this.id, { timeoutMs: 8000 }, signal => fetch(`${this.baseUrl}/models`, { headers: this.headers(), signal, redirect: "error" }));
       if (res.ok) {
         return {
           ok: true,
@@ -503,7 +426,7 @@ export class OpenAICompatProvider implements Provider {
     // Probe 2: minimal chat completion (covers LM Studio, vLLM, etc.)
     try {
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
+        method: "POST", redirect: "error",
         headers: this.headers(),
         body: JSON.stringify({
           model: this.model,

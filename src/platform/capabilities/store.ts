@@ -24,7 +24,7 @@ export function capabilityMetadataPath(): string {
 
 const CertificationSchema = z.object({
   status: z.string(),
-  tests: z.array(z.any()).default([]),
+  tests: z.array(z.any()).prefault([]),
   certifiedAt: z.number().optional(),
   certifiedBy: z.string().optional(),
   expiresAt: z.number().optional(),
@@ -35,18 +35,18 @@ const OverlaySchema = z.object({
   id: z.string(),
   state: z.string().optional(),
   quarantineReason: z.string().optional(),
-  trustDecision: z.enum(["allow", "deny", "review", "unknown"]).default("unknown"),
+  trustDecision: z.enum(["allow", "deny", "review", "unknown"]).prefault("unknown"),
   trustDecisionReason: z.string().optional(),
   certification: CertificationSchema.optional(),
-  pendingReview: z.object({ reason: z.string(), requestedAt: z.number(), newPermissions: z.array(z.string()).default([]) }).optional(),
-  vulnerabilityStatus: z.enum(["none-known", "unknown", "flagged", "quarantined"]).default("unknown"),
-  maintenanceStatus: z.enum(["active", "unknown", "deprecated", "abandoned"]).default("unknown"),
-  history: z.array(z.object({ at: z.number(), action: z.string(), actor: z.string().optional(), detail: z.string().optional() })).default([]),
+  pendingReview: z.object({ reason: z.string(), requestedAt: z.number(), newPermissions: z.array(z.string()).prefault([]) }).optional(),
+  vulnerabilityStatus: z.enum(["none-known", "unknown", "flagged", "quarantined"]).prefault("unknown"),
+  maintenanceStatus: z.enum(["active", "unknown", "deprecated", "abandoned"]).prefault("unknown"),
+  history: z.array(z.object({ at: z.number(), action: z.string(), actor: z.string().optional(), detail: z.string().optional() })).prefault([]),
 });
 
 const StateSchema = z.object({
-  version: z.literal(CAPABILITY_METADATA_VERSION).default(CAPABILITY_METADATA_VERSION),
-  overlays: z.record(OverlaySchema).default({}),
+  version: z.literal(CAPABILITY_METADATA_VERSION).prefault(CAPABILITY_METADATA_VERSION),
+  overlays: z.record(z.string(), OverlaySchema).prefault({}),
 });
 
 export type CapabilityOverlay = z.infer<typeof OverlaySchema>;

@@ -9,7 +9,7 @@ import { estimateCost, round6 } from './models';
 import { DAY_MS, localDayStart } from './period';
 import type { SpendCategory, SpendEvent, SpendKind } from './types';
 
-export const SEED_VERSION = 1;
+export const SEED_VERSION = 2;
 export const SEED_RNG = 0x1317_b0d6;
 
 /** mulberry32 — 32-bit integer ops only, so Rust matches bit for bit. */
@@ -53,13 +53,13 @@ const WORKSPACES: readonly Weighted<string>[] = [
 ];
 
 const MODELS: readonly Weighted<string>[] = [
-  { v: 'claude-sonnet-4.5', w: 0.35 },
-  { v: 'gpt-5-mini', w: 0.2 },
-  { v: 'claude-haiku-4-6', w: 0.15 },
+  { v: 'claude-sonnet-5-5', w: 0.35 },
+  { v: 'gpt-6-luna', w: 0.2 },
+  { v: 'gpt-6.1-sol', w: 0.15 },
   { v: 'gpt-4o-mini', w: 0.1 },
-  { v: 'gemini-2.5-flash', w: 0.1 },
+  { v: 'gemini-3.8-flash', w: 0.1 },
   { v: 'qwen2.5:3b', w: 0.07 },
-  { v: 'gpt-5', w: 0.03 },
+  { v: 'gpt-6-astra', w: 0.03 },
 ];
 
 const KINDS: readonly Weighted<SpendKind>[] = [
@@ -134,7 +134,7 @@ export function seedEvents(now: number, tzOffsetMin: number): SpendEvent[] {
         model = pick(rand, MODELS);
         tokensIn = 300 + Math.floor(rand() * 2500);
         tokensOut = 100 + Math.floor(rand() * 1200);
-        costUsd = estimateCost(model, tokensIn, tokensOut);
+        costUsd = estimateCost(model, tokensIn, tokensOut, now);
       } else if (kind === 'tool_call') {
         const tool = TOOLS[Math.floor(rand() * TOOLS.length)];
         costUsd = round6(0.001 + rand() * 0.019);
@@ -192,7 +192,7 @@ export function seedEvents(now: number, tzOffsetMin: number): SpendEvent[] {
             sessionId: `run-${Math.floor(rand() * 0xffff)
               .toString(16)
               .padStart(4, '0')}`,
-            model: 'claude-opus-4-6',
+            model: 'claude-opus-5-5',
             tokensIn: 0,
             tokensOut: 0,
             costUsd: 0,
@@ -211,12 +211,12 @@ export function seedEvents(now: number, tzOffsetMin: number): SpendEvent[] {
             sessionId: `chat-${Math.floor(rand() * 0xffff)
               .toString(16)
               .padStart(4, '0')}`,
-            model: 'gpt-5-mini',
+            model: 'gpt-6-luna',
             tokensIn: 0,
             tokensOut: 0,
             costUsd: 0,
             category: 'llm',
-            detail: { from: 'gpt-5', to: 'gpt-5-mini' },
+            detail: { from: 'gpt-6-astra', to: 'gpt-6-luna' },
           }
     );
   }

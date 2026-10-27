@@ -135,7 +135,15 @@ pub fn spawn_sidecar(state: &Arc<EngineState>) {
     *lock(&state.generation) += 1;
     let generation = *lock(&state.generation);
 
+    let home = match crate::desktop_home::resolve() {
+        Ok(home) => home,
+        Err(reason) => { *lock(&state.note) = Some(reason); return; }
+    };
     let mut cmd = Command::new(&bin);
+    // Do not inherit a terminal's CLI XR_HOME. The bundled engine is complete.
+    cmd.env("XR_HOME", &home);
+    // Keychain services are global: a directory alone is not isolation.
+    cmd.env("XR_SECRET_NAMESPACE", "desktop");
     cmd.arg("serve")
         .arg("--port")
         .arg("0")

@@ -12,7 +12,7 @@
  * vLLM, LocalAI, …) understands. The shape must match the `Tool.parameters`
  * JSON Schema in the registry.
  */
-import type { Tool } from "../../core/types.ts";
+import type { Tool, ToolCall } from "../../core/types.ts";
 
 /** An OpenAI-style `tools` array entry. */
 export interface OpenAIToolSpec {
@@ -34,7 +34,7 @@ export function toOpenAITools(tools: Tool[]): OpenAIToolSpec[] {
     function: {
       name: t.name,
       description: t.description ?? "",
-      parameters: (t.parameters ?? { type: "object", properties: {} }) as Record<string, unknown>,
+      parameters: toolParameters(t.parameters),
     },
   }));
 }
@@ -51,9 +51,9 @@ export function toOpenAITools(tools: Tool[]): OpenAIToolSpec[] {
  */
 export function parseOpenAIToolCalls(
   raw: unknown,
-): Array<{ tool: string; args: Record<string, unknown> }> {
+): ToolCall[] {
   if (!Array.isArray(raw)) return [];
-  const out: Array<{ tool: string; args: Record<string, unknown> }> = [];
+  const out: ToolCall[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
     const fn = (entry as any).function;
@@ -63,13 +63,14 @@ export function parseOpenAIToolCalls(
       try {
         const parsed = JSON.parse(fn.arguments);
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed;
+        else throw new Error("malformed native tool arguments (expected object)");
       } catch {
-        args = {};
+        throw new Error("malformed native tool arguments (invalid JSON)");
       }
     } else if (fn.arguments && typeof fn.arguments === "object") {
       args = fn.arguments as Record<string, unknown>;
     }
-    out.push({ tool: fn.name, args });
+    out.push({ ...(typeof entry.id === "string" ? { id: entry.id } : {}), tool: fn.name, args });
   }
   return out;
 }
@@ -78,4 +79,13 @@ export function parseOpenAIToolCalls(
 export function isChatCompletionObject(x: unknown): boolean {
   if (!x || typeof x !== "object") return false;
   return Array.isArray((x as any).choices);
+}
+
+/** Accept the actual registry schema, retaining required/additionalProperties/$defs.
+ * Legacy property maps are wrapped ONCE, not nested under properties.type. */
+export function toolParameters(parameters: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!parameters || Object.keys(parameters).length === 0) return { type: "object", properties: {} };
+  if ("properties" in parameters || parameters.type === "object" || "$ref" in parameters) return { ...parameters };
+  if (typeof parameters.type === "string") throw new Error("tool parameters must be an object schema");
+  return { type: "object", properties: parameters };
 }

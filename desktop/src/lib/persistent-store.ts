@@ -10,6 +10,13 @@
  * the pre-paint script's contract) and *JSON for everything else.
  */
 import { isTauri } from '@/lib/tauri';
+import { purgeCredentialCopies } from './credential-migration';
+import {
+  assertSafeSetting,
+  durableModelSelection,
+  isSensitiveSettingKey,
+} from './persistent-safety';
+export { isSensitiveSettingKey } from './persistent-safety';
 
 type Store = {
   get: <T>(key: string) => Promise<T | undefined>;
@@ -35,17 +42,14 @@ function getStore(): Promise<Store | null> {
   return storePromise;
 }
 
-/**
- * Phase 31 · A14 — sensitive keys never touch localStorage. Provider API
- * keys (the `xr.providerKeys` fallback used when the OS keychain is
- * unavailable) and anything token/secret/password-shaped persist ONLY in
- * the Tauri Store (settings.json in the app-private data dir); the browser
- * fallback keeps them session-only rather than web-readable forever.
- */
-const SENSITIVE_KEY = /providerkeys|api[-_]?key|token|secret|password|passwd|credential/i;
-
-export function isSensitiveSettingKey(key: string): boolean {
-  return SENSITIVE_KEY.test(key);
+/** One-time in-place cleanup. This is not secure erasure of backups: owners
+ * must rotate keys previously stored by older builds. Never copy them. */
+export async function purgeLegacyCredentialSettings(): Promise<boolean> {
+  return purgeCredentialCopies(
+    await getStore(),
+    window.localStorage,
+    isTauri()
+  );
 }
 
 function writeLocalStorageRaw(key: string, raw: string): void {
@@ -79,30 +83,38 @@ function writeToTauriStore(key: string, value: unknown): void {
 
 /** Raw string setting (theme): bare string in localStorage + Tauri Store. */
 export function writeSettingRaw(key: string, value: string): void {
+  assertSafeSetting(key, value);
   writeLocalStorageRaw(key, value);
   writeToTauriStore(key, value);
 }
 
 /** JSON setting (sidebar, user name): JSON.stringify in both layers. */
 export function writeSettingJSON(key: string, value: unknown): void {
+  assertSafeSetting(key, value);
   writeLocalStorageRaw(key, JSON.stringify(value));
   writeToTauriStore(key, value);
 }
 
 /** Read a raw string setting: Tauri Store first, then localStorage. */
 export async function readSettingRaw(key: string): Promise<string | null> {
+  if (isSensitiveSettingKey(key)) return null;
   const store = await getStore();
   if (store) {
     try {
       const value = await store.get<string>(key);
-      if (typeof value === 'string' && value.length > 0) return value;
+      if (typeof value === 'string' && value.length > 0) {
+        assertSafeSetting(key, value);
+        return value;
+      }
     } catch {
       /* fall through to localStorage */
     }
   }
   if (isSensitiveSettingKey(key)) return null; // A14: never read secrets back from localStorage
   try {
-    return window.localStorage.getItem(key);
+    const value = window.localStorage.getItem(key);
+    assertSafeSetting(key, value);
+    return value;
   } catch {
     return null;
   }
@@ -110,11 +122,22 @@ export async function readSettingRaw(key: string): Promise<string | null> {
 
 /** Read a JSON setting: Tauri Store first, then the localStorage copy. */
 export async function readSettingJSON<T>(key: string): Promise<T | null> {
+  if (isSensitiveSettingKey(key)) return null;
+  const safe = (value: unknown): T | null => {
+    const result =
+      key === 'xr.model.default' ? durableModelSelection(value) : value;
+    assertSafeSetting(key, result);
+    if (result !== value) {
+      // Sanitized value only, never write the legacy object back.
+      writeSettingJSON(key, result);
+    }
+    return result as T | null;
+  };
   const store = await getStore();
   if (store) {
     try {
       const value = await store.get<T>(key);
-      if (value !== undefined && value !== null) return value;
+      if (value !== undefined && value !== null) return safe(value);
     } catch {
       /* fall through to localStorage */
     }
@@ -122,7 +145,7 @@ export async function readSettingJSON<T>(key: string): Promise<T | null> {
   if (isSensitiveSettingKey(key)) return null; // A14: never read secrets back from localStorage
   try {
     const raw = window.localStorage.getItem(key);
-    return raw === null ? null : (JSON.parse(raw) as T);
+    return raw === null ? null : safe(JSON.parse(raw));
   } catch {
     return null;
   }

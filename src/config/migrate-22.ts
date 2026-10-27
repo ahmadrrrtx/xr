@@ -11,38 +11,38 @@ export const phase9ConfigShape = {
   triggers: z
     .object({
       /** Global kill switch. Stops NEW fires; in-flight runs keep their cancel path. */
-      pauseAll: z.boolean().default(false),
+      pauseAll: z.boolean().prefault(false),
       /** Daemon scheduler tick (ms). */
-      tickMs: z.number().int().min(1_000).max(3_600_000).default(15_000),
+      tickMs: z.number().int().min(1_000).max(3_600_000).prefault(15_000),
     })
-    .default({}),
+    .prefault({}),
   telegram: z
     .object({
       /** Per-chat message bucket. Default 20 messages a minute. */
       rateLimit: z
         .object({
-          tokens: z.number().positive().default(20),
-          refillPerSec: z.number().min(0).default(20 / 60),
+          tokens: z.number().positive().prefault(20),
+          refillPerSec: z.number().min(0).prefault(20 / 60),
         })
-        .default({}),
+        .prefault({}),
       chatBudgets: z
         .object({
           maxUsd: z.number().min(0).optional(),
           maxTokens: z.number().int().min(0).optional(),
         })
-        .default({}),
+        .prefault({}),
       /** The user wants the bot running. Set by Start/Stop and Connect/Disconnect. */
-      enabled: z.boolean().default(false),
+      enabled: z.boolean().prefault(false),
       /** Start on daemon boot when enabled and a token is present. */
-      autoStart: z.boolean().default(true),
+      autoStart: z.boolean().prefault(true),
       /** Paired Telegram user ids. Written by the /start pairing flow; never preconfigured. */
-      pairedUserIds: z.array(z.number().int().positive()).max(50).default([]),
+      pairedUserIds: z.array(z.number().int().positive()).max(50).prefault([]),
       /** Optional public HTTPS URL. When set, Telegram pushes updates here instead of polling. */
       webhookUrl: z.string().url().startsWith("https://").max(2048).optional(),
       /** Documents are capped here; photos are capped at 2 MB regardless. */
-      maxAttachmentBytes: z.number().int().min(64 * 1024).max(20 * 1024 * 1024).default(5 * 1024 * 1024),
+      maxAttachmentBytes: z.number().int().min(64 * 1024).max(20 * 1024 * 1024).prefault(5 * 1024 * 1024),
     })
-    .default({}),
+    .prefault({}),
 };
 
 export function migrate21to22(raw: any): any {

@@ -70,9 +70,10 @@ function preset(id: string, model: string) {
 
 function baseConfig(over: Record<string, unknown> = {}): XRConfig {
   return ConfigSchema.parse({
-    defaults: { provider: PRIMARY, model: "v5-a" },
+    defaults: { provider: PRIMARY, model: "v5-a", fallbackProvider: FALLBACK, fallbackModel: "v5-b" },
     providerEngine: { routingStrategy: "hybrid" },
     intelligencePlane: {
+      allowFallback: true, allowCrossProviderFallback: true, enableAutomatic: true,
       // Tiny, deterministic retry budget — tests must stay fast.
       retry: { maxInPlaceRetries: 1, baseDelayMs: 0, maxDelayMs: 1, totalBudgetMs: 200, jitterRatio: 0 },
     },
@@ -102,6 +103,7 @@ function pinRequest() {
       summary: "service integration: pin primary with diverse fallback",
       pin: { providerId: PRIMARY, modelId: "v5-a" },
       allowFallback: true,
+      allowCrossProviderFallback: true,
       restrictProviders: [PRIMARY, FALLBACK],
     },
   };
@@ -148,7 +150,7 @@ describe("Phase 5 · IntelligenceService resilience wiring", () => {
     expect(record.decisionId).toBe(decision.decisionId);
 
     // EFFECT: the wrapped provider actually fails over and answers.
-    const turn = await provider.chat([{ role: "user", content: "hi" }], []);
+    const turn = await provider.chat([{ role: "user", content: "hi" }], [], { beforeAttempt: () => {} });
     expect(turn.message).toBe("fallback answer");
     // 1 primary attempt + 1 in-place transient retry, then 1 fallback call.
     expect(calls).toEqual([PRIMARY, PRIMARY, FALLBACK]);
@@ -170,12 +172,12 @@ describe("Phase 5 · IntelligenceService resilience wiring", () => {
     expect(report.fallback.total).toBe(1);
     expect(report.fallback.byTrigger["transient"]).toBe(1);
     expect(Object.keys(report.fallback.byLevel)).toHaveLength(1);
-    expect(report.costPerQuality.samples).toBe(1); // usage present → cpq event
+    expect(report.costPerQuality.samples).toBe(0); // unknown tariff/fidelity is unavailable, not an invented CPQ
   });
 
   test("workspace breaker config applies: sustained outage trips breakers → authority reports HONEST unavailability", async () => {
     const permanent = async (): Promise<ModelTurn> => {
-      throw new Error("401 unauthorized: invalid api key"); // permanent class
+      throw new Error("HTTP 503 service unavailable"); // transient outage; auth is separately terminal
     };
     primaryBehavior = permanent;
     fallbackBehavior = permanent;
@@ -183,6 +185,7 @@ describe("Phase 5 · IntelligenceService resilience wiring", () => {
     const service = wiredService(
       baseConfig({
         intelligencePlane: {
+          allowFallback: true, allowCrossProviderFallback: true, enableAutomatic: true,
           retry: { maxInPlaceRetries: 0, baseDelayMs: 0, maxDelayMs: 0, totalBudgetMs: 0, jitterRatio: 0 },
           breaker: {
             windowSize: 8,
@@ -201,7 +204,7 @@ describe("Phase 5 · IntelligenceService resilience wiring", () => {
     // escalation, never a fake success.
     for (let run = 0; run < 2; run++) {
       const { provider } = service.resolveProvider(pinRequest());
-      await expect(provider.chat([{ role: "user", content: "hi" }], [])).rejects.toThrow(
+      await expect(provider.chat([{ role: "user", content: "hi" }], [], { beforeAttempt: () => {} })).rejects.toThrow(
         RoutingEscalationError,
       );
     }
@@ -260,4 +263,15 @@ describe("Phase 5 · IntelligenceService resilience wiring", () => {
     expect(report.selection.manualRate).toBe(0);
     expect(report.selection.p95Ms).toBeLessThan(report.selection.budgetMs);
   });
+});
+
+
+test("a changed consent/config snapshot revokes further retry/fallback attempts", async () => {
+  const config = baseConfig();
+  primaryBehavior = async () => { config.intelligencePlane.allowCrossProviderFallback = false; throw new Error("HTTP 503"); };
+  fallbackBehavior = async () => ({ message: "NEVER", toolCalls: [], done: true });
+  const service = wiredService(config);
+  const { provider } = service.resolveProvider(pinRequest());
+  await expect(provider.chat([{ role: "user", content: "synthetic" }], [], { beforeAttempt() {} })).rejects.toThrow();
+  expect(calls).toEqual([PRIMARY]);
 });

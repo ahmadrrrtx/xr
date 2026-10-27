@@ -44,6 +44,11 @@ import { join } from "node:path";
  * aarch64 build, a bare `…-setup.exe` the x64 NSIS).
  */
 const PLATFORM_BY_EXT: Array<[RegExp, string]> = [
+  [/^darwin-x64-.*\.app\.tar\.gz$/, "darwin-x86_64"],
+  [/^darwin-arm64-.*\.app\.tar\.gz$/, "darwin-aarch64"],
+  [/^linux-arm64-.*\.AppImage$/, "linux-aarch64"],
+  [/^windows-arm64-.*\.msi$/, "windows-aarch64-msi"],
+  [/^windows-arm64-.*-setup\.exe$/, "windows-aarch64-nsis"],
   [/amd64\.AppImage$/, "linux-x86_64"],
   [/aarch64\.app\.tar\.gz$/, "darwin-aarch64"],
   [/x64\.app\.tar\.gz$/, "darwin-x86_64"],
@@ -104,9 +109,8 @@ export function buildManifest(dir: string, version: string, tag: string, notes: 
   }
   // Launch-audit L-002 — the Windows ARM flavour matrix is NSIS-only, so the
   // generic aarch64 key mirrors it directly when the specific key exists.
-  if (platforms["windows-aarch64-nsis"] && !platforms["windows-aarch64"]) {
-    platforms["windows-aarch64"] = { ...platforms["windows-aarch64-nsis"] };
-  }
+  const arm = platforms["windows-aarch64-msi"] ?? platforms["windows-aarch64-nsis"];
+  if (arm) platforms["windows-aarch64"] = { ...arm };
   return {
     version,
     notes,
@@ -126,6 +130,11 @@ if (import.meta.main) {
     a["notes-file"] ? readFileSync(a["notes-file"], "utf8") : (a.notes || "See CHANGELOG.md"),
   );
   const n = Object.keys(manifest.platforms as object).length;
+  if (a["require-targets"] === "true") {
+    const p = manifest.platforms as Record<string,unknown>;
+    const missing = ["linux-x86_64","darwin-aarch64","darwin-x86_64","windows-x86_64"].filter(k=>!p[k]);
+    if (missing.length) throw new Error(`Configured updater missing supported targets: ${missing.join(", ")}`);
+  }
   writeFileSync(a.out ?? "latest.json", JSON.stringify(manifest, null, 2) + "\n", "utf8");
   console.log(`[updater-manifest] ${n} platform key(s) with signatures → ${a.out ?? "latest.json"}`);
   if (n === 0) {

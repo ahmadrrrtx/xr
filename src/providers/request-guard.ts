@@ -29,37 +29,8 @@
  * Failing to distinguish them is what makes a runtime lie about why it stopped.
  */
 
-/** Why a guarded request ended early. */
-export type AbortKind = "cancelled" | "timeout";
-
-/** Error thrown when a guarded provider request is aborted or times out. */
-export class ProviderAbortError extends Error {
-  readonly kind: AbortKind;
-  readonly providerId: string;
-  readonly timeoutMs?: number;
-
-  constructor(kind: AbortKind, providerId: string, timeoutMs?: number) {
-    super(
-      kind === "timeout"
-        ? `provider ${providerId} timed out after ${timeoutMs} ms`
-        : `provider ${providerId} request cancelled`,
-    );
-    this.name = "ProviderAbortError";
-    this.kind = kind;
-    this.providerId = providerId;
-    this.timeoutMs = timeoutMs;
-  }
-}
-
-/** True when the error represents a user/caller cancellation. */
-export function isCancellation(e: unknown): boolean {
-  return e instanceof ProviderAbortError && e.kind === "cancelled";
-}
-
-/** True when the error represents a request timeout. */
-export function isTimeout(e: unknown): boolean {
-  return e instanceof ProviderAbortError && e.kind === "timeout";
-}
+import { ProviderAbortError, isCancellation, isTimeout, type AbortKind } from "../core/provider-abort.ts";
+export { ProviderAbortError, isCancellation, isTimeout, type AbortKind } from "../core/provider-abort.ts";
 
 /**
  * Default per-request ceiling. Deliberately generous: local models on modest
@@ -130,29 +101,69 @@ export async function guardedRequest<T>(
   if (caller?.aborted) throw new ProviderAbortError("cancelled", providerId);
 
   const timeoutController = new AbortController();
+  const reason = () => caller?.aborted ? new ProviderAbortError("cancelled", providerId) : new ProviderAbortError("timeout", providerId, timeoutMs);
   const timer = setTimeout(() => timeoutController.abort(), timeoutMs);
-  // Node/Bun keep the process alive for pending timers; this one must not.
   (timer as unknown as { unref?: () => void }).unref?.();
-
   const onCallerAbort = () => timeoutController.abort();
-  // Compose manually rather than via AbortSignal.any(): the manual path works
-  // on every runtime XR supports and lets us keep the timeout/cancel
-  // distinction, which AbortSignal.any() erases.
   caller?.addEventListener("abort", onCallerAbort, { once: true });
-
+  let removeBodyListener = () => {};
+  let rejectOnAbort: (() => void) | undefined;
+  const cleanup = () => {
+    clearTimeout(timer); caller?.removeEventListener("abort", onCallerAbort);
+    if (rejectOnAbort) timeoutController.signal.removeEventListener("abort", rejectOnAbort);
+    removeBodyListener();
+  };
+  let delegated = false;
   try {
-    return await run(timeoutController.signal);
+    const aborted = new Promise<never>((_, reject) => {
+      rejectOnAbort = () => reject(reason());
+      timeoutController.signal.addEventListener("abort", rejectOnAbort, { once: true });
+    });
+    if (caller?.aborted) timeoutController.abort();
+    if (timeoutController.signal.aborted) throw reason();
+    const value = await Promise.race([run(timeoutController.signal), aborted]);
+    if (!(value instanceof Response) || !value.body || value.bodyUsed) return value;
+
+    // A fetch promise resolves at HEADERS, not EOF. Keep the same deadline
+    // and cancellation active through JSON/text/SSE consumption, with bounded
+    // bytes and backpressure. Never buffer an unbounded stream into memory.
+    const reader = value.body.getReader();
+    let controller: ReadableStreamDefaultController<Uint8Array>, ended = false, bytes = 0;
+    const end = (error?: unknown) => {
+      if (ended) return; ended = true; cleanup();
+      if (error !== undefined) controller.error(error); else controller.close();
+      void reader.cancel(error).catch(() => {});
+    };
+    const abortBody = () => end(reason());
+    const body = new ReadableStream<Uint8Array>({
+      start(c) { controller = c; },
+      async pull(c) {
+        try {
+          const chunk = await reader.read();
+          if (ended) return;
+          if (chunk.done) { end(); return; }
+          bytes += chunk.value.byteLength;
+          if (bytes > MAX_PROVIDER_RESPONSE_BYTES) { end(new Error(`provider ${providerId} response exceeded ${MAX_PROVIDER_RESPONSE_BYTES} bytes`)); return; }
+          c.enqueue(chunk.value);
+        } catch (e) { end(timeoutController.signal.aborted ? reason() : e); }
+      },
+      cancel() { if (!ended) { ended = true; cleanup(); void reader.cancel().catch(() => {}); } },
+    });
+    timeoutController.signal.addEventListener("abort", abortBody, { once: true });
+    removeBodyListener = () => timeoutController.signal.removeEventListener("abort", abortBody);
+    const wrapped = new Response(body, { status: value.status, statusText: value.statusText, headers: value.headers });
+    Object.defineProperty(wrapped, "url", { value: value.url });
+    delegated = true;
+    if (timeoutController.signal.aborted) abortBody();
+    return wrapped as unknown as T;
   } catch (e) {
-    if (timeoutController.signal.aborted) {
-      // Caller abort wins the attribution: if the user cancelled, that is the
-      // truthful reason even when the deadline expired in the same tick.
-      throw caller?.aborted
-        ? new ProviderAbortError("cancelled", providerId)
-        : new ProviderAbortError("timeout", providerId, timeoutMs);
-    }
+    cleanup();
+    if (timeoutController.signal.aborted) throw reason();
     throw e;
   } finally {
-    clearTimeout(timer);
-    caller?.removeEventListener("abort", onCallerAbort);
+    if (!delegated) cleanup();
   }
 }
+
+/** Across buffered and streamed adapters; this is bytes, not model tokens. */
+export const MAX_PROVIDER_RESPONSE_BYTES = 16 * 1024 * 1024;

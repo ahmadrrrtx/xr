@@ -75,7 +75,7 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   hardCap: true,
   circuitBreakerPct: 0.95,
   circuitBreakerSpendPer5min: 0.5,
-  modelDownshifting: true,
+  modelDownshifting: false,
   finalizationReservePct: 0.1,
   dailyLimit: 1,
   perRequestLimit: 0.25,
@@ -89,17 +89,9 @@ export const DEFAULT_BUDGET_SETTINGS: BudgetSettings = {
   paused: false,
   pauseReason: null,
   pausedAt: null,
-  configuredModels: [
-    'claude-sonnet-4.5',
-    'claude-haiku-4-6',
-    'gpt-5',
-    'gpt-5-mini',
-    'gpt-4o',
-    'gpt-4o-mini',
-    'gemini-2.5-flash',
-  ],
-  installedLocal: ['qwen2.5:3b', 'qwen2.5-coder:3b'],
-  defaultModel: 'claude-sonnet-4.5',
+  configuredModels: [],
+  installedLocal: [],
+  defaultModel: '',
 };
 
 export type BudgetSettingsPatch = Partial<BudgetSettings>;
@@ -133,7 +125,16 @@ export const CATEGORY_LABEL: Record<SpendCategory, string> = {
 };
 
 export type SpendSurface =
-  'chat' | 'brain' | 'hud' | 'voice' | 'builder' | 'research' | 'workflows' | 'playground' | 'test' | 'seed';
+  | 'chat'
+  | 'brain'
+  | 'hud'
+  | 'voice'
+  | 'builder'
+  | 'research'
+  | 'workflows'
+  | 'playground'
+  | 'test'
+  | 'seed';
 
 export interface SpendEvent {
   id: string;
@@ -176,13 +177,16 @@ export type PreCallCode =
   | 'agent'
   | 'workspace'
   | 'local-only'
-  | 'spike';
+  | 'spike'
+  | 'price-unavailable';
 
 export interface PreCallRequest {
   model: string;
   estimatedTokensIn: number;
   estimatedTokensOut: number;
-  /** Override the registry estimate (tests / playground). */
+  /** Never allow a presentation guard to change an engine request target. */
+  allowDownshift?: boolean;
+  /** Override with an engine-catalog estimate (or deterministic test fixture). */
   estimatedCost?: number;
   agent?: string | null;
   workspace?: string | null;

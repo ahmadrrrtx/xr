@@ -16,6 +16,8 @@ import { registry } from "./registry.ts";
 import { resolveProvider, resolveProviderSync, type ResolveOptions } from "./resolver.ts";
 import { PRESETS } from "./presets.ts";
 import { OpenAICompatProvider } from "./openai-compat.ts";
+import { OpenAIResponsesProvider } from "./native/openai-responses.ts";
+import { modelFact } from "../intelligence/model-registry.ts";
 import {
   AnthropicProvider,
   GoogleProvider,
@@ -110,6 +112,7 @@ function registerBuiltins(): void {
     PRESETS["openai"],
     (config, model, preset) => {
       const baseUrl = providerOverrideBaseUrl(config, "openai") ?? preset.baseUrl!;
+      if (modelFact("openai", model)?.transport === "responses") return new OpenAIResponsesProvider({ model, baseUrl, apiKeyEnv: preset.apiKeyEnv });
       return new OpenAICompatProvider({
         id: preset.id,
         label: preset.label,

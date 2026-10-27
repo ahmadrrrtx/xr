@@ -141,6 +141,7 @@ export interface AppContainerRun {
   timeoutMs: number;
   maxOutputBytes: number;
   stdin?: string;
+  signal?: AbortSignal;
 }
 
 export interface AppContainerResult {
@@ -148,6 +149,7 @@ export interface AppContainerResult {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  cancelled?: boolean;
   outputTruncated: boolean;
   durationMs: number;
   spawnError?: string;
@@ -156,6 +158,7 @@ export interface AppContainerResult {
 /** Run one command inside the AppContainer; resolves when the job ends or times out. */
 export async function runInAppContainer(run: AppContainerRun): Promise<AppContainerResult> {
   const started = Date.now();
+  if (run.signal?.aborted) return { exitCode: null, stdout: "", stderr: "cancelled before start", timedOut: false, cancelled: true, outputTruncated: false, durationMs: 0 };
   const { k32 } = win();
   const { sid, sidString } = containerSid();
   const scratch = mkdtempSync(join(tmpdir(), "xr-ac-"));
@@ -225,11 +228,11 @@ export async function runInAppContainer(run: AppContainerRun): Promise<AppContai
     }
     k32.ResumeThread(hThread);
 
-    let timedOut = false;
+    let timedOut = false, cancelled = false;
     for (;;) {
       if (k32.WaitForSingleObject(hProcess, 0) === C.WAIT_OBJECT_0) break;
-      if (Date.now() - started > run.timeoutMs) {
-        timedOut = true;
+      if (run.signal?.aborted || Date.now() - started > run.timeoutMs) {
+        cancelled = !!run.signal?.aborted; timedOut = !cancelled;
         k32.TerminateJobObject(job, 124);
         k32.WaitForSingleObject(hProcess, 5000);
         break;
@@ -248,6 +251,7 @@ export async function runInAppContainer(run: AppContainerRun): Promise<AppContai
       stdout: out.subarray(0, run.maxOutputBytes).toString("utf8"),
       stderr: err.subarray(0, Math.max(0, run.maxOutputBytes - out.length)).toString("utf8"),
       timedOut,
+      cancelled,
       outputTruncated: truncated,
       durationMs: Date.now() - started,
     };

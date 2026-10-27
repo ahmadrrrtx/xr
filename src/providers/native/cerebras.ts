@@ -1,3 +1,4 @@
+import { outputLimit, usagePair } from "./history.ts";
 /**
  * XR — Native Cerebras Provider
  * 
@@ -90,7 +91,7 @@ export class CerebrasProvider implements Provider {
     const body: Record<string, unknown> = {
       model: this.model,
       messages: cerebrasMessages,
-      max_tokens: 2048,
+      max_tokens: outputLimit(options?.maxOutputTokens),
       temperature: 0.3,
     };
 
@@ -102,7 +103,7 @@ export class CerebrasProvider implements Provider {
       // GAP-001 — bounded + cancellable (was: no signal, no timeout).
       const res = await guardedRequest(this.id, options, (signal) =>
         fetch(`${this.baseUrl}/chat/completions`, {
-          method: "POST",
+          method: "POST", redirect: "error",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
@@ -112,16 +113,7 @@ export class CerebrasProvider implements Provider {
         }),
       );
 
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        try {
-          const err = JSON.parse(txt);
-          throw new Error(`Cerebras error: ${err.error?.message ?? `HTTP ${res.status}`}`);
-        } catch (e) {
-          if ((e as Error).message.includes("Cerebras")) throw e;
-          throw new Error(`Cerebras ${res.status}: ${txt.slice(0, 200)}`);
-        }
-      }
+      if (!res.ok) { await res.body?.cancel(); throw new Error(`${this.id} API HTTP ${res.status}`); }
 
       const json: any = await res.json();
       const choice = json.choices?.[0];
@@ -143,7 +135,7 @@ export class CerebrasProvider implements Provider {
       }
 
       const usage = json.usage
-        ? { inTokens: json.usage.prompt_tokens ?? 0, outTokens: json.usage.completion_tokens ?? 0 }
+        ? usagePair(json.usage.prompt_tokens, json.usage.completion_tokens)
         : undefined;
 
       return {
@@ -186,7 +178,7 @@ export class CerebrasProvider implements Provider {
     const start = Date.now();
     try {
       const res = await fetch(`${this.baseUrl}/models`, {
-        method: "GET",
+        method: "GET", redirect: "error",
         headers: { "Authorization": `Bearer ${apiKey}` },
       });
 

@@ -1,0 +1,224 @@
+{
+  "version": "2026-10-26.1",
+  "verifiedAt": "2026-10-26",
+  "staleAt": "2027-01-24T00:00:00Z",
+  "models": [
+    {
+      "providerId": "openai",
+      "modelId": "gpt-6-astra",
+      "lifecycle": "active",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+      "transport": "responses",
+      "contextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 10,
+        "output": 50,
+        "source": "https://developers.openai.com/api/docs/models/gpt-6-astra"
+      },
+      "notes": [
+        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
+        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
+      ]
+    },
+    {
+      "providerId": "openai",
+      "modelId": "gpt-6.1-sol",
+      "lifecycle": "active",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+      "transport": "responses",
+      "contextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 2,
+        "output": 10,
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+      },
+      "notes": [
+        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
+        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
+      ]
+    },
+    {
+      "providerId": "openai",
+      "modelId": "gpt-6-luna",
+      "lifecycle": "active",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "transport": "responses",
+      "contextWindow": 1050000,
+      "maxOutputTokens": 128000,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 0.1,
+        "output": 0.5,
+        "source": "https://developers.openai.com/api/docs/models/gpt-6-luna"
+      },
+      "notes": [
+        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
+        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
+      ]
+    },
+    {
+      "providerId": "openai",
+      "modelId": "gpt-4o-mini",
+      "lifecycle": "deprecated",
+      "source": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+      "transport": "chat-completions",
+      "contextWindow": 128000,
+      "maxOutputTokens": 16384,
+      "tools": true,
+      "price": {
+        "input": 0.15,
+        "output": 0.6,
+        "source": "https://developers.openai.com/api/docs/models/gpt-4o-mini"
+      },
+      "notes": [
+        "Official page labels this deprecated; manual compatibility only, not an Auto default."
+      ]
+    },
+    {
+      "providerId": "anthropic",
+      "modelId": "claude-fable-5-1",
+      "lifecycle": "active",
+      "source": "https://platform.claude.com/docs/en/models/overview",
+      "transport": "anthropic-messages",
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 10,
+        "output": 50,
+        "source": "https://platform.claude.com/docs/en/models/overview"
+      },
+      "notes": [
+        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
+        "Model listing is not live credential, compatibility or agent benchmark evidence."
+      ]
+    },
+    {
+      "providerId": "anthropic",
+      "modelId": "claude-opus-5-5",
+      "lifecycle": "active",
+      "source": "https://platform.claude.com/docs/en/models/overview",
+      "transport": "anthropic-messages",
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 4,
+        "output": 20,
+        "source": "https://platform.claude.com/docs/en/models/overview"
+      },
+      "notes": [
+        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
+        "Model listing is not live credential, compatibility or agent benchmark evidence."
+      ]
+    },
+    {
+      "providerId": "anthropic",
+      "modelId": "claude-sonnet-5-5",
+      "lifecycle": "active",
+      "source": "https://platform.claude.com/docs/en/models/overview",
+      "transport": "anthropic-messages",
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 2,
+        "output": 10,
+        "source": "https://platform.claude.com/docs/en/models/overview"
+      },
+      "notes": [
+        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
+        "Model listing is not live credential, compatibility or agent benchmark evidence."
+      ]
+    },
+    {
+      "providerId": "anthropic",
+      "modelId": "claude-haiku-5-5",
+      "lifecycle": "active",
+      "source": "https://platform.claude.com/docs/en/models/overview",
+      "transport": "anthropic-messages",
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "tools": true,
+      "reasoning": true,
+      "notes": [
+        "Published pricing is 'from' $0.10/$0.50; exact applicable rate unavailable. Do not assume the minimum."
+      ]
+    },
+    {
+      "providerId": "google",
+      "modelId": "gemini-4-argon",
+      "lifecycle": "active",
+      "source": "https://ai.google.dev/gemini-api/docs/models/gemini-4-argon",
+      "transport": "gemini-generate-content",
+      "contextWindow": 1048576,
+      "maxOutputTokens": 65536,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 2,
+        "output": 10,
+        "source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "until": "2026-11-30T23:59:59.999Z",
+        "then": {
+          "input": 4,
+          "output": 20
+        }
+      },
+      "notes": [
+        "Synchronous output limit; long-decode modes not implemented by XR.",
+        "Thinking tokens are billable; implicit cache only; no Live API/audio generation."
+      ]
+    },
+    {
+      "providerId": "google",
+      "modelId": "gemini-3.8-flash",
+      "lifecycle": "active",
+      "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
+      "transport": "gemini-generate-content",
+      "contextWindow": 1048576,
+      "maxOutputTokens": 65536,
+      "tools": true,
+      "reasoning": true,
+      "price": {
+        "input": 0.75,
+        "output": 3.75,
+        "source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "until": "2026-12-31T23:59:59.999Z",
+        "then": {
+          "input": 1.5,
+          "output": 7.5
+        }
+      },
+      "notes": [
+        "Free-tier eligibility is account-dependent; paid standard base rates are used for estimates.",
+        "Preserve thought signatures when returning function results."
+      ]
+    },
+    {
+      "providerId": "ollama",
+      "modelId": "qwen3.5:9b",
+      "lifecycle": "active",
+      "source": "https://ollama.com/library/qwen3.5",
+      "transport": "chat-completions",
+      "contextWindow": 256000,
+      "tools": true,
+      "reasoning": true,
+      "notes": [
+        "Library tags are not proof of installed/reachable runtime or agent validation.",
+        "9b weights are multiple GB; do not download or infer on this 2 GB audit host.",
+        "No provider token fee; hardware, power and runtime costs remain."
+      ]
+    }
+  ]
+}

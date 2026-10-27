@@ -3,6 +3,7 @@
  * Hard constraints only. Never score an incompatible candidate as selectable.
  */
 
+import { localityAllowed } from "./locality.ts";
 import { capabilityRequired } from "./capability.ts";
 import type { BehavioralView } from "./behavioral.ts";
 import type { RoutingHealthView } from "./health.ts";
@@ -66,6 +67,13 @@ export function evaluateCandidate(
     return { model, compatible: false, rejections };
   }
 
+  // Never automatically recommend stale/deprecated/unverified catalog guesses.
+  // A configured target stays inspectable/manual-compatible; no config rewriting.
+  if (model.evidence && !requirements.pin?.strict) {
+    const e = model.evidence;
+    if (e.stale || e.lifecycle === "deprecated" || (!e.configured && (e.lifecycle !== "active" || e.compatible !== "contract-tested"))) rejections.push({ code: "health_unavailable", message: "Model metadata is stale/deprecated or not configured/protocol-tested; use explicit configuration/manual selection", detail: e.lifecycle });
+  }
+
   // Pin restriction: when strict pin to another provider, reject others
   if (requirements.pin?.providerId && requirements.pin.strict) {
     if (model.providerId !== requirements.pin.providerId) {
@@ -92,33 +100,16 @@ export function evaluateCandidate(
     }
   }
 
-  // Locality policy (requirements override policy)
-  const locality = requirements.localityPolicy ?? policy.localityPolicy;
-  if (locality === "local_only" || locality === "no_cloud") {
-    if (model.locality.locality === "cloud") {
-      rejections.push({
-        code: "locality_policy",
-        message: "Cloud providers blocked by locality policy",
-        detail: locality,
-      });
-    }
-    if (locality === "local_only" && model.locality.locality !== "local") {
-      rejections.push({
-        code: "locality_policy",
-        message: "Only local models allowed",
-        detail: model.locality.locality,
-      });
-    }
-  }
-  if (locality === "private_only") {
-    if (model.locality.locality === "cloud") {
-      rejections.push({
-        code: "locality_policy",
-        message: "Public cloud blocked; private/local only",
-      });
+  // Intersection, never request-overrides-workspace. Unknown/hybrid endpoints
+  // do not satisfy a private/local restriction.
+  for (const locality of [policy.localityPolicy, requirements.localityPolicy]) {
+    if (locality !== undefined && !localityAllowed(locality, model.locality.locality)) {
+      rejections.push({ code: "locality_policy", message: `Target violates locality restriction ${locality}`, detail: model.locality.locality });
     }
   }
 
+  // Credential presence is not an authentication or reachability result.
+  if (model.locality.requiresCredential && model.credentialAvailable === false) rejections.push({ code: "credential_missing", message: "API key not configured (reachability unknown)" });
   // Credentials
   if (model.locality.requiresCredential) {
     // Credential flag is on provider descriptor; model inherits via construction.
@@ -231,8 +222,12 @@ export function evaluateCandidate(
   const maxCost = requirements.maxCostUsd ?? policy.maxCostUsd;
   if (maxCost !== undefined && maxCost >= 0) {
     if (!model.cost.free) {
-      const inP = model.cost.inPerMTok ?? tierDefaultIn(model.cost.tier);
-      const outP = model.cost.outPerMTok ?? tierDefaultOut(model.cost.tier);
+      const inP = model.cost.inPerMTok;
+      const outP = model.cost.outPerMTok;
+      if (inP === undefined || outP === undefined || !Number.isFinite(inP) || !Number.isFinite(outP)) {
+        rejections.push({ code: "budget", message: "Price unavailable — cannot evaluate a monetary limit" });
+        return { model, compatible: false, rejections };
+      }
       // Assume ~2k in + 500 out for a typical call estimate
       const est = (2000 / 1e6) * inP + (500 / 1e6) * outP;
       if (est > maxCost && maxCost === 0 && !model.cost.free) {
@@ -240,7 +235,7 @@ export function evaluateCandidate(
           code: "budget",
           message: "Non-free model exceeds zero cost ceiling",
         });
-      } else if (maxCost > 0 && est > maxCost * 10) {
+      } else if (maxCost > 0 && est > maxCost) {
         // Only reject when wildly over (soft budget is scored, hard when absurd)
         rejections.push({
           code: "budget",
@@ -281,9 +276,8 @@ export function evaluateCandidate(
 
   // Phase 5 · T3 — circuit breaker: an OPEN breaker removes the target from
   // selection with a reason; half-open stays eligible (probe path) but is
-  // down-scored by the scorer. Manual pins bypass evaluation of this gate —
-  // user authority wins (Charter §9.5), and the executor still gates calls.
-  if (opts.routingHealth && !requirements.pin?.providerId) {
+  // down-scored by the scorer. Pins do not silently reset an open breaker.
+  if (opts.routingHealth) {
     const gate = opts.routingHealth.gate(model.providerId, model.modelId);
     if (gate.state === "open") {
       rejections.push({

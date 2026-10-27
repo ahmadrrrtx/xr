@@ -40,6 +40,7 @@ import { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
 import { CostRepo } from "../state/repos/cost-repo.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore } from "../context/memory/store.ts";
+import { buildCatalog } from "../intelligence/catalog.ts";
 import { priceFor } from "../cost/pricing.ts";
 import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
 import { makeApprover } from "../control/approval-store.ts";
@@ -350,7 +351,18 @@ export class AgentService implements LifecycleHook {
       routingDecision?.selected?.modelId ??
       overrides.model ??
       config.defaults.model;
-    const pricing = priceFor(provider.id, selectedModel);
+    const pricingOverrides: Record<string, import("../cost/governor.ts").Pricing> = {};
+    for (const [p, descriptor] of Object.entries(config.providerEngine?.providerCapabilities ?? {})) {
+      for (const [m, facts] of Object.entries((descriptor as any)?.models ?? {})) {
+        const raw = (facts as any)?.cost;
+        if (raw && typeof raw.source === "string") pricingOverrides[`${p}/${m}`] = raw;
+      }
+    }
+    for (const m of buildCatalog(config).models) {
+      const key = `${m.providerId}/${m.modelId}`;
+      if (m.tags.includes("local") && m.locality.locality !== "local" && !pricingOverrides[key]) pricingOverrides[key] = { known: false, inPerMTok: NaN, outPerMTok: NaN, source: "remote runtime tariff unavailable" };
+    }
+    const pricing = priceFor(provider.id, selectedModel, { override: pricingOverrides[`${provider.id}/${selectedModel}`] });
 
     const budget = envelopeBudget ?? {
       // Compat aliases (one release): on the partitioned path these are
@@ -612,6 +624,7 @@ export class AgentService implements LifecycleHook {
       policy: {
         budget,
         pricing,
+        pricingOverrides,
         egressAllowlist: config.security.egressAllowlist,
         dryRun: overrides.dryRun ?? false,
         ...(overrides.toolsAllow ? { toolsAllow: overrides.toolsAllow } : {}),

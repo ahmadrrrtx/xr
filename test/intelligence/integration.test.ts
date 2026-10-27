@@ -55,7 +55,7 @@ describe("XR 4.4 provider routing integration", () => {
       id: "primary",
       label: "P",
       async chat() {
-        throw new Error("boom");
+        throw new Error("provider primary HTTP 503");
       },
       async health() {
         return { ok: false };
@@ -71,9 +71,10 @@ describe("XR 4.4 provider routing integration", () => {
         return { ok: true };
       },
     };
-    const wrap = new FallbackProvider(primary as any, fallback as any);
+    const wrap = new FallbackProvider(primary as any, fallback as any, { canFallback: () => true });
     expect(wrap.id).toBe("primary");
-    const turn = await wrap.chat([], []);
+    const turn = await wrap.chat([], [], { beforeAttempt: () => {} });
+    expect(wrap.id).toBe("fallback");
     expect(turn.message).toBe("ok");
   });
 

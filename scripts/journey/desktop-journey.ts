@@ -18,8 +18,8 @@
  *                  Closing the app must take the sidecar down with it.
  *   agent          the INSTALLED engine (the sidecar the app ships) performs a
  *                  real task against the deterministic fixture provider
- *   update         de-scoped until XR-LAUNCH-008 signing keys exist (the
- *                  updater manifest is dry-run by desktop-app.yml)
+ *   update         actual same-version reinstall/data retention; cross-version
+ *                  and automatic update remain separate, unvalidated evidence
  *   uninstall      apt remove · NSIS uninstaller `/S` · removing XR.app;
  *                  binaries and the uninstall registration are gone
  */
@@ -99,9 +99,9 @@ function captureOutput(child: ChildProcess): (e: unknown) => Error {
 }
 
 /** Minimal W3C WebDriver client for tauri-driver (no npm dependency). */
-async function webdriverSmoke(app: string): Promise<string> {
+async function webdriverSmoke(app: string, env: Record<string,string>): Promise<string> {
   const base = "http://127.0.0.1:4444";
-  const driver = spawn("tauri-driver", [], { stdio: ["ignore", "pipe", "pipe"] });
+  const driver = spawn("tauri-driver", [], { env, stdio: ["ignore", "pipe", "pipe"] });
   const explain = captureOutput(driver);
   try {
     for (let i = 0; i < 30; i++) {
@@ -195,8 +195,13 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
   const home = join(work, "home"), ws = join(work, "workspace");
   for (const d of [home, ws]) mkdirSync(d, { recursive: true });
   const env: Record<string, string> = { ...(process.env as Record<string, string>), HOME: home, NO_COLOR: "1", CI: "1", XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER: "1" };
-  if (process.platform !== "win32") delete env.XR_HOME; // Windows keeps USERPROFILE: WebView2 needs a real profile
-  else env.XR_HOME = join(home, ".xr");
+  const engineHome = join(home, ".xr-desktop");
+  // Native app and direct installed-sidecar CLI must target the SAME isolated
+  // governed home. Windows retains USERPROFILE for the WebView2 runtime.
+  env.XR_DESKTOP_HOME = engineHome;
+  env.XR_HOME = engineHome;
+  env.XR_SECRET_BACKEND = "file";
+  env.XR_SECRET_NAMESPACE = "desktop";
   const ctx = { installer: "", app: "", engine: "", pkg: "", uninstaller: "", installDir: "" };
 
   const step = async (name: StepName, fn: () => Promise<string>) => {
@@ -271,7 +276,7 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       const v = await sh([ctx.engine, "--version"], { env });
       need(v.status === 0 && v.out.includes(N), `installed engine --version: ${tail(v.out, 200)}`);
       if (opts.webdriver) {
-        const detail = await webdriverSmoke(ctx.app);
+        const detail = await webdriverSmoke(ctx.app, env);
         need(await engineGone(15_000), "engine sidecar still listening 15 s after the app closed (containment)");
         return `${detail}; sidecar exited with the app`;
       }
@@ -295,7 +300,7 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
     await step("agent", async () => {
       const provider = await startFixtureProvider();
       try {
-        writeFixtureConfig(env.XR_HOME ?? join(home, ".xr"), provider.url);
+        writeFixtureConfig(engineHome, provider.url);
         const r = await sh([ctx.engine, "--cwd", ws, "--provider", FIXTURE_PROVIDER, "--model", FIXTURE_MODEL, "--json", "Write the journey proof file."], { env, timeoutMs: 120_000 });
         const proof = join(ws, FIXTURE_FILE);
         need(existsSync(proof) && readFileSync(proof, "utf8") === FIXTURE_CONTENT, `proof file not written by the installed engine (exit ${r.status}): ${tail(r.out)}`);
@@ -306,10 +311,31 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       }
     });
 
-    steps.push(failed
-      ? { step: "update", status: "blocked", detail: "an earlier step failed", ms: 0 }
-      : { step: "update", status: "descoped", detail: "desktop auto-update needs the XR-LAUNCH-008 updater signing key (owner-provisioned); latest.json generation is dry-run in desktop-app.yml", ms: 0 });
-    console.log(`  ${steps[steps.length - 1]!.status.padEnd(7)} update`);
+    await step("update", async () => {
+      // Honest, executable reinstall coverage. This is NOT a cross-version or
+      // signed auto-update claim; those require separately provisioned jobs.
+      const sentinel = join(engineHome, "journey-reinstall-sentinel");
+      mkdirSync(engineHome, { recursive: true });
+      writeFileSync(sentinel, "must survive same-version reinstall");
+      if (flavour.channel === "deb") {
+        const r = await sh(["sudo", "-n", "apt-get", "install", "--reinstall", "-y", "--no-install-recommends", resolve(ctx.installer)], {timeoutMs:600_000});
+        need(r.status === 0, `reinstall failed: ${tail(r.out)}`);
+      } else if (flavour.channel === "nsis") {
+        const r = await sh([resolve(ctx.installer), "/S"], {timeoutMs:600_000});
+        need(r.status === 0, `NSIS reinstall failed: ${tail(r.out)}`);
+      } else {
+        const mount = join(work, "reinstall-mnt"); mkdirSync(mount);
+        const r = await sh(["hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mount, resolve(ctx.installer)]);
+        need(r.status === 0, `reinstall mount failed: ${tail(r.out)}`);
+        try {
+          const app = readdirSync(mount).find(n=>n.endsWith(".app"));need(Boolean(app), "no app in reinstall disk image");
+          const copy = await sh(["ditto", join(mount, app!), ctx.installDir]);need(copy.status===0, `reinstall copy failed: ${tail(copy.out)}`);
+        } finally { await sh(["hdiutil", "detach", mount, "-force"]); }
+      }
+      need(readFileSync(sentinel,"utf8")==="must survive same-version reinstall", "reinstall lost application data");
+      const v=await sh([ctx.engine,"--version"],{env});need(v.status===0&&v.out.includes(N),"reinstalled engine identity mismatch");
+      return "same-version reinstall + isolated-data preservation + installed engine version executed; cross-version/automatic update NOT validated";
+    });
 
     await step("uninstall", async () => {
       if (flavour.channel === "deb") {

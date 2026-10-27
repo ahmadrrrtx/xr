@@ -39,18 +39,21 @@ export class BudgetManager {
    */
   getConfig() {
     const cfg = this.store.getBudgetConfig();
-    return cfg ?? {
+    const result = cfg ?? {
       monthly_cap: 10.0,
       daily_cap: null,
       warnings_enabled: true,
       auto_fallback: true,
     };
+    if (!Number.isFinite(result.monthly_cap) || result.monthly_cap < 0 || (result.daily_cap !== null && (!Number.isFinite(result.daily_cap) || result.daily_cap < 0))) throw new Error("Invalid persisted budget policy; admission unavailable until repaired");
+    return result;
   }
 
   /**
    * Check if a request with the estimated cost is allowed.
    */
   checkBudget(estCostUsd: number): BudgetCheckResult {
+    if (!Number.isFinite(estCostUsd) || estCostUsd < 0) return { allow: false, reason: "price/usage unavailable — monetary admission refused", suggestLocal: true };
     const cfg = this.getConfig();
     const status = this.getStatus();
 

@@ -46,6 +46,12 @@
 
 import type { ChatOptions, Message, Provider, ProviderStreamChunk, Tool } from "../core/types.ts";
 import { ProviderAbortError } from "../providers/request-guard.ts";
+import { chatAttempt, streamAttempt } from "../providers/attempts.ts";
+import { ProviderError, normalizeProviderError, isRetryableProviderError } from "../providers/errors.ts";
+import { buildCatalog, findModel } from "./catalog.ts";
+import { localityAllowed } from "./locality.ts";
+import { localityForKind } from "./capability.ts";
+import { evaluateCandidate } from "./evaluator.ts";
 import type { XRConfig } from "../config/config.ts";
 import { registry } from "../providers/registry.ts";
 import { PRESETS } from "../providers/presets.ts";
@@ -192,19 +198,22 @@ export function legacyFallbackAllowed(params: {
  * the resilient executor's per-hop guard uses this same function (Art. III:
  * one derivation, no second opinion).
  */
-export function localityOf(providerId: string): Locality | "unknown" {
+export function localityOf(providerId: string, config?: XRConfig): Locality | "unknown" {
   const preset = registry.getPreset(providerId) ?? PRESETS[providerId];
   if (!preset) return "unknown";
   switch (preset.kind) {
-    case "local":
-      return "local";
+    case "local": {
+      const url = config?.localModels?.runtimes?.[providerId]?.baseUrl ?? (config?.providers?.[providerId] as { baseUrl?: string } | undefined)?.baseUrl ?? preset.baseUrl;
+      return localityForKind("local", providerId, url).locality;
+    }
     case "hosted":
       return "cloud";
     default:
+      if (preset.baseUrl) return localityForKind("local", providerId, preset.baseUrl).locality;
       // `custom`/self-hosted endpoints are not provably local, so they are
       // treated as `private` — permitted under `private_only`/`no_cloud`,
       // refused under `local_only`.
-      return "private";
+      return "cloud";
   }
 }
 
@@ -212,21 +221,7 @@ export function localityOf(providerId: string): Locality | "unknown" {
  * Is `locality` permitted under `policy`? Unknown locality is refused under any
  * restrictive policy — ambiguity denies (Art. IV.4).
  */
-export function localityAllowed(
-  policy: "any" | "local_only" | "private_only" | "no_cloud",
-  locality: Locality | "unknown",
-): boolean {
-  switch (policy) {
-    case "any":
-      return true;
-    case "local_only":
-      return locality === "local";
-    case "private_only":
-      return locality === "local" || locality === "private";
-    case "no_cloud":
-      return locality !== "cloud" && locality !== "unknown" && locality !== "hybrid";
-  }
-}
+export { localityAllowed } from "./locality.ts";
 
 export class RoutingService {
   private lastDecision: RoutingDecision | null = null;
@@ -257,7 +252,7 @@ export class RoutingService {
     const request: RouteRequest = {
       ...(overrides?.provider !== undefined ? { provider: overrides.provider } : {}),
       ...(overrides?.model !== undefined ? { model: overrides.model } : {}),
-      mode: overrides?.mode ?? strategyToMode(strategy),
+      mode: overrides?.mode,
       requirements: { modelClass: "chat", ...overrides?.requirements },
     };
 
@@ -277,6 +272,7 @@ export class RoutingService {
   resolveWithDecision(overrides?: ResolveOptions): ResolveWithDecision {
     const decision = this.decide(overrides);
     const policy = decision.constraints.localityPolicy;
+    const configSnapshot = JSON.stringify(this.config);
 
     if (decision.unavailable || !decision.selected) {
       /**
@@ -289,17 +285,14 @@ export class RoutingService {
        */
       const primaryId = overrides?.provider ?? this.config.defaults.provider;
       const primaryModel = overrides?.model ?? this.config.defaults.model;
-      const primaryLocality = localityOf(primaryId);
+      const primaryLocality = localityOf(primaryId, this.config);
 
       if (!localityAllowed(policy, primaryLocality)) {
         throw new LocalityPolicyViolation(policy, primaryId, primaryLocality);
       }
 
-      const primary = registry.createProvider(primaryId, this.config, primaryModel);
-      return {
-        provider: this.wrapFallbackLegacy(primary, primaryId, primaryModel, policy),
-        decision,
-      };
+      if (!registry.has(primaryId)) throw new Error(`Unknown provider "${primaryId}"`);
+      throw new ProviderError("unsupported_capability", primaryId, `Provider selection refused: ${decision.explanation}`, { modelId: primaryModel });
     }
 
     const selected = decision.selected;
@@ -307,7 +300,7 @@ export class RoutingService {
     // Defence in depth: the router already filtered by locality, but the
     // provider construction path must never be able to disagree with the
     // decision it was handed.
-    const selectedLocality = localityOf(selected.providerId);
+    const selectedLocality = localityOf(selected.providerId, this.config);
     if (!localityAllowed(policy, selectedLocality)) {
       throw new LocalityPolicyViolation(policy, selected.providerId, selectedLocality);
     }
@@ -328,12 +321,22 @@ export class RoutingService {
         (candidate) =>
           (candidate.providerId !== selected.providerId ||
             candidate.modelId !== selected.modelId) &&
-          localityAllowed(policy, localityOf(candidate.providerId)),
+          localityAllowed(policy, localityOf(candidate.providerId, this.config)),
       );
       if (step) {
         try {
           const fallback = registry.createProvider(step.providerId, this.config, step.modelId);
-          return { provider: new FallbackProvider(primary, fallback), decision };
+          const canFallback = () => {
+            if (JSON.stringify(this.config) !== configSnapshot) return false;
+            const consent = this.config.intelligencePlane;
+            if (!(decision.requirements.allowFallback ?? consent?.allowFallback)) return false;
+            if (step.providerId !== selected.providerId && !(decision.requirements.allowCrossProviderFallback ?? consent?.allowCrossProviderFallback)) return false;
+            if (localityOf(selected.providerId, this.config) !== "cloud" && localityOf(step.providerId, this.config) === "cloud" && !(decision.requirements.allowCloudFallback ?? consent?.allowCloudFallback)) return false;
+            if (!localityAllowed(policy, localityOf(step.providerId, this.config))) return false;
+            const m = findModel(buildCatalog(this.config), step.providerId, step.modelId);
+            return !!m && evaluateCandidate(m, { ...decision.requirements, pin: undefined }, decision.constraints).compatible;
+          };
+          return { provider: new FallbackProvider(primary, fallback, { canFallback }), decision };
         } catch {
           // A fallback that cannot be constructed is simply absent; the primary
           // is still valid and policy-compliant.
@@ -348,50 +351,6 @@ export class RoutingService {
     return { provider: primary, decision };
   }
 
-  /** Legacy fallback wiring, used only when the decision path could not select. */
-  private wrapFallbackLegacy(
-    primary: Provider,
-    primaryId: string,
-    primaryModel: string,
-    policy: "any" | "local_only" | "private_only" | "no_cloud",
-  ): Provider {
-    let fallbackId: string | undefined = this.config.defaults.fallbackProvider;
-    let fallbackModel: string | undefined = this.config.defaults.fallbackModel;
-
-    if (!fallbackId && this.config.localModels?.enabled && !this.isLocal(primaryId)) {
-      const local = this.findBestLocal();
-      fallbackId = local?.id ?? "ollama";
-      fallbackModel = local?.model ?? this.config.defaults.fallbackModel ?? "qwen2.5:7b";
-    }
-
-    /**
-     * Phase 0 · T11 — target diversity, including the same-provider case.
-     * The original guard (`fallbackId !== primaryId`) still permitted a
-     * same-provider/same-model fallback whenever the model was also equal, and
-     * the shipped defaults made exactly that the common case.
-     */
-    const resolvedFallbackModel = fallbackModel ?? primaryModel;
-
-    if (legacyFallbackAllowed({ fallbackId, fallbackModel, primaryId, primaryModel, policy })) {
-      try {
-        const fallback = registry.createProvider(fallbackId!, this.config, resolvedFallbackModel);
-        return new FallbackProvider(primary, fallback);
-      } catch {
-        return primary;
-      }
-    }
-    return primary;
-  }
-
-  private isLocal(id: string): boolean {
-    return isLocalPreset(id);
-  }
-
-  private findBestLocal(): { id: string; model: string } | undefined {
-    // `localModels` mixes booleans and strings; only the string fields are read.
-    const localCfg = (this.config.localModels ?? {}) as unknown as Record<string, string | undefined>;
-    return findBestLocalTarget(localCfg, this.config.defaults.provider, this.config.defaults.model);
-  }
 }
 
 /**
@@ -403,130 +362,44 @@ export class RoutingService {
  * constructs it.
  */
 export class FallbackProvider implements Provider {
-  constructor(
-    public primary: Provider,
-    public fallback: Provider,
-  ) {}
-
-  get id() {
-    return this.primary.id;
+  readonly managesAttempts = true;
+  private active: Provider;
+  constructor(public primary: Provider, public fallback: Provider, private consent?: { canFallback: () => boolean }) { this.active = primary; }
+  get id() { return this.active.id; }
+  get modelId() { return this.active.modelId; }
+  get capabilities() { return this.active.capabilities; }
+  get fallbackId() { return this.fallback.id; }
+  private sameTarget() {
+    const a=this.primary.modelId ?? (this.primary as Provider & {model?:string}).model;
+    const b=this.fallback.modelId ?? (this.fallback as Provider & {model?:string}).model;
+    return this.primary===this.fallback || (this.primary.id===this.fallback.id && typeof a==="string" && a.length>0 && a===b);
   }
-
-  /**
-   * Human-visible routing reason (Phase 0 · T11).
-   *
-   * The label used to print only provider labels, so a genuinely diverse
-   * fallback (qwen2.5:7b → codellama:7b on the same runtime) rendered as
-   * "Ollama (Local) → fallback Ollama (Local)" — indistinguishable from the
-   * self-fallback bug. The model is now included whenever the labels match.
-   */
   get label() {
-    const primaryLabel = this.primary.label;
-    const fallbackLabel = this.fallback.label;
-    if (primaryLabel !== fallbackLabel) {
-      return `${primaryLabel} → fallback ${fallbackLabel}`;
-    }
-    const primaryModel = (this.primary as { model?: string }).model;
-    const fallbackModel = (this.fallback as { model?: string }).model;
-    if (primaryModel && fallbackModel && primaryModel !== fallbackModel) {
-      return `${primaryLabel} (${primaryModel}) → fallback ${fallbackLabel} (${fallbackModel})`;
-    }
-    return primaryLabel;
+    if(this.sameTarget()) return this.primary.label;
+    if (this.active === this.fallback) return `${this.fallback.label} (${this.fallback.modelId ?? "model unknown"}; explicit fallback)`;
+    return this.primary.label === this.fallback.label ? `${this.primary.label} (${this.primary.modelId ?? (this.primary as any).model ?? "?"}) → fallback ${this.fallback.label} (${this.fallback.modelId ?? (this.fallback as any).model ?? "?"})` : `${this.primary.label} → fallback ${this.fallback.label}`;
   }
-
-  /** Expose both sides for decision/audit consumers. */
-  get fallbackId() {
-    return this.fallback.id;
+  private allowed(error: unknown, options?: ChatOptions): boolean {
+    // Cancellation/auth/malformed/unknown failures never replay. Deadlines may
+    // fail over only with explicit fresh consent and another admitted request.
+    return !this.sameTarget() && !["ProviderBudgetAdmissionError", "ProviderAccountingError"].includes((error as Error)?.name) && !(error instanceof ProviderAbortError && error.kind === "cancelled") && isRetryableProviderError(normalizeProviderError(error, this.primary.id, this.primary.modelId)) && !!options?.beforeAttempt && this.consent?.canFallback() === true;
   }
-
-  /** `provider/model` when the model is known, else just the provider id. */
-  private describe(p: Provider): string {
-    const model = (p as { model?: string }).model;
-    return model ? `${p.id}/${model}` : p.id;
+  async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<import("../core/types.ts").ModelTurn> {
+    this.active = this.primary;
+    try { return await chatAttempt(this.primary, messages, tools, options); }
+    catch (error) { if (!this.allowed(error, options)) throw error; }
+    this.active = this.fallback;
+    return chatAttempt(this.fallback, messages, tools, options, true);
   }
-
-  async chat(
-    messages: Parameters<Provider["chat"]>[0],
-    tools: Parameters<Provider["chat"]>[1],
-    options?: Parameters<Provider["chat"]>[2],
-  ): ReturnType<Provider["chat"]> {
-    try {
-      return await this.primary.chat(messages, tools, options);
-    } catch (e) {
-      // GAP-001 — failover exists for a provider that FAILED, not for a turn
-      // the user cancelled or that blew the deadline. Retrying those would
-      // double the latency the timeout was meant to bound and would ignore an
-      // explicit stop request.
-      if (e instanceof ProviderAbortError) throw e;
-      // Phase 0 · T11 — name the actual fallback target, including the model,
-      // so "falling back to ollama" can never describe a retry of the same
-      // model on the same endpoint.
-      console.warn(
-        `\x1b[33m! Primary provider (${this.describe(this.primary)}) failed: ${(e as Error).message}. Falling back to ${this.describe(this.fallback)}...\x1b[0m`,
-      );
-      return await this.fallback.chat(messages, tools, options);
-    }
-  }
-
-  /**
-   * Phase 14 — streaming with the same failover rule as `chat()`.
-   *
-   * The wrapper used to expose only `chat()`, so every run routed through it
-   * (the legacy/default path) lost token streaming: the loop found no
-   * `chatStream` and the whole reply arrived as one event after the full
-   * generation time. Failover is only honest BEFORE any output reached the
-   * consumer; once tokens were yielded a primary failure propagates as-is —
-   * a silent switch would stitch two models' words into one answer.
-   */
-  async *chatStream(
-    messages: Message[],
-    tools: Tool[],
-    options?: ChatOptions,
-  ): AsyncGenerator<ProviderStreamChunk> {
+  async *chatStream(messages: Message[], tools: Tool[], options?: ChatOptions): AsyncGenerator<ProviderStreamChunk> {
+    this.active = this.primary;
     let emitted = false;
     try {
-      for await (const chunk of streamOf(this.primary, messages, tools, options)) {
-        if (chunk.text || chunk.toolCall) emitted = true;
-        yield chunk;
-      }
+      for await (const c of streamAttempt(this.primary, messages, tools, options)) { if (c.text || c.toolCall) emitted = true; yield c; }
       return;
-    } catch (e) {
-      if (e instanceof ProviderAbortError) throw e;
-      if (emitted) throw e;
-      console.warn(
-        `\x1b[33m! Primary provider (${this.describe(this.primary)}) failed: ${(e as Error).message}. Falling back to ${this.describe(this.fallback)}...\x1b[0m`,
-      );
-    }
-    yield* streamOf(this.fallback, messages, tools, options);
+    } catch (error) { if (emitted || !this.allowed(error, options)) throw error; }
+    this.active = this.fallback;
+    yield* streamAttempt(this.fallback, messages, tools, options, true);
   }
-
-  async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
-    const h = await this.primary.health();
-    if (h.ok) return h;
-    return await this.fallback.health();
-  }
-}
-
-/**
- * Drive a provider as a stream: its native `chatStream` when it has one,
- * otherwise its complete `chat()` turn as text/tool/usage chunks + finish.
- */
-async function* streamOf(
-  provider: Provider,
-  messages: Message[],
-  tools: Tool[],
-  options?: ChatOptions,
-): AsyncGenerator<ProviderStreamChunk> {
-  const native = (provider as Provider & {
-    chatStream?: (m: Message[], t: Tool[], o?: ChatOptions) => AsyncGenerator<ProviderStreamChunk>;
-  }).chatStream;
-  if (typeof native === "function") {
-    yield* native.call(provider, messages, tools, options);
-    return;
-  }
-  const turn = await provider.chat(messages, tools, options);
-  if (turn.message) yield { text: turn.message, providerId: provider.id };
-  for (const tc of turn.toolCalls ?? []) yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: provider.id };
-  if (turn.usage) yield { usage: turn.usage, providerId: provider.id };
-  yield { finish: true, providerId: provider.id };
+  async health() { this.active = this.primary; return this.primary.health(); }
 }

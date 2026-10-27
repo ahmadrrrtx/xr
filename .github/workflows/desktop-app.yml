@@ -29,7 +29,8 @@
 #
 # Signing (XR-LAUNCH-008, decision D5): wired but gated on owner secrets
 # (TAURI_UPDATER_KEY[_PASSWORD], APPLE_*, WINDOWS_CERTIFICATE[_PASSWORD]).
-# Without them every leg is an honest UNSIGNED build with a notice; see
+# Without them development builds are UNSIGNED; ALL tag candidates fail early.
+# Publication is private draft preparation only until explicit owner promotion; see
 # docs/release/DESKTOP_SIGNING.md. No key material is ever in the repo.
 # =============================================================================
 name: Desktop App (Tauri packaging)
@@ -54,7 +55,27 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  release-preflight:
+    name: Identity + owner signing prerequisites (before native builds)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Fail on identity drift or missing tag-signing prerequisites
+        env:
+          HAS_UPDATER_KEY: ${{ secrets.TAURI_UPDATER_KEY != '' }}
+          HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+          HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+          HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+        run: |
+          bun scripts/release-manifest.ts --check
+          bun scripts/desktop-signing-plan.ts --preflight --tag "${{ github.ref_type == 'tag' }}"
+
   shell-check:
+    needs: [release-preflight]
     name: Rust shell — cargo check + clippy (Linux reference)
     runs-on: ubuntu-22.04
     timeout-minutes: 40
@@ -69,7 +90,7 @@ jobs:
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: stable
+          toolchain: 1.99.1
           components: clippy
       - name: Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -80,7 +101,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - name: Install engine dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
       # Sidecar MUST exist before cargo check: tauri-build validates
       # bundle.externalBin paths at build-script time.
       - name: Compile engine sidecar (single source — scripts/compile-sidecar.ts)
@@ -88,17 +109,17 @@ jobs:
       - name: Smoke-test the sidecar (real boot + health probe)
         run: bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu
       - name: cargo check (all targets)
-        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --all-targets
+        run: cargo check --locked --jobs 1 --manifest-path desktop/src-tauri/Cargo.toml --all-targets
       - name: cargo clippy (-D warnings)
-        run: cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --locked --jobs 1 --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
       # `cargo check --all-targets` only type-checks the unit tests; until this
       # step existed, engine_state.rs's tests (banner parsing, bounded stderr
       # tail, probe-cache expiry) had never actually RUN in CI.
       - name: cargo test (shell unit tests)
-        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
+        run: cargo test --locked --jobs 1 --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
       - name: Install desktop (renderer) dependencies
         working-directory: desktop
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
       # Phase 27 — the shell's own surface: tray/menu/lifecycle values, the
       # generated tray + MSIX artefacts, and the crash-report redaction rules.
       # `--inspect` also prints the master-icon geometry, so a master whose
@@ -129,6 +150,7 @@ jobs:
   # Until this job was green the honest status of W-1/W-2 was "implemented,
   # not runtime-verified".
   shell-test-windows:
+    needs: [release-preflight]
     name: Rust shell — cargo test on Windows (W-1/W-2 runtime proof)
     runs-on: windows-latest
     timeout-minutes: 45
@@ -138,7 +160,7 @@ jobs:
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: stable
+          toolchain: 1.99.1
       - name: Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
@@ -148,7 +170,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - name: Install engine dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
       # Same precondition as the Linux job: tauri-build validates externalBin.
       - name: Compile engine sidecar (x86_64-pc-windows-msvc)
         env:
@@ -160,17 +182,18 @@ jobs:
       - name: cargo test (win.rs runtime tests + shell unit tests)
         env:
           RUSTFLAGS: -D warnings
-        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
+        run: cargo test --locked --jobs 1 --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
 
   bundle:
     name: ${{ matrix.osName }} — tauri bundle
-    needs: [shell-check, shell-test-windows]
+    needs: [release-preflight, shell-check, shell-test-windows]
     runs-on: ${{ matrix.runsOn }}
+    environment: ${{ github.ref_type == 'tag' && 'desktop-signing' || 'desktop-development' }}
     timeout-minutes: 90
     # Windows ARM64 is reported, not gating (D4/D7).
     continue-on-error: ${{ matrix.slug == 'windows-arm64' }}
     permissions:
-      contents: write # attach installers to the release on tag runs (read-only elsewhere in effect)
+      contents: read # workflow artifacts only; draft-assets attaches after all journeys
     strategy:
       fail-fast: false
       matrix:
@@ -209,7 +232,7 @@ jobs:
       - name: Rust toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: stable
+          toolchain: 1.99.1
       - name: Add the x86_64 cross target (Intel-mac leg only)
         if: matrix.slug == 'darwin-x64'
         run: rustup target add x86_64-apple-darwin
@@ -219,9 +242,9 @@ jobs:
           workspaces: desktop/src-tauri
       - name: Install frontend dependencies
         working-directory: desktop
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Install engine dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile engine sidecar (externalBin for this triple)
         env:
           SIDECAR_TRIPLE: ${{ matrix.triple }}
@@ -235,7 +258,7 @@ jobs:
       - name: cargo test (shell unit tests on this OS leg)
         if: matrix.slug != 'darwin-x64'
         shell: bash
-        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
+        run: cargo test --locked --jobs 1 --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
       # XR-LAUNCH-008 (decision D5): signing is wired but gated on owner
       # secrets. Absent secrets ⇒ an UNSIGNED build plus a notice (PRs, forks);
       # never a silent "signed" claim. Only presence flags reach the planner;
@@ -243,31 +266,30 @@ jobs:
       - name: Signing plan (secrets-gated)
         shell: bash
         env:
-          HAS_UPDATER_KEY: ${{ secrets.TAURI_UPDATER_KEY != '' }}
-          HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
-          HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
-          HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
-          WINDOWS_CERTIFICATE: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE || '' }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
-          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
-          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
-          APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+          HAS_UPDATER_KEY: ${{ github.ref_type == 'tag' && secrets.TAURI_UPDATER_KEY != '' }}
+          HAS_APPLE_CERT: ${{ github.ref_type == 'tag' && secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+          HAS_APPLE_NOTARY: ${{ github.ref_type == 'tag' && secrets.APPLE_ID != '' && secrets.APPLE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+          HAS_WINDOWS_CERT: ${{ github.ref_type == 'tag' && secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+          WINDOWS_CERTIFICATE: ${{ github.ref_type == 'tag' && runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE || '' }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ github.ref_type == 'tag' && runner.os == 'Windows' && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+          APPLE_CERTIFICATE: ${{ github.ref_type == 'tag' && runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ github.ref_type == 'tag' && runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ github.ref_type == 'tag' && runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ github.ref_type == 'tag' && runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ github.ref_type == 'tag' && runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ github.ref_type == 'tag' && runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
         run: |
           set -euo pipefail
           thumb=""
           if [ "${{ runner.os }}" = "Windows" ] && [ "$HAS_WINDOWS_CERT" = "true" ]; then
             # shellcheck disable=SC2016 # a single-quoted PowerShell program: $vars are PowerShell's
             thumb="$(pwsh -NoProfile -Command '
+              $ErrorActionPreference = "Stop"
               $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
               $pfx = Join-Path $env:RUNNER_TEMP "xr-signing.pfx"
               [IO.File]::WriteAllBytes($pfx, $bytes)
               $pw = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-              $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
-              Remove-Item $pfx -Force
-              $cert.Thumbprint')"
+              try { $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw; $cert.Thumbprint } finally { Remove-Item $pfx -Force -ErrorAction SilentlyContinue }')"
           fi
           os="linux"; [ "${{ runner.os }}" = "macOS" ] && os="macos"; [ "${{ runner.os }}" = "Windows" ] && os="windows"
           # Absolute, forward-slash path (Git Bash on Windows: pwd -W → D:/a/_temp).
@@ -294,14 +316,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Updater signing key (minisign, from `tauri signer generate`) and its
           # password. Empty ⇒ the plan above turned createUpdaterArtifacts off.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ github.ref_type == 'tag' && secrets.TAURI_UPDATER_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.ref_type == 'tag' && secrets.TAURI_UPDATER_KEY_PASSWORD || '' }}
           # macOS: APPLE_* arrive via GITHUB_ENV from the plan step only when
           # provisioned; the bundler then signs (hardened runtime) and, with the
           # notary credentials, notarizes + staples.
         with:
           projectPath: desktop
-          args: --verbose ${{ matrix.tauriArgs }} --config ${{ env.XR_SIGNING_CONFIG }}
+          args: ${{ matrix.tauriArgs }} --config ${{ env.XR_SIGNING_CONFIG }}
       - name: List produced bundles
         shell: bash
         run: find desktop/src-tauri/${{ matrix.targetDir }}/bundle -maxdepth 3 -type f | sort
@@ -510,35 +532,7 @@ jobs:
             desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi.sig
             desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe
             desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe.sig
-      # Until this step existed the installers were WORKFLOW artifacts only —
-      # nothing ever attached them to the GitHub release, so every URL
-      # latest.json pointed at was a 404 by construction. GitHub renames the
-      # assets on upload (spaces → periods); make-updater-manifest.ts mirrors that.
-      - name: Attach installers (+ .sig when provisioned) to the GitHub release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ github.ref_name }}
-          fail_on_unmatched_files: false
-          files: |
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/deb/*.deb
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/rpm/*.rpm
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage/*.AppImage
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/appimage/*.AppImage.sig
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg/*.dmg
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos/*.app.tar.gz
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos/*.app.tar.gz.sig
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/msi/*.msi.sig
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe
-            desktop/src-tauri/${{ matrix.targetDir }}/bundle/nsis/*-setup.exe.sig
 
-  # ── XR-LAUNCH-011 — desktop clean-machine journey (REQUIRED) ──────────────
-  # A runner that did NOT build the bundle downloads it and walks install →
-  # launch (GUI + engine sidecar health; WebDriver render check on Linux and
-  # Windows x64) → core agent smoke through the installed engine → uninstall.
-  # Update is de-scoped until the XR-LAUNCH-008 updater key exists. Evidence
-  # JSON feeds docs/release/SUPPORT_MATRIX.md (scripts/support-matrix.ts).
   journey:
     name: Desktop journey — ${{ matrix.slug }} on ${{ matrix.runsOn }}
     needs: [bundle]
@@ -626,6 +620,7 @@ jobs:
   #     job list. On a PR it is skipped rather than left red for reasons no PR
   #     author can act on.
   flatpak:
+    needs: [release-preflight]
     name: Linux — Flatpak metadata (required) + build (workflow_dispatch)
     # 24.04, not 22.04, for one specific reason: the AppStream CLI on 22.04 is
     # from 2022 and does not know the modern tags this metadata uses — it reports
@@ -712,7 +707,7 @@ jobs:
         with:
           bun-version-file: .bun-version
       - name: Install engine dependencies
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Updater manifest + signature verifier tests (ephemeral test key)
         run: bun test test/release/updater-manifest.test.ts
       - name: Download signed updater artifacts (tags) or the unsigned bundles (dry run)
@@ -720,7 +715,14 @@ jobs:
         with:
           pattern: ${{ github.ref_type == 'tag' && 'xr-updater-sigs-*' || 'xr-desktop-*' }}
           path: updater-artifacts
-          merge-multiple: true
+          merge-multiple: false
+      - name: Collect architecture-qualified updater payloads (no filename collisions)
+        run: bun scripts/desktop-release-assets.ts --input updater-artifacts --out updater-payloads
+      - name: Configured tag updater requires every supported platform
+        run: |
+          enabled="$(bun -e 'console.log(Boolean(require("./desktop/src-tauri/tauri.conf.json").plugins?.updater?.pubkey))')"
+          echo "REQUIRE_TARGETS=false" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$enabled" = true ]; then echo "REQUIRE_TARGETS=true" >> "$GITHUB_ENV"; fi
       - name: Assemble latest.json
         run: |
           version="${GITHUB_REF_NAME#v}"; tag="$GITHUB_REF_NAME"
@@ -729,8 +731,8 @@ jobs:
             echo "DRY_RUN=1" >> "$GITHUB_ENV"
           fi
           bun run scripts/make-updater-manifest.ts \
-            --dir updater-artifacts --version "$version" --tag "$tag" \
-            --notes "Release $GITHUB_REF_NAME — see CHANGELOG.md" --out latest.json
+            --dir updater-payloads --version "$version" --tag "$tag" \
+            --notes "Release $GITHUB_REF_NAME — see CHANGELOG.md" --require-targets "$REQUIRE_TARGETS" --out latest.json
           test -f latest.json
           if [ "$(python3 -c 'import json;print(len(json.load(open("latest.json"))["platforms"]))')" = "0" ]; then
             echo "::warning::no signed updater artifacts — skipping publish (updater not provisioned)"
@@ -742,33 +744,19 @@ jobs:
       # a signature from another key fails here and nothing is published.
       - name: Verify every signature in latest.json against the committed pubkey
         if: env.SKIP != '1'
-        run: bun run scripts/verify-updater-signatures.ts --manifest latest.json --dir updater-artifacts
-      - name: Publish latest.json to the release (stable channel)
-        if: env.SKIP != '1' && github.ref_type == 'tag'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        run: bun run scripts/verify-updater-signatures.ts --manifest latest.json --dir updater-payloads
+      - name: Upload verified updater manifest (PRIVATE workflow artifact, no rolling feed mutation)
+        if: env.SKIP != '1'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          tag_name: ${{ github.ref_name }}
-          files: latest.json
-      # Beta channel endpoint (desktop/src-tauri/src/commands/updates.rs):
-      # releases/download/updater-beta/latest.json on a rolling pre-release.
-      - name: Publish latest.json to the rolling updater-beta pre-release (beta channel)
-        if: env.SKIP != '1' && env.CHANNEL == 'beta' && github.ref_type == 'tag'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: updater-beta
-          name: "Updater channel: beta"
-          prerelease: true
-          make_latest: false
-          body: "Rolling pointer for the desktop beta update channel. Installers live on the versioned releases."
-          files: latest.json
+          name: xr-updater-manifest
+          path: latest.json
+          if-no-files-found: error
 
-  # XR-LAUNCH-012 (D7): the ONE check branch protection requires for this
-  # workflow (.github/required-checks.json). It fails unless every job it
-  # needs succeeded — a skipped or cancelled job is not a pass.
-  desktop-gate:
-    name: Desktop gate (bundles + latest.json + journey)
+  desktop-validation:
+    name: Desktop native validation (bundles + journeys)
     if: always()
-    needs: [shell-check, shell-test-windows, bundle, journey, updater-manifest, flatpak]
+    needs: [release-preflight, shell-check, shell-test-windows, bundle, journey, updater-manifest, flatpak]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -778,3 +766,98 @@ jobs:
         run: |
           echo "needs: $RESULTS"
           for r in $RESULTS; do [ "$r" = success ] || { echo "::error::a required job ended '$r'"; exit 1; }; done
+
+  draft-assets:
+    name: Verified desktop assets — PRIVATE draft only
+    needs: [desktop-validation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Refuse mutation of an already public release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/release-ci-evidence.ts --draft-only
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: xr-desktop-*
+          path: candidate-artifacts
+          merge-multiple: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: github.ref_type == 'tag'
+        with:
+          pattern: xr-updater-sigs-*
+          path: candidate-artifacts
+          merge-multiple: false
+      - name: Detect explicitly provisioned updater
+        id: updater
+        run: echo "enabled=$(bun -e 'console.log(Boolean(require("./desktop/src-tauri/tauri.conf.json").plugins?.updater?.pubkey))')" >> "$GITHUB_OUTPUT"
+      - name: Download already verified updater manifest when provisioned
+        if: github.ref_type == 'tag' && steps.updater.outputs.enabled == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: xr-updater-manifest
+          path: verified-updater
+      - name: Collect only production installers + signatures and inventory locked dependencies
+        run: |
+          bun scripts/desktop-release-assets.ts --input candidate-artifacts --out desktop-release
+          if [ -f verified-updater/latest.json ]; then cp verified-updater/latest.json desktop-release/latest.json; fi
+          bun scripts/sbom.ts --scope combined --out desktop-release/desktop-sbom.cyclonedx.json
+          bun scripts/write-sums.ts desktop-release
+          mv desktop-release/SHA256SUMS desktop-release/DESKTOP-SHA256SUMS
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: github.ref_type == 'tag'
+      - name: Sign and independently verify desktop checksum inventory + SBOM
+        if: github.ref_type == 'tag'
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          for f in DESKTOP-SHA256SUMS desktop-sbom.cyclonedx.json; do
+            cosign sign-blob --yes --bundle "desktop-release/$f.bundle" "desktop-release/$f"
+            cosign verify-blob --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/desktop-app.yml@${{ github.ref }}" --certificate-oidc-issuer "https://token.actions.githubusercontent.com" --bundle "desktop-release/$f.bundle" "desktop-release/$f"
+          done
+      - name: Attest native installer build provenance (not a local fixture proof)
+        if: github.ref_type == 'tag'
+        id: attest
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3 official annotated tag resolved
+        with:
+          subject-path: desktop-release/DESKTOP-SHA256SUMS
+      - name: Verify native provenance exact workflow/ref/source commit
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh attestation verify desktop-release/DESKTOP-SHA256SUMS --repo "${{ github.repository }}" --signer-workflow "${{ github.repository }}/.github/workflows/desktop-app.yml" --source-ref "${{ github.ref }}" --source-digest "${{ github.sha }}" --deny-self-hosted-runners
+          cp "${{ steps.attest.outputs.bundle-path }}" desktop-release/desktop-provenance.sigstore.json
+      - name: Attach installers to PRIVATE draft only (public promotion is separately owner-gated)
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: false
+          overwrite_files: true
+          fail_on_unmatched_files: true
+          files: desktop-release/*
+
+  desktop-gate:
+    name: Desktop gate (bundles + latest.json + journey)
+    if: always()
+    needs: [release-preflight, shell-check, shell-test-windows, bundle, journey, updater-manifest, flatpak, desktop-validation, draft-assets]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every validation, collection and applicable tag-signature job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do [ "$r" = success ] || { echo "::error::required job ended '$r'"; exit 1; }; done

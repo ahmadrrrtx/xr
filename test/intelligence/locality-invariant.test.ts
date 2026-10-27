@@ -35,6 +35,7 @@ import {
   strategyToMode,
 } from "../../src/intelligence/routing-service.ts";
 import type { Provider } from "../../src/core/types.ts";
+import { registerRuntimeSecretResolver } from "../../src/security/secret-broker.ts";
 import { ConfigSchema, type XRConfig } from "../../src/config/config.ts";
 
 // Registering the built-in provider presets is a side effect of importing the
@@ -48,7 +49,7 @@ function config(over: Record<string, unknown> = {}): XRConfig {
   return ConfigSchema.parse({
     defaults: { provider: "ollama", model: "qwen2.5:7b" },
     providerEngine: { routingStrategy: "hybrid" },
-    intelligencePlane: {},
+    intelligencePlane: { enableAutomatic: true },
     ...over,
   });
 }
@@ -212,8 +213,8 @@ describe("T3 — REGRESSION: a cloud default is never silently used under a rest
     // it did before Phase 2.
     const cfg = config({ intelligencePlane: { localityPolicy: "any" } });
     const svc = new RoutingService(cfg);
-    const { provider } = svc.resolveWithDecision({ provider: "openai", model: "gpt-4o-mini" });
-    expect(provider.id).toBe("openai");
+    const unregister = registerRuntimeSecretResolver(name => name === "OPENAI_API_KEY" ? "deterministic-fake-key" : undefined);
+    try { const { provider } = svc.resolveWithDecision({ provider: "openai", model: "gpt-4o-mini" }); expect(provider.id).toBe("openai"); } finally { unregister(); }
   });
 });
 
@@ -244,8 +245,7 @@ describe("T3 — legacy strategy compatibility is preserved", () => {
     // single authority enforces — a cloud default must never satisfy it.
     const decision = svc.decide({});
     expect(decision.constraints.localityPolicy).toBe("local_only");
-    const { provider } = svc.resolveWithDecision({});
-    expect(localityOfProvider(provider.id)).toBe("local");
+    expect(() => svc.resolveWithDecision({})).toThrow();
   });
 });
 
@@ -416,7 +416,7 @@ describe("T3 — mutation hardening: every locality branch is pinned", () => {
     };
     const boom: Provider = {
       id: "b", label: "B",
-      chat: async () => { throw new Error("down"); },
+      chat: async () => { throw new Error("HTTP 503"); },
       health: async () => ({ ok: false }),
     };
     const secondary: Provider = {
@@ -428,10 +428,10 @@ describe("T3 — mutation hardening: every locality branch is pinned", () => {
     // Healthy primary: the fallback must NOT run.
     expect((await new FallbackProvider(ok, secondary).chat([], [])).message).toBe("primary");
     // Failing primary: the fallback MUST run.
-    expect((await new FallbackProvider(boom, secondary).chat([], [])).message).toBe("secondary");
+    expect((await new FallbackProvider(boom, secondary, { canFallback: () => true }).chat([], [], { beforeAttempt: () => {} })).message).toBe("secondary");
     // health() mirrors the same rule.
     expect((await new FallbackProvider(ok, secondary).health()).ok).toBe(true);
-    expect((await new FallbackProvider(boom, secondary).health()).ok).toBe(true);
+    expect((await new FallbackProvider(boom, secondary).health()).ok).toBe(false);
   });
 
   test("FallbackProvider exposes the primary's id, not the fallback's", () => {

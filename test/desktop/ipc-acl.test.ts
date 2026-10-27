@@ -202,3 +202,16 @@ describe("XR-LAUNCH-021 — no panics on a damaged database; WAL-safe import/exp
     expect(tab).toContain("toast.error('Export failed'");
   });
 });
+
+// Source wiring assertion complements std-only executed validator tests, not an
+// OS keychain integration claim.
+test("legacy native credential IPC cannot address arbitrary OS-store accounts", () => {
+  const source = read("src/commands/settings.rs");
+  for (const fn of ["keychain_get", "keychain_delete"]) {
+    const body = source.slice(source.indexOf(`pub fn ${fn}(`)).split("\n}\n")[0]!;
+    expect(body).toContain("crate::legacy_credentials::validate_scope(&service, &account)?");
+  }
+  const write = source.slice(source.indexOf("pub fn keychain_set(")).split("\n}\n")[0]!;
+  expect(write).toContain("Legacy OS credential writes are disabled");
+  expect(write).not.toContain("set_password");
+});

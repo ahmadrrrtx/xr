@@ -18,7 +18,7 @@ function baseConfig(over: Record<string, unknown> = {}): XRConfig {
   return ConfigSchema.parse({
     defaults: { provider: "ollama", model: "qwen2.5:7b" },
     providerEngine: { routingStrategy: "hybrid" },
-    intelligencePlane: {},
+    intelligencePlane: { enableAutomatic: true },
     ...over,
   });
 }
@@ -89,7 +89,7 @@ describe("Phase 5 · explainable automatic routing", () => {
     expect(decision.explanation).toMatch(/difficulty=/);
   });
 
-  test("seeded BAD metadata decision is overridable by manual pin (override completeness)", () => {
+  test("manual pin cannot bypass an explicitly unsupported required capability", () => {
     // Seed a bad override at the MODEL level (the decision-path metadata):
     // mark the local runtime's default toolUse-unsupported; the tool-use task
     // will be routed away from it (metadata says incapable).
@@ -113,8 +113,8 @@ describe("Phase 5 · explainable automatic routing", () => {
       model: "qwen2.5:7b",
       requirements: { modelClass: "chat", require: { toolUse: true }, summary: "call tools" },
     });
-    expect(pinned.decision.selected?.providerId).toBe("ollama");
-    expect(pinned.decision.manual).toBe(true);
+    expect(pinned.decision.unavailable).toBe(true);
+    expect(pinned.decision.selected).toBeUndefined();
   });
 
   test("restrict-to-set: only whitelisted providers are eligible (user_restriction)", () => {
@@ -153,10 +153,10 @@ describe("Phase 5 · explainable automatic routing", () => {
     expect(decision.factors.join(" ")).toMatch(/workspace default provider|preferred provider/);
   });
 
-  test("enableAutomatic default (new users) routes automatically", () => {
-    const config = baseConfig(); // enableAutomatic defaults to true
+  test("new users do not roam providers until Auto is explicitly enabled", () => {
+    const config = baseConfig({ intelligencePlane: {} }); // safe default is opt-in
     const policy = policyFromConfig(config);
-    expect(policy.routingMode).toBe("automatic");
+    expect(policy.routingMode).toBe("preferred_with_fallback");
   });
 
   test("explicit difficulty override feeds the capability gate deterministically", () => {

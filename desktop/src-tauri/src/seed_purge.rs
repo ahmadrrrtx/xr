@@ -20,13 +20,13 @@
  */
 use rusqlite::{params, Connection};
 
-/// Demo data is a development aid: debug builds only, opt-out with
-/// `XR_DEMO_DATA=0`. Always false in a release build.
+/// Demo data is a development aid: debug builds only, explicit opt-in with
+/// `XR_DEMO_DATA=1`. Always false in a release build.
 pub fn demo_data_enabled() -> bool {
     cfg!(debug_assertions)
         && std::env::var("XR_DEMO_DATA")
-            .map(|v| v != "0")
-            .unwrap_or(true)
+            .map(|v| v == "1")
+            .unwrap_or(false)
 }
 
 fn all_digits(s: &str, n: usize) -> bool {
@@ -287,7 +287,7 @@ CREATE TABLE IF NOT EXISTS budget_events (id TEXT PRIMARY KEY, ts INTEGER NOT NU
         // answer is the cfg!(debug_assertions) gate itself.
         assert_eq!(
             demo_data_enabled(),
-            cfg!(debug_assertions) && std::env::var("XR_DEMO_DATA").as_deref() != Ok("0")
+            cfg!(debug_assertions) && std::env::var("XR_DEMO_DATA").as_deref() == Ok("1")
         );
     }
 

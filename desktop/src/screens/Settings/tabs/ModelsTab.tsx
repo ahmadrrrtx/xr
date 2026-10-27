@@ -2,8 +2,7 @@
  * Settings → Models & Providers (Phase 8) — provider list with connection
  * status, a 12-entry add catalog, default-model-by-capability selects, and
  * the local-Ollama card (detect + pull with live progress).
- * Keys live in the OS keychain when available; otherwise they fall back to
- * the local store with a visible "local-insecure" warning.
+ * Keys are held by the engine secret broker, never generic desktop settings.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -40,7 +39,6 @@ import type { LucideIcon } from 'lucide-react';
 import { isTauri } from '@/lib/tauri';
 import {
   detectSystem,
-  keychainDelete,
   ollamaDetect,
   ollamaPull,
   openUrl,
@@ -58,26 +56,133 @@ interface CatalogEntry extends ProviderCatalogEntry {
 }
 
 const CATALOG: CatalogEntry[] = [
-  { id: 'openai', name: 'OpenAI', kind: 'openai-compatible', tagline: 'GPT-4o, o-series and more.', baseUrl: 'https://api.openai.com/v1', keysUrl: 'https://platform.openai.com/api-keys', icon: Sparkles },
-  { id: 'anthropic', name: 'Anthropic', kind: 'anthropic', tagline: 'Claude models.', baseUrl: 'https://api.anthropic.com', keysUrl: 'https://console.anthropic.com/settings/keys', icon: Brain },
-  { id: 'google', name: 'Google Gemini', kind: 'gemini', tagline: 'Gemini models.', baseUrl: 'https://generativelanguage.googleapis.com', keysUrl: 'https://aistudio.google.com/apikey', icon: Flower2 },
-  { id: 'openrouter', name: 'OpenRouter', kind: 'openai-compatible', tagline: 'One key, every model.', baseUrl: 'https://openrouter.ai/api', keysUrl: 'https://openrouter.ai/keys', icon: Boxes },
-  { id: 'ollama', name: 'Ollama (local)', kind: 'ollama', tagline: 'Local models on this machine — no key needed.', baseUrl: 'http://localhost:11434', keyless: true, icon: Cpu },
-  { id: 'mistral', name: 'Mistral', kind: 'openai-compatible', tagline: 'Mistral and Codestral models.', baseUrl: 'https://api.mistral.ai/v1', keysUrl: 'https://console.mistral.ai/api-keys', icon: Cloud },
-  { id: 'groq', name: 'Groq', kind: 'openai-compatible', tagline: 'Fast inference for open models.', baseUrl: 'https://api.groq.com/openai/v1', keysUrl: 'https://console.groq.com/keys', icon: Zap },
-  { id: 'together', name: 'Together', kind: 'openai-compatible', tagline: 'Open models, hosted.', baseUrl: 'https://api.together.xyz/v1', keysUrl: 'https://api.together.ai/settings/api-keys', icon: Rocket },
-  { id: 'xai', name: 'xAI', kind: 'openai-compatible', tagline: 'Grok models.', baseUrl: 'https://api.x.ai/v1', keysUrl: 'https://console.x.ai', icon: Bot },
-  { id: 'deepseek', name: 'DeepSeek', kind: 'openai-compatible', tagline: 'DeepSeek chat and reasoner.', baseUrl: 'https://api.deepseek.com/v1', keysUrl: 'https://platform.deepseek.com/api_keys', icon: Globe },
-  { id: 'cohere', name: 'Cohere', kind: 'openai-compatible', tagline: 'Command models.', baseUrl: 'https://api.cohere.com/compatibility/v1', keysUrl: 'https://dashboard.cohere.com/api-keys', icon: Wrench },
-  { id: 'custom', name: 'Custom Endpoint', kind: 'custom', tagline: 'Any OpenAI-compatible base URL.', baseUrl: '', icon: Wrench },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    kind: 'openai-compatible',
+    tagline: 'Current GPT models and manual legacy choices.',
+    baseUrl: 'https://api.openai.com/v1',
+    keysUrl: 'https://platform.openai.com/api-keys',
+    icon: Sparkles,
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    kind: 'anthropic',
+    tagline: 'Claude models.',
+    baseUrl: 'https://api.anthropic.com',
+    keysUrl: 'https://console.anthropic.com/settings/keys',
+    icon: Brain,
+  },
+  {
+    id: 'google',
+    name: 'Google Gemini',
+    kind: 'gemini',
+    tagline: 'Gemini models.',
+    baseUrl: 'https://generativelanguage.googleapis.com',
+    keysUrl: 'https://aistudio.google.com/apikey',
+    icon: Flower2,
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    kind: 'openai-compatible',
+    tagline: 'One key, every model.',
+    baseUrl: 'https://openrouter.ai/api',
+    keysUrl: 'https://openrouter.ai/keys',
+    icon: Boxes,
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama (local)',
+    kind: 'ollama',
+    tagline: 'Local models on this machine — no key needed.',
+    baseUrl: 'http://localhost:11434',
+    keyless: true,
+    icon: Cpu,
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral',
+    kind: 'openai-compatible',
+    tagline: 'Mistral and Codestral models.',
+    baseUrl: 'https://api.mistral.ai/v1',
+    keysUrl: 'https://console.mistral.ai/api-keys',
+    icon: Cloud,
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    kind: 'openai-compatible',
+    tagline: 'Fast inference for open models.',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    keysUrl: 'https://console.groq.com/keys',
+    icon: Zap,
+  },
+  {
+    id: 'together',
+    name: 'Together',
+    kind: 'openai-compatible',
+    tagline: 'Open models, hosted.',
+    baseUrl: 'https://api.together.xyz/v1',
+    keysUrl: 'https://api.together.ai/settings/api-keys',
+    icon: Rocket,
+  },
+  {
+    id: 'xai',
+    name: 'xAI',
+    kind: 'openai-compatible',
+    tagline: 'Grok models.',
+    baseUrl: 'https://api.x.ai/v1',
+    keysUrl: 'https://console.x.ai',
+    icon: Bot,
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    kind: 'openai-compatible',
+    tagline: 'DeepSeek chat and reasoner.',
+    baseUrl: 'https://api.deepseek.com/v1',
+    keysUrl: 'https://platform.deepseek.com/api_keys',
+    icon: Globe,
+  },
+  {
+    id: 'cohere',
+    name: 'Cohere',
+    kind: 'openai-compatible',
+    tagline: 'Command models.',
+    baseUrl: 'https://api.cohere.com/compatibility/v1',
+    keysUrl: 'https://dashboard.cohere.com/api-keys',
+    icon: Wrench,
+  },
+  {
+    id: 'custom',
+    name: 'Custom Endpoint',
+    kind: 'custom',
+    tagline: 'Any OpenAI-compatible base URL.',
+    baseUrl: '',
+    icon: Wrench,
+  },
 ];
 
 const OLLAMA_ENTRY = CATALOG.find((entry) => entry.id === 'ollama')!;
 
-const CAPABILITIES: Array<{ key: keyof CapabilityDefaults; label: string; hint?: string }> = [
+const CAPABILITIES: Array<{
+  key: keyof CapabilityDefaults;
+  label: string;
+  hint?: string;
+}> = [
   { key: 'chat', label: 'Chat', hint: 'The default for new conversations.' },
-  { key: 'coding', label: 'Coding', hint: 'Used for code generation and review.' },
-  { key: 'embeddings', label: 'Embeddings', hint: 'Powers search over your history.' },
+  {
+    key: 'coding',
+    label: 'Coding',
+    hint: 'Used for code generation and review.',
+  },
+  {
+    key: 'embeddings',
+    label: 'Embeddings',
+    hint: 'Powers search over your history.',
+  },
   { key: 'vision', label: 'Vision', hint: 'Reading images and screenshots.' },
   { key: 'stt', label: 'Speech to text' },
   { key: 'tts', label: 'Text to speech' },
@@ -94,7 +199,12 @@ type CapabilityDefaults = {
 
 /* ── Ollama curated models ────────────────────────────────────── */
 
-interface CuratedModel { id: string; name: string; ram: number; sizeGb: number }
+interface CuratedModel {
+  id: string;
+  name: string;
+  ram: number;
+  sizeGb: number;
+}
 const CURATED: CuratedModel[] = [
   { id: 'gemma2:2b', name: 'Gemma 2 2B', ram: 8, sizeGb: 1.6 },
   { id: 'qwen2.5:3b', name: 'Qwen 2.5 3B', ram: 8, sizeGb: 1.9 },
@@ -112,7 +222,9 @@ export function ModelsTab() {
 
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [configFor, setConfigFor] = useState<CatalogEntry | null>(null);
-  const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[] | null>(null);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[] | null>(
+    null
+  );
   const [ollamaBusy, setOllamaBusy] = useState(false);
   const [pullOpen, setPullOpen] = useState(false);
   const [pullModel, setPullModel] = useState<string | null>(null);
@@ -173,12 +285,7 @@ export function ModelsTab() {
   }): void => {
     void (async () => {
       const keyStorage = input.keyStorage;
-      if (input.apiKey && keyStorage === 'local-insecure') {
-        const { readSettingJSON, writeSettingJSON } = await import('@/lib/persistent-store');
-        const keys = (await readSettingJSON<Record<string, string>>('xr.providerKeys')) ?? {};
-        keys[input.id] = input.apiKey;
-        await writeSettingJSON('xr.providerKeys', keys);
-      }
+
       const next = providers.filter((provider) => provider.id !== input.id);
       next.push({
         id: input.id,
@@ -203,21 +310,25 @@ export function ModelsTab() {
     })();
   };
 
-  const removeProvider = (id: string): void => {
-    void (async () => {
-      void keychainDelete('xr', id);
-      const { readSettingJSON, writeSettingJSON } = await import('@/lib/persistent-store');
-      const keys = (await readSettingJSON<Record<string, string>>('xr.providerKeys')) ?? {};
-      if (keys[id]) {
-        delete keys[id];
-        await writeSettingJSON('xr.providerKeys', keys);
-      }
-      update('models', {
-        providers: providers.filter((provider) => provider.id !== id),
-      });
-      setConfigFor(null);
-      toast.success('Provider removed');
-    })();
+  const removeProvider = async (id: string): Promise<void> => {
+    const existing = providers.find((p) => p.id === id);
+    let notice =
+      'Desktop entry removed; review external credentials separately.';
+    if (existing?.keyStorage === 'engine') {
+      const { removeProviderKeyFromEngine } =
+        await import('@/engine/providers');
+      notice = (await removeProviderKeyFromEngine(id)).notice;
+    } else if (existing?.keyStorage === 'keychain') {
+      const { keychainDelete } = await import('@/lib/settingsApi');
+      await keychainDelete('xr', id);
+    } else if (existing?.keyStorage === 'local-insecure') {
+      const { purgeLegacyCredentialSettings } =
+        await import('@/lib/persistent-store');
+      await purgeLegacyCredentialSettings();
+    }
+    update('models', { providers: providers.filter((p) => p.id !== id) });
+    setConfigFor(null);
+    toast.success('Stored entry removed', { description: notice });
   };
 
   const pull = (model: string): void => {
@@ -245,9 +356,16 @@ export function ModelsTab() {
           (event) => {
             const progress = event.payload;
             if (progress.id !== pullId) return;
-            if (progress.total && progress.total > 0 && progress.completed !== null) {
+            if (
+              progress.total &&
+              progress.total > 0 &&
+              progress.completed !== null
+            ) {
               setPullPct(
-                Math.min(100, Math.round((progress.completed / progress.total) * 100))
+                Math.min(
+                  100,
+                  Math.round((progress.completed / progress.total) * 100)
+                )
               );
             }
             if (progress.status === 'success') {
@@ -270,18 +388,26 @@ export function ModelsTab() {
       <SettingsSection title="Providers">
         {!hasProviders ? (
           <div className="px-3.5 py-6 text-center">
-            <p className="text-text-secondary text-[13px]">No providers configured yet.</p>
+            <p className="text-text-secondary text-[13px]">
+              No providers configured yet.
+            </p>
             <p className="text-text-tertiary mt-1 text-xs">
               Add one below, or use Ollama to run models locally.
             </p>
-            <Button size="sm" className="mt-3" onClick={() => setCatalogOpen(true)}>
+            <Button
+              size="sm"
+              className="mt-3"
+              onClick={() => setCatalogOpen(true)}
+            >
               Add provider
             </Button>
           </div>
         ) : (
           <>
             {providers.map((provider) => {
-              const entry = CATALOG.find((catalog) => catalog.id === provider.id);
+              const entry = CATALOG.find(
+                (catalog) => catalog.id === provider.id
+              );
               const Icon = entry?.icon ?? Boxes;
               const connected = provider.lastTest?.ok === true;
               return (
@@ -312,12 +438,14 @@ export function ModelsTab() {
                   }
                   description={
                     provider.kind === 'ollama'
-                      ? provider.baseUrl ?? 'http://localhost:11434'
+                      ? (provider.baseUrl ?? 'http://localhost:11434')
                       : provider.keyStorage === 'local-insecure'
                         ? 'Key stored locally (no OS keychain available)'
-                        : provider.keyStorage === 'keychain'
-                          ? 'Key in OS keychain'
-                          : 'Saved'
+                        : provider.keyStorage === 'engine'
+                          ? 'engine secret broker'
+                          : provider.keyStorage === 'keychain'
+                            ? 'Key in OS keychain'
+                            : 'Saved'
                   }
                 >
                   <Button
@@ -347,9 +475,10 @@ export function ModelsTab() {
               </Button>
               {insecureCount > 0 ? (
                 <p className="text-warning mt-2 max-w-[60ch] text-[11px]">
-                  {insecureCount} {insecureCount === 1 ? 'key is' : 'keys are'} stored without
-                  the OS keychain — a system keychain (Keychain / Credential Manager / Secret
-                  Service) gives {insecureCount === 1 ? 'it' : 'them'} stronger protection.
+                  {insecureCount} {insecureCount === 1 ? 'key is' : 'keys are'}{' '}
+                  stored without the OS keychain — a system keychain (Keychain /
+                  Credential Manager / Secret Service) gives{' '}
+                  {insecureCount === 1 ? 'it' : 'them'} stronger protection.
                 </p>
               ) : null}
             </div>
@@ -361,7 +490,9 @@ export function ModelsTab() {
       <SettingsSection title="Default models">
         {!hasProviders && (ollamaModels ?? []).length === 0 ? (
           <div className="px-3.5 py-5 text-center">
-            <p className="text-text-secondary text-[13px]">No models available yet.</p>
+            <p className="text-text-secondary text-[13px]">
+              No models available yet.
+            </p>
             <button
               type="button"
               className="text-accent mt-1 text-xs hover:underline"
@@ -409,7 +540,12 @@ export function ModelsTab() {
           }
         >
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" disabled={ollamaBusy} onClick={refreshOllama}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={ollamaBusy}
+              onClick={refreshOllama}
+            >
               {ollamaBusy ? 'Checking…' : 'Check again'}
             </Button>
             <Button
@@ -421,9 +557,14 @@ export function ModelsTab() {
             </Button>
           </div>
         </SettingRow>
-        {ollamaModels !== null && !providers.some((provider) => provider.kind === 'ollama') ? (
+        {ollamaModels !== null &&
+        !providers.some((provider) => provider.kind === 'ollama') ? (
           <div className="border-border-subtle border-t px-3.5 py-3">
-            <Button variant="outline" size="sm" onClick={() => openProvider(OLLAMA_ENTRY)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openProvider(OLLAMA_ENTRY)}
+            >
               Use Ollama in XR
             </Button>
           </div>
@@ -454,7 +595,9 @@ export function ModelsTab() {
           <div className="mt-2 grid grid-cols-2 gap-2">
             {CATALOG.map((entry) => {
               const Icon = entry.icon;
-              const configured = providers.some((provider) => provider.id === entry.id);
+              const configured = providers.some(
+                (provider) => provider.id === entry.id
+              );
               return (
                 <button
                   key={entry.id}
@@ -469,7 +612,10 @@ export function ModelsTab() {
                     <span className="text-text-primary flex items-center gap-1.5 text-[13px] font-medium">
                       {entry.name}
                       {configured ? (
-                        <Badge variant="secondary" className="text-[9px] uppercase">
+                        <Badge
+                          variant="secondary"
+                          className="text-[9px] uppercase"
+                        >
                           Added
                         </Badge>
                       ) : null}
@@ -489,7 +635,9 @@ export function ModelsTab() {
       {configFor ? (
         <ProviderConfigModal
           entry={configFor}
-          existing={providers.find((provider) => provider.id === configFor.id) ?? null}
+          existing={
+            providers.find((provider) => provider.id === configFor.id) ?? null
+          }
           open
           onOpenChange={(open) => {
             if (!open) setConfigFor(null);
@@ -511,7 +659,8 @@ export function ModelsTab() {
           <div className="mt-2 max-h-80 space-y-1.5 overflow-y-auto">
             {CURATED.map((model) => {
               const pulling = pullModel === model.id;
-              const recommended = totalRam > 0 && totalRam >= model.ram && model.ram <= 16;
+              const recommended =
+                totalRam > 0 && totalRam >= model.ram && model.ram <= 16;
               const tooBig = totalRam > 0 && totalRam < model.ram;
               return (
                 <div
@@ -527,7 +676,10 @@ export function ModelsTab() {
                     <p className="text-text-primary flex items-center gap-1.5 text-[13px] font-medium">
                       {model.name}
                       {recommended ? (
-                        <Badge variant="secondary" className="text-[9px] uppercase">
+                        <Badge
+                          variant="secondary"
+                          className="text-[9px] uppercase"
+                        >
                           Recommended
                         </Badge>
                       ) : null}

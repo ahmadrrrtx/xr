@@ -5,18 +5,14 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { makeTrust, makeGrant, type TrustHarness } from "./_helpers.ts";
 import { NamespaceSandboxBackend } from "../../src/runtime/trust/environment/namespace.ts";
-import { detectBwrap } from "../../src/runtime/trust/isolated-spawn.ts";
 import { RestrictedProcessBackend } from "../../src/runtime/trust/environment/restricted-process.ts";
 import { sensitiveBlockedPaths } from "../../src/runtime/trust/classify.ts";
 import type { EnvironmentExecutable, PlacementDecision } from "../../src/runtime/trust/types.ts";
 
-// Probe the real backend at module load so we can skip honestly if the host
-// cannot provide a namespace sandbox (e.g. no bubblewrap / no user namespaces).
-// Strict confinement tests validate the bubblewrap boundary (the fully-enforced
-// mechanism). Where bubblewrap is unavailable (e.g. Windows, or a bare CI
-// runner) they SKIP. The namespace backend also has a weaker unshare fallback
-// for real actions, which is not strictly unit-tested here.
-const NS_AVAILABLE = await detectBwrap();
+// Both Linux mechanisms are now self-probed. Skips must be explicit, never
+// early-returning tests displayed as if they exercised a kernel boundary.
+const NS_AVAILABLE = await new NamespaceSandboxBackend().detect();
+const kernelTest = NS_AVAILABLE ? test : test.skip;
 
 let h: TrustHarness;
 let W: string;
@@ -59,8 +55,7 @@ afterAll(() => {
 });
 
 describe("XR 4.2 namespace sandbox (real kernel boundary)", () => {
-  test("backend detects and claims an honest kernel boundary", () => {
-    if (!NS_AVAILABLE) return;
+  kernelTest("backend detects and claims an honest kernel boundary", () => {
     expect(h.manager.capabilities().namespaceSandbox).toBe(true);
     const be = h.manager.backendFor("namespace_sandbox");
     expect(be).toBeDefined();
@@ -69,8 +64,7 @@ describe("XR 4.2 namespace sandbox (real kernel boundary)", () => {
     expect(be!.guarantees.noAmbientAuthority).toBe(true);
   });
 
-  test("filesystem is confined: workspace is writable, host paths are ABSENT", async () => {
-    if (!NS_AVAILABLE) return;
+  kernelTest("filesystem is confined: workspace is writable, host paths are ABSENT", async () => {
     const exec: EnvironmentExecutable = {
       argv: ["sh", "-c", `echo built > out.txt; cat ${hostSecret} 2>/dev/null || echo NO_HOST_SECRET; cat ${W}/ws_secret.txt 2>/dev/null || echo NO_WS_SECRET`],
       cwd: W,
@@ -92,8 +86,7 @@ describe("XR 4.2 namespace sandbox (real kernel boundary)", () => {
     expect(out.output.cleanup.state).toBe("succeeded");
   });
 
-  test("network is blocked inside the sandbox (no routes, no DNS)", async () => {
-    if (!NS_AVAILABLE) return;
+  kernelTest("network is blocked inside the sandbox (no routes, no DNS)", async () => {
     // Primary proof: an isolated net namespace has NO routing table entries
     // (only the /proc/net/route header). A leaked/host netns would show eth0
     // and a default route. Secondary proof: DNS resolution cannot succeed.
@@ -113,8 +106,7 @@ describe("XR 4.2 namespace sandbox (real kernel boundary)", () => {
     expect(out.output.result.stdout).not.toContain("DNS_OK");
   });
 
-  test("ambient host environment is NOT inherited", async () => {
-    if (!NS_AVAILABLE) return;
+  kernelTest("ambient host environment is NOT inherited", async () => {
     process.env.XR_HOST_LEAK = "LEAKY_VALUE_123";
     try {
       const exec: EnvironmentExecutable = {
@@ -135,8 +127,7 @@ describe("XR 4.2 namespace sandbox (real kernel boundary)", () => {
     }
   });
 
-  test("output is bounded (truncation raises a boundary event)", async () => {
-    if (!NS_AVAILABLE) return;
+  kernelTest("output is bounded (truncation raises a boundary event)", async () => {
     const exec: EnvironmentExecutable = {
       argv: ["sh", "-c", "head -c 300000 /dev/zero | tr '\\0' 'a'"],
       cwd: W,
@@ -152,8 +143,7 @@ describe("XR 4.2 namespace sandbox (real kernel boundary)", () => {
     expect(out.output.result.stdout.length).toBeLessThanOrEqual(50000 + 4096);
   });
 
-  test("task-scoped credentials are injected then revoked on cleanup", async () => {
-    if (!NS_AVAILABLE) return;
+  kernelTest("task-scoped credentials are injected then revoked on cleanup", async () => {
     const RAW = `RAWSECRET_${randomUUID().replace(/-/g, "")}`;
     const ref = h.broker.register("token", RAW, "core_tool:shell");
     const grant = grantFor(W);
@@ -174,8 +164,7 @@ describe("XR 4.2 namespace sandbox (real kernel boundary)", () => {
     expect(h.broker.has(ref.refId)).toBe(false);           // revoked after the run
   });
 
-  test("a Tier-2 network allowlist is refused (not enforceable inside the boundary)", async () => {
-    if (!NS_AVAILABLE) return;
+  kernelTest("a Tier-2 network allowlist is refused (not enforceable inside the boundary)", async () => {
     const grant = makeGrant({
       tier: "tier2_isolated",
       fs: { writableRoots: [W], readOnlyRoots: [], blockedPaths: sensitiveBlockedPaths(), ephemeralScratch: true },

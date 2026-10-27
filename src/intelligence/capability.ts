@@ -3,6 +3,8 @@
  * Unknown is never treated as supported.
  */
 
+import { MODEL_REGISTRY_VERSION, MODEL_FACTS_VERIFIED_AT, modelFact, modelFactsFresh } from "./model-registry.ts";
+import { priceFor, pricingAvailable } from "../cost/pricing.ts";
 import type { ProviderCapabilities } from "../providers/capabilities.ts";
 import type { ProviderPreset } from "../providers/presets.ts";
 import type {
@@ -90,12 +92,11 @@ export function fromLegacyCapabilities(caps: ProviderCapabilities | undefined): 
   return out;
 }
 
-export function localityForKind(kind: ProviderPreset["kind"], id?: string): LocalityProfile {
-  if (kind === "local") {
+export function localityForKind(kind: ProviderPreset["kind"], id?: string, baseUrl?: string): LocalityProfile {
+  let loopback = !baseUrl;
+  if (baseUrl) { try { const h = new URL(baseUrl).hostname; loopback = h === "localhost" || h === "[::1]" || /^127\.\d+\.\d+\.\d+$/.test(h); } catch { loopback = false; } }
+  if (kind === "local" && loopback) {
     return { locality: "local", leavesMachine: false, requiresCredential: false };
-  }
-  if (id === "bedrock") {
-    return { locality: "private", leavesMachine: true, requiresCredential: true, region: "aws" };
   }
   if (kind === "custom") {
     // Custom endpoints may be private; treat as private when URL looks local, else cloud.
@@ -107,7 +108,7 @@ export function localityForKind(kind: ProviderPreset["kind"], id?: string): Loca
 export function costProfileFor(tier: CostTier, kind: ProviderPreset["kind"]): CostProfile {
   return {
     tier,
-    free: kind === "local" || tier === "free",
+    free: kind === "local",
   };
 }
 
@@ -207,20 +208,9 @@ export function descriptorFromPreset(
 ): ProviderDescriptor {
   const caps = fromLegacyCapabilities(preset.capabilities);
   const locality = localityForKind(preset.kind, preset.id);
-  // Custom baseUrl localhost → treat as local-ish private
-  if (preset.kind === "custom" && preset.baseUrl) {
-    try {
-      const u = new URL(preset.baseUrl);
-      if (u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname.endsWith(".local")) {
-        locality.locality = "local";
-        locality.leavesMachine = false;
-      } else {
-        locality.locality = "private";
-      }
-    } catch {
-      /* keep default */
-    }
-  }
+  // Only literal loopback is local. .local DNS/public custom endpoints are
+  // NOT evidence of privacy; never guess that a hosted URL is private.
+  if (preset.kind === "custom" && preset.baseUrl) Object.assign(locality, localityForKind("local", preset.id, preset.baseUrl));
   return {
     providerId: preset.id,
     label: preset.label,
@@ -253,24 +243,34 @@ export function modelsFromPreset(
     const caps = { ...provider.capabilities };
     // Per-model refinements for known families
     refineModelCapabilities(modelId, caps);
+    const fact = modelFact(preset.id, modelId);
+    // These are declared API capabilities, distinct from XR/live validation.
+    if (fact) { caps.toolUse = fact.tools ? "supported" : "unsupported"; caps.functionCalling = caps.toolUse; caps.reasoning = fact.reasoning ? "supported" : "unknown"; }
+    if (preset.id === "anthropic" || preset.id === "google" || (preset.id === "openai" && modelId.startsWith("gpt-6"))) {
+      caps.streaming = "unsupported"; // XR currently buffers these native turns; the API itself supports SSE.
+      caps.jsonMode = "unsupported"; caps.structuredOutput = "unsupported"; // no response-format contract in this adapter
+    }
+    const price = priceFor(preset.id, modelId);
     const classes = classesFromCapabilities(caps);
     const modalities = modalitiesFromCapabilities(caps);
     models.push({
       key: modelKey(preset.id, modelId),
       providerId: preset.id,
       modelId,
+      credentialAvailable: provider.auth.credentialAvailable,
       label: `${preset.label} / ${modelId}`,
       classes,
       modalities,
       capabilities: caps,
-      context: contextHintFor(modelId),
-      cost: costProfileFor(preset.tier, preset.kind),
+      context: fact ? { contextWindow: fact.contextWindow, maxOutputTokens: fact.maxOutputTokens } : contextHintFor(modelId),
+      cost: { ...costProfileFor(preset.tier, preset.kind), known: pricingAvailable(price), source: price.source, verifiedAt: price.verifiedAt, ...(pricingAvailable(price) ? { inPerMTok: price.inPerMTok, outPerMTok: price.outPerMTok } : {}) },
+      evidence: { registryVersion: MODEL_REGISTRY_VERSION, source: fact?.source ?? preset.docsUrl ?? "legacy-preset", verifiedAt: fact ? MODEL_FACTS_VERIFIED_AT : "", lifecycle: fact?.lifecycle ?? "unknown", configured: false, reachable: "unknown", compatible: fact && ["gpt-6.1-sol", "claude-sonnet-5-5", "gemini-3.8-flash"].includes(modelId) ? "contract-tested" : "unknown", agentValidated: false, recommended: false, stale: !modelFactsFresh() },
       latency: {
         class: preset.kind === "local" ? "standard" : preset.tier === "free" ? "fast" : "standard",
       },
       quality: qualityFor(preset.tier, caps),
       locality: { ...provider.locality },
-      limitations: buildLimitations(caps, provider),
+      limitations: [...buildLimitations(caps, provider), ...((preset.id === "anthropic" || preset.id === "google" || (preset.id === "openai" && modelId.startsWith("gpt-6"))) ? ["XR native adapter buffers whole turns; native API SSE and schema-constrained final output are not implemented or advertised by this transport."] : []), ...(fact?.notes ?? ["Legacy/configured identifier: lifecycle and live agent behavior unverified."])],
       isDefault: modelId === preset.defaultModel,
       tags: [preset.kind, preset.tier],
     });

@@ -54,9 +54,12 @@ function layout(parent: string) {
 }
 
 for (const mechanism of ["unshare", "bwrap"] as const) {
-  describe(`namespace sandbox (${mechanism}) confines the filesystem`, async () => {
-    const backend = new NamespaceSandboxBackend({ only: mechanism });
-    const available = linux && (await backend.detect());
+  // Finish real probes before registering tests; async describe callbacks can
+  // otherwise overlap unrelated tests that deliberately replace spawn/env.
+  const backend = new NamespaceSandboxBackend({ only: mechanism, bwrapPath: process.env.XR_TEST_BWRAP_PATH });
+  const available = linux && (await backend.detect());
+  if (linux && mechanism === "bwrap" && process.env.XR_TEST_BWRAP_PATH && !available) throw new Error("Explicit test bwrap failed the real confinement self-check; do not hide it as a skip");
+  describe(`namespace sandbox (${mechanism}) confines the filesystem`, () => {
     const t = available ? test : test.skip;
     if (!available) test.skip(`${mechanism} unavailable on this host — nothing to verify`, () => {});
 
@@ -70,7 +73,9 @@ for (const mechanism of ["unshare", "bwrap"] as const) {
         expect(read.ok).toBe(false);
         expect(read.stdout).not.toContain("SECRET");
         const write = await sh(backend, ws, `echo INJECTED >> ${JSON.stringify(sibling)}`);
-        expect(write.ok).toBe(false);
+        // A /tmp sibling path may resolve to private scratch. Return status
+        // is not the security property: the protected HOST bytes stay intact.
+        if (!sibling.startsWith("/tmp/")) expect(write.ok).toBe(false);
         expect(readFileSync(sibling, "utf8")).toBe("SECRET\n");
       });
     }
@@ -102,6 +107,60 @@ for (const mechanism of ["unshare", "bwrap"] as const) {
       const r = await sh(backend, ws, "cat link");
       expect(r.ok).toBe(false);
       expect(r.stdout).not.toContain("SECRET");
+    });
+
+    t("readonly grant cannot be remounted writable; mapped-root cannot regain capabilities", async () => {
+      const { ws, base } = layout(tmpdir());
+      const ro = join(base, "ro"); mkdirSync(ro); writeFileSync(join(ro, "canary"), "ORIGINAL");
+      const r = await sh(backend, ws, `mount -o remount,bind,rw ${JSON.stringify(ro)} && printf CHANGED > ${JSON.stringify(join(ro, "canary"))}`, [ws], [ro]);
+      expect(r.ok).toBe(false);
+      expect(readFileSync(join(ro, "canary"), "utf8")).toBe("ORIGINAL");
+      const caps = await sh(backend, ws, "grep -E '^(Cap(Eff|Prm|Bnd|Amb)|NoNewPrivs):' /proc/self/status");
+      expect(caps.ok).toBe(true);
+      for (const kind of ["Eff", "Prm", "Bnd", "Amb"]) expect(caps.stdout).toMatch(new RegExp(`Cap${kind}:\\s+0+`));
+      expect(caps.stdout).toMatch(/NoNewPrivs:\s+1/);
+    });
+
+    t("invalid limits and a blocked subtree never execute a host marker", async () => {
+      const { ws } = layout(tmpdir());
+      const exec = { argv: ["sh", "-c", "echo BAD > marker"], cwd: ws, env: {}, timeoutMs: 1000, maxOutputBytes: 4096, memoryBytes: NaN };
+      const r = await backend.run(exec, { grant: grantFor([ws]), envInject: {} });
+      expect(r.ok).toBe(false); expect(existsSync(join(ws, "marker"))).toBe(false);
+      const blocked = { ...grantFor([ws]) as object, fs: { writableRoots: [ws], readOnlyRoots: [], blockedPaths: [join(ws, "private")] } } as never;
+      const denied = await backend.run({ ...exec, memoryBytes: undefined }, { grant: blocked, envInject: {} });
+      expect(denied.ok).toBe(false); expect(existsSync(join(ws, "marker"))).toBe(false);
+    });
+
+    t("hard CPU/address-space/process limits are applied and cannot be raised", async () => {
+      const { ws } = layout(tmpdir());
+      const r = await backend.run({ argv: ["/bin/sh", "-c", "cat /proc/self/limits; ulimit -v 131072 && echo RAISED"], cwd: ws, env: {}, timeoutMs: 2000, maxOutputBytes: 8192, cpuSeconds: 2, memoryBytes: 64 * 1024 * 1024, maxProcesses: 256 }, { grant: grantFor([ws]), envInject: {} });
+      expect(r.ok).toBe(false); expect(r.stdout).not.toContain("RAISED");
+      expect(r.stdout).toMatch(/Max cpu time\s+2\s+2/);
+      expect(r.stdout).toMatch(/Max address space\s+67108864\s+67108864/);
+      expect(r.stdout).toMatch(/Max processes\s+256\s+256/);
+    });
+
+    t("CPU, address-space, process and scratch ceilings reject real bounded attempts", async () => {
+      const { ws } = layout(tmpdir());
+      const exec = { argv: ["/bin/sh", "-c", "while :; do :; done"], cwd: ws, env: {}, timeoutMs: 4000, maxOutputBytes: 4096, cpuSeconds: 1 };
+      const ctx = { grant: grantFor([ws]), envInject: {} };
+      const cpu = await backend.run(exec, ctx);
+      expect(cpu.ok).toBe(false); expect(cpu.timedOut).toBe(false); // RLIMIT_CPU, not the wall-clock timer
+      const memory = await backend.run({ ...exec, argv: ["/usr/bin/python3", "-c", "bytearray(64*1024*1024)"], memoryBytes: 32 * 1024 * 1024 }, ctx);
+      expect(memory.ok).toBe(false); expect(memory.stderr).toContain("MemoryError");
+      const proc = await backend.run({ ...exec, argv: ["/bin/sh", "-c", "sleep 0.01 & wait"], maxProcesses: 1 }, ctx);
+      expect(proc.ok).toBe(false); expect(proc.stderr).toMatch(/fork|Resource temporarily unavailable/i);
+      const temp = await backend.run({ ...exec, argv: ["/bin/sh", "-c", "dd if=/dev/zero of=/tmp/fill bs=4096 count=8"], maxTempBytes: 8192 }, ctx);
+      expect(temp.ok).toBe(false); expect(temp.stderr).toContain("No space left");
+    });
+
+    t("aborting an isolated action kills its delayed descendant, with no later host effect", async () => {
+      const { ws } = layout(tmpdir()); const c = new AbortController();
+      const timer = setTimeout(() => c.abort(), 80);
+      const r = await backend.run({ argv: ["/bin/sh", "-c", "(sleep 0.4; echo BAD > survived) & wait"], cwd: ws, env: {}, timeoutMs: 3000, maxOutputBytes: 4096, signal: c.signal }, { grant: grantFor([ws]), envInject: {} });
+      clearTimeout(timer); expect(r.ok).toBe(false); expect(r.cancelled).toBe(true);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      expect(existsSync(join(ws, "survived"))).toBe(false);
     });
 
     t("network is none", async () => {
@@ -139,7 +198,7 @@ describe("unshare setup fails closed", () => {
     // A writable root of "/" leaves no staging mountpoint → setup fails.
     const r = await sh(backend, "/", `touch ${JSON.stringify(marker)}`, ["/"]);
     expect(r.ok).toBe(false);
-    expect(r.stderr).toContain("filesystem confinement could not be established");
+    expect(r.stderr).toMatch(/reserved mount root|filesystem confinement could not be established/);
     expect(existsSync(marker)).toBe(false);
   });
 });

@@ -36,7 +36,7 @@
         "properties": {
           "id": { "type": "string" },
           "path": { "type": "string" },
-          "kind": { "type": "string", "enum": ["json-version", "json-version-only", "toml-version", "generated-module", "site-identity", "marker-block", "shell-var", "powershell-var"] }
+          "kind": { "type": "string", "enum": ["json-version", "json-version-only", "toml-version", "cargo-lock-root", "generated-module", "site-identity", "marker-block", "shell-var", "powershell-var"] }
         }
       }
     },

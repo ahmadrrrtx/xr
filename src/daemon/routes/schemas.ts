@@ -84,9 +84,11 @@ export const OnboardingStatusResponse = z.looseObject({
     runtime: z.string().describe("Active local runtime id (e.g. ollama)."),
     healthy: z.boolean(),
     running: z.boolean(),
-    installed: z.number().describe("Installed local model count."),
+    installed: z.number().describe("Last fresh diagnostic model count; zero does not prove no installation."),
+    healthState: z.enum(["unknown", "reachable", "unreachable"]).optional(),
   }),
-  internet: z.boolean().describe("Best-effort reachability probe (never blocks the response)."),
+  internet: z.boolean().describe("Legacy pessimistic cached reachability; inspection never probes."),
+  internetState: z.enum(["unknown", "reachable", "unreachable"]).optional(),
   config: z.looseObject({
     provider: z.string(),
     model: z.string(),
@@ -96,11 +98,14 @@ export const OnboardingStatusResponse = z.looseObject({
   }),
 });
 
+export const OnboardingProviderRemoveRequest = z.looseObject({ providerId: z.string().min(1).max(80) });
+export const OnboardingProviderRemoveResponse = z.looseObject({ ok: z.boolean(), provider: z.string(), secretBackend: z.string(), notice: z.string() });
+
 export const OnboardingProviderRequest = z.looseObject({
   providerId: z.string().min(1).max(80).describe("Hosted provider preset id (from /api/providers)."),
-  apiKey: z.string().min(1).max(2048).describe("Provider API key — stored in the OS keychain or sealed file, never returned."),
+  apiKey: z.string().min(1).max(2048).describe("Provider API key — stored by the engine credential backend (local AES-GCM file fallback is not an OS keychain; its key is stored beside it), never returned."),
   model: z.string().max(200).optional().describe("Optional default model for this provider."),
-  probe: z.boolean().optional().describe("Run a live health probe after saving (default true; the save itself never fails on probe outcome)."),
+  probe: z.boolean().optional().describe("Explicit opt-in to a live health probe after saving (default false; saving is offline apart from local secret storage)."),
   // R2 · handler-read; desktop key save sends setDefault:false (keeps default).
   setDefault: z.boolean().optional().describe("Switch the default provider to this key (default true)."),
 });
@@ -373,6 +378,7 @@ export const BudgetSetRequest = z.looseObject({
   monthlyCap: z.number().nonnegative().optional(),
   dailyCap: z.number().nonnegative().nullable().optional(),
   warningsEnabled: z.boolean().optional(),
+  tightenOnly: z.boolean().optional().describe("Atomically lower monthly/daily caps only; never raise policy or change the per-task default."),
   autoFallback: z.boolean().optional(), // R2 · handler-read, must be declared
 });
 

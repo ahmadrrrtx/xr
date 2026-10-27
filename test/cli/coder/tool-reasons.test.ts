@@ -12,7 +12,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAgentLoop } from "../../../src/core/agent.ts";
+import { runAgentLoop } from "../../helpers/scripted-agent.ts";
 import type { ChatStreamEvent, Message, ModelTurn, Provider, Tool } from "../../../src/core/types.ts";
 import { Store } from "../../../src/state/workspace-store.ts";
 import { ToolRegistryService } from "../../../src/tools/registry-service.ts";

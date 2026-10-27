@@ -44,131 +44,13 @@ audit_project() {
     return 1
   fi
 
-  bun install --frozen-lockfile --ignore-scripts
-
-  local audit_json
-  audit_json="$(mktemp)"
-  # `bun audit` exits non-zero when it finds advisories; that is data for the
-  # filter below, not a failure of the audit itself — hence `|| true`. A real
-  # audit failure (no lockfile, registry error) produces unparseable output,
-  # which the filter treats as a hard error.
-  bun audit --json >"$audit_json" 2>/dev/null || true
-
-  AUDIT_JSON="$audit_json" bun --eval '
-    const fs = require("fs");
-
-    const fail = (msg) => {
-      console.error(`audit-deps: ${msg}`);
-      process.exit(2);
-    };
-
-    let report;
-    try {
-      report = JSON.parse(fs.readFileSync(process.env.AUDIT_JSON, "utf8"));
-    } catch {
-      fail("bun audit did not produce JSON — treating as gate failure");
-    }
-
-    // Normalise `bun audit --json` output to [{name, severity, title, url, id}].
-    // Current Bun emits { "<pkg>": [ {advisory}, ... ] }; accept a bare array
-    // too so a future format change degrades into parsing, not silence.
-    const advisories = [];
-    const push = (name, a) => {
-      if (!a || typeof a !== "object") return;
-      advisories.push({
-        name: name ?? a.name ?? a.package ?? "(unknown)",
-        severity: String(a.severity ?? a.level ?? "unknown").toLowerCase(),
-        title: a.title ?? a.summary ?? "",
-        url: a.url ?? "",
-        id: a.id ?? a.ghsa_id ?? "",
-      });
-    };
-    if (Array.isArray(report)) {
-      for (const item of report) push(item?.name ?? item?.package, item);
-    } else if (report && typeof report === "object") {
-      for (const [name, list] of Object.entries(report)) {
-        if (Array.isArray(list)) for (const a of list) push(name, a);
-        else if (list && Array.isArray(list.advisories))
-          for (const a of list.advisories) push(name, a);
-        else push(name, list);
-      }
-    }
-
-    if (advisories.length === 0) {
-      console.log("audit-deps: no advisories reported by bun audit");
-      process.exit(0);
-    }
-
-    // Production-reachability BFS over the installed graph.
-    const root = process.cwd();
-    const readPkg = (dir) => {
-      try {
-        return JSON.parse(fs.readFileSync(`${dir}/package.json`, "utf8"));
-      } catch {
-        return null;
-      }
-    };
-    const resolveDep = (name, parentDir) => {
-      for (const base of [`${parentDir}/node_modules`, `${root}/node_modules`]) {
-        const dir = `${base}/${name}`;
-        if (fs.existsSync(`${dir}/package.json`)) return dir;
-      }
-      return null;
-    };
-    const depNames = (pkg) => [
-      ...Object.keys(pkg?.dependencies ?? {}),
-      ...Object.keys(pkg?.optionalDependencies ?? {}),
-      ...Object.keys(pkg?.peerDependencies ?? {}),
-    ];
-
-    const rootPkg = readPkg(root);
-    if (!rootPkg) fail(`no readable package.json in ${root}`);
-
-    const production = new Set();
-    const queue = depNames(rootPkg).map((name) => ({ name, from: root }));
-    while (queue.length > 0) {
-      const { name, from } = queue.shift();
-      if (production.has(name)) continue;
-      const dir = resolveDep(name, from);
-      if (!dir) continue; // declared but not installed (e.g. skipped optional)
-      production.add(name);
-      const pkg = readPkg(dir);
-      for (const dep of depNames(pkg)) {
-        if (!production.has(dep)) queue.push({ name: dep, from: dir });
-      }
-    }
-
-    const BLOCKING = new Set(["high", "critical"]);
-    const blocking = [];
-    const devOnly = [];
-    for (const a of advisories) {
-      if (!BLOCKING.has(a.severity)) continue;
-      (production.has(a.name) ? blocking : devOnly).push(a);
-    }
-
-    for (const a of devOnly) {
-      console.log(
-        `audit-deps: ignored dev-only ${a.severity} in ${a.name} — ${a.title} ${a.url}`.trimEnd(),
-      );
-    }
-    if (blocking.length > 0) {
-      for (const a of blocking) {
-        console.error(
-          `audit-deps: PRODUCTION ${a.severity.toUpperCase()} in ${a.name} — ${a.title} ${a.url}`.trimEnd(),
-        );
-      }
-      console.error(
-        `audit-deps: FAIL — ${blocking.length} high/critical advisor${blocking.length === 1 ? "y" : "ies"} reachable from production dependencies`,
-      );
-      process.exit(1);
-    }
-    console.log(
-      `audit-deps: PASS — no high/critical advisories in the production graph (${production.size} production packages, ${devOnly.length} dev-only ignored)`,
-    );
-  '
-  local rc=$?
+  bun install --frozen-lockfile --ignore-scripts || return "$?"
+  local audit_json audit_status=0 rc=0
+  audit_json="$(mktemp)" || return 1
+  bun audit --json >"$audit_json" || audit_status=$?
+  bun "$ROOT/scripts/audit-deps-filter.ts" "$audit_json" "$audit_status" || rc=$?
   rm -f "$audit_json"
-  return $rc
+  return "$rc"
 }
 
 targets=("$ROOT")

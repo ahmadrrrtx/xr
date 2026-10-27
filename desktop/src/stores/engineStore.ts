@@ -14,28 +14,27 @@
  */
 import { create } from 'zustand';
 
-import { MODEL_REGISTRY, modelInfo } from '@/budget/models';
-import { EngineDown, engineEndpoint, engineFetch, engineJson, enginePost, resetEngineLink, type EngineEndpoint } from '@/engine/transport';
-import type { EngineHealth, EngineModelsResponse, EngineProvidersResponse } from '@/engine/types';
+import { qualifiedModelId } from '@/budget/models';
+import { modelOptions, type EngineCatalog } from '@/engine/catalog';
+export type { EngineModelOption } from '@/engine/catalog';
+import {
+  EngineDown,
+  engineEndpoint,
+  engineFetch,
+  engineJson,
+  enginePost,
+  resetEngineLink,
+  type EngineEndpoint,
+} from '@/engine/transport';
+import type {
+  EngineHealth,
+  EngineModelsResponse,
+  EngineProvidersResponse,
+} from '@/engine/types';
 import { isTauri } from '@/lib/tauri';
 
-export type EngineStatus = 'unknown' | 'checking' | 'up' | 'down' | 'unauthorized';
-
-export interface EngineModelOption {
-  id: string;
-  label: string;
-  provider: string;
-  providerLabel: string;
-  kind: 'local' | 'cloud';
-  /** Usable right now (key present / runtime running). */
-  available: boolean;
-  /** Why not (shown as the disabled row's hint). */
-  unavailableReason?: string;
-  /** Local runtime detail (parameter size, quantization) when known. */
-  detail?: string;
-  /** The engine's current default. */
-  isDefault: boolean;
-}
+export type EngineStatus =
+  'unknown' | 'checking' | 'up' | 'down' | 'unauthorized';
 
 interface EngineState {
   status: EngineStatus;
@@ -50,12 +49,16 @@ interface EngineState {
   upSince: number | null;
   providers: EngineProvidersResponse | null;
   models: EngineModelsResponse | null;
+  catalog: EngineCatalog | null;
   catalogLoadedAt: number | null;
   catalogError: string | null;
   restarting: boolean;
 
   refresh: () => Promise<boolean>;
-  loadCatalog: (opts?: { force?: boolean }) => Promise<void>;
+  loadCatalog: (opts?: {
+    force?: boolean;
+    discoverLocal?: boolean;
+  }) => Promise<void>;
   /** Set the engine's default provider/model (`POST /providers/set`). */
   setEngineDefault: (modelId: string) => Promise<void>;
   /** Dev: ask the Vite plugin to launch the engine. Packaged: Rust restart. */
@@ -74,7 +77,8 @@ let inflight: Promise<boolean> | null = null;
 function versionString(h: EngineHealth | null): string | null {
   if (!h) return null;
   if (typeof h.version === 'string') return h.version;
-  if (h.version && typeof h.version.display === 'string') return h.version.display;
+  if (h.version && typeof h.version.display === 'string')
+    return h.version.display;
   return null;
 }
 
@@ -89,6 +93,7 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   upSince: null,
   providers: null,
   models: null,
+  catalog: null,
   catalogLoadedAt: null,
   catalogError: null,
   restarting: false,
@@ -118,7 +123,8 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
         if (!wasUp) void get().loadCatalog({ force: true });
         return true;
       } catch (e) {
-        const unauthorized = e instanceof EngineDown && e.kind === 'unauthorized';
+        const unauthorized =
+          e instanceof EngineDown && e.kind === 'unauthorized';
         const endpoint = await engineEndpoint().catch(() => null);
         set((st) => ({
           status: unauthorized ? 'unauthorized' : 'down',
@@ -145,15 +151,37 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
 
   loadCatalog: async (opts) => {
     const st = get();
-    if (!opts?.force && st.catalogLoadedAt && Date.now() - st.catalogLoadedAt < CATALOG_TTL_MS) return;
+    if (
+      !opts?.force &&
+      !opts?.discoverLocal &&
+      st.catalogLoadedAt &&
+      Date.now() - st.catalogLoadedAt < CATALOG_TTL_MS
+    )
+      return;
     try {
-      const [providers, models] = await Promise.all([
+      // Catalog inspection is offline, including startup. /models performs
+      // runtime probes and is ONLY called after an explicit discovery action.
+      const [providers, catalog, discovered] = await Promise.all([
         engineJson<EngineProvidersResponse>('/providers'),
-        engineJson<EngineModelsResponse>('/models').catch(() => null),
+        engineJson<EngineCatalog>('/providers/catalog'),
+        opts?.discoverLocal
+          ? engineJson<EngineModelsResponse>('/models')
+          : Promise.resolve(undefined),
       ]);
-      set({ providers, models, catalogLoadedAt: Date.now(), catalogError: null });
+      set({
+        providers,
+        catalog,
+        models: discovered ?? st.models,
+        catalogLoadedAt: Date.now(),
+        catalogError: null,
+      });
     } catch (e) {
-      set({ catalogError: e instanceof Error ? e.message : 'Could not load the model catalogue.' });
+      set({
+        catalogError:
+          e instanceof Error
+            ? e.message
+            : 'Could not load the model catalogue.',
+      });
     }
   },
 
@@ -171,23 +199,49 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
     try {
       if (isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
-        const r = await invoke<{ ok: boolean; message?: string }>('engine_restart');
+        const r = await invoke<{ ok: boolean; message?: string }>(
+          'engine_restart'
+        );
         resetEngineLink();
         const up = await waitForEngine(20_000);
-        return { ok: up, message: up ? 'Engine restarted.' : (r?.message ?? 'The engine did not come back within 20 s.') };
+        return {
+          ok: up,
+          message: up
+            ? 'Engine restarted.'
+            : (r?.message ?? 'The engine did not come back within 20 s.'),
+        };
       }
       if (!import.meta.env.DEV) {
-        return { ok: false, message: 'Start the engine with `xr serve` and retry.' };
+        return {
+          ok: false,
+          message: 'Start the engine with `xr serve` and retry.',
+        };
       }
       const res = await fetch('/__xr/engine/start', { method: 'POST' });
-      const j = (await res.json().catch(() => ({}))) as { started?: boolean; reason?: string };
+      const j = (await res.json().catch(() => ({}))) as {
+        started?: boolean;
+        reason?: string;
+      };
       if (!res.ok || !j.started) {
-        return { ok: false, message: j.reason ?? 'Could not start the engine from the dev server.' };
+        return {
+          ok: false,
+          message:
+            j.reason ?? 'Could not start the engine from the dev server.',
+        };
       }
       const up = await waitForEngine(25_000);
-      return { ok: up, message: up ? 'Engine started.' : 'Started the engine, but it has not answered yet.' };
+      return {
+        ok: up,
+        message: up
+          ? 'Engine started.'
+          : 'Started the engine, but it has not answered yet.',
+      };
     } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : 'Could not restart the engine.' };
+      return {
+        ok: false,
+        message:
+          e instanceof Error ? e.message : 'Could not restart the engine.',
+      };
     } finally {
       set({ restarting: false });
     }
@@ -202,7 +256,10 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
     const schedule = (): void => {
       if (polling <= 0) return;
       if (pollTimer !== null) window.clearTimeout(pollTimer);
-      pollTimer = window.setTimeout(() => void tick(), get().status === 'up' ? POLL_UP_MS : POLL_DOWN_MS);
+      pollTimer = window.setTimeout(
+        () => void tick(),
+        get().status === 'up' ? POLL_UP_MS : POLL_DOWN_MS
+      );
     };
     const onVisible = (): void => {
       if (document.visibilityState === 'visible') void tick();
@@ -242,7 +299,7 @@ export function engineVersion(): string | null {
 export function engineDefaultModel(): string | null {
   const p = useEngineStore.getState().providers;
   if (!p?.model) return null;
-  return p.model;
+  return qualifiedModelId(p.primary, p.model);
 }
 
 /** True when at least one provider can answer right now. */
@@ -252,90 +309,12 @@ export function engineHasProvider(): boolean {
   return p.providers.some((x) => x.healthy && (x.kind === 'local' || x.hasKey));
 }
 
-const CLOUD_PROVIDER_IDS = new Set(['openai', 'anthropic', 'google', 'xai']);
-
-/** Registry cloud models for a provider — a provider without a key lists them disabled. */
-function cloudModelsFor(providerId: string): string[] {
-  return MODEL_REGISTRY.filter((m) => m.provider === providerId && !m.local).map((m) => m.id);
-}
-
-/**
- * The model picker's rows, built from the engine's catalogue: Local group =
- * models the local runtime reports; Cloud group = providers the engine
- * knows, enabled when a key is configured. Falls back to nothing (not to a
- * fake list) when the engine is down.
- */
+/** Last-known-good engine facts survive a refresh error, never synthetic rows. */
 export function engineModelOptions(
-  providers: EngineProvidersResponse | null = useEngineStore.getState().providers,
+  providers: EngineProvidersResponse | null = useEngineStore.getState()
+    .providers,
   models: EngineModelsResponse | null = useEngineStore.getState().models,
-): { local: EngineModelOption[]; cloud: EngineModelOption[] } {
-  const local: EngineModelOption[] = [];
-  const cloud: EngineModelOption[] = [];
-  if (!providers) return { local, cloud };
-  const defaultId = providers.model;
-
-  // Local: the current runtime's models (Ollama list), plus the configured
-  // default when the runtime has not listed it (still selectable; the engine
-  // will say "Provider offline" honestly if it is not pulled).
-  const runtime = models?.current;
-  const runtimeProvider = providers.providers.find((p) => p.id === (runtime?.providerId ?? 'ollama'));
-  const running = runtime?.running === true || runtimeProvider?.healthy === true;
-  const seen = new Set<string>();
-  for (const m of runtime?.models ?? []) {
-    const id = typeof m === 'string' ? m : (m.name ?? m.model ?? m.id);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    const detail = typeof m === 'string' ? undefined : [m.parameterSize, m.quantization].filter(Boolean).join(' · ') || undefined;
-    local.push({
-      id,
-      label: modelInfo(id).name,
-      provider: runtime?.providerId ?? 'ollama',
-      providerLabel: runtime?.label ?? 'Ollama',
-      kind: 'local',
-      available: running,
-      ...(running ? {} : { unavailableReason: 'Runtime not running' }),
-      ...(detail ? { detail } : {}),
-      isDefault: id === defaultId,
-    });
-  }
-  if (defaultId && !seen.has(defaultId) && providers.primary && !CLOUD_PROVIDER_IDS.has(providers.primary)) {
-    const p = providers.providers.find((x) => x.id === providers.primary);
-    local.push({
-      id: defaultId,
-      label: modelInfo(defaultId).name,
-      provider: providers.primary,
-      providerLabel: p?.label ?? providers.primary,
-      kind: 'local',
-      available: p?.healthy === true,
-      ...(p?.healthy ? {} : { unavailableReason: p?.detail ?? 'Not reachable' }),
-      isDefault: true,
-    });
-  }
-
-  for (const p of providers.providers) {
-    if (p.kind !== 'cloud' && p.kind !== 'hosted') continue;
-    // With a key: every registry model for the major providers (one row per
-    // model), the provider's default otherwise. Without a key: one compact
-    // row per major provider pointing at "Configure API key"; the long tail
-    // lives under Manage models and keys.
-    let ids: string[];
-    if (p.hasKey) {
-      ids = CLOUD_PROVIDER_IDS.has(p.id) ? cloudModelsFor(p.id) : p.defaultModel ? [p.defaultModel] : [];
-    } else {
-      ids = CLOUD_PROVIDER_IDS.has(p.id) ? [cloudModelsFor(p.id)[0] ?? p.defaultModel ?? ''].filter(Boolean) : [];
-    }
-    for (const id of ids) {
-      cloud.push({
-        id,
-        label: modelInfo(id).name,
-        provider: p.id,
-        providerLabel: p.label,
-        kind: 'cloud',
-        available: p.hasKey,
-        ...(p.hasKey ? {} : { unavailableReason: 'No API key' }),
-        isDefault: id === defaultId && p.id === providers.primary,
-      });
-    }
-  }
-  return { local, cloud };
+  catalog: EngineCatalog | null = useEngineStore.getState().catalog
+) {
+  return modelOptions(providers, models, catalog);
 }

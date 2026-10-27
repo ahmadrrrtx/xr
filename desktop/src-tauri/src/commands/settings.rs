@@ -152,9 +152,10 @@ pub fn set_setting(app: AppHandle, path: String, value: Value) -> Result<(), Str
 // ─── OS keychain ────────────────────────────────────────────────────────────
 
 /// Read a secret. `Ok(None)` = no entry; `Err` = keychain unavailable
-/// (the frontend then falls back to the flagged insecure store).
+/// (new credentials are only saved through the engine broker; no plaintext fallback).
 #[tauri::command]
 pub fn keychain_get(service: String, account: String) -> Result<Option<String>, String> {
+    crate::legacy_credentials::validate_scope(&service, &account)?;
     let entry = keyring::Entry::new(&service, &account)
         .map_err(|e| format!("keychain-unavailable: {e}"))?;
     match entry.get_password() {
@@ -166,20 +167,22 @@ pub fn keychain_get(service: String, account: String) -> Result<Option<String>, 
 
 #[tauri::command]
 pub fn keychain_set(service: String, account: String, secret: String) -> Result<(), String> {
-    let entry = keyring::Entry::new(&service, &account)
-        .map_err(|e| format!("keychain-unavailable: {e}"))?;
-    entry
-        .set_password(&secret)
-        .map_err(|e| format!("keychain-unavailable: {e}"))
+    let _ = (service, account, secret);
+    Err("Legacy OS credential writes are disabled; save new credentials through the engine secret broker".into())
 }
 
 #[tauri::command]
 pub fn keychain_delete(service: String, account: String) -> Result<(), String> {
+    crate::legacy_credentials::validate_scope(&service, &account)?;
     let entry = keyring::Entry::new(&service, &account)
         .map_err(|e| format!("keychain-unavailable: {e}"))?;
     match entry.delete_credential() {
-        Ok(()) => Ok(()),
+        Ok(()) | Err(keyring::Error::NoEntry) => {},
+        Err(e) => return Err(format!("keychain-unavailable: {e}")),
+    }
+    match entry.get_password() {
         Err(keyring::Error::NoEntry) => Ok(()),
+        Ok(_) => Err("keychain deletion was not confirmed; entry retained".into()),
         Err(e) => Err(format!("keychain-unavailable: {e}")),
     }
 }

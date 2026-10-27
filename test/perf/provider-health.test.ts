@@ -153,6 +153,9 @@ describe("Phase 01 — health cache correctness", () => {
     const config = await freshConfig();
     const env = PRESETS["groq"]!.apiKeyEnv!;
     const { setSecret, removeSecret } = await import("../../src/security/secrets.ts");
+    const controlled=fakeHealthyServer();
+    config.providers.groq={...config.providers.groq,baseUrl:`http://127.0.0.1:${controlled.port}/v1`};
+    const oldPrivate=process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER;process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER="1";
     try {
       // No key → cached auth-negative ("API key ... not set").
       const before = await checkProviderHealthCached(config, "groq");
@@ -162,11 +165,12 @@ describe("Phase 01 — health cache correctness", () => {
       setSecret(env, "sk-test-12345");
       invalidateProviderHealthCache("groq");
       const after = await checkProviderHealthCached(config, "groq");
-      // Fresh probe (network to api.groq.com from CI is unreachable): the
+      // Fresh controlled loopback probe (not external vendor evidence): the
       // detail must NO LONGER be the stale auth message.
       expect(after.detail).not.toContain("API key");
       expect(after.cached).toBe(false);
     } finally {
+      controlled.stop(true);if(oldPrivate===undefined)delete process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER;else process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER=oldPrivate;
       try { removeSecret(env); } catch { /* ignore */ }
     }
   });
@@ -296,16 +300,15 @@ describe("Phase 01 — catalog cache", () => {
     invalidateCatalogCache();
     const config = loadConfig().config;
     const groqEnv = PRESETS["groq"]!.apiKeyEnv!;
-    const had = process.env[groqEnv];
+    const {setSecret,removeSecret}=await import("../../src/security/secrets.ts");
     try {
       buildCatalog(config);
       const misses1 = catalogCacheStats().misses;
-      process.env[groqEnv] = "sk-test";
+      setSecret(groqEnv,"fixture-broker-only-not-real");
       buildCatalog(config); // same config, changed key presence
       expect(catalogCacheStats().misses).toBeGreaterThan(misses1);
     } finally {
-      if (had === undefined) delete process.env[groqEnv];
-      else process.env[groqEnv] = had;
+      removeSecret(groqEnv);
     }
   });
 });

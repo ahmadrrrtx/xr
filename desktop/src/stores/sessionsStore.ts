@@ -11,7 +11,8 @@ import { readSettingJSON, writeSettingJSON } from '@/lib/persistent-store';
 import { engineDefaultModel } from '@/stores/engineStore';
 
 /** Last-resort default when neither the user nor the engine has chosen. */
-export const DEFAULT_MODEL = 'claude-sonnet-4.5';
+// No fabricated cloud choice before setup or an available engine default.
+export const DEFAULT_MODEL = '';
 
 /** Persisted default (seeded by onboarding / last picker choice). */
 let defaultModel: string | null = null;
@@ -84,13 +85,18 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     const now = Date.now();
     // Reuse an existing empty session instead of stacking blank ones.
     const existing = get().sessions.find(
-      (s) => s.title === 'New chat' && now - s.updatedAt < 5 * 60_000,
+      (s) => s.title === 'New chat' && now - s.updatedAt < 5 * 60_000
     );
     if (existing) {
       set({ activeSessionId: existing.id });
       return existing;
     }
-    const session = await chatDb.createSession(newId(), 'New chat', model ?? resolveDefaultModel(), now);
+    const session = await chatDb.createSession(
+      newId(),
+      'New chat',
+      model ?? resolveDefaultModel(),
+      now
+    );
     set((st) => ({
       sessions: [session, ...st.sessions],
       activeSessionId: session.id,
@@ -100,8 +106,16 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   createTitledSession: async (title, model) => {
     const now = Date.now();
-    const session = await chatDb.createSession(newId(), title.slice(0, 80) || 'New chat', model ?? resolveDefaultModel(), now);
-    set((st) => ({ sessions: [session, ...st.sessions], activeSessionId: session.id }));
+    const session = await chatDb.createSession(
+      newId(),
+      title.slice(0, 80) || 'New chat',
+      model ?? resolveDefaultModel(),
+      now
+    );
+    set((st) => ({
+      sessions: [session, ...st.sessions],
+      activeSessionId: session.id,
+    }));
     return session;
   },
 
@@ -111,7 +125,9 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     const now = Date.now();
     await chatDb.updateSessionTitle(id, title, now);
     set((st) => ({
-      sessions: st.sessions.map((s) => (s.id === id ? { ...s, title, updatedAt: now } : s)),
+      sessions: st.sessions.map((s) =>
+        s.id === id ? { ...s, title, updatedAt: now } : s
+      ),
     }));
   },
 

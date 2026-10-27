@@ -8,7 +8,14 @@
  * skippable; 4–9 may skip; 10 always ends the flow.
  */
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -46,7 +53,8 @@ const STEP_TITLES: Record<number, string> = {
 export function OnboardingWizard() {
   const navigate = useNavigate();
   const reduced = useReducedMotion();
-  const { step, direction, nextStep, prevStep, goToStep } = useOnboardingStore();
+  const { step, direction, nextStep, prevStep, goToStep } =
+    useOnboardingStore();
   const [understood, setUnderstood] = useState(false);
   const escTimes = useRef<number[]>([]);
 
@@ -56,14 +64,28 @@ export function OnboardingWizard() {
     return true;
   }, [step, understood]);
 
-  const finish = useCallback(async (to: string = '/chat') => {
-    await useOnboardingStore.getState().finishOnboarding();
-    // The orb joins the desktop the moment onboarding completes (Phase 6).
-    void orbShow();
-    navigate(to, { replace: true });
-    const name = useOnboardingStore.getState().userName;
-    toast(`Welcome${name ? `, ${name}` : ''}. XR is ready.`);
-  }, [navigate]);
+  const finish = useCallback(
+    async (to: string = '/chat') => {
+      try {
+        await useOnboardingStore.getState().finishOnboarding();
+        void orbShow();
+        navigate(to, { replace: true });
+        const name = useOnboardingStore.getState().userName;
+        toast(
+          `Welcome${name ? `, ${name}` : ''}. Setup saved; provider readiness is shown separately.`
+        );
+      } catch (error) {
+        toast.error('Setup was not completed', {
+          description:
+            error instanceof Error
+              ? error.message
+              : 'Retry or choose guest mode.',
+        });
+        useOnboardingStore.getState().goToStep(4);
+      }
+    },
+    [navigate]
+  );
 
   const onContinue = useCallback(() => {
     if (step < 10) {
@@ -91,11 +113,22 @@ export function OnboardingWizard() {
         el instanceof HTMLTextAreaElement ||
         el?.isContentEditable === true ||
         (el instanceof HTMLInputElement &&
-          !['checkbox', 'radio', 'button', 'submit', 'range', 'color', 'file'].includes(el.type));
+          ![
+            'checkbox',
+            'radio',
+            'button',
+            'submit',
+            'range',
+            'color',
+            'file',
+          ].includes(el.type));
 
       if (e.key === 'Escape') {
         const now = Date.now();
-        escTimes.current = [...escTimes.current.filter((t) => now - t < 700), now];
+        escTimes.current = [
+          ...escTimes.current.filter((t) => now - t < 700),
+          now,
+        ];
         if (escTimes.current.length >= 3) {
           escTimes.current = [];
           devReset();
@@ -107,7 +140,10 @@ export function OnboardingWizard() {
         if (canContinue) onContinue();
         return;
       }
-      if ((e.altKey && e.key === 'ArrowLeft') || (e.key === 'Backspace' && !textEntry)) {
+      if (
+        (e.altKey && e.key === 'ArrowLeft') ||
+        (e.key === 'Backspace' && !textEntry)
+      ) {
         e.preventDefault();
         if (step > 1) prevStep();
       }
@@ -126,13 +162,20 @@ export function OnboardingWizard() {
     7: <StepVoice />,
     8: <StepPrefs />,
     9: <StepIntegrations />,
-    10: <StepAllSet onStart={() => void finish()} onShield={() => void finish('/shield')} />,
+    10: (
+      <StepAllSet
+        onStart={() => void finish()}
+        onShield={() => void finish('/shield')}
+      />
+    ),
   };
 
   const variants = {
-    enter: (dir: 1 | -1) => (reduced ? { opacity: 0 } : { x: dir * 48, opacity: 0 }),
+    enter: (dir: 1 | -1) =>
+      reduced ? { opacity: 0 } : { x: dir * 48, opacity: 0 },
     center: { x: 0, opacity: 1 },
-    exit: (dir: 1 | -1) => (reduced ? { opacity: 0 } : { x: dir * -48, opacity: 0 }),
+    exit: (dir: 1 | -1) =>
+      reduced ? { opacity: 0 } : { x: dir * -48, opacity: 0 },
   };
 
   return (
@@ -146,7 +189,11 @@ export function OnboardingWizard() {
       <motion.div
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={reduced ? { duration: 0.2 } : { type: 'spring', stiffness: 200, damping: 28 }}
+        transition={
+          reduced
+            ? { duration: 0.2 }
+            : { type: 'spring', stiffness: 200, damping: 28 }
+        }
         className="bg-bg-ink border-border-subtle flex h-[92vh] max-h-[620px] w-[92vw] max-w-[720px] flex-col overflow-hidden rounded-2xl border shadow-2xl"
       >
         {/* Header: progress + step counter + skip */}
@@ -156,7 +203,10 @@ export function OnboardingWizard() {
               <span className="text-text-tertiary text-[11px] font-semibold tracking-[0.08em] uppercase">
                 {STEP_TITLES[step]}
               </span>
-              <span className="text-text-tertiary font-mono text-[11px]" aria-live="polite">
+              <span
+                className="text-text-tertiary font-mono text-[11px]"
+                aria-live="polite"
+              >
                 {step} / 10
               </span>
             </div>
@@ -197,7 +247,11 @@ export function OnboardingWizard() {
               initial="enter"
               animate="center"
               exit="exit"
-              transition={reduced ? { duration: 0.2 } : { type: 'spring', stiffness: 300, damping: 30 }}
+              transition={
+                reduced
+                  ? { duration: 0.2 }
+                  : { type: 'spring', stiffness: 300, damping: 30 }
+              }
               className="absolute inset-0 overflow-y-auto px-6 py-6"
             >
               {slides[step]}
@@ -220,7 +274,7 @@ export function OnboardingWizard() {
               type="button"
               onClick={onContinue}
               disabled={!canContinue}
-              className="bg-accent text-accent-contrast hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40 rounded-lg px-5 py-2 text-[13.5px] font-semibold transition-colors"
+              className="bg-accent text-accent-contrast hover:bg-accent-hover rounded-lg px-5 py-2 text-[13.5px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               Continue
             </button>

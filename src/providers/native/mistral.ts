@@ -1,3 +1,4 @@
+import { outputLimit, usagePair } from "./history.ts";
 /**
  * XR — Native Mistral AI Provider
  * 
@@ -120,7 +121,7 @@ export class MistralProvider implements Provider {
       model: this.model,
       messages: mistralMessages,
       temperature: 0.3,
-      max_tokens: 2048,
+      max_tokens: outputLimit(options?.maxOutputTokens),
     };
 
     if (toolsList) {
@@ -131,7 +132,7 @@ export class MistralProvider implements Provider {
       // GAP-001 — bounded + cancellable (was: no signal, no timeout).
       const res = await guardedRequest(this.id, options, (signal) =>
         fetch(`${this.baseUrl}/chat/completions`, {
-          method: "POST",
+          method: "POST", redirect: "error",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
@@ -141,16 +142,7 @@ export class MistralProvider implements Provider {
         }),
       );
 
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        try {
-          const err = JSON.parse(txt);
-          throw new Error(`Mistral API error: ${err.error?.message ?? `HTTP ${res.status}`}`);
-        } catch (e) {
-          if ((e as Error).message.includes("Mistral")) throw e;
-          throw new Error(`Mistral ${res.status}: ${txt.slice(0, 200)}`);
-        }
-      }
+      if (!res.ok) { await res.body?.cancel(); throw new Error(`${this.id} API HTTP ${res.status}`); }
 
       const json: any = await res.json();
       const choice = json.choices?.[0];
@@ -180,7 +172,7 @@ export class MistralProvider implements Provider {
       }
 
       const usage = json.usage
-        ? { inTokens: json.usage.prompt_tokens ?? 0, outTokens: json.usage.completion_tokens ?? 0 }
+        ? usagePair(json.usage.prompt_tokens, json.usage.completion_tokens)
         : undefined;
 
       return {
@@ -223,7 +215,7 @@ export class MistralProvider implements Provider {
     const start = Date.now();
     try {
       const res = await fetch(`${this.baseUrl}/models`, {
-        method: "GET",
+        method: "GET", redirect: "error",
         headers: { "Authorization": `Bearer ${apiKey}` },
       });
 

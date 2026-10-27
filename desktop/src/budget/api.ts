@@ -32,7 +32,7 @@ import { DAY_MS, localDayStart, type Period } from './period';
 import { purgeSeedSpend, SEED_PURGE_VERSION } from '@/lib/seedPurge';
 
 /** Version of the demo spend seed (dev builds only; see `init`). */
-const SEED_VERSION = 1;
+const SEED_VERSION = 2;
 import {
   DEFAULT_BUDGET_SETTINGS,
   type BreakdownBy,
@@ -319,7 +319,7 @@ class BrowserBackend implements BudgetBackend {
   async init(tzOffsetMin: number): Promise<BudgetOverview> {
     this.tz = tzOffsetMin;
     this.invalidate();
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && import.meta.env.VITE_XR_DEMO_DATA === '1') {
       // Demo spend history: development builds only (XR-LAUNCH-009). The
       // branch and the seed module are absent from production bundles.
       const seeded = readJSON<number>(LS.seeded);

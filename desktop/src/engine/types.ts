@@ -33,7 +33,12 @@ export interface EnginePreview {
   tool?: string;
   riskTier?: string;
   untrustedReason?: string;
-  sections?: Array<{ title: string; body: string; kind?: string; truncated?: boolean }>;
+  sections?: Array<{
+    title: string;
+    body: string;
+    kind?: string;
+    truncated?: boolean;
+  }>;
 }
 
 export interface EngineApprovalRequired {
@@ -60,17 +65,45 @@ export type EngineChatFrame =
       cancelled?: boolean;
     }
   | { type: 'token'; text: string }
-  | { type: 'tool_call'; id: string; tool: string; args?: Record<string, unknown> }
-  | { type: 'tool_result'; id: string; tool: string; ok: boolean; result?: string; error?: string }
-  | { type: 'usage'; usage: EngineUsage }
-  | { type: 'error'; code?: string; message?: string; error?: string; retryable?: boolean; detail?: unknown }
+  | {
+      type: 'tool_call';
+      id: string;
+      tool: string;
+      args?: Record<string, unknown>;
+    }
+  | {
+      type: 'tool_result';
+      id: string;
+      tool: string;
+      ok: boolean;
+      result?: string;
+      error?: string;
+    }
+  | {
+      type: 'usage';
+      usage: EngineUsage;
+      provider?: string;
+      model?: string;
+      source?: 'provider' | 'estimated';
+      usdEstimate?: number | null;
+      rateSource?: string;
+    }
+  | {
+      type: 'error';
+      code?: string;
+      message?: string;
+      error?: string;
+      retryable?: boolean;
+      detail?: unknown;
+    }
   | {
       type: 'done';
       fullText?: string;
       finalMessage?: string;
       usage?: EngineUsage;
       finishReason?: string;
-      stopped?: 'done' | 'error' | 'budget' | 'cancelled' | 'max_steps' | (string & {});
+      stopped?:
+        'done' | 'error' | 'budget' | 'cancelled' | 'max_steps' | (string & {});
       steps?: number;
       ttftMs?: number;
       totalMs?: number;
@@ -87,13 +120,23 @@ export interface EngineProvider {
   id: string;
   label: string;
   tier?: string;
-  kind: 'local' | 'cloud' | 'hosted';
+  kind: 'local' | 'cloud' | 'hosted' | 'custom';
+  locality?: 'local' | 'private' | 'hybrid' | 'cloud' | 'unknown';
   hasKey: boolean;
   authOk?: boolean;
   healthy: boolean;
+  healthState?: 'unknown' | 'reachable' | 'unreachable';
+  authState?: 'unverified' | 'verified' | 'failed' | 'missing_credentials';
+  checkedAt?: string | null;
   latencyMs?: number | null;
   detail?: string | null;
-  capabilities?: { chat?: boolean; toolUse?: boolean; jsonMode?: boolean; streaming?: boolean; embeddings?: boolean };
+  capabilities?: {
+    chat?: boolean;
+    toolUse?: boolean;
+    jsonMode?: boolean;
+    streaming?: boolean;
+    embeddings?: boolean;
+  };
   defaultModel?: string | null;
   cached?: boolean;
 }
@@ -120,7 +163,13 @@ export interface EngineLocalModel {
 }
 
 export interface EngineModelsResponse {
-  selected: { runtime: string; model: string; routing: string; provider?: string; enabled?: boolean };
+  selected: {
+    runtime: string;
+    model: string;
+    routing: string;
+    provider?: string;
+    enabled?: boolean;
+  };
   current: {
     id: string;
     providerId: string;
@@ -139,7 +188,16 @@ export interface EngineModelsResponse {
   };
   hardware?: {
     summary?: string;
-    specs?: { os?: string; arch?: string; cpuCores?: number; totalRamGb?: number; freeRamGb?: number; availableDiskGb?: number; gpus?: unknown[]; tier?: string };
+    specs?: {
+      os?: string;
+      arch?: string;
+      cpuCores?: number;
+      totalRamGb?: number;
+      freeRamGb?: number;
+      availableDiskGb?: number;
+      gpus?: unknown[];
+      tier?: string;
+    };
   };
   recommendation?: unknown;
   runtimes?: unknown[];
@@ -160,11 +218,28 @@ export interface EngineHealth {
 
 export interface EngineBudget {
   config: { perTaskUsd?: number; perTaskTokens?: number };
-  persisted?: { monthly_cap?: number | null; daily_cap?: number | null; warnings_enabled?: boolean; auto_fallback?: boolean };
-  usage: { totalUsd: number; totalTokens: number; dayUsd?: number; monthUsd?: number };
-  burn?: { monthUsd?: number; monthlyCap?: number | null; burnPct?: number | null };
+  persisted?: {
+    monthly_cap?: number | null;
+    daily_cap?: number | null;
+    warnings_enabled?: boolean;
+    auto_fallback?: boolean;
+  };
+  usage: {
+    totalUsd: number;
+    totalTokens: number;
+    dayUsd?: number;
+    monthUsd?: number;
+  };
+  burn?: {
+    monthUsd?: number;
+    monthlyCap?: number | null;
+    burnPct?: number | null;
+  };
   byModel?: Record<string, { usd?: number; tokens?: number; calls?: number }>;
-  byProvider?: Record<string, { usd?: number; tokens?: number; calls?: number }>;
+  byProvider?: Record<
+    string,
+    { usd?: number; tokens?: number; calls?: number }
+  >;
   recent?: unknown[];
   generatedAt?: string | number;
 }

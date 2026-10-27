@@ -1,5 +1,10 @@
 # Desktop shell support matrix — Phase 27
 
+> Historical matrix: these recorded releases/runs do **not** validate the
+> uncommitted1.1.1-rc.1 candidate. Current native/platform/signing status is
+> BLOCKED/NOT RUN in the [candidate report](RELEASE_CANDIDATE_REPORT.md).
+
+
 The agent runtime has its own matrix (`SUPPORT_MATRIX.md`, generated from CI
 evidence). This one covers the **desktop shell**: tray, global shortcuts,
 updater, crash recovery and OS chrome. It exists because the phase brief asks for

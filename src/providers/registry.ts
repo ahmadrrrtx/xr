@@ -144,9 +144,14 @@ export class ProviderRegistry {
       );
     }
     const provider = entry.factory(config, model, entry.preset);
+    if (provider.id !== id) throw new Error(`Provider factory identity mismatch for ${id}`);
+    const legacyModel = (provider as Provider & { model?: string }).model;
+    if (typeof legacyModel === "string" && legacyModel !== model) throw new Error(`Provider factory model mismatch for ${id}`);
+    if (provider.modelId === undefined) Object.defineProperty(provider, "modelId", { value: model, configurable: true });
+    if (provider.modelId !== model) throw new Error(`Provider factory model mismatch for ${id}`);
     // Phase 1 — the resolver/registry is the SINGLE owner of declared transport
     // capabilities; the agent loop reads them to honor the capability catalog.
-    provider.capabilities = capabilitiesFromPreset(entry.preset);
+    provider.capabilities = { ...capabilitiesFromPreset(entry.preset), ...provider.capabilities };
     return provider;
   }
 

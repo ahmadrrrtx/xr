@@ -46,7 +46,7 @@ async function fixture(tool = "write_file", toolArgs: Record<string, unknown> = 
     providerEngine: {
       routingStrategy: "primary",
       customProviders: [{ id: PROVIDER, label: "Offline contract fixture", baseUrl: `http://127.0.0.1:${port}/v1`, defaultModel: "stub-model", capabilities: { chat: true, streaming: false, toolUse: true, functionCalling: true } }],
-      providerCapabilities: {},
+      providerCapabilities: { [PROVIDER]: { models: { "stub-model": { cost: { inPerMTok:1,outPerMTok:1,known:true,source:"synthetic coder fixture; not provider billing" } } } } },
     },
     security: { egressAllowlist: [], hardened: true },
     memory: { enabled: false },
@@ -148,7 +148,7 @@ describe("budget routing and honest unsupported flags", () => {
     try {
       const r = await f.run(["--dry-run", "--budget", "0.1234"]);
       expectExit(r, 0);
-      expect(summary(r)?.meter).toContain("$0.1234 cap");
+      expect(summary(r)?.meter).toContain("$0.1234 estimated admission threshold");
       expect(summary(r)?.meter).not.toContain("$0.5 cap");
     } finally { await f.close(); }
   }, T);

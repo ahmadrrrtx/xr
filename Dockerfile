@@ -22,7 +22,7 @@ WORKDIR /app
 
 # Install deps first (layer cache)
 COPY package.json bun.lock* ./
-RUN bun install --frozen-lockfile --production || bun install --production
+RUN bun install --frozen-lockfile --production --ignore-scripts
 
 # App source. scripts/ is required for the nightly golden-path container
 # job (bun run scripts/golden-path.ts). Do NOT volume-mount the host
@@ -35,7 +35,13 @@ COPY plugins ./plugins
 COPY tsconfig.json ./
 
 # Data lives in a volume so the audit log / memory persist across upgrades.
+RUN groupadd --gid 10001 xr \
+ && useradd --uid 10001 --gid xr --create-home --home-dir /home/xr xr \
+ && mkdir -p /data \
+ && chown xr:xr /data
+ENV HOME=/home/xr
 ENV XR_HOME=/data
+USER 10001:10001
 VOLUME ["/data"]
 
 # Dashboard port.

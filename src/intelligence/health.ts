@@ -214,6 +214,13 @@ export class RoutingHealth {
     return "deny_open";
   }
 
+  /** Release a probe without inventing a provider outcome (admission denial,
+   * caller cancellation, construction/reporting error, or stopped consumer). */
+  cancelProbe(providerId: string, modelId?: string): void {
+    const s = this.state(keyOf(providerId, modelId));
+    if (s.state === "half_open" && s.probeInFlight) { s.probeInFlight = false; this.persistSoon(true); }
+  }
+
   /** Resolve a half-open probe: success closes; failure re-opens with backoff. */
   resolveProbe(providerId: string, modelId: string | undefined, ok: boolean): void {
     const s = this.state(keyOf(providerId, modelId));

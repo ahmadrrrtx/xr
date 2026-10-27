@@ -185,6 +185,7 @@ function descriptorFor(providerId: string, modelId: string): {
   const preset = PRESETS[providerId]!;
   const models = modelsFromPreset(preset, true);
   const m = models.find((x) => x.modelId === modelId)!;
+  if (m.evidence) m.evidence = { ...m.evidence, source: "deterministic routing fixture (not live model validation)", configured: true };
   const provider: ProviderDescriptor = {
     providerId,
     label: preset.label,
@@ -231,7 +232,7 @@ describe("Phase 5 · capability-gated selection on measured contracts", () => {
       models: [weak.model, strong.model],
       builtAt: Date.now(),
     };
-    const config = ConfigSchema.parse({ defaults: { provider: "ollama", model: "qwen2.5:7b" } }) as XRConfig;
+    const config = ConfigSchema.parse({ defaults: { provider: "ollama", model: "qwen2.5:7b" }, intelligencePlane: { enableAutomatic: true } }) as XRConfig;
 
     const router = new IntelligenceRouter({ catalog, behavioral: behavioralView(store) });
     const { decision } = router.route(config, {
@@ -270,7 +271,7 @@ describe("Phase 5 · capability-gated selection on measured contracts", () => {
       models: [weak.model, strong.model],
       builtAt: Date.now(),
     };
-    const config = ConfigSchema.parse({ defaults: { provider: "ollama", model: "qwen2.5:7b" } }) as XRConfig;
+    const config = ConfigSchema.parse({ defaults: { provider: "ollama", model: "qwen2.5:7b" }, intelligencePlane: { enableAutomatic: true } }) as XRConfig;
 
     const router = new IntelligenceRouter({ catalog, behavioral: behavioralView(store) });
     const { decision } = router.route(config, {
@@ -306,7 +307,7 @@ describe("Phase 5 · capability-gated selection on measured contracts", () => {
     const store = new BehavioralStore({ file: null }); // no contracts
     const weak = descriptorFor("ollama", "qwen2.5:7b");
     const catalog: IntelligenceCatalog = { providers: [weak.provider], models: [weak.model], builtAt: Date.now() };
-    const config = ConfigSchema.parse({ defaults: { provider: "ollama", model: "qwen2.5:7b" } }) as XRConfig;
+    const config = ConfigSchema.parse({ defaults: { provider: "ollama", model: "qwen2.5:7b" }, intelligencePlane: { enableAutomatic: true } }) as XRConfig;
     const router = new IntelligenceRouter({ catalog, behavioral: behavioralView(store) });
     const { decision } = router.route(config, {
       requirements: { modelClass: "chat", summary: "hello" },

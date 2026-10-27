@@ -119,6 +119,8 @@ export function buildFallbackChain(
     if (steps.length >= maxSteps) break;
     const m = ev.model;
     if (selected && m.key === selected.key) continue;
+    if (!ev.compatible) continue;
+    if (selected && m.providerId !== selected.providerId && !(requirements.allowCrossProviderFallback ?? policy.allowCrossProviderFallback)) continue;
 
     // Circuit breaker: skip OPEN targets (reason already on rejected list)
     if (routingHealth && routingHealth.gate(m.providerId, m.modelId).state === "open") {
@@ -189,13 +191,14 @@ export function mayFallbackOnTrigger(trigger: FallbackTrigger): {
   switch (trigger) {
     case "before_request":
     case "provider_outage":
-    case "auth_failure":
     case "rate_limit":
     case "timeout":
-    case "invalid_response":
-    case "tool_incompatible":
     case "local_unavailable":
       return { allow: true, reason: `trigger ${trigger} is safe for model-level fallback` };
+    case "auth_failure":
+    case "invalid_response":
+    case "tool_incompatible":
+      return { allow: false, reason: "Non-retryable credential/protocol/capability failure — correct configuration before retry" };
     case "budget_exhausted":
       return { allow: false, reason: "budget exhausted — revalidate budget before any retry" };
     case "privacy_restriction":

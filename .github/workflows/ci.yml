@@ -129,9 +129,15 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      # No bun install needed: both scripts use only node builtins.
+      # Identity itself uses node builtins; executable security gate installs frozen dependencies below.
       - name: Verify every surface is stamped from release.manifest.json
         run: bun run release:check
+      - name: Install governed security-test dependencies (frozen; no dependency scripts)
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          (cd desktop && bun install --frozen-lockfile --ignore-scripts)
+      - name: Behavioral security, real Linux isolation, governed smoke and dependency audit
+        run: bun run security:check
 
       - name: Verify no unsupported public claim
         run: bun run claim-lint

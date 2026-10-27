@@ -6,12 +6,13 @@
 import type { XRConfig } from "../config/config.ts";
 import { registry } from "../providers/registry.ts";
 import { PRESETS, type ProviderPreset } from "../providers/presets.ts";
-import { getSecret, getSecretSyncCached } from "../security/secrets.ts";
+import { secretBrokerSync } from "../security/secret-broker.ts";
 import { TtlCache } from "../util/ttl-cache.ts";
 import { xrMetrics } from "../observability/metrics.ts";
 import {
   descriptorFromPreset,
   modelsFromPreset,
+  localityForKind,
   modelKey,
 } from "./capability.ts";
 import type {
@@ -83,7 +84,7 @@ export function catalogFingerprint(config?: XRConfig): string {
   const keyPresence: Record<string, boolean> = {};
   for (const preset of Object.values(PRESETS)) {
     if (preset.apiKeyEnv) {
-      keyPresence[preset.apiKeyEnv] = !!(process.env[preset.apiKeyEnv] || getSecretSyncCached(preset.apiKeyEnv));
+      keyPresence[preset.apiKeyEnv] = !!secretBrokerSync(preset.apiKeyEnv);
     }
   }
   return JSON.stringify({
@@ -114,7 +115,7 @@ export function catalogFingerprint(config?: XRConfig): string {
 
 function credentialAvailable(preset: ProviderPreset): boolean {
   if (!preset.apiKeyEnv) return true;
-  return !!(process.env[preset.apiKeyEnv] || getSecret(preset.apiKeyEnv));
+  return !!secretBrokerSync(preset.apiKeyEnv);
 }
 
 /**
@@ -157,11 +158,11 @@ function buildCatalogUncached(config?: XRConfig): IntelligenceCatalog {
       const rt = (config.localModels.runtimes as Record<string, any>)[preset.id];
       if (rt) {
         pd.health = {
-          ok: !!rt.healthy,
+          ok: typeof rt.healthy === "boolean" ? rt.healthy : undefined,
           authOk: true,
-          available: rt.running !== false && rt.healthy !== false,
+          available: rt.running === false || rt.healthy === false ? false : rt.running === true && rt.healthy === true ? true : undefined,
           detail: rt.detail,
-          checkedAt: rt.lastCheckedAt ? Date.parse(rt.lastCheckedAt) || Date.now() : Date.now(),
+          checkedAt: rt.lastCheckedAt ? Date.parse(rt.lastCheckedAt) || 0 : 0,
           stale: true,
         };
       }
@@ -175,6 +176,9 @@ function buildCatalogUncached(config?: XRConfig): IntelligenceCatalog {
 
     providers.push(pd);
     const ms = modelsFromPreset(preset, cred);
+    const baseUrl = config?.localModels?.runtimes?.[preset.id]?.baseUrl ?? (config?.providers?.[preset.id] as { baseUrl?: string } | undefined)?.baseUrl ?? preset.baseUrl;
+    if (preset.kind === "local") pd.locality = localityForKind(preset.kind, preset.id, baseUrl);
+    for (const m of ms) { m.locality = pd.locality; if (override) applyCapabilityOverride({ capabilities: m.capabilities } as ProviderDescriptor, override); if (m.locality.locality !== "local" && preset.kind === "local") { m.cost.free = false; m.cost.known = false; m.cost.source = "remote-tariff-unavailable"; delete m.cost.inPerMTok; delete m.cost.outPerMTok; } }
     for (const m of ms) {
       if (pd.health) m.health = pd.health;
       // Apply model-level overrides when present: providerCapabilities[id].models[modelId]
@@ -217,6 +221,15 @@ function buildCatalogUncached(config?: XRConfig): IntelligenceCatalog {
     });
   }
 
+  const configured = configNamedModels(config);
+  for (const m of models) if (m.evidence) {
+    m.evidence.configured = configured.some(c => c.providerId === m.providerId && c.modelId === m.modelId);
+    if (m.health && !m.health.stale) m.evidence.reachable = m.health.ok ? "pass" : "fail";
+    const p = providers.find(p => p.providerId === m.providerId);
+    if (p) m.health = { ...m.health, authOk: m.health?.authOk, checkedAt: m.health?.checkedAt ?? 0, stale: m.health?.stale ?? true };
+    if (p?.kind === "local" && p.locality.locality !== "local") { m.locality = p.locality; m.cost.free = false; if (!m.cost.source?.startsWith("operator-declared:")) { m.cost.known = false; m.cost.source = "remote-tariff-unavailable"; delete m.cost.inPerMTok; delete m.cost.outPerMTok; } }
+    // Never promote a catalog or cached health result to agentValidated/recommended.
+  }
   return { providers, models, builtAt: Date.now() };
 }
 
@@ -232,6 +245,7 @@ function configNamedModels(config?: XRConfig): Array<{ providerId: string; model
   };
   push(config.defaults?.provider, config.defaults?.model);
   push(config.defaults?.fallbackProvider, config.defaults?.fallbackModel);
+  for (const p of config.providerEngine?.customProviders ?? []) { push(p.id, p.defaultModel); }
   const local = config.localModels as
     | { provider?: string; runtime?: string; selected?: string; installed?: unknown }
     | undefined;
@@ -303,6 +317,8 @@ function applyCapabilityOverride(pd: ProviderDescriptor, override: any): void {
 function applyModelOverride(m: ModelDescriptor, override: any): void {
   if (!override || typeof override !== "object") return;
   applyCapabilityOverride({ capabilities: m.capabilities } as ProviderDescriptor, override);
+  const c = override.cost;
+  if (c && c.known !== false && typeof c.source === "string" && c.source.trim() && [c.inPerMTok, c.outPerMTok].every((n: unknown) => typeof n === "number" && Number.isFinite(n) && n >= 0)) { m.cost.inPerMTok = c.inPerMTok; m.cost.outPerMTok = c.outPerMTok; m.cost.known = true; m.cost.source = `operator-declared: ${c.source}`; }
   if (typeof override.contextWindow === "number") {
     m.context.contextWindow = override.contextWindow;
   }
@@ -317,7 +333,7 @@ export function findModel(
     const exact = catalog.models.find(
       (m) => m.providerId === providerId && m.modelId === modelId,
     );
-    if (exact) return exact;
+    return exact;
   }
   // Default model for provider
   const def = catalog.models.find((m) => m.providerId === providerId && m.isDefault);

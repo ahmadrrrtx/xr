@@ -411,6 +411,7 @@ export function fmtUsd(
   n: number,
   opts: { compact?: boolean; precise?: boolean } = {}
 ): string {
+  if (!Number.isFinite(n)) return 'Unavailable';
   const abs = Math.abs(n);
   // compact: whole dollars drop the cents ("$5", "$100"); otherwise 2 dp.
   const digits =
@@ -460,6 +461,8 @@ function denialText(
   ctx: CheckContext
 ): string {
   switch (code) {
+    case 'price-unavailable':
+      return 'Price unavailable. Configure sourced rates in the engine, or choose a known-priced/local target. Nothing was sent.';
     case 'paused':
       return pauseReasonText(s.pauseReason);
     case 'per-request':
@@ -492,12 +495,13 @@ export function checkPreCall(
   req: PreCallRequest,
   ctx: CheckContext
 ): PreCallCheck {
+  if (req.allowDownshift === false) s = { ...s, modelDownshifting: false };
   const state = deriveState(s, c);
   const tokensIn = Math.max(0, Math.floor(req.estimatedTokensIn));
   const tokensOut = Math.max(0, Math.floor(req.estimatedTokensOut));
   let model = req.model;
   let cost = round6(
-    req.estimatedCost ?? estimateCost(model, tokensIn, tokensOut)
+    req.estimatedCost ?? estimateCost(model, tokensIn, tokensOut, ctx.now)
   );
   const caps = capsFor(s, c, req);
   const hardCaps: Caps = {
@@ -544,6 +548,7 @@ export function checkPreCall(
   };
 
   if (s.paused) return deny('paused');
+  if (!Number.isFinite(cost) || cost < 0) return deny('price-unavailable');
 
   const localOnly = s.monthlyLimit <= EPS;
   if (localOnly && !isLocalModel(model)) {

@@ -61,12 +61,15 @@ test("daemon workspace switch uses the canonical XRApp.switchWorkspace, not inli
   expect(prov).not.toMatch(/workspaceManager\.getStore\(/);
 });
 
-test("provider health is served by the shared ProviderHealthChecker", () => {
-  const prov = codeOnly(read("src/daemon/routes/providers.routes.ts"));
-  // Phase 04 — providers.list must use the shared cached health engine via gateway
-  // which internally uses checkProviderHealthCached bounded cached deduped.
-  const usesSharedHealth = /checkProviderHealthCached\(/.test(prov) || /providerGateway\.health/.test(prov) || /providerGateway\.healthAll/.test(prov);
-  expect(usesSharedHealth).toBeTrue();
+test("provider listing is offline; explicit onboarding probes use shared bounded health", () => {
+  const prov=codeOnly(read("src/daemon/routes/providers.routes.ts"));
+  expect(prov).toContain("providerGateway.inspectHealth(");
+  expect(prov).not.toMatch(/providerGateway\.healthAll\(/);
+  const setup=codeOnly(read("src/daemon/routes/onboarding.routes.ts"));
+  expect(setup).toContain("body.probe === true");
+  expect(setup).toContain("checkProviderHealthCached(");
+  // Actual zero-request listing / opt-in-only probes are exercised by
+  // test/daemon/offline-onboarding-budget.test.ts, not inferred from this census.
 });
 
 test("surface identity: daemon records itself as the canonical daemon surface", () => {

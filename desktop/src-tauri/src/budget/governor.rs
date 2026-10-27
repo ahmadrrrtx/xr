@@ -2,7 +2,7 @@
  * Budget governor — pure logic (Phase 13).
  *
  * A line-for-line port of desktop/src/budget/{period,models,core,seed}.ts.
- * Same order of checks, same EPS, same price table, same rounding, same
+ * Same order of checks, same EPS, shared canonical model-facts JSON, same rounding, same
  * message strings — the webview's browser fallback and this module must
  * produce identical verdicts, and `mod tests` pins the shared vectors.
  *
@@ -18,10 +18,10 @@ pub const DAY_MS: i64 = 86_400_000;
 pub const HOUR_MS: i64 = 3_600_000;
 pub const SPIKE_WINDOW_MS: i64 = 5 * 60_000;
 pub const DANGER_PCT: f64 = 0.85;
-pub const SEED_VERSION: i64 = 1;
+pub const SEED_VERSION: i64 = 2;
 pub const SEED_RNG: u32 = 0x1317_b0d6;
-pub const UNKNOWN_IN_PER_1M: f64 = 5.0;
-pub const UNKNOWN_OUT_PER_1M: f64 = 15.0;
+pub const UNKNOWN_IN_PER_1M: f64 = f64::NAN;
+pub const UNKNOWN_OUT_PER_1M: f64 = f64::NAN;
 
 // ─── Wire types (camelCase, mirror src/budget/types.ts) ───────────────────
 
@@ -58,7 +58,7 @@ impl Default for BudgetSettings {
             hard_cap: true,
             circuit_breaker_pct: 0.95,
             circuit_breaker_spend_per5min: 0.5,
-            model_downshifting: true,
+            model_downshifting: false,
             finalization_reserve_pct: 0.1,
             daily_limit: 1.0,
             per_request_limit: 0.25,
@@ -72,20 +72,9 @@ impl Default for BudgetSettings {
             paused: false,
             pause_reason: None,
             paused_at: None,
-            configured_models: [
-                "claude-sonnet-4.5",
-                "claude-haiku-4-6",
-                "gpt-5",
-                "gpt-5-mini",
-                "gpt-4o",
-                "gpt-4o-mini",
-                "gemini-2.5-flash",
-            ]
-            .iter()
-            .map(|s| s.to_string())
-            .collect(),
-            installed_local: vec!["qwen2.5:3b".into(), "qwen2.5-coder:3b".into()],
-            default_model: "claude-sonnet-4.5".into(),
+            configured_models: vec![],
+            installed_local: vec![],
+            default_model: String::new(),
         }
     }
 }
@@ -225,6 +214,8 @@ pub struct PreCallRequest {
     pub estimated_tokens_out: f64,
     #[serde(default)]
     pub estimated_cost: Option<f64>,
+    #[serde(default)]
+    pub allow_downshift: Option<bool>,
     #[serde(default)]
     pub agent: Option<String>,
     #[serde(default)]
@@ -381,6 +372,7 @@ fn group_thousands(int: &str) -> String {
 
 /// `fmtUsd(n, { precise })`: 4 dp when precise or 0 < |n| < 0.01, else 2.
 pub fn fmt_usd(n: f64, precise: bool) -> String {
+    if !n.is_finite() { return "Unavailable".into(); }
     let abs = n.abs();
     let digits = if precise || (abs > 0.0 && abs < 0.01) {
         4
@@ -534,26 +526,48 @@ const fn local(id: &'static str) -> ModelInfo {
     }
 }
 
-/// Same order as MODEL_REGISTRY in models.ts — ties in downshift sorting use it.
-pub const MODEL_REGISTRY: [ModelInfo; 17] = [
-    cloud("gpt-5", "openai", 2.5, 10.0),
-    cloud("gpt-5-mini", "openai", 0.15, 0.6),
-    cloud("gpt-4o", "openai", 2.5, 10.0),
-    cloud("gpt-4o-mini", "openai", 0.15, 0.6),
-    cloud("claude-opus-4-6", "anthropic", 15.0, 75.0),
-    cloud("claude-sonnet-4-6", "anthropic", 3.0, 15.0),
-    cloud("claude-sonnet-4.5", "anthropic", 3.0, 15.0),
-    cloud("claude-haiku-4-6", "anthropic", 0.25, 1.25),
-    cloud("gemini-2.5-pro", "google", 1.25, 10.0),
-    cloud("gemini-2.5-flash", "google", 0.3, 2.5),
-    cloud("grok-4", "xai", 3.0, 15.0),
-    local("qwen2.5:3b"),
-    local("qwen2.5-coder:3b"),
-    local("llama3.2:3b"),
-    local("llama3.1:8b"),
-    local("deepseek-r1:7b"),
-    local("llama3.1:70b"),
-];
+// Parse one compile-time included offline data file, not copied provider prices.
+fn facts() -> &'static Value {
+    static DATA: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+    DATA.get_or_init(|| serde_json::from_str(include_str!("../../../../src/core/model-facts.json")).unwrap_or(Value::Null))
+}
+fn model_registry() -> &'static Vec<ModelInfo> {
+    static MODELS: std::sync::OnceLock<Vec<ModelInfo>> = std::sync::OnceLock::new();
+    MODELS.get_or_init(|| {
+        let mut models = Vec::new();
+        if let Some(rows) = facts()["models"].as_array() {
+            for f in rows {
+                if let (Some(id), Some(provider)) = (f["modelId"].as_str(), f["providerId"].as_str()) {
+                    if provider == "ollama" { models.push(local(id)); }
+                    else { models.push(cloud(id, provider, f["price"]["input"].as_f64().unwrap_or(f64::NAN), f["price"]["output"].as_f64().unwrap_or(f64::NAN))); }
+                }
+            }
+        }
+        for id in ["qwen2.5:3b", "qwen2.5-coder:3b", "llama3.2:3b", "llama3.1:8b", "deepseek-r1:7b", "llama3.1:70b"] { models.push(local(id)); }
+        models
+    })
+}
+fn split_model(id: &str) -> (Option<&str>, &str) {
+    if let Some((p, m)) = id.split_once("::") { return (Some(p), m); }
+    if let Some((p, m)) = id.split_once('/') {
+        if ["openai", "anthropic", "google", "xai", "ollama", "lmstudio", "llamacpp", "groq", "openrouter"].contains(&p) { return (Some(p), m); }
+    }
+    (None, id)
+}
+fn local_provider(p: &str) -> bool {
+    ["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang"].contains(&p)
+}
+fn iso_ms(text: &str) -> Option<i64> {
+    let parts: Vec<&str> = text.get(..10)?.split('-').collect();
+    let day = days_from_civil(parts.first()?.parse().ok()?, parts.get(1)?.parse().ok()?, parts.get(2)?.parse().ok()?);
+    if text.len() == 10 { return Some(day * DAY_MS); }
+    if !text.ends_with('Z') { return None; }
+    let h: i64 = text.get(11..13)?.parse().ok()?;
+    let m: i64 = text.get(14..16)?.parse().ok()?;
+    let sec: i64 = text.get(17..19)?.parse().ok()?;
+    let millis = if text.as_bytes().get(19) == Some(&b'.') { text.get(20..23)?.parse::<i64>().ok()? } else { 0 };
+    Some(day * DAY_MS + h * 3_600_000 + m * 60_000 + sec * 1000 + millis)
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Priced {
@@ -582,36 +596,42 @@ fn looks_local(id: &str) -> bool {
 }
 
 pub fn model_info(id: &str) -> Priced {
-    if let Some(m) = MODEL_REGISTRY.iter().find(|m| m.id == id) {
-        return Priced {
-            provider: m.provider.into(),
-            in_per_1m: m.in_per_1m,
-            out_per_1m: m.out_per_1m,
-            local: m.local,
-            estimate: false,
-        };
-    }
-    let is_local = looks_local(id);
-    Priced {
-        provider: if is_local { "ollama" } else { "other" }.into(),
-        in_per_1m: if is_local { 0.0 } else { UNKNOWN_IN_PER_1M },
-        out_per_1m: if is_local { 0.0 } else { UNKNOWN_OUT_PER_1M },
-        local: is_local,
-        estimate: !is_local,
-    }
+    let now = facts()["verifiedAt"].as_str().and_then(iso_ms).unwrap_or(i64::MAX);
+    priced_at(id, now, 0.0)
 }
-
-pub fn is_local_model(id: &str) -> bool {
-    model_info(id).local
+fn priced_at(id: &str, now: i64, input_tokens: f64) -> Priced {
+    let (explicit, model) = split_model(id);
+    let provider = explicit.or_else(|| model_registry().iter().find(|m| m.id == model).map(|m| m.provider));
+    let is_local = provider.map(local_provider).unwrap_or_else(|| looks_local(model));
+    let mut out = Priced { provider: provider.unwrap_or(if is_local { "ollama" } else { "other" }).into(), in_per_1m: if is_local { 0.0 } else { f64::NAN }, out_per_1m: if is_local { 0.0 } else { f64::NAN }, local: is_local, estimate: !is_local };
+    if is_local { return out; }
+    let fresh = facts()["staleAt"].as_str().and_then(iso_ms).map(|end| now <= end).unwrap_or(false);
+    if !fresh { return out; }
+    if let Some(f) = facts()["models"].as_array().and_then(|rows| rows.iter().find(|f| f["modelId"].as_str() == Some(model) && f["providerId"].as_str() == provider)) {
+        let mut p = &f["price"];
+        if p["until"].as_str().and_then(iso_ms).map(|end| now > end).unwrap_or(false) { p = &p["then"]; }
+        if let (Some(i), Some(o)) = (p["input"].as_f64(), p["output"].as_f64()) {
+            if i.is_finite() && o.is_finite() && i >= 0.0 && o >= 0.0 {
+                let long = provider == Some("openai") && model.starts_with("gpt-6") && input_tokens > 272_000.0;
+                out.in_per_1m = i * if long { 2.0 } else { 1.0 };
+                out.out_per_1m = o * if long { 1.5 } else { 1.0 };
+            }
+        }
+    }
+    out
 }
-
+pub fn is_local_model(id: &str) -> bool { model_info(id).local }
 pub fn estimate_cost(id: &str, tokens_in: f64, tokens_out: f64) -> f64 {
-    let m = model_info(id);
+    let now = facts()["verifiedAt"].as_str().and_then(iso_ms).unwrap_or(i64::MAX);
+    estimate_cost_at(id, tokens_in, tokens_out, now)
+}
+pub fn estimate_cost_at(id: &str, tokens_in: f64, tokens_out: f64, now: i64) -> f64 {
+    let m = priced_at(id, now, tokens_in);
     round6((tokens_in * m.in_per_1m + tokens_out * m.out_per_1m) / 1_000_000.0)
 }
 
 fn registry_index(id: &str) -> usize {
-    MODEL_REGISTRY
+    model_registry()
         .iter()
         .position(|m| m.id == id)
         .unwrap_or(999)
@@ -814,7 +834,7 @@ pub fn pause_reason_text(reason: Option<&str>) -> String {
 // ─── Pre-call check ────────────────────────────────────────────────────────
 
 pub fn available_models(s: &BudgetSettings) -> Vec<&'static str> {
-    MODEL_REGISTRY
+    model_registry()
         .iter()
         .filter(|m| {
             s.configured_models.iter().any(|x| x == m.id)
@@ -1014,6 +1034,7 @@ fn denial_text(
     reset_date: Option<&str>,
 ) -> String {
     match code {
+        "price-unavailable" => "Price unavailable. Configure sourced rates in the engine, or choose a known-priced/local target. Nothing was sent.".into(),
         "paused" => pause_reason_text(s.pause_reason.as_deref()),
         "per-request" => format!(
             "This call would cost about {}, more than your per-request limit of {}. Use a cheaper model or raise the limit under Budget → Settings.",
@@ -1061,13 +1082,16 @@ pub fn check_pre_call(
     now: i64,
     reset_date: Option<&str>,
 ) -> PreCallCheck {
+    let mut policy = s.clone();
+    if req.allow_downshift == Some(false) { policy.model_downshifting = false; }
+    let s = &policy;
     let state = derive_state(s, c).to_string();
     let tokens_in = req.estimated_tokens_in.max(0.0).floor();
     let tokens_out = req.estimated_tokens_out.max(0.0).floor();
     let mut model = req.model.clone();
     let mut cost = round6(
         req.estimated_cost
-            .unwrap_or_else(|| estimate_cost(&model, tokens_in, tokens_out)),
+            .unwrap_or_else(|| estimate_cost_at(&model, tokens_in, tokens_out, now)),
     );
     let caps = caps_for(s, c, req);
     let hard_caps = Caps {
@@ -1116,6 +1140,7 @@ pub fn check_pre_call(
     if s.paused {
         deny!("paused");
     }
+    if !cost.is_finite() || cost < 0.0 || !req.estimated_tokens_in.is_finite() || !req.estimated_tokens_out.is_finite() { deny!("price-unavailable"); }
 
     let local_only = s.monthly_limit <= EPS;
     if local_only && !is_local_model(&model) {
@@ -1503,13 +1528,13 @@ pub fn seed_events(now: i64, tz: i64) -> Vec<SpendEvent> {
     ];
     let workspaces: [(&str, f64); 3] = [("xr", 0.55), ("client-acme", 0.3), ("personal", 0.15)];
     let models: [(&str, f64); 7] = [
-        ("claude-sonnet-4.5", 0.35),
-        ("gpt-5-mini", 0.2),
-        ("claude-haiku-4-6", 0.15),
+        ("claude-sonnet-5-5", 0.35),
+        ("gpt-6-luna", 0.2),
+        ("gpt-6.1-sol", 0.15),
         ("gpt-4o-mini", 0.1),
-        ("gemini-2.5-flash", 0.1),
+        ("gemini-3.8-flash", 0.1),
         ("qwen2.5:3b", 0.07),
-        ("gpt-5", 0.03),
+        ("gpt-6-astra", 0.03),
     ];
     let kinds: [(&str, f64); 4] = [
         ("llm_call", 0.85),
@@ -1562,7 +1587,7 @@ pub fn seed_events(now: i64, tz: i64) -> Vec<SpendEvent> {
                 model = Some(m.to_string());
                 tokens_in = 300 + (rand.next_f64() * 2500.0).floor() as i64;
                 tokens_out = 100 + (rand.next_f64() * 1200.0).floor() as i64;
-                cost_usd = estimate_cost(m, tokens_in as f64, tokens_out as f64);
+                cost_usd = estimate_cost_at(m, tokens_in as f64, tokens_out as f64, now);
             } else if kind == "tool_call" {
                 let tool = tools[(rand.next_f64() * tools.len() as f64).floor() as usize];
                 cost_usd = round6(0.001 + rand.next_f64() * 0.019);
@@ -1619,7 +1644,7 @@ pub fn seed_events(now: i64, tz: i64) -> Vec<SpendEvent> {
                 agent: Some(agent.into()),
                 workspace: Some(workspace.into()),
                 session_id: Some(session),
-                model: Some("claude-opus-4-6".into()),
+                model: Some("claude-opus-5-5".into()),
                 tokens_in: 0,
                 tokens_out: 0,
                 cost_usd: 0.0,
@@ -1635,12 +1660,12 @@ pub fn seed_events(now: i64, tz: i64) -> Vec<SpendEvent> {
                 agent: Some(agent.into()),
                 workspace: Some(workspace.into()),
                 session_id: Some(session),
-                model: Some("gpt-5-mini".into()),
+                model: Some("gpt-6-luna".into()),
                 tokens_in: 0,
                 tokens_out: 0,
                 cost_usd: 0.0,
                 category: "llm".into(),
-                detail: Some(serde_json::json!({ "from": "gpt-5", "to": "gpt-5-mini" })),
+                detail: Some(serde_json::json!({ "from": "gpt-6-astra", "to": "gpt-6-luna" })),
             });
         }
     }
@@ -1660,7 +1685,11 @@ mod tests {
     const TZ: i64 = -300;
 
     fn settings() -> BudgetSettings {
-        BudgetSettings::default()
+        let mut s = BudgetSettings::default();
+        s.model_downshifting = true;
+        s.configured_models = ["claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra", "gemini-3.8-flash"].iter().map(|x| x.to_string()).collect();
+        s.installed_local = vec!["qwen2.5:3b".into(), "qwen2.5-coder:3b".into()];
+        s
     }
 
     fn counters(s: &BudgetSettings, spent_month: f64, spent_today: f64) -> Counters {
@@ -1677,6 +1706,7 @@ mod tests {
             estimated_tokens_in: ti,
             estimated_tokens_out: to,
             estimated_cost: None,
+            allow_downshift: None,
             agent: Some("main".into()),
             workspace: Some("xr".into()),
             session_id: None,
@@ -1717,16 +1747,16 @@ mod tests {
     #[test]
     fn price_table() {
         assert!(near(
-            estimate_cost("claude-sonnet-4.5", 2000.0, 800.0),
-            0.018
+            estimate_cost("claude-sonnet-5-5", 2000.0, 800.0),
+            0.012
         ));
-        assert!(near(estimate_cost("gpt-5-mini", 2000.0, 800.0), 0.00078));
-        assert!(near(estimate_cost("mystery-9000", 2000.0, 800.0), 0.022));
+        assert!(near(estimate_cost("gpt-6-luna", 2000.0, 800.0), 0.0006));
+        assert!(estimate_cost("mystery-9000", 2000.0, 800.0).is_nan());
         assert!(model_info("mystery-9000").estimate);
         assert!(near(estimate_cost("qwen2.5:3b", 2000.0, 800.0), 0.0));
         assert!(is_local_model("ollama/anything"));
         assert!(is_local_model("llama3.1:8B"));
-        assert!(!is_local_model("gpt-5"));
+        assert!(!is_local_model("gpt-6-astra"));
     }
 
     #[test]
@@ -1747,13 +1777,13 @@ mod tests {
         let r = check_pre_call(
             &s,
             &counters(&s, 0.0, 0.0),
-            &req("claude-sonnet-4.5", 2000.0, 800.0),
+            &req("claude-sonnet-5-5", 2000.0, 800.0),
             NOW,
             None,
         );
         assert!(r.allowed);
         assert_eq!(r.code, "ok");
-        assert!(near(r.remaining, 0.982));
+        assert!(near(r.remaining, 0.988));
         assert_eq!(r.hard_remaining, Some(1.0));
         assert_eq!(r.state, "ok");
     }
@@ -1767,7 +1797,7 @@ mod tests {
         let r = check_pre_call(
             &s,
             &c,
-            &req("claude-sonnet-4.5", 2000.0, 800.0),
+            &req("claude-sonnet-5-5", 2000.0, 800.0),
             NOW,
             Some("2026-10-31"),
         );
@@ -1785,7 +1815,7 @@ mod tests {
             check_pre_call(
                 &raised,
                 &c,
-                &req("claude-sonnet-4.5", 2000.0, 800.0),
+                &req("claude-sonnet-5-5", 2000.0, 800.0),
                 NOW,
                 None
             )
@@ -1796,12 +1826,12 @@ mod tests {
     #[test]
     fn per_request_downshifts_then_denies() {
         let s = settings();
-        let big = req("gpt-5", 100_000.0, 20_000.0);
+        let big = req("gpt-6-astra", 100_000.0, 20_000.0);
         let r = check_pre_call(&s, &counters(&s, 0.0, 0.0), &big, NOW, None);
         assert!(r.allowed);
         assert_eq!(r.code, "downshifted");
-        assert_eq!(r.downgraded_to_model.as_deref(), Some("gemini-2.5-flash"));
-        assert!(near(r.estimated_cost, 0.08));
+        assert_eq!(r.downgraded_to_model.as_deref(), Some("gemini-3.8-flash"));
+        assert!(near(r.estimated_cost, 0.15));
         let mut off = settings();
         off.model_downshifting = false;
         let d = check_pre_call(&off, &counters(&off, 0.0, 0.0), &big, NOW, None);
@@ -1811,31 +1841,31 @@ mod tests {
     }
 
     #[test]
-    fn per_request_one_dollar_blocks_opus() {
+    fn per_request_quarter_dollar_blocks_opus() {
         let mut s = settings();
-        s.per_request_limit = 1.0;
-        s.configured_models = vec!["claude-opus-4-6".into()];
+        s.per_request_limit = 0.25;
+        s.configured_models = vec!["claude-opus-5-5".into()];
         s.installed_local = vec![];
         let r = check_pre_call(
             &s,
             &counters(&s, 0.0, 0.0),
-            &req("claude-opus-4-6", 40_000.0, 8_000.0),
+            &req("claude-opus-5-5", 40_000.0, 8_000.0),
             NOW,
             None,
         );
         assert!(!r.allowed);
         assert_eq!(r.code, "per-request");
-        assert!(near(r.estimated_cost, 1.2));
+        assert!(near(r.estimated_cost, 0.32));
     }
 
     #[test]
     fn approach_downshift_sonnet_haiku_local() {
         let s = settings();
-        let r = req("claude-sonnet-4.5", 2000.0, 800.0);
+        let r = req("claude-sonnet-5-5", 2000.0, 800.0);
         let warn = check_pre_call(&s, &counters(&s, 4.0, 0.0), &r, NOW, None);
         assert_eq!(
             warn.downgraded_to_model.as_deref(),
-            Some("claude-haiku-4-6")
+            Some("gpt-6-luna")
         );
         assert!(warn.downshift_why.unwrap().contains("80%"));
         let danger = check_pre_call(&s, &counters(&s, 4.3, 0.0), &r, NOW, None);
@@ -1846,7 +1876,7 @@ mod tests {
         let mut no_local = settings();
         no_local.installed_local = vec![];
         let d2 = check_pre_call(&no_local, &counters(&no_local, 4.3, 0.0), &r, NOW, None);
-        assert_eq!(d2.downgraded_to_model.as_deref(), Some("claude-haiku-4-6"));
+        assert_eq!(d2.downgraded_to_model.as_deref(), Some("gpt-6-luna"));
         let mut off = settings();
         off.model_downshifting = false;
         assert_eq!(
@@ -1859,8 +1889,8 @@ mod tests {
     fn reserve_blocks_new_work_but_allows_finalization() {
         let s = settings();
         let c = counters(&s, 4.49, 0.0);
-        let mut small = req("gpt-5-mini", 2000.0, 800.0);
-        small.model = "claude-sonnet-4.5".into();
+        let mut small = req("gpt-6-luna", 2000.0, 800.0);
+        small.model = "claude-sonnet-5-5".into();
         let mut off = s.clone();
         off.model_downshifting = false;
         let denied = check_pre_call(&off, &c, &small, NOW, None);
@@ -1869,7 +1899,7 @@ mod tests {
         small.finalization = Some(true);
         let fin = check_pre_call(&off, &c, &small, NOW, None);
         assert!(fin.allowed);
-        assert!(near(fin.remaining, 0.492));
+        assert!(near(fin.remaining, 0.498));
     }
 
     #[test]
@@ -1880,7 +1910,7 @@ mod tests {
         let r = check_pre_call(
             &s,
             &counters(&s, 4.99, 0.0),
-            &req("claude-sonnet-4.5", 2000.0, 800.0),
+            &req("claude-sonnet-5-5", 2000.0, 800.0),
             NOW,
             None,
         );
@@ -1911,7 +1941,7 @@ mod tests {
                 agent: Some("main".into()),
                 workspace: None,
                 session_id: None,
-                model: Some("claude-sonnet-4.5".into()),
+                model: Some("claude-sonnet-5-5".into()),
                 tokens_in: 0,
                 tokens_out: 0,
                 cost_usd: 0.03,
@@ -1927,7 +1957,7 @@ mod tests {
         let r = check_pre_call(
             &local,
             &counters(&local, 0.0, 0.0),
-            &req("claude-sonnet-4.5", 2000.0, 800.0),
+            &req("claude-sonnet-5-5", 2000.0, 800.0),
             NOW,
             None,
         );
@@ -1952,27 +1982,27 @@ mod tests {
         assert_eq!(first.agent.as_deref(), Some("main"));
         assert_eq!(first.workspace.as_deref(), Some("xr"));
         assert_eq!(first.session_id.as_deref(), Some("chat-b69c"));
-        assert_eq!(first.model.as_deref(), Some("claude-sonnet-4.5"));
+        assert_eq!(first.model.as_deref(), Some("claude-sonnet-5-5"));
         assert_eq!((first.tokens_in, first.tokens_out), (362, 906));
-        assert!(near(first.cost_usd, 0.014676));
+        assert!(near(first.cost_usd, 0.009784));
         let last = &a[a.len() - 1];
         assert_eq!(last.id, "sp_seed_0233");
         assert_eq!(last.ts, 1_791_129_357_000);
-        assert_eq!(last.model.as_deref(), Some("gemini-2.5-flash"));
+        assert_eq!(last.model.as_deref(), Some("gemini-3.8-flash"));
         assert_eq!((last.tokens_in, last.tokens_out), (1800, 823));
-        assert!(near(last.cost_usd, 0.002598));
+        assert!(near(last.cost_usd, 0.004436));
         assert_eq!(a.iter().filter(|e| e.kind == "blocked").count(), 3);
         assert_eq!(a.iter().filter(|e| e.kind == "downshifted").count(), 3);
         let today = local_day_start(NOW, TZ);
         assert!(a.iter().all(|e| e.ts < today));
         let p = period_for(NOW, TZ, 1, None);
         let c = counters_from(&a, &p, NOW, TZ);
-        assert!(near(c.spent_month, 0.409827), "{}", c.spent_month);
+        assert!(near(c.spent_month, 0.385849), "{}", c.spent_month);
         assert_eq!(c.tokens_in_month, 47225);
         assert_eq!(c.tokens_out_month, 20640);
         assert!(near(c.spent_today, 0.0));
         let total = round6(a.iter().map(|e| e.cost_usd).sum());
-        assert!(near(total, 2.084444), "{}", total);
+        assert!(near(total, 2.161647), "{}", total);
     }
 
     #[test]
@@ -2024,6 +2054,33 @@ mod tests {
         assert_eq!(s.billing_tier, "pro");
         assert_eq!(s.per_agent_caps.get("coder").copied(), Some(2.5));
         assert!(!s.per_agent_caps.contains_key("bad"));
-        assert_eq!(s.configured_models.len(), 7);
+        assert!(s.configured_models.is_empty());
     }
+    #[test]
+    fn shared_dated_pricing_vectors() {
+        let data: Value = serde_json::from_str(include_str!("../../../../test/desktop/fixtures/pricing-v1.json")).unwrap();
+        for v in data["cases"].as_array().unwrap() {
+            let id = v["model"].as_str().unwrap();
+            let usd = estimate_cost_at(id, v["input"].as_f64().unwrap(), v["output"].as_f64().unwrap(), iso_ms(v["now"].as_str().unwrap()).unwrap());
+            if v["usd"].is_null() { assert!(usd.is_nan(), "{} must be unavailable, got {}", v["id"], usd); }
+            else { assert!(near(usd, v["usd"].as_f64().unwrap()), "{}: {}", v["id"], usd); }
+        }
+    }
+    #[test]
+    fn unknown_price_and_guard_cannot_override_explicit_target() {
+        let s = settings();
+        let c = counters(&s, 0.0, 0.0);
+        let mut unknown = req("vendor::mystery-9000", 2000.0, 800.0);
+        unknown.allow_downshift = Some(false);
+        let denial = check_pre_call(&s, &c, &unknown, NOW, None);
+        assert!(!denial.allowed); assert_eq!(denial.code, "price-unavailable");
+        let mut pin = req("openai::gpt-6-astra", 100000.0, 20000.0);
+        pin.allow_downshift = Some(false);
+        let denial = check_pre_call(&s, &c, &pin, NOW, None);
+        assert!(!denial.allowed); assert!(denial.downgraded_to_model.is_none()); assert_eq!(denial.model, pin.model);
+        assert!(BudgetSettings::default().installed_local.is_empty());
+        assert!(BudgetSettings::default().configured_models.is_empty());
+        assert!(!BudgetSettings::default().model_downshifting);
+    }
+
 }

@@ -4,15 +4,15 @@
   "comment": "XR RELEASE MANIFEST — the single source of truth for release identity and every public claim. Constitution Article XXII.1 ('One release manifest stamps version across version.ts, package.json, README, installers, website ... CI fails on drift') and Article XIX.1 ('no public claim without an evidence link'). Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface. NOTE (2026-08-13): 1.0.0 is a DELIBERATE semver rebaseline of 7.1.0 (Truth) — the same codebase, re-identified as the first stable line. Historical 7.x artifacts remain under docs/ as frozen records. INDEPENDENT VERSION LINES (deliberate, not drift): mobile/package.json (PWA line, e.g. 28.x) and cloud/package.json (control-plane line, e.g. 1.0.x) version independently of the product line and are NOT stamped targets; website/src/lib/site.ts is the stamped console surface.",
   "identity": {
     "name": "@rrrtx/xr",
-    "version": "1.1.0",
+    "version": "1.1.1-rc.1",
     "codename": "Graphite",
-    "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+    "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.",
     "author": "Muhammad Ahmad (@ahmadrrrtx)",
     "license": "MIT",
     "repo": "https://github.com/ahmadrrrtx/xr",
     "homepage": "https://xr-gules.vercel.app",
     "npm": "https://www.npmjs.com/package/@rrrtx/xr",
-    "stability": "public-beta"
+    "stability": "developer-preview"
   },
   "channels": {
     "comment": "Public release channels (launch-audit XR-LAUNCH-001/002; owner decisions D1 + D6, 2026-10-22). identity.version is the in-development line on main; publicVersion is what EVERY public install path serves today. The bootstrap installers are stamped from publicVersion (bun run release:stamp), and `bun run channel:live` asserts each claimed channel serves exactly publicVersion with bytes matching that release's signed SHA256SUMS. Promote publicVersion only after the new release's live channel check passes (docs/release/CHANNELS.md#public-version). withdrawnTags exist in git but were never published: their GitHub releases must be marked pre-release and npm must never carry them (scripts/tag-npm-invariant.ts).",
@@ -77,6 +77,18 @@
       "path": "desktop/src-tauri/Cargo.toml",
       "kind": "toml-version",
       "comment": "Cargo package version; drifted to 0.2.0 before L-008 (Tauri reads conf version, but the shell's own crate identity must not lag)."
+    },
+    {
+      "id": "desktop/package.json",
+      "path": "desktop/package.json",
+      "kind": "json-version-only",
+      "comment": "RC-101: renderer package identity follows the product; no framework/dependency fields are stamped."
+    },
+    {
+      "id": "desktop/Cargo.lock",
+      "path": "desktop/src-tauri/Cargo.lock",
+      "kind": "cargo-lock-root",
+      "comment": "RC-101: derived root crate identity only; dependency resolutions/checksums remain byte-identical and cargo --locked validates separately."
     }
   ],
   "claims": [

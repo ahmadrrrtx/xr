@@ -1,74 +1,98 @@
 # Desktop signing, notarization and updates — owner runbook
 
-Launch audit **XR-LAUNCH-008**, owner decision **D5**: signing is wired in
-`.github/workflows/desktop-app.yml` and **gated on owner secrets**. With no
-secrets, every desktop build is an honest **unsigned** build and the job prints
-a notice saying so; nothing claims to be signed. No key or certificate is
-ever in the repository, and none was handled while wiring this.
+Current candidate: **1.1.1-rc.1 / developer-preview**, 2026-10-27.
+**No production signing material or native-platform signing result was supplied
+in this workspace. Public preview/stable publication is NOT READY.**
 
-Current state (2026-10-22): **no secrets provisioned → desktop builds are
-unsigned and there is no auto-update.** README and the release notes must keep
-saying so until the gates below are green.
+# # Enforced policy (supersedes historical unsigned-tag behavior)
 
-## Secrets
+* Ordinary development/PR builds may be clearly **UNSIGNED development**
+  artifacts. Raw Apple/Windows/updater private signing values are tag-only
+  environment inputs, not PR values. Presence flags are not signatures.
+* **Every desktop tag candidate**, including preview tags, requires valid
+  macOS Developer ID + notarization and Windows Authenticode prerequisites.
+  Missing owner material blocks early, before expensive native builds. Removing
+  a certificate is not a way to publish an unsigned tag.
+* A tag with a committed updater public key also requires its private signing
+  key. Missing/wrong signatures fail. If no updater is provisioned, updating
+  remains explicitly disabled; no fake working updater/feed is published.
+* Native bundles remain private workflow artifacts until build, native unit,
+  installed GUI/engine/agent and journey gates pass. Production installers are
+  architecture-qualified; test MSIX/test certificates/development portable
+  outputs are excluded from production collection.
+* The final desktop aggregate includes collection and applicable tag signing/
+  provenance jobs. Desktop attachments are **PRIVATE draft only**. Public
+  promotion is separately owner-triggered in the existing Release workflow,
+  with same-tag/same-commit completed native CI evidence, independent signed
+  artifact verification, supply chain and CLI journeys.
+* Repo environments must be configured by the owner: `desktop-signing`,
+  `release-promotion`, `npm-publish`, `release-channels`. Merely naming them in
+  YAML is NOT proof that required reviewers/tag restrictions exist.
 
-| Secret | What | Used for |
-|---|---|---|
-| `TAURI_UPDATER_KEY` | content of the private key from `tauri signer generate` | signs updater payloads (`.sig`) |
-| `TAURI_UPDATER_KEY_PASSWORD` | its password | — |
-| `APPLE_CERTIFICATE` | base64 of the Developer ID Application `.p12` | macOS codesign (hardened runtime) |
-| `APPLE_CERTIFICATE_PASSWORD` | `.p12` password | — |
-| `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Name (TEAMID)` | — |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | Apple ID, app-specific password, team ID | notarization + stapling |
-| `WINDOWS_CERTIFICATE` | base64 of the Authenticode `.pfx` (OV/EV) | Windows Authenticode |
-| `WINDOWS_CERTIFICATE_PASSWORD` | `.pfx` password | — |
+# # Owner secrets — configure directly in GitHub, never in chat or source
 
-The `Signing plan` step (`scripts/desktop-signing-plan.ts`) only sees whether
-each secret is present. Rules:
+| Name | Purpose |
+|---|---|
+| `APPLE_CERTIFICATE` | base64 Developer ID Application p12 |
+| `APPLE_CERTIFICATE_PASSWORD` | p12 password |
+| `APPLE_SIGNING_IDENTITY` | Developer ID identity |
+| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | notarization account/app-specific password/team |
+| `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | Authenticode pfx and password |
+| `TAURI_UPDATER_KEY`, `TAURI_UPDATER_KEY_PASSWORD` | matching Tauri updater private key/password, only after public-key provisioning |
+| `TAP_GITHUB_TOKEN` | Homebrew tap only, minimum repository scope |
+| `WINGET_TOKEN` | owner-authorized WinGet fork/PR account |
+| `NPM_TOKEN` | separately authorized stable dist-tag operations; trusted npm publication itself uses OIDC |
 
-- missing secrets on a PR → unsigned build, notice, green;
-- tag build with the updater pubkey committed but no `TAURI_UPDATER_KEY` → **fails**
-  (it would ship installers the shipped updater rejects);
-- tag build signed for macOS but without notarization secrets → **fails**;
-- `WINDOWS_CERTIFICATE` set but no thumbprint imported → **fails**.
+The planner receives booleans/public thumbprints, not key contents. Windows
+imports a private temporary pfx into the runner store and removes the file in
+`finally`; the command line carries a public thumbprint, not its password.
+No owner key/certificate was generated, inspected, committed or handled by this
+agent. Treat runner/dependency code allowed to sign as trusted code; enforce
+protected refs/reviewers and short-lived/minimal account privileges.
 
-## Order of operations
+Presence-only blocker (expected exit1 with this workspace's absent material):
 
-1. **Updater key** — follow [UPDATER.md](UPDATER.md) "One-time setup"
-   (`tauri signer generate`, `generate-updater-keys.ts --apply <.pub>`, commit,
-   two secrets).
-2. **Key backup (gate):** store the updater private key and its password offline in
-   two places (e.g. password manager + encrypted offline media). Record the date
-   and the key id (`untrusted comment: minisign public key: <ID>` in the `.pub`)
-   in the release checklist. A lost key means no installed copy can ever update
-   again; a leaked key means anyone can push an update — rotate by shipping a
-   release whose config carries the new pubkey, signed with the old key.
-3. **Apple** — Developer ID Application certificate + notarization credentials
-   → the six `APPLE_*` secrets.
-4. **Windows** — Authenticode certificate → the two `WINDOWS_*` secrets. (An EV
-   certificate on a hardware token cannot be used from a hosted runner; use a
-   cloud HSM/signing service and a custom `signCommand` instead.)
-5. Push a pre-release tag (`v1.2.0-beta.1`). The tag pipeline then:
-   - signs each leg and **verifies it with the OS tools** (`codesign --verify
-     --deep --strict`, `spctl --assess`, `xcrun stapler validate`, `signtool
-     verify /pa`);
-   - builds `latest.json`, **verifies every signature in it against the committed
-     pubkey** (`scripts/verify-updater-signatures.ts`), and only then publishes it
-     to the tag's release and, for pre-release tags, to the rolling
-     `updater-beta` release (the beta channel endpoint).
+```bash
+bun scripts/desktop-signing-plan.ts --preflight --tag true
+```
 
-## Acceptance (owner-run; cannot be done without the keys and hardware)
+This is **not** an actual signature verification. The real platform steps run:
+macOS `codesign --verify --deep --strict`, `spctl --assess`, `stapler validate`;
+Windows `signtool verify /pa /v`. A green Linux renderer, fixture crypto test,
+planner or pure Rust module cannot replace these.
 
-- [ ] `codesign` / `spctl` / `stapler` steps green on the macOS legs.
-- [ ] `signtool verify /pa` green on the Windows legs.
-- [ ] N → N+1: install build N on macOS, Windows and Linux (AppImage), publish
-      N+1, Settings → Updates → Check → Download → Restart; the app comes back on
-      N+1.
-- [ ] Tampered manifest rejected on a real install: serve a `latest.json` whose
-      signature or URL was altered (e.g. via a `plugins.updater.channels`
-      override build); the app must refuse the download ("signature" error) and
-      stay on N. (CI already refuses to publish such a manifest.)
-- [ ] Key backup recorded (step 2).
+# # Native artifacts and provenance
 
-Until every box is ticked, `docs/release/launch-gates.json` keeps XR-LAUNCH-008
-below `green` and the release stays labelled **Public beta**.
+The existing desktop workflow collects only production installer/updater
+payload types, rejects links/credential artifacts/orphan signatures and prevents
+arm/intel app.tar.gz overwrite. It writes `DESKTOP-SHA256SUMS` and the combined
+locked application inventory, signs/verifies them with exact tag workflow
+identity, attests the checksum subject and verifies exact workflow/ref/source
+commit via GitHub attestation verification. This is implemented automation,
+not a claim that it executed for the uncommitted candidate.
+
+CLI release proofs are separate `SHA256SUMS`/cosign/SLSA subjects. CLI binaries
+are authenticated by those release proofs, not inferred desktop OS signatures.
+See [verification](VERIFYING_RELEASES.md) and [current evidence](RELEASE_CANDIDATE_REPORT.md).
+
+# # Updates and lifecycle
+
+Current updater pubkey/endpoints are unprovisioned. Keep that state until the
+owner commits the real public key/channel endpoints and executes a signed
+update between different installed versions, signature/key-swap negatives,
+data preservation, interruption/recovery and compatible rollback. Never put a
+preview on the stable/default feed. The workflow no longer automatically
+mutates a rolling beta feed merely because a tag exists.
+
+The source native journey now pins an absolute scratch XR_DESKTOP_HOME,
+passes it through WebDriver and the installed engine, reinstalls the same
+version and checks retained data/version before uninstall. **That source was
+not executed on GUI platforms here and same-version reinstall is not a
+cross-version/automatic-update PASS.** CLI binary/npm synthetic next-version
+journeys were executed locally and are separately scoped in the report.
+
+Manual updates require authenticated artifacts of the same product/channel and
+safe data backup while closed. Desktop engine home is independent of CLI;
+OS-store namespace changes when that home moves. Re-enter credentials as needed.
+Sealed-file backup contains a nearby key; do not describe it as protection
+against complete home compromise or as a portable OS-keychain export.

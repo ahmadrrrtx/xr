@@ -16,23 +16,23 @@ export const CatalogEntrySchema = z.object({
   id: z.string().min(2).max(96),
   name: z.string().min(1).max(160),
   version: z.string().min(1).max(40),
-  author: z.string().max(200).default("unknown"),
-  description: z.string().max(2000).default(""),
-  type: z.string().default("tool"),
-  source: z.enum(["local", "catalog", "github", "url", "builtin"]).default("catalog"),
+  author: z.string().max(200).prefault("unknown"),
+  description: z.string().max(2000).prefault(""),
+  type: z.string().prefault("tool"),
+  source: z.enum(["local", "catalog", "github", "url", "builtin"]).prefault("catalog"),
   sourceUrl: z.string().max(800).optional(),
   install: z
     .object({
-      kind: z.enum(["local", "git", "tarball", "mcpb", "metadata-only"]).default("metadata-only"),
+      kind: z.enum(["local", "git", "tarball", "mcpb", "metadata-only"]).prefault("metadata-only"),
       path: z.string().max(800).optional(),
       url: z.string().max(800).optional(),
       sha256: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
     })
-    .default({ kind: "metadata-only" }),
-  permissions: z.array(z.string()).default([]),
-  capabilities: z.array(z.string()).default([]),
-  trustLevel: z.enum(["unknown", "community", "reviewed", "verified", "official", "local-dev"]).default("unknown"),
-  tags: z.array(z.string()).default([]),
+    .prefault({ kind: "metadata-only" }),
+  permissions: z.array(z.string()).prefault([]),
+  capabilities: z.array(z.string()).prefault([]),
+  trustLevel: z.enum(["unknown", "community", "reviewed", "verified", "official", "local-dev"]).prefault("unknown"),
+  tags: z.array(z.string()).prefault([]),
   homepage: z.string().max(800).optional(),
 });
 

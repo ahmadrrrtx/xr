@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "gate": "xr-behavioral-security",
+  "status": "PASS",
+  "platform": "linux",
+  "arch": "x64",
+  "bun": "1.4.2",
+  "wallMs": 191126.237147,
+  "scope": "Executed source/runtime security regressions + Linux kernel self-check + governed fixture smoke + dependency audit. NOT native GUI, production signatures, live providers or whole-machine absence of effects.",
+  "stages": [
+    {
+      "name": "pinned-bun",
+      "status": "PASS",
+      "exitCode": null,
+      "wallMs": 0,
+      "detail": "actual 1.4.2; expected 1.4.2"
+    },
+    {
+      "name": "linux-kernel-isolation",
+      "status": "PASS",
+      "exitCode": null,
+      "wallMs": 120.248603,
+      "detail": "real self-check: unshare=true,bwrap=true; at least one mandatory; behavioral effect tests follow"
+    },
+    {
+      "name": "release-identity",
+      "status": "PASS",
+      "exitCode": 0,
+      "wallMs": 15.506817000000012,
+      "command": [
+        "/home/user/.cache/xr-tools/bun",
+        "scripts/release-manifest.ts",
+        "--check"
+      ]
+    },
+    {
+      "name": "linux-isolation-effects",
+      "status": "PASS",
+      "exitCode": 0,
+      "wallMs": 5505.729899,
+      "command": [
+        "/home/user/.cache/xr-tools/bun",
+        "test",
+        "test/trust/namespace-confinement.test.ts",
+        "test/trust/inherited-submount.test.ts",
+        "test/trust/process-bounds.test.ts"
+      ]
+    },
+    {
+      "name": "behavioral-security",
+      "status": "PASS",
+      "exitCode": 0,
+      "wallMs": 184416.542822,
+      "command": [
+        "bash",
+        "scripts/parity-suite-runner.sh",
+        "linux",
+        "--exclude",
+        "^test/e2e-blackbox/"
+      ]
+    },
+    {
+      "name": "agent-smoke",
+      "status": "PASS",
+      "exitCode": 0,
+      "wallMs": 482.21306999999797,
+      "command": [
+        "/home/user/.cache/xr-tools/bun",
+        "scripts/agent-benchmark.ts",
+        "--smoke"
+      ]
+    },
+    {
+      "name": "online-dependency-audit",
+      "status": "PASS",
+      "exitCode": 0,
+      "wallMs": 577.5545949999942,
+      "command": [
+        "bash",
+        "scripts/audit-deps.sh",
+        ".",
+        "desktop"
+      ]
+    }
+  ]
+}

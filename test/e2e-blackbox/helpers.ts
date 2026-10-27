@@ -279,7 +279,8 @@ export function installStubProvider(
     providerEngine: {
       routingStrategy: "hybrid",
       customProviders: [stubProviderConfig(providerId, stub, overrides) as never],
-      providerCapabilities: {},
+      // Explicit synthetic tariff; unknown production APIs are never free.
+      providerCapabilities: { [providerId]: { models: { [String(overrides.model ?? stub.model)]: { cost: { inPerMTok:1,outPerMTok:1,known:true,source:"synthetic blackbox fixture; not provider billing" } } } } },
     },
   });
 }

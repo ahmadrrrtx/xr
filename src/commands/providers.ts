@@ -2,6 +2,8 @@
  * XR — Providers Command
  * Manage and inspect LLM providers: list, add, remove, set, test, status, refresh.
  */
+import { setProvider } from "./providers-selection.ts";
+import { measureProviders } from "./providers-measure.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import { ProviderService } from "../services/provider-service.ts";
@@ -92,7 +94,7 @@ function printUsage(): void {
   xr providers catalog [--json]  intelligence-plane provider/model catalog
   xr providers route [--json]    explain automatic selection
   xr providers explain [--json]  detailed routing decision
-  xr providers measure [--provider <id>] [--json]  offline behavioral measurement
+  xr providers measure --live --provider <id> --model <id> [--json]  bounded, metered compatibility probes
   xr providers slo [--json]      routing SLO report (selection p95, fallback, CPR)
 
   ${C.bold("Change model / provider (never stuck on default)")}
@@ -472,83 +474,6 @@ async function removeProvider(
   ok(`Custom provider "${id}" removed.`);
 }
 
-async function setProvider(
-  ps: ProviderService,
-  args: string[],
-): Promise<void> {
-  const force = args.includes("--force");
-  const id = args.find((a) => !a.startsWith("--"));
-  const model = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
-  if (!id) {
-    warn("Usage: xr providers set <id> [model] [--force]");
-    console.log(`  ${C.dim("Examples:")}`);
-    console.log(`    xr providers set ollama qwen2.5:7b`);
-    console.log(`    xr providers set openai gpt-4o-mini`);
-    console.log(`  ${C.dim("--force:")}  switch even when the canary probe cannot reach/auth the provider`);
-    console.log(`  ${C.dim("List:")} xr providers list`);
-    return;
-  }
-
-  // Phase 3 · T6 — model-switch state machine: preflight → warm → canary →
-  // swap → verify, with rollback on failure. No unexplained waits: every
-  // phase is timeout-bounded and reported.
-  const { ModelSwitchStateMachine } = await import("../providers/model-switch.ts");
-  const { Tokens } = await import("../core/tokens.ts");
-  const configService = ps.getRegistry().resolve(Tokens.Config);
-  const readActive = () => ({
-    providerId: ps.getActiveProviderId(),
-    model: configService.get().defaults?.model,
-  });
-  const machine = new ModelSwitchStateMachine({
-    preflight: (t) => {
-      const known = ps.getPreset(t.providerId) !== undefined;
-      return known ? { ok: true, detail: `${t.providerId} is a known provider` } : { ok: false, detail: `unknown provider: ${t.providerId}` };
-    },
-    warm: async (t, timeoutMs) => {
-      const report = await Promise.race([
-        ps.checkHealth(t.providerId, t.model),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`health probe timed out after ${timeoutMs} ms`)), timeoutMs)),
-      ]);
-      return report.ok || report.authOk
-        ? { ok: true, detail: `${report.detail}${report.latencyMs ? ` (${report.latencyMs}ms)` : ""}` }
-        : { ok: false, detail: report.detail };
-    },
-    canary: async (t, timeoutMs) => {
-      const report = await Promise.race([
-        ps.checkHealth(t.providerId, t.model),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`canary timed out after ${timeoutMs} ms`)), timeoutMs)),
-      ]);
-      // authOk = reachable + key present — a sound switch (model availability
-      // is a runtime concern); full completion probes are for local runtimes.
-      return report.ok || report.authOk
-        ? { ok: true, detail: `${report.detail}${report.latencyMs ? ` (${report.latencyMs}ms)` : ""}` }
-        : { ok: false, detail: report.detail };
-    },
-    apply: async (t) => {
-      await ps.setActiveProvider(t.providerId, t.model);
-    },
-    readActive,
-  });
-
-  const result = await machine.run({ providerId: id, model }, { force });
-  for (const p of result.phases) {
-    if (p.phase === "done" || p.phase === "rolled-back") continue;
-    const icon = p.ok ? C.green("✓") : C.red("✗");
-    console.log(`  ${icon} ${p.phase.padEnd(9)} ${p.detail} ${C.dim(`(${Math.round(p.ms)}ms)`)}`);
-  }
-  if (result.ok) {
-    ok(`Active model set to ${id}${model ? ` / ${model}` : ""} (persisted${result.forced ? " · forced" : ""}).`);
-    console.log(`  ${C.dim("Verify:")} xr providers list · xr models`);
-    console.log(`  ${C.dim("Shell:")}   Alt+P or /model ${id}${model ? ` ${model}` : ""}`);
-    console.log(`  ${C.dim("Web:")}     xr serve → Providers → Change model`);
-  } else {
-    const failed = result.phases.find((p) => !p.ok && p.phase !== "rolled-back");
-    warn(`Switch to ${id}${model ? ` / ${model}` : ""} NOT applied — kept ${result.previous.providerId}.`);
-    if (failed) console.log(`  ${C.dim(`Reason: ${failed.detail}`)}`);
-    console.log(`  ${C.dim("To switch anyway (no canary): xr providers set <id> [model] --force")}`);
-    process.exitCode = 1;
-  }
-}
 
 async function testProvider(
   ps: ProviderService,
@@ -760,55 +685,6 @@ async function refreshProviders(ps: ProviderService): Promise<void> {
  * MEASURED behavioral contracts (never vendor claims). Runs only here, as an
  * explicit operator action — never on the routing hot path.
  */
-async function measureProviders(
-  registry: import("../core/service-registry.ts").ServiceRegistry,
-  args: string[],
-): Promise<void> {
-  let intel: import("../intelligence/service.ts").IntelligenceService | null = null;
-  try {
-    intel = registry.resolve(Tokens.Intelligence);
-  } catch {
-    warn("Intelligence service not registered.");
-    return;
-  }
-  const jsonMode = args.includes("--json");
-  const idx = args.findIndex((a) => a === "--provider" || a === "-p");
-  const midx = args.findIndex((a) => a === "--model" || a === "-m");
-  const providerId = idx >= 0 ? args[idx + 1] : undefined;
-  const modelId = midx >= 0 ? args[midx + 1] : undefined;
-
-  if (!jsonMode) {
-    banner();
-    console.log(C.bold("Behavioral measurement (offline probes)"));
-    info(
-      "Running bounded probes (structured-output, tool-use, refusal, context-retention). " +
-        "Cloud targets are probed only when the workspace locality policy permits; bounded paid traffic may result.",
-    );
-  }
-  const { measured, skipped } = await intel.measureModels({
-    ...(providerId !== undefined ? { providerId } : {}),
-    ...(modelId !== undefined ? { modelId } : {}),
-  });
-
-  if (jsonMode) {
-    console.log(JSON.stringify({ measured, skipped }, null, 2));
-    return;
-  }
-  if (!measured.length && !skipped.length) {
-    info("No models matched the filter.");
-    return;
-  }
-  for (const c of measured) {
-    ok(
-      `${c.providerId}/${c.modelId} — overall ${c.overallFidelity.toFixed(2)} ` +
-        `(tools ${c.toolUseFidelity}, structured ${c.structuredOutputFidelity}, retention ${c.contextRetention}, false-refusal ${c.refusalRate}; n=${c.samples})`,
-    );
-  }
-  for (const s of skipped.slice(0, 12)) {
-    console.log(`  ${C.dim("skip")} ${s.key} — ${s.reason}`);
-  }
-  console.log(C.dim("\nMeasured contracts: XR_HOME/cache/intelligence/behavioral.json"));
-}
 
 /** Phase 5 · T6 — routing SLO report (`xr providers slo`). */
 async function showRoutingSlo(

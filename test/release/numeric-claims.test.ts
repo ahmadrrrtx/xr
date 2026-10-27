@@ -64,9 +64,10 @@ describe("test-count tuple — README equals the measured baseline", () => {
 });
 
 describe("doc links — every relative link in the published docs resolves", () => {
-  test("the README's generated register link target exists (1.1.0 excerpt)", () => {
+  test("the README's generated register link follows the authoritative development identity", () => {
     const readme = readFileSync(join(ROOT, "README.md"), "utf8");
-    expect(readme).toContain("docs/release/1.1.0/known-limitations.md");
+    const version=JSON.parse(readFileSync(join(ROOT,"release.manifest.json"),"utf8")).identity.version;
+    expect(readme).toContain(`docs/release/${version}/known-limitations.md`);
     expect(scanDocLinks(readme, join(ROOT, "README.md"))).toEqual([]);
   });
 

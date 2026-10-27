@@ -240,16 +240,16 @@ export interface EnvironmentSession {
 export const EnvironmentActionRequestSchema = z.object({
   environment: z.enum(ENVIRONMENT_TYPES),
   action: ActionSchema,
-  target: TargetIdentitySchema.default({ kind: "none" }),
+  target: TargetIdentitySchema.prefault({ kind: "none" }),
   /** Requesting actor provenance (voice commands are marked, never trusted more). */
-  sourceActor: z.enum(["cli", "tui", "daemon", "telegram", "api", "voice", "agent", "workflow"]).default("cli"),
+  sourceActor: z.enum(["cli", "tui", "daemon", "telegram", "api", "voice", "agent", "workflow"]).prefault("cli"),
   /** Caller-declared perception confidence for this action decision. */
-  confidence: z.enum(OBSERVATION_CONFIDENCE).default("unknown"),
+  confidence: z.enum(OBSERVATION_CONFIDENCE).prefault("unknown"),
   /** Observation this action was derived from (required for coordinate). */
   observationRef: z.string().max(500).optional(),
   sessionId: z.string().max(120).optional(),
   taskId: z.string().max(120).optional(),
-  dryRun: z.boolean().default(false),
+  dryRun: z.boolean().prefault(false),
   timeoutMs: z.number().int().min(100).max(60000).optional(),
 });
 export type EnvironmentActionRequest = z.infer<typeof EnvironmentActionRequestSchema>;

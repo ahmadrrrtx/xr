@@ -61,3 +61,29 @@ describe("sidecar compile matrix (L-002/L-003)", () => {
     expect(sh).toContain("SKIPPED (cross-target)");
   });
 });
+
+test('sidecar dev cache refuses stale source, target, tool, missing metadata or changed binary bytes',async()=>{
+  const {sidecarFingerprint,sidecarCacheMatches}=await import('../../scripts/compile-sidecar');
+  const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync}=await import('node:fs');
+  const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {createHash}=await import('node:crypto');
+  const root=mkdtempSync(join(tmpdir(),'xr-sidecar-cache-'));
+  try{
+    mkdirSync(join(root,'src'));mkdirSync(join(root,'scripts'));
+    for(const path of ['package.json','bun.lock','.bun-version','scripts/compile-sidecar.ts','src/index.ts'])writeFileSync(join(root,path),'fixture input');
+    const binary=join(root,'engine');writeFileSync(binary,'fixture binary (not executable)');
+    const inputs=sidecarFingerprint(root,'bun-linux-x64');expect(sidecarCacheMatches(binary,inputs)).toBe(false);
+    writeFileSync(binary+'.build.json',JSON.stringify({schemaVersion:1,inputsSha256:inputs,binarySha256:createHash('sha256').update(readFileSync(binary)).digest('hex')}));
+    expect(sidecarCacheMatches(binary,inputs)).toBe(true);
+    expect(sidecarCacheMatches(binary,sidecarFingerprint(root,'bun-linux-arm64'))).toBe(false);
+    expect(sidecarCacheMatches(binary,sidecarFingerprint(root,'bun-linux-x64','other-bun'))).toBe(false);
+    writeFileSync(join(root,'src/index.ts'),'changed policy');expect(sidecarCacheMatches(binary,sidecarFingerprint(root,'bun-linux-x64'))).toBe(false);
+    writeFileSync(binary,'changed binary');expect(sidecarCacheMatches(binary,inputs)).toBe(false);
+  }finally{rmSync(root,{recursive:true,force:true});}
+});
+
+
+test("real Windows process.platform win32 resolves native x64/arm64 without environment overrides",()=>{
+  expect(resolveCompile("win32-x64")).toEqual({triple:"x86_64-pc-windows-msvc",bunTarget:"bun-windows-x64",ext:".exe",cross:false});
+  expect(resolveCompile("win32-arm64")).toEqual({triple:"aarch64-pc-windows-msvc",bunTarget:"bun-windows-arm64",ext:".exe",cross:false});
+  expect(resolveCompile("win32-x64","aarch64-pc-windows-msvc").cross).toBe(true);
+});

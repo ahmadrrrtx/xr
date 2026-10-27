@@ -153,9 +153,12 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/website/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/whatsapp/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/agent-benchmark-runner.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/agent-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/apply-branch-protection.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/assert-clean-tree.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/audit-deps-filter.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/audit-deps.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/baseline-inventory.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/benchmark-ttft.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -176,6 +179,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-brand-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-ipc-acl.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/desktop-release-assets.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-seed-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-signing-plan.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/desktop-sink-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -197,6 +201,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/hot-path-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/journey/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/launch-claims.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/lib/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/license-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/make-preview.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/make-updater-manifest.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -204,6 +209,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/measure-trust-perf.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/memory-recall-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/mutate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/native-budget-check/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/npm-ghost-versions.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/npm-pack-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ownership-map.ts` | @ahmadrrrtx | explicit entry |
@@ -220,10 +226,12 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/provider-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/publish-winget.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/quarantine.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/real-device-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-assets-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/release-ci-evidence.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/repo-intelligence-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

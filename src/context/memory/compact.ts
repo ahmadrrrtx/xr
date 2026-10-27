@@ -17,7 +17,7 @@ export interface CompactOptions {
 }
 
 export function totalChars(messages: Message[]): number {
-  return messages.reduce((n, m) => n + m.content.length, 0);
+  return messages.reduce((n, m) => n + JSON.stringify(m).length, 0);
 }
 
 /**
@@ -37,8 +37,14 @@ export function compact(messages: Message[], opts: CompactOptions = {}): Message
   const system = hasSystem ? [messages[0]] : [];
   const rest = hasSystem ? messages.slice(1) : messages;
 
-  const recent = rest.slice(-keepRecent);
-  const older = rest.slice(0, -keepRecent);
+  let cut = Math.max(0, rest.length - keepRecent);
+  // Tool calls + results (and signed reasoning preceding them) are atomic.
+  // Prefer retaining an over-budget group to creating an invalid/orphaned
+  // protocol exchange. Per-attempt admission still bounds the next request.
+  while (cut > 0 && rest[cut]?.role === "tool") cut--;
+  const recent = rest.slice(cut);
+  const older = rest.slice(0, cut);
+  if (!older.length) return messages;
 
   const summary = summarize(older);
   const note: Message = {

@@ -160,12 +160,15 @@ export class StreamingMetricsCollector {
 export function withTurnMetrics(provider: Provider, collector: StreamingMetricsCollector, modelId?: string): Provider {
   const model = modelId ?? (provider as { modelId?: string }).modelId ?? provider.id;
 
-  const record = (m: Omit<TurnMetrics, "at">) =>
-    collector.record({ ...m, at: new Date().toISOString() });
+  // Telemetry is presentation, never an admission/settlement or replay cause.
+  const record = (m: Omit<TurnMetrics, "at"> | TurnMetrics) => {
+    try { collector.record({ ...m, at: new Date().toISOString() }); } catch { /* unavailable metrics are not a provider failure */ }
+  };
 
   return {
-    id: provider.id,
-    label: provider.label,
+    get id() { return provider.id; },
+    get label() { return provider.label; },
+    get managesAttempts() { return provider.managesAttempts === true; },
     // GAP-001 — this decorator MUST forward chat options. It sits between the
     // agent loop and the real adapter on the default run path, so dropping the
     // third argument silently stripped the cancellation signal and the request
@@ -182,10 +185,10 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
         const totalMs = ttftMs;
         const outTokens = turn.usage?.outTokens ?? estimateTokens(turn.message);
         const inTokens = turn.usage?.inTokens ?? 0;
-        const highWaterKb = await peakRssKb();
-        collector.record({
-          providerId: provider.id,
-          model,
+        const highWaterKb = await peakRssKb().catch(() => undefined);
+        record({
+          providerId: turn.executing?.providerId ?? provider.id,
+          model: turn.executing?.modelId ?? provider.modelId ?? model,
           ttftMs: Math.round(ttftMs),
           totalMs: Math.round(totalMs),
           outTokens,
@@ -198,7 +201,7 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
         return turn;
       } catch (e) {
         const totalMs = performance.now() - started;
-        collector.record({
+        record({
           providerId: provider.id,
           model,
           ttftMs: Math.round(totalMs),
@@ -244,7 +247,7 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
         settled = true;
         record({
           providerId: provider.id,
-          model,
+          model: provider.modelId ?? model,
           ttftMs: Math.round(ttft || (performance.now() - started)),
           totalMs: Math.round(performance.now() - started),
           outTokens: out,
@@ -281,7 +284,7 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
     // This decorator sits between the loop and the real adapter on the default
     // run path, so dropping `capabilities` made the loop read undefined and
     // always stream — defeating the streaming:false capability declaration.
-    capabilities: (provider as { capabilities?: import("./../core/types.ts").ProviderCapabilitiesFlags }).capabilities,
+    get capabilities() { return provider.capabilities; },
   };
 }
 

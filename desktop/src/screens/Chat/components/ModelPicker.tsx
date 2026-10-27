@@ -14,23 +14,44 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { fmtUsd } from '@/budget/core';
-import { modelInfo, type ModelInfo } from '@/budget/models';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { modelInfo, qualifiedModelId, type ModelInfo } from '@/budget/models';
+import { engineJson } from '@/engine/transport';
+import type { RoutingDecision } from '../../../../../src/intelligence/types';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { chatDb } from '@/lib/chat-db';
 import { openUrl } from '@/lib/settingsApi';
 import { useBudgetStore } from '@/stores/budgetStore';
-import { engineModelOptions, useEngineStore, type EngineModelOption } from '@/stores/engineStore';
-import { resolveDefaultModel, setDefaultModel, useSessionsStore } from '@/stores/sessionsStore';
+import {
+  engineModelOptions,
+  useEngineStore,
+  type EngineModelOption,
+} from '@/stores/engineStore';
+import {
+  resolveDefaultModel,
+  setDefaultModel,
+  useSessionsStore,
+} from '@/stores/sessionsStore';
 
 function iconFor(m: ModelInfo, o: EngineModelOption) {
   if (o.kind === 'local') return Cpu;
   return m.latency === 'fast' ? Zap : Sparkles;
 }
 
-function priceLine(m: ModelInfo, o: EngineModelOption): string {
-  const ctx = `${m.contextK}K ctx`;
-  if (o.kind === 'local') return `${o.providerLabel}${o.detail ? ` · ${o.detail}` : ''} · $0`;
-  return `${o.providerLabel} · ${ctx} · ${fmtUsd(m.inPer1M, { compact: true })} in / ${fmtUsd(m.outPer1M, { compact: true })} out per 1M`;
+function priceLine(o: EngineModelOption): string {
+  const ctx = o.contextWindow
+    ? `${Math.round(o.contextWindow / 1000)}K ctx`
+    : 'context unknown';
+  if (o.kind === 'local')
+    return `${o.providerLabel} · no provider token fee (hardware excluded)`;
+  const rates =
+    Number.isFinite(o.inPerMTok) && Number.isFinite(o.outPerMTok)
+      ? `${fmtUsd(o.inPerMTok!, { compact: true })} in / ${fmtUsd(o.outPerMTok!, { compact: true })} out per 1M (estimate)`
+      : 'price unavailable';
+  return `${o.providerLabel} · ${o.locality} · ${ctx} · ${rates}`;
 }
 
 export function ModelPicker({
@@ -53,13 +74,24 @@ export function ModelPicker({
   const engineStatus = useEngineStore((s) => s.status);
   const providers = useEngineStore((s) => s.providers);
   const models = useEngineStore((s) => s.models);
+  const catalog = useEngineStore((s) => s.catalog);
   const catalogError = useEngineStore((s) => s.catalogError);
   const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<RoutingDecision | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
 
-  const active = sessions.sessions.find((s) => s.id === sessionId)?.model ?? resolveDefaultModel();
-  const label = modelInfo(active).name;
-  const groups = useMemo(() => engineModelOptions(providers, models), [providers, models]);
-  const engineDefault = providers?.model ?? null;
+  const active =
+    sessions.sessions.find((s) => s.id === sessionId)?.model ??
+    resolveDefaultModel();
+  const label = modelInfo(active).name || 'Choose a model';
+  const groups = useMemo(
+    () => engineModelOptions(providers, models, catalog),
+    [providers, models, catalog]
+  );
+  const engineDefault = providers
+    ? qualifiedModelId(providers.primary, providers.model)
+    : null;
 
   useEffect(() => {
     if (open) void useEngineStore.getState().loadCatalog();
@@ -75,36 +107,49 @@ export function ModelPicker({
   const pick = async (o: EngineModelOption) => {
     if (!o.available) {
       if (o.kind === 'cloud') navigate('/budget?tab=models');
-      else toast('Runtime not running', { description: o.unavailableReason ?? 'Start Ollama and retry.' });
+      else
+        toast('Runtime not running', {
+          description: o.unavailableReason ?? 'Start Ollama and retry.',
+        });
       return;
     }
     if (sessionId) {
       await chatDb.updateSessionModel(sessionId, o.id);
       useSessionsStore.setState((st) => ({
-        sessions: st.sessions.map((s) => (s.id === sessionId ? { ...s, model: o.id } : s)),
+        sessions: st.sessions.map((s) =>
+          s.id === sessionId ? { ...s, model: o.id } : s
+        ),
       }));
     }
     // The desktop default (new sessions) follows the last explicit choice.
     await setDefaultModel(o.id);
-    void useBudgetStore.getState().updateSettings({ defaultModel: o.id }, { quiet: true });
+    void useBudgetStore
+      .getState()
+      .updateSettings({ defaultModel: o.id }, { quiet: true });
     setOpen(false);
   };
 
   const setDefault = async (o: EngineModelOption, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!o.available) return;
+    if (!o.available && !o.discovered) return;
     try {
       await useEngineStore.getState().setEngineDefault(o.id);
-      toast(`${modelInfo(o.id).name} is now the default`, { description: 'The engine will use it for new runs.' });
+      toast(`${modelInfo(o.id).name} is now the default`, {
+        description: 'The engine will use it for new runs.',
+      });
     } catch (err) {
-      toast('Could not set the default', { description: err instanceof Error ? err.message : undefined });
+      toast('Could not set the default', {
+        description: err instanceof Error ? err.message : undefined,
+      });
     }
   };
 
   const renderRow = (o: EngineModelOption) => {
     const m = modelInfo(o.id);
     const Icon = iconFor(m, o);
-    const isActive = o.id === active;
+    const isActive =
+      o.id === active ||
+      (o.modelId === active && o.provider === providers?.primary);
     const isDefault = o.id === engineDefault;
     return (
       <div
@@ -121,24 +166,37 @@ export function ModelPicker({
             void pick(o);
           }
         }}
-        className={`group/row flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 text-left focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none ${
-          o.available ? 'hover:bg-bg-raised' : 'opacity-60 hover:bg-bg-raised/50'
+        className={`group/row focus-visible:ring-accent flex w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-2 text-left focus-visible:ring-2 focus-visible:outline-none ${
+          o.available
+            ? 'hover:bg-bg-raised'
+            : 'hover:bg-bg-raised/50 opacity-60'
         }`}
       >
-        <Icon aria-hidden="true" className="text-text-secondary mt-0.5 size-4 shrink-0" strokeWidth={1.5} />
+        <Icon
+          aria-hidden="true"
+          className="text-text-secondary mt-0.5 size-4 shrink-0"
+          strokeWidth={1.5}
+        />
         <span className="min-w-0 flex-1">
           <span className="text-text-primary flex items-center gap-1.5 text-[13px] font-semibold">
-            <span className="truncate">{!o.available && o.kind === 'cloud' ? o.providerLabel : m.name}</span>
+            <span className="truncate">
+              {!o.available && o.kind === 'cloud' ? o.providerLabel : m.name}
+            </span>
             {m.estimate && o.kind !== 'local' && (
-              <span className="text-text-tertiary font-mono text-[9px] font-normal tracking-wide uppercase">estimate</span>
+              <span className="text-text-tertiary font-mono text-[9px] font-normal tracking-wide uppercase">
+                estimate
+              </span>
             )}
           </span>
           <span className="text-text-tertiary block truncate text-[11px]">
             {o.available
-              ? priceLine(m, o)
+              ? priceLine(o)
               : o.kind === 'cloud'
                 ? `${m.name} and others · ${o.unavailableReason ?? 'Unavailable'}`
                 : `${o.providerLabel} · ${o.unavailableReason ?? 'Unavailable'}`}
+          </span>
+          <span className="text-text-tertiary block text-[10px]">
+            {o.detail}
           </span>
           {!o.available && o.kind === 'cloud' && (
             <span className="text-accent mt-0.5 flex items-center gap-1 text-[11px]">
@@ -148,22 +206,39 @@ export function ModelPicker({
           )}
         </span>
         <span className="text-text-tertiary font-mono text-[9px] tracking-wide uppercase">
-          {o.kind === 'local' ? 'local' : 'cloud'}
+          {o.locality}
         </span>
-        {o.available && (
+        {(o.available || o.discovered) && (
           <button
             type="button"
             onClick={(e) => void setDefault(o, e)}
-            aria-label={isDefault ? `${m.name} is the default` : `Set ${m.name} as default`}
+            aria-label={
+              isDefault
+                ? `${m.name} is the default`
+                : `Set ${m.name} as default`
+            }
             title={isDefault ? 'Engine default' : 'Set as engine default'}
             className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded ${
-              isDefault ? 'text-warning' : 'text-text-tertiary opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100'
+              isDefault
+                ? 'text-warning'
+                : 'text-text-tertiary opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100'
             }`}
           >
-            <Star size={13} strokeWidth={1.75} aria-hidden="true" className={isDefault ? 'fill-current' : ''} />
+            <Star
+              size={13}
+              strokeWidth={1.75}
+              aria-hidden="true"
+              className={isDefault ? 'fill-current' : ''}
+            />
           </button>
         )}
-        {isActive && <Check aria-hidden="true" className="text-accent mt-0.5 size-4 shrink-0" strokeWidth={1.5} />}
+        {isActive && (
+          <Check
+            aria-hidden="true"
+            className="text-accent mt-0.5 size-4 shrink-0"
+            strokeWidth={1.5}
+          />
+        )}
       </div>
     );
   };
@@ -171,7 +246,9 @@ export function ModelPicker({
   const renderGroup = (title: string, items: EngineModelOption[]) =>
     items.length === 0 ? null : (
       <div key={title}>
-        <div className="text-text-tertiary px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide uppercase">{title}</div>
+        <div className="text-text-tertiary px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide uppercase">
+          {title}
+        </div>
         {items.map(renderRow)}
       </div>
     );
@@ -187,7 +264,7 @@ export function ModelPicker({
           <button
             type="button"
             data-testid="model-picker-trigger"
-            className="text-text-tertiary hover:bg-bg-raised hover:text-text-secondary max-w-[220px] truncate rounded px-2 py-0.5 text-[12px] font-medium transition-colors focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none"
+            className="text-text-tertiary hover:bg-bg-raised hover:text-text-secondary focus-visible:ring-accent max-w-[220px] truncate rounded px-2 py-0.5 text-[12px] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
             aria-label={`Model: ${label}. Change model`}
           >
             {label} ▾
@@ -197,8 +274,93 @@ export function ModelPicker({
       <PopoverContent
         align={align}
         side={side}
-        className="w-[320px] border-border-subtle bg-bg-ink max-h-[min(480px,70vh)] overflow-y-auto p-1"
+        className="border-border-subtle bg-bg-ink max-h-[min(480px,70vh)] w-[320px] overflow-y-auto p-1"
       >
+        {catalogError && !empty && (
+          <p role="status" className="text-warning px-2 py-1 text-xs">
+            Refresh failed; showing last-known catalog: {catalogError}
+          </p>
+        )}
+        <section
+          className="border-border-subtle mb-1 border-b p-2 text-xs"
+          aria-label="Auto selection preview"
+        >
+          <button
+            className="text-accent"
+            disabled={previewBusy || engineStatus !== 'up'}
+            onClick={() => {
+              setPreviewBusy(true);
+              setPreviewError(null);
+              void engineJson<{ decision: RoutingDecision }>(
+                '/providers/route?mode=automatic&class=tool_use&detailed=1'
+              )
+                .then((r) => setPreview(r.decision))
+                .catch((e) =>
+                  setPreviewError(
+                    e instanceof Error ? e.message : 'No safe recommendation'
+                  )
+                )
+                .finally(() => setPreviewBusy(false));
+            }}
+          >
+            Auto · explain a candidate
+          </button>
+          <p className="text-text-tertiary mt-1">
+            Offline dry-run only: no provider traffic or changes. Accepting pins
+            ONE visible target; it does not enable roaming or failover.
+            Budget/authorization are checked again on execution.
+          </p>
+          {previewError && (
+            <p role="status" className="text-warning">
+              {previewError}
+            </p>
+          )}
+          {preview && (
+            <div className="mt-1">
+              <p>{preview.explanation}</p>
+              <p className="text-text-tertiary">
+                {preview.factors.join(' · ')} · {preview.rejected.length} shown
+                rejections. Documentation/heuristics are not live agent or
+                measured quality evidence.
+              </p>
+              {preview.selected &&
+                (() => {
+                  const id = qualifiedModelId(
+                    preview.selected.providerId,
+                    preview.selected.modelId
+                  );
+                  const option = [...groups.local, ...groups.cloud].find(
+                    (o) => o.id === id
+                  );
+                  return option?.available ? (
+                    <button
+                      className="text-accent mt-1"
+                      onClick={() => void pick(option)}
+                    >
+                      Accept and pin {preview.selected.providerId} /{' '}
+                      {preview.selected.modelId}
+                    </button>
+                  ) : (
+                    <p className="text-warning">
+                      Candidate is not configured/discovered. Configure it or
+                      choose another manual target; nothing was changed.
+                    </p>
+                  );
+                })()}
+            </div>
+          )}
+        </section>
+        <button
+          disabled={engineStatus !== 'up'}
+          className="text-accent w-full px-2 py-1 text-left text-xs"
+          onClick={() =>
+            void useEngineStore
+              .getState()
+              .loadCatalog({ force: true, discoverLocal: true })
+          }
+        >
+          Discover local models (explicit endpoint probes)
+        </button>
         {empty ? (
           <div className="text-text-secondary px-2 py-3 text-[12.5px]">
             {engineStatus === 'up'
@@ -206,7 +368,9 @@ export function ModelPicker({
                 ? `Could not load models: ${catalogError}`
                 : 'No models available. Install Ollama for local models, or add an API key.'
               : 'Engine not running — the model list comes from the engine.'}
-            <div className="text-text-tertiary mt-1 text-[11.5px]">Current: {label}</div>
+            <div className="text-text-tertiary mt-1 text-[11.5px]">
+              Current: {label}
+            </div>
             {engineStatus === 'up' && !catalogError ? (
               <div className="mt-2 flex gap-2">
                 <button

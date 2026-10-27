@@ -14,8 +14,20 @@
  * exist for scripts/journey/*.ts and the provider-canary fixture leg; they
  * are never part of the shipped product.
  */
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { basename, dirname, join, normalize, sep } from "node:path";
@@ -36,7 +48,9 @@ export interface Running {
 function listen(server: Server): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
+    server.listen(0, "127.0.0.1", () =>
+      resolve((server.address() as AddressInfo).port),
+    );
   });
 }
 
@@ -65,7 +79,12 @@ export async function startFixtureProvider(): Promise<Running> {
     requests.push(`${req.method} ${req.url}`);
     res.setHeader("content-type", "application/json");
     if (req.url?.endsWith("/models")) {
-      res.end(JSON.stringify({ object: "list", data: [{ id: FIXTURE_MODEL, object: "model" }] }));
+      res.end(
+        JSON.stringify({
+          object: "list",
+          data: [{ id: FIXTURE_MODEL, object: "model" }],
+        }),
+      );
       return;
     }
     if (!req.url?.endsWith("/chat/completions")) {
@@ -89,27 +108,65 @@ export async function startFixtureProvider(): Promise<Running> {
             {
               id: "journey-call-1",
               type: "function",
-              function: { name: "write_file", arguments: JSON.stringify({ path: FIXTURE_FILE, content: FIXTURE_CONTENT }) },
+              function: {
+                name: "write_file",
+                arguments: JSON.stringify({
+                  path: FIXTURE_FILE,
+                  content: FIXTURE_CONTENT,
+                }),
+              },
             },
           ],
         }
-      : { role: "assistant", content: JSON.stringify({ message: "Journey task complete.", tool_calls: [], done: true }) };
+      : {
+          role: "assistant",
+          content: JSON.stringify({
+            message: "Journey task complete.",
+            tool_calls: [],
+            done: true,
+          }),
+        };
     const usage = { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 };
     if (wantsStream) {
       res.setHeader("content-type", "text/event-stream");
       const delta = first
-        ? { role: "assistant", content: message.content, tool_calls: (message as { tool_calls: unknown[] }).tool_calls.map((c, index) => ({ index, ...(c as object) })) }
+        ? {
+            role: "assistant",
+            content: message.content,
+            tool_calls: (message as { tool_calls: unknown[] }).tool_calls.map(
+              (c, index) => ({ index, ...(c as object) }),
+            ),
+          }
         : { role: "assistant", content: message.content };
-      res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`);
-      res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: first ? "tool_calls" : "stop" }], usage })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason: null }] })}\n\n`,
+      );
+      res.write(
+        `data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: first ? "tool_calls" : "stop" }], usage })}\n\n`,
+      );
       res.end("data: [DONE]\n\n");
       return;
     }
-    res.end(JSON.stringify({ id: `journey-${chatTurns}`, object: "chat.completion", model: FIXTURE_MODEL, choices: [{ index: 0, message, finish_reason: first ? "tool_calls" : "stop" }], usage }));
+    res.end(
+      JSON.stringify({
+        id: `journey-${chatTurns}`,
+        object: "chat.completion",
+        model: FIXTURE_MODEL,
+        choices: [
+          { index: 0, message, finish_reason: first ? "tool_calls" : "stop" },
+        ],
+        usage,
+      }),
+    );
   });
   const port = await listen(server);
   server.unref();
-  return { port, url: `http://127.0.0.1:${port}/v1`, requests, close: closer(server) };
+  return {
+    port,
+    url: `http://127.0.0.1:${port}/v1`,
+    requests,
+    close: closer(server),
+  };
 }
 
 export interface ReleaseSpec {
@@ -129,14 +186,23 @@ export interface NpmSpec {
  * Static server rooted at `root` (layout: root/v<version>/<asset>), plus the
  * synthetic GitHub-releases index and npm packument described above.
  */
-export async function startFixtureServer(opts: { root: string; releases?: ReleaseSpec[]; npm?: NpmSpec }): Promise<Running> {
+export async function startFixtureServer(opts: {
+  root: string;
+  releases?: ReleaseSpec[];
+  npm?: NpmSpec;
+}): Promise<Running> {
   const requests: string[] = [];
   let base = "";
   const manifests: Record<string, Record<string, Record<string, string>>> = {};
   for (const [v, file] of Object.entries(opts.npm?.tarballs ?? {})) {
     // cwd + bare file name: Git-for-Windows' GNU tar reads `C:\…` as host:path.
-    const p = spawnSync("tar", ["-xzOf", basename(file), "package/package.json"], { encoding: "utf8", cwd: dirname(file) });
-    if (p.status !== 0) throw new Error(`cannot read package.json from ${file}: ${p.stderr}`);
+    const p = spawnSync(
+      "tar",
+      ["-xzOf", basename(file), "package/package.json"],
+      { encoding: "utf8", cwd: dirname(file) },
+    );
+    if (p.status !== 0)
+      throw new Error(`cannot read package.json from ${file}: ${p.stderr}`);
     manifests[v] = JSON.parse(p.stdout);
   }
   const serveFile = (res: ServerResponse, file: string) => {
@@ -150,14 +216,29 @@ export async function startFixtureServer(opts: { root: string; releases?: Releas
     if (url === "/releases.json") {
       const list = (opts.releases ?? []).map((r) => {
         const dir = join(opts.root, `v${r.version}`);
-        const assets = existsSync(dir) ? readFileSync(join(dir, "SHA256SUMS"), "utf8").split(/\r?\n/).filter(Boolean).map((l) => ({ name: l.split(/\s+\*?/)[1] })) : [];
-        return { tag_name: `v${r.version}`, draft: false, prerelease: r.prerelease === true, assets: [...assets, { name: "SHA256SUMS" }] };
+        const assets = existsSync(dir)
+          ? readFileSync(join(dir, "SHA256SUMS"), "utf8")
+              .split(/\r?\n/)
+              .filter(Boolean)
+              .map((l) => ({ name: l.split(/\s+\*?/)[1] }))
+          : [];
+        return {
+          tag_name: `v${r.version}`,
+          draft: false,
+          prerelease: r.prerelease === true,
+          assets: [...assets, { name: "SHA256SUMS" }],
+        };
       });
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify(list));
       return;
     }
-    if (opts.npm && (url === `/${opts.npm.name}` || url === `/${opts.npm.name.replace("/", "%2f")}` || url === `/${opts.npm.name.replace("/", "%2F")}`)) {
+    if (
+      opts.npm &&
+      (url === `/${opts.npm.name}` ||
+        url === `/${opts.npm.name.replace("/", "%2f")}` ||
+        url === `/${opts.npm.name.replace("/", "%2F")}`)
+    ) {
       const versions: Record<string, unknown> = {};
       for (const [v, file] of Object.entries(opts.npm.tarballs)) {
         const bytes = readFileSync(file);
@@ -180,7 +261,13 @@ export async function startFixtureServer(opts: { root: string; releases?: Releas
         };
       }
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ name: opts.npm.name, "dist-tags": { latest: opts.npm.latest }, versions }));
+      res.end(
+        JSON.stringify({
+          name: opts.npm.name,
+          "dist-tags": { latest: opts.npm.latest },
+          versions,
+        }),
+      );
       return;
     }
     const tar = /^\/-\/tarballs\/([^/]+)\/[^/]+\.tgz$/.exec(url);
@@ -189,7 +276,11 @@ export async function startFixtureServer(opts: { root: string; releases?: Releas
       return;
     }
     const file = normalize(join(opts.root, url));
-    if (file.startsWith(normalize(opts.root) + sep) && existsSync(file) && statSync(file).isFile()) {
+    if (
+      file.startsWith(normalize(opts.root) + sep) &&
+      existsSync(file) &&
+      statSync(file).isFile()
+    ) {
       serveFile(res, file);
       return;
     }
@@ -207,20 +298,73 @@ export async function startFixtureServer(opts: { root: string; releases?: Releas
  * installer's setup wrote) and allow file edits, so `xr "<task>"` runs the
  * deterministic write_file turn unattended.
  */
-export function writeFixtureConfig(dataHome: string, providerUrl: string): void {
+export function writeFixtureConfig(
+  dataHome: string,
+  providerUrl: string,
+): void {
   mkdirSync(dataHome, { recursive: true });
   const cfgPath = join(dataHome, "config.json");
-  const prior = existsSync(cfgPath) ? JSON.parse(readFileSync(cfgPath, "utf8")) : {};
-  writeFileSync(cfgPath, JSON.stringify({
-    ...prior,
-    version: prior.version ?? 22,
-    defaults: { ...(prior.defaults ?? {}), provider: FIXTURE_PROVIDER, model: FIXTURE_MODEL },
-    memory: { ...(prior.memory ?? {}), enabled: false },
-    providerEngine: {
-      ...(prior.providerEngine ?? {}),
-      routingStrategy: "primary",
-      customProviders: [{ id: FIXTURE_PROVIDER, label: "Journey fixture (loopback)", baseUrl: providerUrl, defaultModel: FIXTURE_MODEL, capabilities: { chat: true, streaming: false, toolUse: true, functionCalling: true } }],
-    },
-  }, null, 2));
-  writeFileSync(join(dataHome, "cli.json"), JSON.stringify({ provider: FIXTURE_PROVIDER, model: FIXTURE_MODEL, permissions: { allow: ["edit:*"], deny: [] } }));
+  const prior = existsSync(cfgPath)
+    ? JSON.parse(readFileSync(cfgPath, "utf8"))
+    : {};
+  writeFileSync(
+    cfgPath,
+    JSON.stringify(
+      {
+        ...prior,
+        version: prior.version ?? 22,
+        defaults: {
+          ...(prior.defaults ?? {}),
+          provider: FIXTURE_PROVIDER,
+          model: FIXTURE_MODEL,
+        },
+        memory: { ...(prior.memory ?? {}), enabled: false },
+        providerEngine: {
+          ...(prior.providerEngine ?? {}),
+          routingStrategy: "primary",
+          // Explicit SYNTHETIC loopback tariff: production unknown models are
+          // never inferred free. Admission/settlement still use the real governor.
+          providerCapabilities: {
+            ...(prior.providerEngine?.providerCapabilities ?? {}),
+            [FIXTURE_PROVIDER]: {
+              models: {
+                [FIXTURE_MODEL]: {
+                  cost: {
+                    inPerMTok: 0,
+                    outPerMTok: 0,
+                    known: true,
+                    source: "synthetic journey fixture; no provider billing",
+                  },
+                },
+              },
+            },
+          },
+          customProviders: [
+            {
+              id: FIXTURE_PROVIDER,
+              label: "Journey fixture (loopback)",
+              baseUrl: providerUrl,
+              defaultModel: FIXTURE_MODEL,
+              capabilities: {
+                chat: true,
+                streaming: false,
+                toolUse: true,
+                functionCalling: true,
+              },
+            },
+          ],
+        },
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(dataHome, "cli.json"),
+    JSON.stringify({
+      provider: FIXTURE_PROVIDER,
+      model: FIXTURE_MODEL,
+      permissions: { allow: ["edit:*"], deny: [] },
+    }),
+  );
 }

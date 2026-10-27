@@ -98,8 +98,18 @@ const PROVIDER_ENTRIES: Record<
   },
 };
 
-const LATENCY_LABEL = { fast: 'Fast', medium: 'Medium', slow: 'Slow' } as const;
-const QUALITY_LABEL = { good: 'Good', great: 'Great', best: 'Best' } as const;
+const LATENCY_LABEL = {
+  fast: 'Fast',
+  medium: 'Medium',
+  slow: 'Slow',
+  unknown: 'Latency unmeasured',
+} as const;
+const QUALITY_LABEL = {
+  good: 'Good',
+  great: 'Great',
+  best: 'Best',
+  unknown: 'Quality unmeasured',
+} as const;
 
 export function ModelsTab() {
   const settings = useBudgetStore((s) => s.settings);
@@ -137,15 +147,6 @@ export function ModelsTab() {
 
   const saveProvider = (input: ProviderSaveInput): void => {
     void (async () => {
-      if (input.apiKey && input.keyStorage === 'local-insecure') {
-        const { readSettingJSON, writeSettingJSON } =
-          await import('@/lib/persistent-store');
-        const keys =
-          (await readSettingJSON<Record<string, string>>('xr.providerKeys')) ??
-          {};
-        keys[input.id] = input.apiKey;
-        await writeSettingJSON('xr.providerKeys', keys);
-      }
       const prev = providers.find((p) => p.id === input.id);
       const next: ProviderConfig[] = providers.filter((p) => p.id !== input.id);
       next.push({
@@ -178,19 +179,27 @@ export function ModelsTab() {
     })();
   };
 
-  const removeProvider = (id: string): void => {
-    void (async () => {
+  const removeProvider = async (id: string): Promise<void> => {
+    const existing = providers.find((p) => p.id === id);
+    let notice =
+      'Desktop entry removed; review external credentials separately.';
+    if (existing?.keyStorage === 'engine') {
+      const { removeProviderKeyFromEngine } =
+        await import('@/engine/providers');
+      notice = (await removeProviderKeyFromEngine(id)).notice;
+    } else if (existing?.keyStorage === 'keychain') {
       const { keychainDelete } = await import('@/lib/settingsApi');
-      void keychainDelete('xr', id);
-      updateSettings('models', {
-        providers: providers.filter((p) => p.id !== id),
-      });
-      for (const m of MODEL_REGISTRY)
-        if (m.provider === id && !m.local)
-          await useBudgetStore.getState().removeModel(m.id);
-      setConfigFor(null);
-      toast.success('Provider removed');
-    })();
+      await keychainDelete('xr', id);
+    } else if (existing?.keyStorage === 'local-insecure') {
+      const { purgeLegacyCredentialSettings } =
+        await import('@/lib/persistent-store');
+      await purgeLegacyCredentialSettings();
+    }
+    updateSettings('models', {
+      providers: providers.filter((p) => p.id !== id),
+    });
+    setConfigFor(null);
+    toast.success('Stored entry removed', { description: notice });
   };
 
   const testModel = (m: ModelInfo): void => {

@@ -23,7 +23,7 @@ import {
   runStatusLabel,
   runStatusTone,
 } from "../src/core/ux-status.ts";
-import { runAgent } from "../src/core/agent.ts";
+import { runAgent } from "./helpers/scripted-agent.ts";
 import { Store } from "../src/state/workspace-store.ts";
 import type { ChatStreamEvent, Message, ModelTurn, Provider, Tool } from "../src/core/types.ts";
 

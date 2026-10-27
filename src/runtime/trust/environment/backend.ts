@@ -10,6 +10,7 @@
  * implemented here.
  */
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import type {
@@ -50,6 +51,7 @@ export interface RawRunOptions {
   timeoutMs: number;
   maxOutputBytes: number;
   stdin?: string;
+  signal?: AbortSignal;
   /**
    * Phase 4 · T1 — extra inherited file descriptors (e.g. a seccomp policy
    * file for bubblewrap). Each parent fd is passed to the child as fd
@@ -66,6 +68,7 @@ export interface RawRunOutcome {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  cancelled?: boolean;
   outputTruncated: boolean;
   durationMs: number;
   spawnError?: string;
@@ -79,112 +82,63 @@ export interface RawRunOutcome {
  */
 export function runChild(opts: RawRunOptions): Promise<RawRunOutcome> {
   const started = Date.now();
+  const empty = (extra: Partial<RawRunOutcome>): RawRunOutcome => ({ exitCode: null, stdout: "", stderr: "", timedOut: false, cancelled: false, outputTruncated: false, durationMs: Date.now() - started, killed: false, ...extra });
+  if (opts.signal?.aborted) return Promise.resolve(empty({ cancelled: true, stderr: "cancelled before start" }));
+  if (!opts.argv.length || !Number.isSafeInteger(opts.timeoutMs) || opts.timeoutMs <= 0 || !Number.isSafeInteger(opts.maxOutputBytes) || opts.maxOutputBytes <= 0 || Buffer.byteLength(opts.stdin ?? "") > 1024 * 1024) {
+    return Promise.resolve(empty({ spawnError: "invalid command/resource bounds", stderr: "invalid command/resource bounds" }));
+  }
   return new Promise((resolvePromise) => {
     const [cmd, ...args] = opts.argv;
-    let stdout = "";
-    let stderr = "";
-    let outBytes = 0;
-    let truncated = false;
-    let timedOut = false;
-    let killed = false;
-
+    const out: Buffer[] = [], err: Buffer[] = [];
+    let outBytes = 0, truncated = false, timedOut = false, cancelled = false, killed = false, finished = false;
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(cmd, args, {
-        cwd: opts.cwd,
-        env: opts.env,
-        detached: true,
-        // Phase 4 · T1 — extra parent fds are inherited by the child as
-        // fd 3, 4, … (e.g. the seccomp policy file for bubblewrap).
-        stdio: ["pipe", "pipe", "pipe", ...(opts.extraFds ?? [])],
-      });
-    } catch (err) {
-      resolvePromise({
-        exitCode: null,
-        stdout: "",
-        stderr: String(err instanceof Error ? err.message : err),
-        timedOut: false,
-        outputTruncated: false,
-        durationMs: Date.now() - started,
-        spawnError: String(err instanceof Error ? err.message : err),
-        killed: false,
-      });
-      return;
-    }
-
-    const killGroup = (signal: NodeJS.Signals) => {
+      child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, detached: true, stdio: ["pipe", "pipe", "pipe", ...(opts.extraFds ?? [])] });
+    } catch (e) { resolvePromise(empty({ spawnError: (e as Error).message, stderr: (e as Error).message })); return; }
+    const killGroup = () => {
       if (!child.pid) return;
-      try {
-        process.kill(-child.pid, signal);
-        killed = true;
-      } catch {
-        try {
-          child.kill(signal);
-          killed = true;
-        } catch {
-          /* already dead */
-        }
-      }
+      try { process.kill(-child.pid, "SIGKILL"); killed = true; }
+      catch { try { killed = child.kill("SIGKILL") || killed; } catch { /* already dead */ } }
+      // A detached descendant must not hold the caller's response pipes open.
+      child.stdin?.destroy(); child.stdout?.destroy(); child.stderr?.destroy();
     };
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      killGroup("SIGKILL");
-    }, opts.timeoutMs);
-
-    const capture = (which: "stdout" | "stderr") => (chunk: Buffer) => {
+    const abort = () => { cancelled = true; killGroup(); };
+    const timer = setTimeout(() => { timedOut = true; killGroup(); }, opts.timeoutMs);
+    opts.signal?.addEventListener("abort", abort, { once: true });
+    if (opts.signal?.aborted) abort();
+    const finish = (code: number | null, spawnError?: string) => {
+      if (finished) return; finished = true;
+      clearTimeout(timer); opts.signal?.removeEventListener("abort", abort);
+      // Byte accounting is over raw buffers, not UTF-16 code units. Incomplete
+      // UTF-8 tails at a truncated boundary are omitted rather than expanded.
+      const decode = (chunks: Buffer[]) => new TextDecoder().decode(Buffer.concat(chunks), { stream: true });
+      resolvePromise({ exitCode: code, stdout: decode(out), stderr: decode(err) || spawnError || "", timedOut, cancelled, outputTruncated: truncated, durationMs: Date.now() - started, spawnError, killed });
+    };
+    const capture = (chunks: Buffer[]) => (chunk: Buffer) => {
       if (truncated) return;
-      const s = chunk.toString("utf8");
-      if (outBytes + s.length > opts.maxOutputBytes) {
-        const room = Math.max(0, opts.maxOutputBytes - outBytes);
-        if (which === "stdout") stdout += s.slice(0, room);
-        else stderr += s.slice(0, room);
-        outBytes = opts.maxOutputBytes;
-        truncated = true;
-        killGroup("SIGKILL");
-        return;
-      }
-      outBytes += s.length;
-      if (which === "stdout") stdout += s;
-      else stderr += s;
+      const room = opts.maxOutputBytes - outBytes;
+      const bytes = Math.min(room, chunk.length);
+      if (bytes) { chunks.push(Buffer.from(chunk.subarray(0, bytes))); outBytes += bytes; }
+      if (chunk.length > room) { truncated = true; killGroup(); }
     };
-
-    child.stdout?.on("data", capture("stdout"));
-    child.stderr?.on("data", capture("stderr"));
-
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      resolvePromise({
-        exitCode: null,
-        stdout,
-        stderr: stderr || String(err.message),
-        timedOut,
-        outputTruncated: truncated,
-        durationMs: Date.now() - started,
-        spawnError: String(err.message),
-        killed,
-      });
-    });
-
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolvePromise({
-        exitCode: code,
-        stdout,
-        stderr,
-        timedOut,
-        outputTruncated: truncated,
-        durationMs: Date.now() - started,
-        killed,
-      });
-    });
-
-    if (opts.stdin !== undefined && child.stdin) {
-      child.stdin.end(opts.stdin);
-    } else if (child.stdin) {
-      child.stdin.end();
-    }
+    child.stdout?.on("data", capture(out)); child.stderr?.on("data", capture(err));
+    child.on("error", e => finish(null, e.message));
+    child.on("close", code => finish(code));
+    child.stdin?.on("error", () => { /* EPIPE after an early child exit */ });
+    child.stdin?.end(opts.stdin);
   });
+}
+
+/** Docker CLI death alone does not kill a running container. Always remove
+ * the uniquely named per-action container, including timeout/cancellation. */
+export async function runDisposableContainer(opts: RawRunOptions): Promise<RawRunOutcome> {
+  const name = `xr-action-${randomUUID()}`;
+  const argv = [...opts.argv.slice(0, 2), "--name", name, ...opts.argv.slice(2)];
+  const out = await runChild({ ...opts, argv });
+  if (opts.signal?.aborted && out.durationMs === 0) return out;
+  const clean = await runChild({ argv: [opts.argv[0], "rm", "-f", name], cwd: "/", env: opts.env, timeoutMs: 5000, maxOutputBytes: 4096 });
+  if (clean.exitCode !== 0 && !/no such (container|object)/i.test(clean.stderr)) return { ...out, exitCode: null, spawnError: "container cleanup failed; inspect the xr-action container before further execution" };
+  return out;
 }
 
 // ── Path containment (defense-in-depth; NOT a substitute for OS mounts) ───

@@ -73,7 +73,7 @@ describe("signing plan — missing secrets give an honest unsigned build", () =>
     expect(wf).toContain("verify /pa /v");
     expect(wf).toContain("TAURI_SIGNING_PRIVATE_KEY_PASSWORD");
     const verifyAt = wf.indexOf("scripts/verify-updater-signatures.ts");
-    const publishAt = wf.indexOf("Publish latest.json to the release");
+    const publishAt = wf.indexOf("Upload verified updater manifest");
     expect(verifyAt).toBeGreaterThan(0);
     expect(verifyAt).toBeLessThan(publishAt);
   });

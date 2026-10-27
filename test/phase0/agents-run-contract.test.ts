@@ -27,7 +27,7 @@ const POSIX_ONLY = process.platform === "win32";
 let home = "";
 let server: ReturnType<typeof Bun.serve>;
 
-/** What the scripted model returns as its envelope `message`. */
+/** Native completion content returned by the controlled fake model. */
 let reviewerMessage = "";
 
 function envelope(message: string): string {
@@ -48,7 +48,7 @@ beforeAll(() => {
       }
       return Response.json({
         id: "chatcmpl-test",
-        choices: [{ message: { content: envelope(reviewerMessage) }, finish_reason: "stop" }],
+        choices: [{ message: { content: reviewerMessage }, finish_reason: "stop" }],
         usage: { prompt_tokens: 5, completion_tokens: 5 },
       });
     },

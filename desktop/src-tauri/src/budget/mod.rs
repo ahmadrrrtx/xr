@@ -291,10 +291,6 @@ impl Inner {
     }
 
     fn seed_if_fresh(&mut self, now: i64) -> Result<(), String> {
-        // Demo history is a development aid — never in a release build.
-        if !crate::seed_purge::demo_data_enabled() {
-            return Ok(());
-        }
         let seeded = read_kv(&self.conn, KEY_SEEDED).map_err(|e| e.to_string())?;
         let version = seeded.and_then(|s| s.parse::<i64>().ok());
         if version == Some(SEED_VERSION) || !self.events.is_empty() {
@@ -689,7 +685,8 @@ pub fn budget_init<R: Runtime>(
     let (overview, out) = state.with(|db, _out| {
         db.tz = tz_offset_min;
         db.invalidate();
-        db.seed_if_fresh(now)?;
+        // Deliberate demo opt-in only; direct seed calls below are test fixtures.
+        if crate::seed_purge::demo_data_enabled() { db.seed_if_fresh(now)?; }
         Ok(db.overview_now(now))
     })?;
     flush(&app, out);

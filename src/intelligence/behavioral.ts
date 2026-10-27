@@ -17,6 +17,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { ProviderAbortError } from "../providers/request-guard.ts";
 import type { Message, Provider, Tool } from "../core/types.ts";
 
 const XR_HOME_DIR = () => process.env.XR_HOME ?? join(homedir(), ".xr");
@@ -168,11 +169,10 @@ function refusalClass(text: string): string | null {
   return null;
 }
 
-async function withTimeout<T>(fn: Promise<T>, ms: number, what: string): Promise<T> {
-  return await Promise.race([
-    fn,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms)),
-  ]);
+async function withTimeout<T>(fn: Promise<T>, ms: number, controller: AbortController, providerId: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([fn, new Promise<T>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new ProviderAbortError("timeout", providerId)); }, ms); })]); }
+  finally { if (timer) clearTimeout(timer); }
 }
 
 /**
@@ -185,7 +185,10 @@ export class BehavioralEvaluator {
   constructor(private readonly opts: EvaluateOptions = {}) {}
 
   async evaluate(provider: Provider, modelId: string): Promise<BehavioralContract> {
-    const timeoutMs = this.opts.timeoutMs ?? 15_000;
+    const timeoutMs = Math.max(1, Math.min(15_000, this.opts.timeoutMs ?? 15_000));
+    const deadline = Date.now() + 60_000;
+    let calls = 0;
+    let terminalError: unknown;
     const outcomes: ProbeOutcome[] = [];
     let structuredHits = 0, structuredTotal = 0;
     let toolHits = 0, toolTotal = 0;
@@ -204,14 +207,20 @@ export class BehavioralEvaluator {
     let firstTransportError: string | null = null;
 
     const call = async (messages: Message[], tools?: Tool[]) => {
+      if (terminalError) throw terminalError;
+      const controller = new AbortController();
       try {
-        const turn = await withTimeout(provider.chat(messages, tools ?? []), timeoutMs, "probe");
+        if (++calls > 10 || Date.now() >= deadline) throw new Error("probe request/time limit reached");
+        const ms = Math.min(timeoutMs, deadline - Date.now());
+        const turn = await withTimeout(provider.chat(messages, tools ?? [], { signal: controller.signal, timeoutMs: ms, maxOutputTokens: 1024 }), ms, controller, provider.id);
+        if (turn.error) throw new Error("Probe incomplete/refused by transport/output limit; no fidelity contract saved");
         answeredTurns++;
         return turn;
       } catch (e) {
         firstTransportError ??= (e as Error).message;
+        terminalError = e; // never continue paid traffic after failed admission/transport
         throw e;
-      }
+      } finally { controller.abort(); }
     };
 
     // 1. Structured-output fidelity ───────────────────────────────────────
@@ -305,9 +314,9 @@ export class BehavioralEvaluator {
       }
     }
 
-    if (answeredTurns === 0) {
+    if (answeredTurns === 0 || terminalError) {
       throw new Error(
-        `provider unreachable: no probe returned a model turn ` +
+        `provider unreachable or measurement incomplete: not all probes returned usable model turns ` +
           `(first error: ${(firstTransportError ?? "unknown").slice(0, 120)}). ` +
           `Transport failure is not measured capability — not saving a contract.`,
       );

@@ -1,0 +1,13 @@
+{
+  "scope": "Post-local-report Windows alias correction; no native execution inferred",
+  "files": [
+    {
+      "path": "scripts/compile-sidecar.ts",
+      "sha256": "6373f0466966b58873d259a1117725e7bf5bec6826a6e9d7a10a3e1919895cb9"
+    },
+    {
+      "path": "test/desktop/sidecar-targets.test.ts",
+      "sha256": "313354f6c6457f41fe4ff4c0a46ae1441601d1872a1829e9e854514ecde14e20"
+    }
+  ]
+}

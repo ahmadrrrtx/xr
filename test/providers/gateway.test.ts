@@ -6,12 +6,17 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { registry, ProviderRegistry } from "../../src/providers/registry.ts";
 import { providerGateway, ProviderGateway } from "../../src/providers/gateway.ts";
+import { registerRuntimeSecretResolver } from "../../src/security/secret-broker.ts";
 import { PRESETS } from "../../src/providers/presets.ts";
 import { capabilityResolver } from "../../src/providers/capability-resolver.ts";
 import { resolveFallbackChain } from "../../src/providers/fallback-chain.ts";
 import { normalizeProviderError, ProviderError } from "../../src/providers/errors.ts";
 import { loadConfig } from "../../src/config/config.ts";
 import type { Message, Tool, ModelTurn } from "../../src/core/types.ts";
+
+let unregisterSecrets: (() => void) | undefined;
+beforeEach(() => { unregisterSecrets = registerRuntimeSecretResolver(n => n === "OPENAI_API_KEY" ? "deterministic-no-network-fixture" : undefined); });
+afterEach(() => { unregisterSecrets?.(); });
 
 // ── Mock providers ──────────────────────────────────────────────────────────
 
@@ -316,7 +321,7 @@ describe("Fallback Chain", () => {
     const cfg = {
       ...config,
       defaults: { ...config.defaults, provider: "openai", model: "gpt-4o", fallbackProvider: "ollama", fallbackModel: "qwen2.5:7b" },
-      intelligencePlane: { ...config.intelligencePlane, allowFallback: true },
+      intelligencePlane: { ...config.intelligencePlane, allowFallback: true, allowCrossProviderFallback: true },
     } as any;
     const chain = await resolveFallbackChain(cfg);
     expect(chain.steps.length).toBeGreaterThanOrEqual(2);
@@ -384,14 +389,9 @@ describe("Streaming", () => {
     const { config } = loadConfig();
     // Use a provider that exists but may not be mocked — we test the fallback path
     // via MockToolProvider which has no chatStream
-    const mockRegistry = new ProviderRegistry();
-    const preset = { ...PRESETS["ollama"], id: "mock-tools" } as any;
-    mockRegistry.register(preset, () => new MockToolProvider() as any);
-
+    const preset = { ...PRESETS["ollama"], id: "mock-tools", defaultModel: "mock", knownModels: ["mock"] } as any;
+    registry.register(preset, (_c, model) => Object.assign(new MockToolProvider(), { model }) as any);
     const gateway = new ProviderGateway();
-    // Inject mock registry by temporarily replacing singleton's entries
-    const originalEntries = (registry as any).entries;
-    (registry as any).entries = (mockRegistry as any).entries;
 
     try {
       const chunks: any[] = [];
@@ -400,7 +400,7 @@ describe("Streaming", () => {
       }
       expect(chunks.length).toBeGreaterThan(0);
     } finally {
-      (registry as any).entries = originalEntries;
+      registry.unregister("mock-tools");
     }
   });
 });
@@ -536,19 +536,19 @@ describe("Phase 05 — Gateway Fallback Execution", () => {
       ...(config as any).intelligencePlane,
       allowFallback: true,
       allowCloudFallback: false,
-      localityPolicy: "cloud_only",
+      allowCrossProviderFallback: true,
+      localityPolicy: "any",
     };
     return config;
   }
 
   function installMocks(primaryFactory: () => unknown, fallbackFactory: () => unknown) {
-    const mockRegistry = new ProviderRegistry();
-    mockRegistry.register({ ...PRESETS["ollama"], id: "mock-primary", label: "Primary", apiKeyEnv: undefined } as any, primaryFactory as any);
-    mockRegistry.register({ ...PRESETS["ollama"], id: "mock-fallback", label: "Fallback", apiKeyEnv: undefined } as any, fallbackFactory as any);
-    const originalEntries = (registry as any).entries;
-    (registry as any).entries = (mockRegistry as any).entries;
+    const oldPrimary = registry.getEntry("mock-primary"), oldFallback = registry.getEntry("mock-fallback");
+    registry.register({ ...PRESETS["ollama"], id: "mock-primary", label: "Primary", apiKeyEnv: undefined } as any, (_c, model) => Object.assign(primaryFactory() as object, { id: "mock-primary", model }) as any);
+    registry.register({ ...PRESETS["ollama"], id: "mock-fallback", label: "Fallback", apiKeyEnv: undefined } as any, (_c, model) => Object.assign(fallbackFactory() as object, { id: "mock-fallback", model }) as any);
     return () => {
-      (registry as any).entries = originalEntries;
+      if (oldPrimary) registry.register(oldPrimary.preset, oldPrimary.factory); else registry.unregister("mock-primary");
+      if (oldFallback) registry.register(oldFallback.preset, oldFallback.factory); else registry.unregister("mock-fallback");
     };
   }
 
@@ -560,7 +560,8 @@ describe("Phase 05 — Gateway Fallback Execution", () => {
         chainConfig("mock-primary", "mock-fallback"),
         [],
         [],
-        { provider: "mock-primary", model: "mock-model" },
+        { provider: "mock-primary", model: "mock-model", requirements: { allowFallback: true, allowCrossProviderFallback: true } },
+        { beforeAttempt: () => {} },
       );
       expect(out.providerId).toBe("mock-fallback");
       expect(out.turn.message).toBe("ok");
@@ -582,7 +583,7 @@ describe("Phase 05 — Gateway Fallback Execution", () => {
           chainConfig("mock-primary", "mock-fallback"),
           [],
           [],
-          { provider: "mock-primary", model: "mock-model" },
+          { provider: "mock-primary", model: "mock-model", requirements: { allowFallback: true, allowCrossProviderFallback: true } },
         ),
       ).rejects.toThrow();
     } finally {
@@ -610,7 +611,7 @@ describe("Phase 05 — Gateway Fallback Execution", () => {
           chainConfig("mock-primary", "mock-fallback"),
           [],
           [],
-          { provider: "mock-primary", model: "mock-model" },
+          { provider: "mock-primary", model: "mock-model", requirements: { allowFallback: true, allowCrossProviderFallback: true } },
         ),
       ).rejects.toMatchObject({ name: "ProviderAbortError", kind: "cancelled" });
     } finally {

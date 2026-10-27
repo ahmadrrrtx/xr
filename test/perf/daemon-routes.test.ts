@@ -115,7 +115,7 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
         const url = new URL(req.url);
         if (url.pathname.endsWith("/models")) return Response.json({ data: [{ id: "qwen2.5:7b" }] });
         if (url.pathname.endsWith("/chat/completions")) {
-          return Response.json({ choices: [{ message: { content: "fallback reply" } }], usage: { prompt_tokens: 2, completion_tokens: 3 } });
+          return Response.json({ choices: [{ message: { role:"assistant", content: "fallback reply" }, finish_reason:"stop" }], usage: { prompt_tokens: 2, completion_tokens: 3 } });
         }
         return Response.json({ ok: true });
       },
@@ -128,6 +128,11 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
     config.defaults.fallbackProvider = "lmstudio";
     config.defaults.fallbackModel = "qwen2.5:7b";
     config.providerEngine.routingStrategy = "primary"; // deterministic primary+fallback
+    // Explicit owner consent in this controlled local-only fixture. Merely
+    // naming a fallback never permits a production provider hop.
+    config.intelligencePlane.allowFallback=true;
+    config.intelligencePlane.allowCrossProviderFallback=true;
+    config.intelligencePlane.allowCloudFallback=false;
     const runtimes = (config.localModels as Record<string, any>).runtimes;
     runtimes.ollama = { ...(runtimes.ollama ?? {}), baseUrl: "http://127.0.0.1:1" };
     runtimes.lmstudio = { ...(runtimes.lmstudio ?? {}), baseUrl: `http://127.0.0.1:${LMSTUDIO_PORT}` };
@@ -274,6 +279,15 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
     const text = await res.text();
     expect(text).toContain("fallback reply");
     expect(text).toContain("done");
+    const terminal=text.split("\n").filter(l=>l.startsWith("data: {")).map(l=>JSON.parse(l.slice(6))).findLast(e=>e.type==="done");
+    expect(terminal?.stopped).toBe("done");
+    // This handler fixture's d.db is route state, not the lazy kernel's
+    // workspace store. Assert serialized settlement receipts here; the same
+    // decorated chain's actual SQLite rows are independently checked by the
+    // governed-attempts integration test.
+    const receipts=text.split("\n").filter(l=>l.startsWith("data: {")).map(l=>JSON.parse(l.slice(6))).filter(e=>e.type==="usage");
+    expect(receipts.map(e=>[e.provider,e.source])).toEqual([["ollama","estimated"],["lmstudio","provider"]]);
+
   }, 20_000);
 
   test("repeat dashboard traffic is served from caches (warm requests are fast)", async () => {

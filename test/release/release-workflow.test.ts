@@ -55,7 +55,9 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
     expect(workflow).toContain("slsa-framework/slsa-github-generator");
     // The provenance job must depend on the job that produced the digests.
     const prov = workflow.slice(workflow.indexOf("  provenance:"));
-    expect(prov).toMatch(/needs: \[assemble, release\]/);
+    expect(prov).toMatch(/needs: \[assemble\]/);
+    expect(prov).toContain("upload-assets: false");
+    expect(workflow).toContain("needs: [assemble, sign, provenance]");
   });
 
   test("cosign keyless signing covers SHA256SUMS + tarball + SBOM (public Rekor)", () => {
@@ -69,24 +71,24 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
     expect(workflow).toMatch(/softprops\/action-gh-release@[0-9a-f]{40} # v3\b/); // SHA-pinned (XR-LAUNCH-012); v3.0.3 ratcheted with dependabot PR #196 (2026-10-23)
   });
 
-  test("npm publishes under OIDC with dist-tags (stable → latest, beta → beta)", () => {
+  test("npm publishes exact signed bytes under OIDC; candidate/beta never implicitly move stable defaults", () => {
     // The npm CLI performs the publish. Two bun commands are wrong here:
     //   - `bun pm publish` is not a bun subcommand at all (bun 1.3.14 prints
     //     the `bun pm` usage block and exits 1);
     //   - `bun publish` exists but does not implement npm's OIDC
     //     trusted-publishing handshake (oven-sh/bun#22423).
     // Either one fails the npm channel AFTER the GitHub Release is published.
-    expect(workflow).toContain("npm publish --provenance --access public --tag beta");
-    expect(workflow).toContain("npm publish --provenance --access public --tag latest");
+    expect(workflow).toContain('npm publish "${packs[0]}" --provenance --access public --tag beta');
+    expect(workflow).toContain('npm publish "${packs[0]}" --provenance --access public --tag candidate');
     expect(workflow).toMatch(/Publish npm[\s\S]*setup-bun/);
-    expect(workflow).toMatch(/Stamp \+ publish channel manifests[\s\S]*contents: write/);
-    expect(workflow).toMatch(/GitHub Release \(signed assets\)[\s\S]*needs: \[assemble, sign\]/);
+    expect(workflow).toContain("Project stable channel files for this artifact only");
+    expect(workflow).toContain("needs: [assemble, sign, provenance, verify-release, journey, supply-chain]");
     expect(workflow).not.toContain("bun pm publish");
     // Match the run line: explanatory comments may name the command.
     expect(workflow).not.toMatch(/^\s*bun publish /m);
     // OIDC trusted publishing needs npm >= 11.5.1 on Node >= 22.
     expect(workflow).toMatch(/actions\/setup-node@[0-9a-f]{40} # v\d+\b/); // SHA-pinned (XR-LAUNCH-012); major policed by ci:policy rule 7
-    expect(workflow).toContain("npm install -g npm@latest");
+    expect(workflow).toContain("npm install -g npm@12.2.1");
     expect(workflow).toContain("id-token: write");
     // No long-lived npm token is consumed (trusted publishing). A set OR empty
     // auth-token env makes npm skip OIDC and fall back to token auth (404).
@@ -102,7 +104,8 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
   });
 
   test("channels are stamped from the signed SHA256SUMS (no unsigned drift path)", () => {
-    expect(workflow).toContain("channel-manifest.ts --stamp --sums dist/SHA256SUMS");
+    expect(workflow).toContain('channel-manifest.ts --stamp --version "$V" --sums dist/SHA256SUMS');
+    expect(workflow).toContain("find channel-projection -type f");
   });
 
   test("windows channel zip (winget/scoop) is part of the canonical set", () => {
@@ -160,7 +163,7 @@ describe("Phase 3 — artifact truth (release.yml + nightly + dockerfile)", () =
   const consumerWf = readFileSync(join(ROOT, ".github", "workflows", "consumer-smoke.yml"), "utf8");
 
   test("publish jobs are tag-gated; untagged dispatch uses the manifest version", () => {
-    for (const job of ["publish-npm", "release", "provenance", "publish-docker", "publish-channels", "consumer-smoke", "verify-release"]) {
+    for (const job of ["publish-npm", "release", "provenance", "publish-docker", "consumer-smoke", "verify-release"]) {
       const slice = workflow.slice(workflow.indexOf(`  ${job}:`));
       const head = slice.slice(0, 400);
       expect(head).toContain("if: github.ref_type == 'tag'");

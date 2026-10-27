@@ -343,6 +343,7 @@ export interface EnvironmentRunResult {
   readonly stdout: string;
   readonly stderr: string;
   readonly timedOut: boolean;
+  readonly cancelled?: boolean;
   readonly outputTruncated: boolean;
   readonly durationMs: number;
   /** True if the environment believes a limit/boundary was hit or violated. */
@@ -358,6 +359,12 @@ export interface EnvironmentExecutable {
   readonly env: Record<string, string>;
   readonly timeoutMs: number;
   readonly maxOutputBytes: number;
+  /** Transient caller cancellation; never persisted in a grant. */
+  readonly signal?: AbortSignal;
+  readonly cpuSeconds?: number;
+  readonly memoryBytes?: number;
+  readonly maxProcesses?: number;
+  readonly maxTempBytes?: number;
   /** Optional stdin to feed the process. */
   readonly stdin?: string;
 }
@@ -388,7 +395,8 @@ export type CleanupState =
 
 export interface CleanupResult {
   readonly state: CleanupState;
-  readonly processesKilled: number;
+  /** null: OS cleanup occurred but no trustworthy descendant count exists. */
+  readonly processesKilled: number | null;
   readonly credentialsRevoked: number;
   readonly tempRemoved: boolean;
   readonly detail?: string;

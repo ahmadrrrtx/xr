@@ -38,20 +38,12 @@ describe("Phase 1 · native OpenAI-family tool schemas", () => {
     const calls = parseOpenAIToolCalls([
       { id: "call_1", type: "function", function: { name: "read_file", arguments: '{"path":"package.json"}' } },
     ]);
-    expect(calls).toEqual([{ tool: "read_file", args: { path: "package.json" } }]);
+    expect(calls).toEqual([{ id: "call_1", tool: "read_file", args: { path: "package.json" } }]);
   });
 
-  test("parseOpenAIToolCalls tolerates bad arguments (untrusted data, never throws)", () => {
-    const calls = parseOpenAIToolCalls([
-      { function: { name: "shell", arguments: "{not-json" } },
-      { function: { name: "with-empty-args", arguments: "" } },
-      "garbage",
-      { type: "function" }, // no function → skipped
-    ]);
-    expect(calls).toHaveLength(2);
-    expect(calls[0].tool).toBe("shell");
-    expect(calls[0].args).toEqual({}); // bad JSON ⇒ {}, not throw
-    expect(calls[1].tool).toBe("with-empty-args");
+  test("parseOpenAIToolCalls rejects invalid JSON instead of executing fabricated empty args", () => {
+    expect(() => parseOpenAIToolCalls([{ function: { name: "shell", arguments: "{not-json" } }])).toThrow(/malformed/);
+    expect(parseOpenAIToolCalls([{ function: { name: "no-args", arguments: "" } }, "garbage"])).toEqual([{ tool: "no-args", args: {} }]);
   });
 
   test("isChatCompletionObject detects a completion body", () => {

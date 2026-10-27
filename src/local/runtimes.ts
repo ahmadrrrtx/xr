@@ -244,6 +244,13 @@ async function detectAllRuntimesUncached(): Promise<LocalRuntimeStatus[]> {
  * runtimeFingerprint). Cache disabled via XR_RUNTIME_CACHE=0 — detection then
  * remains bounded-parallel (the old sequential loop is gone for good).
  */
+/** Offline snapshot only; no subprocess, HTTP probe or background refresh. */
+export function inspectDetectedRuntimes(): LocalRuntimeStatus[] {
+  if (!runtimeCacheEnabled()) return [];
+  const hit = runtimeCache.get(runtimeFingerprint());
+  return hit && !hit.stale ? hit.value : [];
+}
+
 export async function detectAllRuntimes(): Promise<LocalRuntimeStatus[]> {
   if (!runtimeCacheEnabled()) return detectAllRuntimesUncached();
   const key = runtimeFingerprint();
