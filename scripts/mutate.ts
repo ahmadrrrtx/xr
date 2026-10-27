@@ -35,7 +35,10 @@ const GATED: GatedModule[] = [
   // ── Phase 2 authorities (Part 10: mutation on envelope / registry / router) ──
   // Phase 08: added lifecycle/trust/scope enforcement — include new capability tests that exercise new branches
   { path: "src/tools/registry-service.ts", tests: ["test/tools/semantics-contract.test.ts", "test/tools/registry-phase08.test.ts", "test/capabilities/no-bypass.test.ts", "test/capabilities/security-matrix.test.ts", "test/capabilities/self-grant.test.ts", "test/capabilities/inventory.test.ts"] },
-  { path: "src/intelligence/routing-service.ts", tests: ["test/intelligence/locality-invariant.test.ts", "test/intelligence/integration.test.ts"] },
+  // RC-204: the fallback-consent closure (config snapshot, cross-provider, cloud,
+  // locality, model compatibility, streamed-output replay) is exercised by the
+  // dedicated consent suite — the locality/integration tests never reach it.
+  { path: "src/intelligence/routing-service.ts", tests: ["test/intelligence/locality-invariant.test.ts", "test/intelligence/integration.test.ts", "test/intelligence/fallback-consent.test.ts"] },
   { path: "src/core/execution/envelope.ts", tests: ["test/core/no-bypass.test.ts", "test/core/envelope.test.ts"] },
 ];
 

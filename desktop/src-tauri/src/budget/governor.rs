@@ -603,7 +603,10 @@ fn priced_at(id: &str, now: i64, input_tokens: f64) -> Priced {
     let (explicit, model) = split_model(id);
     let provider = explicit.or_else(|| model_registry().iter().find(|m| m.id == model).map(|m| m.provider));
     let is_local = provider.map(local_provider).unwrap_or_else(|| looks_local(model));
-    let mut out = Priced { provider: provider.unwrap_or(if is_local { "ollama" } else { "other" }).into(), in_per_1m: if is_local { 0.0 } else { f64::NAN }, out_per_1m: if is_local { 0.0 } else { f64::NAN }, local: is_local, estimate: !is_local };
+    // Unknown/unverified price is NaN (never a made-up number): `UNKNOWN_*_PER_1M`
+    // is shared with the webview's `desktop/src/budget/models.ts` so both sides
+    // of the parity pin the same sentinel.
+    let mut out = Priced { provider: provider.unwrap_or(if is_local { "ollama" } else { "other" }).into(), in_per_1m: if is_local { 0.0 } else { UNKNOWN_IN_PER_1M }, out_per_1m: if is_local { 0.0 } else { UNKNOWN_OUT_PER_1M }, local: is_local, estimate: !is_local };
     if is_local { return out; }
     let fresh = facts()["staleAt"].as_str().and_then(iso_ms).map(|end| now <= end).unwrap_or(false);
     if !fresh { return out; }
@@ -1685,11 +1688,12 @@ mod tests {
     const TZ: i64 = -300;
 
     fn settings() -> BudgetSettings {
-        let mut s = BudgetSettings::default();
-        s.model_downshifting = true;
-        s.configured_models = ["claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra", "gemini-3.8-flash"].iter().map(|x| x.to_string()).collect();
-        s.installed_local = vec!["qwen2.5:3b".into(), "qwen2.5-coder:3b".into()];
-        s
+        BudgetSettings {
+            model_downshifting: true,
+            configured_models: ["claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra", "gemini-3.8-flash"].iter().map(|x| x.to_string()).collect(),
+            installed_local: vec!["qwen2.5:3b".into(), "qwen2.5-coder:3b".into()],
+            ..BudgetSettings::default()
+        }
     }
 
     fn counters(s: &BudgetSettings, spent_month: f64, spent_today: f64) -> Counters {

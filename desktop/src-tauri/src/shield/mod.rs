@@ -1301,6 +1301,12 @@ mod tests {
     #[test]
     fn db_seeds_once_pages_newest_first_and_appends_in_order() {
         let db = ShieldDb::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        // XR-LAUNCH-009: `from_connection` seeds the demo chain only when
+        // XR_DEMO_DATA=1; the chain, its ordering and the idempotence pin below
+        // are about that chain, so ask for it explicitly instead of depending
+        // on an environment variable (a fresh install must show real entries,
+        // never fabricated ones).
+        assert_eq!(db.seed_if_empty(NOW).unwrap(), 204);
         assert_eq!(db.count().unwrap(), 204);
         // Seeding is idempotent.
         assert_eq!(db.seed_if_empty(NOW).unwrap(), 0);
@@ -1355,6 +1361,9 @@ mod tests {
     #[test]
     fn audit_table_is_append_only() {
         let db = ShieldDb::from_connection(Connection::open_in_memory().unwrap()).unwrap();
+        // The guard is a per-row trigger: an empty table would let the UPDATE
+        // below "succeed" by touching nothing, which proves nothing.
+        assert_eq!(db.seed_if_empty(NOW).unwrap(), 204);
         let conn = db.conn.lock().unwrap();
         assert!(conn
             .execute("UPDATE shield_audit SET detail = 'x' WHERE seq = 1", [])

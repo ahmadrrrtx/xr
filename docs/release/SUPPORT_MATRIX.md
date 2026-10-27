@@ -32,13 +32,13 @@ Regenerate with `bun run support-matrix` after copying journey evidence into `do
 
 | Surface | Target | Build | Package | Install | Launch | Core-agent smoke | Update | Uninstall | Evidence |
 |---|---|---|---|---|---|---|---|---|---|
-| npm CLI | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR e25afd36+local changes<br>LR 14e0d4c5 |
+| npm CLI | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5<br>LR e25afd36+local changes |
 | npm CLI | Linux arm64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | npm CLI | Windows ARM64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
-| Installer binary | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR e25afd36+local changes<br>LR 14e0d4c5 |
+| Installer binary | Linux x64 | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | ✅ LR | LR 14e0d4c5<br>LR e25afd36+local changes |
 | Installer binary | Linux arm64 ¹ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS arm64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |
 | Installer binary | macOS x64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | — |

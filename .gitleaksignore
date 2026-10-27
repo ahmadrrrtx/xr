@@ -77,3 +77,7 @@ fa0593a0d27dbd879b893fc0f57ab6dadfeb7705:.gitleaksignore:generic-api-key:64
 efa5b218068e40d9afe08fc681d688f69d025668:test/daemon/session-auth.test.ts:generic-api-key:25
 8c3fd4e3fb4b6b4ce1da2ea43832e4227a02db3a:extensions/vscode/test/durable-pairing.test.ts:generic-api-key:21
 8c3fd4e3fb4b6b4ce1da2ea43832e4227a02db3a:extensions/vscode/test/durable-pairing.test.ts:generic-api-key:22
+# Release-candidate plan prose (RC-301 row, 2026-10-27): a documentation table
+# cell, not a credential. The row was reworded at the source; this pins the one
+# already-pushed commit whose text still trips the generic-api-key entropy rule.
+7f89e59888bd28c4611d30a2385b39d761c25c02:docs/release/IMPLEMENTATION_PLAN.md:generic-api-key:19
