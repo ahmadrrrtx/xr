@@ -16,6 +16,7 @@
 import { openSync, readSync, closeSync } from "node:fs";
 import { relative, resolve } from "node:path";
 import type { AgentResult } from "../../core/agent.ts";
+import { CORE_VERSION } from "../../core/version.ts";
 import { EXIT } from "../flags.ts";
 import { CoderSession, type AgentPort } from "./session.ts";
 import type { ConsentWrap } from "./consent.ts";
@@ -193,11 +194,15 @@ export async function runCoder(req: CoderRequest, deps: CoderDeps): Promise<numb
   }
   registerEnvSecrets();
 
-  if (!cfg.provider && !providerWithKey() && !process.env.XR_PROVIDER && !req.provider) {
+  // A credential is not a provider selection. In particular, do not silently
+  // replace a configured local engine route with a detected cloud provider.
+  const detectedKeyProvider = !cfg.provider && !process.env.XR_PROVIDER && !req.provider ? providerWithKey() : null;
+  if (!cfg.provider && !detectedKeyProvider && !process.env.XR_PROVIDER && !req.provider) {
     if (!isRepl) {
       err(
-        `${style.red("✕")} No model is configured.\n` +
-          "  Run `xr` in a terminal to set one up, or set one of: ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY.",
+        `${style.red("✕")} No coding CLI provider or supported provider key was detected.\n` +
+          "  An engine-only configuration is not checked by this preflight.\n" +
+          "  Run `xr` in a terminal to set one up, or select --provider <id> / XR_PROVIDER and set its API key if needed.",
       );
       return EXIT.ERROR;
     }
@@ -213,6 +218,9 @@ export async function runCoder(req: CoderRequest, deps: CoderDeps): Promise<numb
   }
 
   const settings = resolveSettings({ provider: req.provider, model: req.model }, cfg);
+  const providerHint = !settings.provider && detectedKeyProvider
+    ? `A key for ${detectedKeyProvider} is available, but a key alone does not select a provider. XR uses the engine's configured routing; select --provider ${detectedKeyProvider} or set XR_PROVIDER to ${detectedKeyProvider} to choose it explicitly.`
+    : undefined;
   const choice = providerChoices().find((c) => c.id === settings.provider);
   if (settings.provider && choice?.keyEnv && !secretBrokerSync(choice.keyEnv)) {
     err(
@@ -249,7 +257,7 @@ export async function runCoder(req: CoderRequest, deps: CoderDeps): Promise<numb
   const ui: CoderUI = req.json ? new JsonUI() : new TtyUI(deps.term, statusToStderr);
 
   if (isRepl) {
-    return runRepl({ req, deps, ui, cwd, settings, tools, mode, rules, permissions: cfg.permissions ?? {}, systemPrompt, git, files, project });
+    return runRepl({ req, deps, ui, cwd, settings, tools, mode, rules, permissions: cfg.permissions ?? {}, systemPrompt, git, files, project, providerHint });
   }
 
   // One-shot: build the prompt from argument, -p value, and piped stdin.
@@ -266,6 +274,7 @@ export async function runCoder(req: CoderRequest, deps: CoderDeps): Promise<numb
   }
 
   if (req.json) ui.banner([`xr ${settings.provider ?? ""}/${settings.model ?? ""}`, `cwd ${cwd}`]);
+  if (providerHint) ui.notice(providerHint, "warn");
   if (req.dryRun) ui.notice("Dry run: workspace writes and shell execution are simulated; model, read and network requests may still run.");
   if (rules) ui.notice(`Loaded ${rules.source} as project rules`);
 
@@ -363,6 +372,7 @@ interface ReplContext {
   git: ReturnType<typeof gitState>;
   files: string[];
   project: ReturnType<typeof detectProjectType>;
+  providerHint: string | undefined;
 }
 
 async function runRepl(c: ReplContext): Promise<number> {
@@ -390,11 +400,12 @@ async function runRepl(c: ReplContext): Promise<number> {
   const rel = relative(process.env.HOME ?? "", cwd);
   const shownCwd = rel && !rel.startsWith("..") ? `~/${rel}` : cwd;
   const banner = [
-    `xr v1.0 · coding agent · ${settings.provider ?? "?"}/${settings.model ?? "?"} · cwd: ${shownCwd}`,
+    `xr v${CORE_VERSION} · coding agent · ${settings.provider ?? "?"}/${settings.model ?? "?"} · cwd: ${shownCwd}`,
     "Type a task or @file to add context. Ctrl+C cancel, Ctrl+D exit.",
   ];
   if (c.mode === "yolo") ui.notice("Auto-approval ON (--approve-all).", "warn");
   ui.banner(banner);
+  if (c.providerHint) ui.notice(c.providerHint, "warn");
   if (c.req.dryRun) ui.notice("Dry run: workspace writes and shell execution are simulated; model, read and network requests may still run.");
   if (c.rules) ui.notice(`Loaded ${c.rules.source} as project rules`);
   if (c.git.isRepo) ui.notice(`git: ${c.git.branch ?? "detached"}${c.git.status.length ? ` · ${c.git.status.length} changed` : ""}`);

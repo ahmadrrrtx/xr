@@ -29,7 +29,10 @@ export interface TurnSummary {
   stopped: string;
   steps: number;
   filesChanged: string[];
+  /** Successfully completed shell commands; failures may still have had effects. */
   commands: string[];
+  /** Shell results that failed or were blocked; a failed command may have run partially. */
+  commandsFailedOrBlocked?: Array<{ command: string; reason: string }>;
   denied: number;
   autoDenied: number;
   inputTokens?: number;
@@ -205,13 +208,17 @@ export class TtyUI implements CoderUI {
     if (s.dryRun) parts.push("dry-run (simulated)");
     if (s.filesChanged.length) parts.push(`edited ${s.filesChanged.join(", ")}`);
     parts.push(`${s.filesChanged.length} file${s.filesChanged.length === 1 ? "" : "s"} changed`);
-    parts.push(`${s.commands.length} command${s.commands.length === 1 ? "" : "s"} run`);
+    parts.push(`${s.commands.length} command${s.commands.length === 1 ? "" : "s"} completed successfully`);
+    if (s.commandsFailedOrBlocked?.length) {
+      const effects = s.dryRun ? "" : " (may have run)";
+      parts.push(`${s.commandsFailedOrBlocked.length} shell action${s.commandsFailedOrBlocked.length === 1 ? "" : "s"} failed/blocked${effects}`);
+    }
     if (s.denied) parts.push(`${s.denied} denied`);
     const tokens = (s.inputTokens ?? 0) + (s.outputTokens ?? 0);
     // The meter already includes the token count and cost against the cap.
     if (s.meter) parts.push(s.meter);
     else if (tokens > 0) parts.push(`${(tokens / 1000).toFixed(1)}k tokens`);
-    const mark = s.stopped === "done" ? style.green("✓") : style.yellow("!");
+    const mark = s.stopped === "done" && !s.commandsFailedOrBlocked?.length ? style.green("✓") : style.yellow("!");
     this.line(`${mark} ${style.dim(parts.join(" · "))}`);
     if (s.stopped !== "done") this.line(style.yellow(`  ended: ${s.stopped}`));
   }
@@ -297,6 +304,7 @@ export class JsonUI implements CoderUI {
       steps: s.steps,
       files_changed: s.filesChanged,
       commands_run: s.commands,
+      ...(s.commandsFailedOrBlocked?.length ? { commands_failed_or_blocked: s.commandsFailedOrBlocked } : {}),
       denied: s.denied,
       auto_denied: s.autoDenied,
       ...(s.dryRun ? { dry_run: true } : {}),

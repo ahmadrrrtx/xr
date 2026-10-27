@@ -40,6 +40,17 @@ describe("Phase 4 · T6 — SBOM generation", () => {
     expect(deps.some((d) => d.name === "zod")).toBe(true);
   });
 
+  test("runtime package pins are inventoried without claiming their embedded libraries are inventoried", () => {
+    const deps = lockedDependencies();
+    const runtimes = deps.filter((d) => d.name.startsWith("@oven/bun-"));
+    expect(runtimes.length).toBe(8);
+    const pinned = readFileSync(join(import.meta.dir, "..", "..", ".bun-version"), "utf8").trim();
+    expect(runtimes.every((d) => d.version === pinned && !!d.integrity)).toBe(true);
+    const doc = renderCycloneDx({ componentName: "xr", componentVersion: "1", serialNumber: "urn:uuid:test", dependencies: deps });
+    const metadata = doc.metadata as { properties: Array<{ name: string; value: string }> };
+    expect(metadata.properties.find((p) => p.name === "xr:claim")?.value).toContain("embedded runtime libraries");
+  });
+
   test("renderCycloneDx emits a valid CycloneDX 1.5 document", () => {
     const doc = renderCycloneDx({
       componentName: "@rrrtx/xr",

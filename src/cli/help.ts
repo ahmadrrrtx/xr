@@ -49,6 +49,58 @@ function printEntryLine(entry: CatalogEntry, prefix = "xr "): void {
 
 // ── Main help ─────────────────────────────────────────────────────────────────
 
+/** Coding-first human help. Legacy commands and the JSON catalog remain intact. */
+function showCodingOverview(): void {
+  banner(`v${XR_VERSION} · coding agent`);
+  console.log(`  ${xrBold("Get started")}`);
+  console.log(`  ${xrDim("─".repeat(46))}`);
+  const examples: Array<[string, string]> = [
+    ["xr", "interactive coding session in this folder"],
+    ['xr "add tests for this project"', "run one coding task"],
+    ['xr -p "explain src/cli"', "read-only answer; no file edits or shell"],
+    ['xr --cwd <dir> "fix the tests"', "work in a chosen directory"],
+  ];
+  for (const [cmd, description] of examples) {
+    console.log(`  ${xrCyan(padCmd(cmd, 36))} ${xrDim(description)}`);
+  }
+  console.log();
+  console.log(`  ${xrBold("Coding options")}`);
+  console.log(`  ${xrDim("─".repeat(46))}`);
+  const flags: Array<[string, string]> = [
+    ["--provider <id>", "select a provider explicitly"],
+    ["--model <name>", "select a model"],
+    ["--diff", "show proposed edits without writing them"],
+    ["--dry-run", "simulate writes and shell commands"],
+    ["--budget <usd>", "estimated per-task USD limit"],
+    ["--max-tokens <n>", "per-task token limit"],
+    ["--tools <list>", "narrow the available coding tools"],
+    ["--json", "JSON Lines for an admitted coding turn"],
+    ["--no-history", "do not save REPL prompt history"],
+    ["--help, --version", "show help or version"],
+  ];
+  for (const [flag, description] of flags) {
+    console.log(`  ${xrCyan(padCmd(flag, 36))} ${xrDim(description)}`);
+  }
+  console.log();
+  console.log(`  ${xrDim("Read-only and dry-run may still read files and contact a model.")}`);
+  console.log(`  ${xrDim("USD estimates may overshoot; unknown pricing cannot enforce a USD cap.")}`);
+  console.log();
+  console.log(`  ${xrBold("Setup and help")}`);
+  console.log(`  ${xrDim("─".repeat(46))}`);
+  const help: Array<[string, string]> = [
+    ["xr doctor", "diagnose the installation"],
+    ["xr help providers", "provider and model help"],
+    ["xr help budget", "limits and cost guidance"],
+    ["xr help --all", "legacy/shared engine command catalog"],
+  ];
+  for (const [cmd, description] of help) {
+    console.log(`  ${xrCyan(padCmd(cmd, 36))} ${xrDim(description)}`);
+  }
+  console.log();
+  console.log(`  ${xrDim("The separate XR Desktop app provides the broader application experience.")}`);
+  console.log();
+}
+
 export function showHelp(topic?: string, opts?: { all?: boolean }): void {
   if (topic) {
     showTopicOrCommandHelp(topic);
@@ -68,6 +120,11 @@ export function showHelp(topic?: string, opts?: { all?: boolean }): void {
         needsKernel: c.needsKernel,
       })),
     });
+    return;
+  }
+
+  if (!opts?.all) {
+    showCodingOverview();
     return;
   }
 

@@ -169,6 +169,23 @@ describe("XR-LAUNCH-024 · `xr --json` shows cause + reason + next step", () => 
 });
 
 describe("XR-LAUNCH-024 · terminal UI shows cause + next step", () => {
+  test("a failed shell action is not rendered as a successful run", () => {
+    const ui = new TtyUI(null, true);
+    const chunks: string[] = [];
+    const original = process.stderr.write.bind(process.stderr);
+    (process.stderr as { write: unknown }).write = (c: string | Uint8Array) => { chunks.push(String(c)); return true; };
+    try {
+      ui.summary({ stopped: "done", steps: 1, filesChanged: [], commands: [], denied: 0, autoDenied: 0,
+        commandsFailedOrBlocked: [{ command: "exit 1", reason: "failed:command" }] });
+    } finally {
+      (process.stderr as { write: unknown }).write = original;
+    }
+    const text = chunks.join("").replace(/\x1b\[[0-9;]*m/g, "");
+    expect(text).toContain("0 commands completed successfully");
+    expect(text).toContain("1 shell action failed/blocked (may have run)");
+    expect(text).not.toContain("✓");
+  });
+
   test("the ✕ line keeps the tool's message and a dim line adds code + next step", () => {
     const ui = new TtyUI(null, true);
     const chunks: string[] = [];

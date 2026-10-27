@@ -1,11 +1,11 @@
 # =============================================================================
 # Launch audit XR-LAUNCH-007 — the PACKED npm artifact works, per OS.
 #
-# `npm pack` → `npm install -g <tarball> --prefix <scratch>` → the package ships
-# release.manifest.json → `xr --version` → `xr update --check` exits 0 and
-# reports the running version (scripts/npm-pack-smoke.ts). This is the path a
-# user on `npm i -g @rrrtx/xr` takes; 1.0.0 crashed on it (ENOENT on
-# release.manifest.json, missing from package.json `files`).
+# Pack and install with scripts disabled in scratch global and local prefixes.
+# Install and launch with Node but no Bun on PATH, check version/update and the
+# omitted-optional diagnostic (scripts/npm-pack-smoke.ts). Bun is installed on
+# the runner only to run the test harness; the installed CLI uses its pinned
+# platform runtime. This matrix is not evidence for untested CPU/libc targets.
 # =============================================================================
 name: npm Pack Smoke
 
@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Setup Bun (the package launcher is `#!/usr/bin/env bun`)
+      - name: Setup Bun (smoke-test harness only)
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version

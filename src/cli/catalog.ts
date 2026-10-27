@@ -169,7 +169,7 @@ export const CATALOG: CatalogEntry[] = [
     needsKernel: true,
     examples: [
       { cmd: 'xr "summarize this repo"', description: "one-shot agent run" },
-      { cmd: 'xr run "add tests" --budget 0.25', description: "hard spend cap" },
+      { cmd: 'xr run "add tests" --budget 0.25', description: "estimated per-task USD limit" },
       { cmd: 'xr run "explain auth" --mode ask', description: "read-only ask" },
       { cmd: 'xr run "migrate db" --mode plan', description: "plan only" },
     ],

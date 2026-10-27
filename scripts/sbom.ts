@@ -148,7 +148,7 @@ export function renderCycloneDx(input: SbomInput): Record<string, unknown> {
         {
           name: "xr:claim",
           value:
-            "application lock inventory only; system libraries/frameworks are NOT inventoried; NOT a security certification",
+            "application lock inventory only; embedded runtime libraries and system libraries/frameworks are NOT inventoried; NOT a security certification",
         },
         {
           name: "xr:dependency-graph",
