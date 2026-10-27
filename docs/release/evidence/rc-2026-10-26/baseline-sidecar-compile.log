@@ -1,0 +1,6 @@
+$ bun run sidecar:compile
+$ bun run scripts/compile-sidecar.ts
+[sidecar] compiling engine → /home/user/xr/desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu (bun-linux-x64)
+ [211ms]  bundle  829 modules
+ [177ms] compile  /home/user/xr/desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu
+[sidecar] done: /home/user/xr/desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu

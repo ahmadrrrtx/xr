@@ -1,0 +1,2 @@
+$ bun --bun run lint
+$ eslint .

@@ -1,0 +1,10 @@
+$ bun scripts/journey/cli-journey.ts --channel binary --evidence /home/user/xr-evidence/cli-binary-final.json --class LR
+[journey] binary · linux-x64 · N=1.1.1-rc.1 → N+1=1.1.2-journey.1 · scratch /tmp/xr-journey-binary-7wrvDH
+  pass    build (1651 ms) — xr-linux-x64 built for 1.1.1-rc.1 and 1.1.2-journey.1
+  pass    package (204 ms) — SHA256SUMS written for v1.1.1-rc.1 and v1.1.2-journey.1
+  pass    install (665 ms) — install.sh v1.1.1-rc.1 from http://127.0.0.1:34209
+  pass    launch (290 ms) — v1.1.1-rc.1 (Graphite)
+  pass    agent (412 ms) — write_file applied in the workspace after 2 provider turn(s)
+  pass    update (1492 ms) — 1.1.1-rc.1 → 1.1.2-journey.1
+  pass    uninstall (254 ms) — launcher, install dir, data home removed; .profile/.bashrc/.zshrc byte-identical
+{"schema":1,"kind":"cli-journey","channel":"binary","target":"cli-binary-linux-x64","os":"linux","arch":"x64","version":"1.1.1-rc.1","nextVersion":"1.1.2-journey.1","evidenceClass":"LR","commit":"e25afd362e80485340a322e60a97a04d41b6bd51","dirty":true,"runUrl":null,"runner":"local","at":"2026-10-27T07:36:33.649Z","steps":[{"step":"build","status":"pass","detail":"xr-linux-x64 built for 1.1.1-rc.1 and 1.1.2-journey.1","ms":1651},{"step":"package","status":"pass","detail":"SHA256SUMS written for v1.1.1-rc.1 and v1.1.2-journey.1","ms":204},{"step":"install","status":"pass","detail":"install.sh v1.1.1-rc.1 from http://127.0.0.1:34209","ms":665},{"step":"launch","status":"pass","detail":"v1.1.1-rc.1 (Graphite)","ms":290},{"step":"agent","status":"pass","detail":"write_file applied in the workspace after 2 provider turn(s)","ms":412},{"step":"update","status":"pass","detail":"1.1.1-rc.1 → 1.1.2-journey.1","ms":1492},{"step":"uninstall","status":"pass","detail":"launcher, install dir, data home removed; .profile/.bashrc/.zshrc byte-identical","ms":254}],"result":"pass"}

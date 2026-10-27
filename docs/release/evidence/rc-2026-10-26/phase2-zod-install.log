@@ -1,0 +1,9 @@
+$ bun add zod@4.6.6 --exact --ignore-scripts
+bun add v1.4.2 (744846f84)
+Resolving dependencies
+Resolved, downloaded and extracted [4]
+Saved lockfile
+
+installed zod@4.6.6
+
+1 package installed [273.00ms]

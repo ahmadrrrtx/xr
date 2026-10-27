@@ -1,0 +1,2 @@
+$ bun scripts/desktop-seed-gate.ts desktop/dist
+desktop-seed-gate: OK — 7 seed probes absent from desktop/dist.

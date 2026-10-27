@@ -1,0 +1,1 @@
+$ node --max-old-space-size=1024 --max-semi-space-size=16 node_modules/typescript/bin/tsc --noEmit

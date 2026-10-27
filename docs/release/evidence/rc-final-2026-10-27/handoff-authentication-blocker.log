@@ -1,0 +1,50 @@
+$ bun scripts/verify-release.ts --strict --artifact /home/user/.cache/xr-rc-artifacts/rrrtx-xr-1.1.1-rc.1.tgz --sums /home/user/.cache/xr-rc-artifacts/SHA256SUMS --sbom /home/user/.cache/xr-rc-artifacts/sbom.cyclonedx.json --expected-version 1.1.1-rc.1 --json
+{
+  "ok": false,
+  "checks": [
+    {
+      "name": "artifact-exists",
+      "ok": true
+    },
+    {
+      "name": "complete-release-inputs",
+      "ok": false,
+      "detail": "strict requires sums, SBOM, exact publisher identity, expected version and authenticated SLSA inputs; local keys cannot substitute"
+    },
+    {
+      "name": "artifact-sha256",
+      "ok": true,
+      "detail": "sha256 94a4127f3331f10eb156ad27696af4bf7b8dee143385e7fa4554eb19163755b6"
+    },
+    {
+      "name": "inventory-sha256:rrrtx-xr-1.1.1-rc.1.tgz",
+      "ok": true
+    },
+    {
+      "name": "inventory-sha256:sbom.cyclonedx.json",
+      "ok": true
+    },
+    {
+      "name": "inventory-sha256:xr_1.1.1-rc.1_amd64.deb",
+      "ok": true
+    },
+    {
+      "name": "inventory-sha256:xr-linux-x64",
+      "ok": true
+    },
+    {
+      "name": "sbom-cyclonedx",
+      "ok": true,
+      "detail": "1206 locked components; explicitly scoped inventory"
+    },
+    {
+      "name": "sbom-sha256",
+      "ok": true
+    },
+    {
+      "name": "signature",
+      "ok": false,
+      "detail": "no verification identity/key supplied — no claim made"
+    }
+  ]
+}

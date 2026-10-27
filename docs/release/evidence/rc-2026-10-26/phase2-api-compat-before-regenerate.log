@@ -1,0 +1,3 @@
+$ bun run api:compat
+$ bun run scripts/api-compat.ts
+[api-compat] OK — no breaking changes (0 compatible change(s), 283 operations)

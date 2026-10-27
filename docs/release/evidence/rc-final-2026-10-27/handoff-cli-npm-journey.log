@@ -1,0 +1,10 @@
+$ bun scripts/journey/cli-journey.ts --channel npm --evidence /home/user/xr-evidence/cli-npm-final.json --class LR
+[journey] npm · linux-x64 · N=1.1.1-rc.1 → N+1=1.1.2-journey.1 · scratch /tmp/xr-journey-npm-9znuCO
+  pass    build (3879 ms) — npm tarballs for 1.1.1-rc.1 and 1.1.2-journey.1
+  pass    package (130 ms) — tarballs carry bin/xr and release.manifest.json
+  pass    install (4857 ms) — npm -g into /tmp/xr-journey-npm-9znuCO/prefix
+  pass    launch (141 ms) — v1.1.1-rc.1 (Graphite)
+  pass    agent (570 ms) — write_file applied in the workspace after 2 provider turn(s)
+  pass    update (2484 ms) — 1.1.1-rc.1 → 1.1.2-journey.1
+  pass    uninstall (538 ms) — launcher, install dir, data home removed; .profile/.bashrc/.zshrc byte-identical
+{"schema":1,"kind":"cli-journey","channel":"npm","target":"cli-npm-linux-x64","os":"linux","arch":"x64","version":"1.1.1-rc.1","nextVersion":"1.1.2-journey.1","evidenceClass":"LR","commit":"e25afd362e80485340a322e60a97a04d41b6bd51","dirty":true,"runUrl":null,"runner":"local","at":"2026-10-27T07:36:46.491Z","steps":[{"step":"build","status":"pass","detail":"npm tarballs for 1.1.1-rc.1 and 1.1.2-journey.1","ms":3879},{"step":"package","status":"pass","detail":"tarballs carry bin/xr and release.manifest.json","ms":130},{"step":"install","status":"pass","detail":"npm -g into /tmp/xr-journey-npm-9znuCO/prefix","ms":4857},{"step":"launch","status":"pass","detail":"v1.1.1-rc.1 (Graphite)","ms":141},{"step":"agent","status":"pass","detail":"write_file applied in the workspace after 2 provider turn(s)","ms":570},{"step":"update","status":"pass","detail":"1.1.1-rc.1 → 1.1.2-journey.1","ms":2484},{"step":"uninstall","status":"pass","detail":"launcher, install dir, data home removed; .profile/.bashrc/.zshrc byte-identical","ms":538}],"result":"pass"}

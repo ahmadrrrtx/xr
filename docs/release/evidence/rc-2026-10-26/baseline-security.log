@@ -1,0 +1,800 @@
+$ bash -c bun test $(find test/security test/trust test/capabilities -name "*.test.ts" | sort) test/security.test.ts test/trust.test.ts
+bun test v1.4.2 (744846f84)
+
+test/trust.test.ts:
+(pass) estimate: local model is $0 [0.08ms]
+(pass) estimate: cloud model has nonzero cost and scales with steps [0.02ms]
+(pass) benchmark report can be signed and re-verified [1.20ms]
+
+test/security.test.ts:
+(pass) XR Security Guardrails > Plugin sandbox (RCE vector #1) > static scan rejects require('node:fs') [4.18ms]
+(pass) XR Security Guardrails > Plugin sandbox (RCE vector #1) > static scan rejects direct process.env access [0.76ms]
+(pass) XR Security Guardrails > Plugin sandbox (RCE vector #1) > static scan rejects eval() [0.43ms]
+(pass) XR Security Guardrails > Plugin sandbox (RCE vector #1) > accepts a genuinely safe plugin [0.48ms]
+(pass) XR Security Guardrails > Browser control hardening (RCE vector #2) > strips --no-sandbox from production launch args [1.44ms]
+(pass) XR Security Guardrails > Browser control hardening (RCE vector #2) > blocks running as root with the sandbox disabled unless multi-flag acknowledged [0.32ms]
+(pass) XR Security Guardrails > Browser control hardening (RCE vector #2) > validates navigation URLs to http/https only [0.16ms]
+(pass) XR Security Guardrails > Browser control hardening (RCE vector #2) > rejects invalid goto actions without needing a browser [3.21ms]
+(pass) XR Security Guardrails > MCP environment isolation (secret-leak vector #3) > builds an allow-listed environment instead of inheriting process.env [0.73ms]
+(pass) XR Security Guardrails > MCP environment isolation (secret-leak vector #3) > spawns child processes without a shell [0.19ms]
+(pass) XR Security Guardrails > MCP environment isolation (secret-leak vector #3) > validates tool names before invocation [0.13ms]
+(pass) XR Security Guardrails > MCP environment isolation (secret-leak vector #3) > sanitizes payloads against prototype pollution [0.11ms]
+(pass) XR Security Guardrails > Host capability gating (smoke) > grants no capabilities when nothing is granted [0.42ms]
+(pass) XR Security Guardrails > Host capability gating (smoke) > rejects path traversal through the fs capability [0.63ms]
+
+test/capabilities/lifecycle.test.ts:
+(pass) full local lifecycle with effects asserted at each step [509.37ms]
+(pass) certification gate: contract tests run and quarantine on failure [94.44ms]
+(pass) crash isolation: a crashing capability does not corrupt the host [53.42ms]
+(pass) crash in a worker: sandboxed worker reports failure, host stays green [24.37ms]
+(pass) CI capability gate script exists and is executable as a gate [149.54ms]
+
+test/capabilities/no-bypass.test.ts:
+(pass) Phase 08 — No bypass: all sources → policy > core → policy [0.96ms]
+(pass) Phase 08 — No bypass: all sources → policy > plugin → policy (with metadata) [0.18ms]
+(pass) Phase 08 — No bypass: all sources → policy > MCP → policy (with metadata) [0.13ms]
+(pass) Phase 08 — No bypass: all sources → policy > computer → policy (core computer_control) [0.06ms]
+(pass) Phase 08 — No bypass: all sources → policy > web → policy (core fetch_url) [0.16ms]
+(pass) Phase 08 — No bypass: all sources → policy > skill → policy: skills are NOT directly executable [0.11ms]
+(pass) Phase 08 — No bypass: all sources → policy > disabled capability cannot execute even if model requests [0.21ms]
+(pass) Phase 08 — No bypass: all sources → policy > quarantined capability cannot execute [0.13ms]
+(pass) Phase 08 — No bypass: all sources → policy > discovery and execution use identical policy rules [0.26ms]
+(pass) Phase 08 — No bypass: all sources → policy > disabled provider cannot shadow enabled provider (no privilege escalation via collision) [0.10ms]
+
+test/capabilities/self-grant.test.ts:
+(pass) Phase 08 — Model self-grant blocked > model cannot grant itself shell via tool name containing grant [0.17ms]
+(pass) Phase 08 — Model self-grant blocked > model cannot enable filesystem.write via request [0.14ms]
+(pass) Phase 08 — Model self-grant blocked > model cannot mutate permissions, trust, lifecycle, allowlist via tool args [0.14ms]
+(pass) Phase 08 — Model self-grant blocked > model cannot disable approval requirement via tool [0.05ms]
+(pass) Phase 08 — Model self-grant blocked > model cannot mark MCP server trusted via request [0.09ms]
+(pass) Phase 08 — Model self-grant blocked > model cannot certify plugin via tool call [0.05ms]
+(pass) Phase 08 — Model self-grant blocked > model cannot change capability scope via request [0.09ms]
+(pass) Phase 08 — Model self-grant blocked > control-plane operations are not exposed as tools [0.13ms]
+
+test/capabilities/evidence-trust.test.ts:
+(pass) popularity factor is log-scaled and bounded [0.10ms]
+(pass) a signed + tested low-download capability outranks an unsigned high-download one [0.33ms]
+(pass) popularity contributes at most 5% — it can only nudge, never decide [0.10ms]
+(pass) evidence components are explainable (why this ranks) [0.10ms]
+(pass) rank orders by evidence with stable output [0.10ms]
+(pass) outcomes affect the score but absence is not penalized to zero [0.04ms]
+(pass) quarantined/flagged capabilities score near zero regardless of downloads [0.04ms]
+
+test/capabilities/security-matrix.test.ts:
+(pass) Phase 08 — Security Matrix > core: discovery [0.24ms]
+(pass) Phase 08 — Security Matrix > core: execution allowed [0.09ms]
+(pass) Phase 08 — Security Matrix > core: denial for unknown tool [0.04ms]
+(pass) Phase 08 — Security Matrix > core: scope workspace enforced via safePath? (discovery) [0.03ms]
+(pass) Phase 08 — Security Matrix > skill: untrusted not selected (simulated) [0.05ms]
+(pass) Phase 08 — Security Matrix > skill: quarantined/disabled/permission denied not executable [0.07ms]
+(pass) Phase 08 — Security Matrix > plugin: unsigned/unverified blocked via lifecycle [0.09ms]
+(pass) Phase 08 — Security Matrix > plugin: quarantined/disabled/permission denied blocked [0.04ms]
+(pass) Phase 08 — Security Matrix > MCP: unsigned/unallowlisted/invalid signature/poisoned/disabled blocked [0.04ms]
+(pass) Phase 08 — Security Matrix > computer: restricted/approval-required/denied/allowed [0.08ms]
+(pass) Phase 08 — Security Matrix > web: private IP blocked via egress policy (simulated) [0.06ms]
+(pass) Phase 08 — Security Matrix > web: allowed domain passes policy, redirect handling inside tool [0.08ms]
+
+test/capabilities/tuf-updates.test.ts:
+(pass) happy path: fully signed metadata set verifies and candidate is pinned [5.49ms]
+(pass) ROLLBACK attack blocked: metadata versions regress below last seen [0.54ms]
+(pass) FREEZE attack blocked: timestamp outside freshness window [0.61ms]
+(pass) MIX-AND-MATCH attack blocked: targets not pinned by snapshot / snapshot not pinned by timestamp [1.18ms]
+(pass) ARBITRARY PACKAGE blocked: candidate hash not pinned by targets [0.63ms]
+(pass) threshold signing: 2-of-3 root threshold enforced [1.12ms]
+(pass) root rotation: new root must be signed by previous root keys [1.03ms]
+(pass) endless-data protection: oversized metadata refused by size limits [43.94ms]
+(pass) gate: unsigned update refused by default; accepted only on explicit operator opt-in [0.33ms]
+(pass) gate: verified update advances client state; replayed update then blocked [1.40ms]
+(pass) update + rollback round-trip through the skill plane leaves workspace intact [70.54ms]
+(pass) signature primitives: sign/verify round-trip and tamper detection [0.36ms]
+
+test/capabilities/ecosystem.test.ts:
+(pass) effective authority is declaration ∩ policy ∩ grants minus denied [9.05ms]
+(pass) capability service exposes valid common descriptors and effective authority [96.43ms]
+(pass) plugin updates requesting new permissions are blocked for review [13.40ms]
+(pass) plugin rollback restores package but never restores authority silently [10.67ms]
+(pass) skill package extraction blocks path traversal transactionally [8.80ms]
+
+test/capabilities/manifest-security.test.ts:
+(pass) signed + publisher-verified + SBOM + statement + locks ⇒ OK posture [8.53ms]
+(pass) unsigned manifest is flagged (installation is never trust) [8.21ms]
+(pass) invalid signature is REJECTED [8.14ms]
+(pass) wildcard permissions are REJECTED (default-deny) [8.34ms]
+(pass) description injection markers are REJECTED (routing-safe descriptions) [8.50ms]
+(pass) strict mode requires SBOM + statement + locks [8.12ms]
+(pass) authority diff shows new permissions, risk-tier change, data-scope change pre-enable [8.39ms]
+(pass) first-enable diff marks everything as new [8.08ms]
+(pass) enable gate refuses reject-level manifest security; --force overrides after review [91.63ms]
+(pass) TUF-gated update path shows authority diff and refuses unsigned without opt-in [138.11ms]
+
+test/capabilities/inventory.test.ts:
+(pass) Phase 08 — Inventory > inventory deterministic ordering [0.38ms]
+(pass) Phase 08 — Inventory > inventory includes required fields [0.20ms]
+(pass) Phase 08 — Inventory > inventory health counts [0.13ms]
+
+test/capabilities/provenance-graph.test.ts:
+(pass) provenanceOf returns full chain: origin, versions, permissions, deps, placement, update history, outcomes [10.48ms]
+(pass) whatWasUsed answers "what did the agent use?" with outcomes [9.22ms]
+(pass) distinct runtime semantics preserved: typed nodes never collapse planes [9.87ms]
+(pass) descriptor indexing records dependency edges and version updates [97.45ms]
+(pass) recordUse through the capability service records tool-plane uses [9.12ms]
+(pass) graph is bounded (endless-data protection) [1134.60ms]
+(pass) persistence round-trip: events survive a new store instance [10.76ms]
+
+test/security/filesystem-operations.test.ts:
+(pass) FS10/FS11 create: pending approval binds ancestor and object, not path spelling [3.83ms]
+(pass) FS10/FS11 replace: pending approval binds ancestor and object, not path spelling [0.66ms]
+(pass) FS10/FS11 delete: pending approval binds ancestor and object, not path spelling [0.57ms]
+(pass) FS04/FS13 previews do not read a sensitive hardlink under an innocent alias [0.98ms]
+(pass) FS02 ordinary in-root missing parent is handled without outside effects [0.89ms]
+
+test/security/tool-output-framing.test.ts:
+(pass) GAP-003 — tool output is framed as untrusted data > benign output is delimited and labelled as data [0.10ms]
+(pass) GAP-003 — tool output is framed as untrusted data > the exact payload from the audit is detected and flagged [0.03ms]
+(pass) GAP-003 — tool output is framed as untrusted data > flagged content is still delivered in full — detection is not censorship [0.04ms]
+(pass) GAP-003 — tool output is framed as untrusted data > zero-width / bidi smuggling is caught [0.04ms]
+(pass) GAP-003 — tool output is framed as untrusted data > empty and nullish output do not throw [0.05ms]
+(pass) GAP-003 — tool output is framed as untrusted data > the tool name is carried as provenance [0.03ms]
+
+test/security/filesystem-authority.test.ts:
+(pass) FS02/FS10 missing destination parents are approval-bound and made only on commit [0.59ms]
+(pass) FS10 missing ancestor appearing after approval invalidates creation [0.23ms]
+(pass) FS03 canonical root alias is usable; hostile components and foreign spellings refuse [0.54ms]
+(pass) FS04 exact dotenv templates are ordinary context, nested suffixes and keys are sensitive [0.48ms]
+(pass) FS13 FIFO, device alias and hardlinks refuse before content I/O [6.95ms]
+(pass) FS11 native retained read does not follow a parent swapped after acquisition [0.48ms]
+(pass) FS04/FS14 trusted registry-backed narrow disclosure works; yolo/labels cannot create it [1.62ms]
+(pass) FS10/FS14 grant actor, workspace, purpose, registered identity and exact object bind every use [0.67ms]
+
+test/security/exec-integrity.test.ts:
+(pass) Phase 07 · content-hash execution identity > hashes file content (sha256 hex) [0.09ms]
+(pass) Phase 07 · content-hash execution identity > resolves a token to a canonical path + hash [0.15ms]
+(pass) Phase 07 · content-hash execution identity > symlink canonicalization yields the TARGET's hash (content is identity) [0.03ms]
+(pass) Phase 07 · content-hash execution identity > covers the ld-linux dynamic-linker bypass (hashes argv[1], not the linker) [0.46ms]
+(pass) Phase 07 · content-hash execution identity > covers /usr/bin/env <prog> (hashes the real program) [0.13ms]
+(pass) Phase 07 · content-hash execution identity > best-effort parses a direct executable from a shell command [3.45ms]
+(pass) Phase 07 · content-hash execution identity > records an error (unknown) for a non-existent token [0.13ms]
+(pass) Phase 07 · execution-integrity decision > audit mode records but allows unknown binaries (no regression) [0.16ms]
+(pass) Phase 07 · execution-integrity decision > off mode always allows [0.02ms]
+(pass) Phase 07 · execution-integrity decision > approval mode escalates unknown binaries to requireApproval [0.01ms]
+(pass) Phase 07 · execution-integrity decision > enforce mode denies unknown binaries (fail closed) [0.01ms]
+(pass) Phase 07 · execution-integrity decision > enforce mode allows a hash on the allowlist [0.02ms]
+(pass) Phase 07 · execution-integrity decision > enforce mode denies an unresolvable (error) executable [0.02ms]
+(pass) Phase 07 · execution-integrity decision > corrupt/missing allowlist fails closed to empty set [0.12ms]
+
+test/security/audit-signer.test.ts:
+(pass) Phase 4 · audit signer — Ed25519 primitives > generated identity signs and verifies; pubkey derives from priv [0.42ms]
+(pass) Phase 4 · audit signer — Ed25519 primitives > tampered signature or message fails verification [0.24ms]
+(pass) Phase 4 · audit signer — Ed25519 primitives > a different key's signature does not verify (wrong-key attack) [0.20ms]
+(pass) Phase 4 · audit signer — Ed25519 primitives > checkpoint vs head messages are domain-separated [0.13ms]
+(pass) Phase 4 · audit signer — Ed25519 primitives > fingerprint is stable and collision-free across keys [0.06ms]
+(pass) Phase 4 · audit signer — secret-storage round-trip > store → load round-trips through the secret backend [1.32ms]
+(pass) Phase 4 · audit signer — secret-storage round-trip > loadOrCreateAuditIdentity is stable across calls (same key) [0.21ms]
+
+test/security/filesystem-index-context.test.ts:
+(pass) FS04/FS05 repository indexing and later snippets cannot use sensitive hardlink aliases [24.03ms]
+(pass) FS05 skill context does not follow a linked SOP directory or body [0.79ms]
+
+test/security/egress-proxy.test.ts:
+(pass) Phase 4 · T4 — private address blocking (pure) > RFC1918, loopback, link-local and metadata ranges are blocked [0.25ms]
+(pass) Phase 4 · T4 — private address blocking (pure) > public addresses are not blocked [0.06ms]
+(pass) Phase 4 · T4 — private address blocking (pure) > IPv6 blocked forms: loopback, link-local, ULA, mapped [0.34ms]
+(pass) Phase 4 · T4 — private address blocking (pure) > obfuscated host forms are canonicalized before the check [0.84ms]
+(pass) Phase 4 · T4 — checkEgressTarget (allowlist + DNS) > a host outside the allowlist is refused [0.09ms]
+(pass) Phase 4 · T4 — checkEgressTarget (allowlist + DNS) > an allow-listed domain resolving (partly) to a private address is refused [0.12ms]
+(pass) Phase 4 · T4 — checkEgressTarget (allowlist + DNS) > DNS failure is fail-closed [0.14ms]
+(pass) Phase 4 · T4 — checkEgressTarget (allowlist + DNS) > an explicit allowed-host IP (local model runtime) bypasses the block [0.05ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > an allow-listed public-style host reaches the server when loopback is explicitly allowed [11.32ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > the same host WITHOUT explicit allowlisting is refused (SSRF kill) [0.14ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > a redirect into the metadata range is refused after revalidation [1.24ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > a redirect into the loopback range is refused after revalidation [1.11ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > a redirect to an allow-listed target is followed (max redirects enforced) [1.39ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > byte caps truncate and refuse oversized bodies [1.74ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > timeouts are enforced (a hanging server cannot hold the request) [304.33ms]
+(pass) Phase 4 · T4 — guardedFetch against a live local server > audit events fire for allowed and blocked egress [3.20ms]
+
+test/security/business-flag.test.ts:
+(pass) SEC-05 business routes flag > OFF by default — no /api/business/* in the base surface [6.77ms]
+(pass) SEC-05 business routes flag > XR_BUSINESS_ROUTES=on re-enables the residue explicitly [1.25ms]
+
+test/security/win-spawn.test.ts:
+(pass) Windows batch shims run through an explicit cmd.exe, never a bare spawn > non-Windows hosts are untouched [0.11ms]
+(pass) Windows batch shims run through an explicit cmd.exe, never a bare spawn > PATHEXT order resolves bare names; real .exe targets are untouched [0.29ms]
+(pass) Windows batch shims run through an explicit cmd.exe, never a bare spawn > npm / npx / xr shims → cmd.exe /d /s /c with one quoted, verbatim line [0.25ms]
+(pass) Windows batch shims run through an explicit cmd.exe, never a bare spawn > arguments with spaces are quoted; empty arguments survive [0.03ms]
+(pass) Windows batch shims run through an explicit cmd.exe, never a bare spawn > cmd.exe metacharacters are refused, not escaped [5.31ms]
+
+test/security/phase31-bucket-e.test.ts:
+(pass) Phase 31 E1/E6 — five themes survive, each one AA > the theme store offers the five themes plus system [0.07ms]
+(pass) Phase 31 E1/E6 — five themes survive, each one AA > every theme's text ramp meets 4.5:1 on page and card surfaces [0.66ms]
+(pass) Phase 31 E7 — Graphite is the light matte theme now > light surfaces, ink text, muted steel primary [0.05ms]
+(pass) Phase 31 E7 — Graphite is the light matte theme now > flat shadow, no glow halo, matte orb scaling [0.06ms]
+(pass) Phase 31 E7 — Graphite is the light matte theme now > graphite tooltip keeps AA (near-white on ink) [0.01ms]
+(pass) Phase 31 E6 — keyboard: ⌘1–⌘9 switch areas > shortcut registry and shell agree with the canonical nav order [0.10ms]
+(pass) Phase 31 E2/E3/E5 — shipped screens stay shipped (no placeholder regressions) > builder is the real IDE; memory renders the engine graph [0.08ms]
+(pass) Phase 31 E2/E3/E5 — shipped screens stay shipped (no placeholder regressions) > rail collapses with persisted state and labeled toggle [0.04ms]
+(pass) Phase 31 E2/E3/E5 — shipped screens stay shipped (no placeholder regressions) > the orb is one smooth sphere, reduced-motion aware [0.03ms]
+(pass) Phase 31 E4 — Research outline helpers (runtime behavior) > outline parses headings, skips code fences, de-duplicates slugs [0.19ms]
+(pass) Phase 31 E4 — Research outline helpers (runtime behavior) > slug rules stay URL-safe [0.01ms]
+(pass) Phase 31 E4 — Research outline helpers (runtime behavior) > screen wiring: outline nav, heading ids, copy action [0.05ms]
+(pass) Phase 31 E4 — Research outline helpers (runtime behavior) > research streams from the engine, never setTimeout samples [0.03ms]
+
+test/security/secret-keychain.test.ts:
+(pass) XR-LAUNCH-015 · keychain is the primary store > sync setSecret writes the keychain only — no file copy — and indexes the name [0.46ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > async setSecretAsync writes the keychain only [0.23ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > keychain failure falls back to the sealed file, says so once, and returns 'file' [0.62ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > a write that does not read back identically is treated as a failure [0.28ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > XR_SECRET_BACKEND=keychain refuses the file fallback [0.09ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > XR_SECRET_BACKEND=file is an explicit opt-in: no keychain call, no warning [0.11ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > moving a secret into the keychain removes the stale file copy [0.31ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > cold sync read of an indexed keychain name spawns once, then memoizes (including misses) [0.16ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > unindexed names never trigger a sync keychain read [0.05ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > daemon mode: no sync keychain reads; warmSecretCache fills the memo [0.34ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > daemon start warms the cache, disables sync reads, and is bounded even if hydration hangs [52.01ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > getSecretAsync probes legacy keychain-only names until discovery has run [0.33ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > removeSecret clears keychain, file and index [0.89ms]
+(pass) XR-LAUNCH-015 · keychain is the primary store > an indexed but unreadable audit key is NOT replaced (chain anchor kept) [0.18ms]
+(pass) XR-LAUNCH-015 · file → keychain migration > moves verified entries, strips them from .env, keeps a 0600 backup until the next good run [1.42ms]
+(pass) XR-LAUNCH-015 · file → keychain migration > entries the keychain refuses stay in the file; no backup is left behind [0.37ms]
+(pass) XR-LAUNCH-015 · file → keychain migration > an unverified backup is kept and blocks further moves [0.47ms]
+(pass) XR-LAUNCH-015 · file → keychain migration > discovers legacy keychain-only entries once (enumerating and probing backends) [0.44ms]
+(pass) XR-LAUNCH-015 · file → keychain migration > skips cleanly without an OS store [0.07ms]
+(pass) XR-LAUNCH-017 · uninstall --purge removes keychain entries > purge removes indexed, known and enumerable XR entries and reports them [0.48ms]
+(pass) XR-LAUNCH-017 · uninstall --purge removes keychain entries > entries that survive deletion are reported, not hidden [0.15ms]
+(pass) XR-LAUNCH-017 · uninstall --purge removes keychain entries > file mode never touches the keychain and says so [0.08ms]
+(pass) XR-LAUNCH-017 · uninstall --purge removes keychain entries > purgeThenUninstall purges BEFORE the data home is removed; keep-data never purges [0.62ms]
+(pass) XR-LAUNCH-017 · uninstall --purge removes keychain entries > the known-name list covers every fixed secret id defined in src/ [1.27ms]
+(pass) XR-LAUNCH-015 · secrets never reach argv > macOS: `security -i` receives the value on stdin only [0.35ms]
+(pass) XR-LAUNCH-015 · secrets never reach argv > macOS: the stdin command quotes and escapes the value [0.09ms]
+(pass) XR-LAUNCH-015 · secrets never reach argv > Linux: secret-tool receives the value on stdin only [0.15ms]
+(pass) XR-LAUNCH-015 · secrets never reach argv > Windows: PowerShell receives the value on stdin — not argv, not env [0.20ms]
+(pass) XR-LAUNCH-015 · real processes: the value is never on argv > Linux end-to-end (sync + async writes through setSecret) keeps the value off argv [12.10ms]
+(pass) XR-LAUNCH-015 · real processes: the value is never on argv > macOS writes reach `security -i` on stdin, never on argv [5.71ms]
+(pass) XR-LAUNCH-015 · doctor reports the real store > Linux without secret-tool is not reported as linux-secret-service [0.45ms]
+(pass) XR-LAUNCH-015 · doctor reports the real store > strict mode without a keychain fails the doctor row [0.07ms]
+(pass) XR-LAUNCH-015 · doctor reports the real store > a working keychain with leftover file entries warns and points at xr repair [0.35ms]
+
+test/security/phase31-bucket-c.test.ts:
+(pass) Phase 31 C1 — brand assets exist and are wired > public assets exist within the size budget (C11: ≤300KB, OG ≤500KB) [0.09ms]
+(pass) Phase 31 C1 — brand assets exist and are wired > layout declares icons, manifest and the OG/Twitter images [0.51ms]
+(pass) Phase 31 C1 — brand assets exist and are wired > the manifest is installable and carries the v2 brand identity [0.60ms]
+(pass) Phase 31 C2/C9 — no dead internal links, no placeholder content > docs hub links to the living repo docs, not to 404 routes [0.41ms]
+(pass) Phase 31 C2/C9 — no dead internal links, no placeholder content > no page links to /docs/* subroutes that do not exist [0.29ms]
+(pass) Phase 31 C2/C9 — no dead internal links, no placeholder content > downloads has no dead hrefs; every platform card resolves [0.44ms]
+(pass) Phase 31 C2/C9 — no dead internal links, no placeholder content > the link crawler ships and is wired as a package script [0.33ms]
+(pass) Phase 31 C2/C9 — no dead internal links, no placeholder content > no fake social proof anywhere on the site [1.92ms]
+(pass) Phase 31 C3/C4/C7 — mobile menu, overflow, accessibility chrome > mobile menu: spec aria-labels, Escape, outside-tap, scroll lock [0.06ms]
+(pass) Phase 31 C3/C4/C7 — mobile menu, overflow, accessibility chrome > 44px touch targets and aria-current on the active route [0.02ms]
+(pass) Phase 31 C3/C4/C7 — mobile menu, overflow, accessibility chrome > no horizontal scroll guards; no w-screen anywhere [0.30ms]
+(pass) Phase 31 C3/C4/C7 — mobile menu, overflow, accessibility chrome > skip link targets the main landmark; focus ring rule intact [0.27ms]
+(pass) Phase 31 C5 — every page carries its own metadata description > page-specific description exists and stays under 160 chars [3.15ms]
+(pass) Phase 31 C6 — AA contrast tokens > the failing 4.09:1 dim token was raised to #8a8a93 (5.78:1) [0.14ms]
+(pass) Phase 31 C8/C10 — clickable contact, copy feedback, footer links > contact page carries the prominent support mailto [0.20ms]
+(pass) Phase 31 C8/C10 — clickable contact, copy feedback, footer links > copy button toasts success and failure, never silent [0.14ms]
+(pass) Phase 31 C8/C10 — clickable contact, copy feedback, footer links > footer logo is a home link; Pakistan craft line present; no fake status dot [0.03ms]
+(pass) Phase 31 C13/C14/C15 — pricing, 404, downloads > pricing: working toggle driven by the constants, honest line, enterprise mailto [0.15ms]
+(pass) Phase 31 C13/C14/C15 — pricing, 404, downloads > 404 offers back-home and report-a-broken-link [0.32ms]
+(pass) Phase 31 C13/C14/C15 — pricing, 404, downloads > downloads: six platform cards, requirements, checksums [0.11ms]
+
+test/security/secrets.test.ts:
+(pass) D-1 · file fallback encrypts at rest > a written secret is not recoverable from the file without the key [0.51ms]
+(pass) D-1 · file fallback encrypts at rest > the per-install key exists, is 32 bytes, and lives outside the .env file [0.24ms]
+(pass) D-1 · file fallback encrypts at rest > ciphertext for the same value differs across writes (random IV) [0.36ms]
+(pass) D-1 · file fallback encrypts at rest > legacy plaintext files migrate transparently on first read [0.16ms]
+(pass) D-1 · file fallback encrypts at rest > legacy plaintext coexisting with sealed entries migrates only the plaintext [0.34ms]
+(pass) D-1 · file fallback encrypts at rest > an entry sealed under a different key is never silently dropped [0.43ms]
+(pass) D-1 · file fallback encrypts at rest > removeSecret removes the entry and keeps the file sealed [0.26ms]
+
+test/security/mcp-description-poison.test.ts:
+(pass) Phase 07 · MCP tool-description poisoning scan > passes a clean description through unchanged [0.14ms]
+(pass) Phase 07 · MCP tool-description poisoning scan > flags an injection description and prepends a warning (original preserved) [0.04ms]
+(pass) Phase 07 · MCP tool-description poisoning scan > cannot grant authority: the result is descriptive only [0.04ms]
+(pass) Phase 07 · MCP tool-description poisoning scan > detects zero-width / bidi smuggling [0.02ms]
+
+test/security/mcp-allowlist.test.ts:
+(pass) default-deny: unlisted server refused; unsigned allowlist fail-closed [14.01ms]
+(pass) listed server loads; unlisted refused even when enabled (the gate) [10.39ms]
+(pass) unsigned allowlist file is treated as empty (tamper detection) [10.90ms]
+(pass) tampered server list invalidates the signature [12.19ms]
+(pass) revocation removes the entry and re-signs; live client is unloaded [104.27ms]
+(pass) verification helper reports valid key ids [10.64ms]
+(pass) operator config can explicitly disable the gate — but the default is enforced [94.96ms]
+
+test/security/audit-crypto.test.ts:
+(pass) Phase 4 · signed audit — keying and signing > ensureAuditKeying is idempotent and publishes pubkey into the chain [12.73ms]
+(pass) Phase 4 · signed audit — keying and signing > an unsigned store reports keyed=false; verify still works chain-only [10.00ms]
+(pass) Phase 4 · tamper matrix > (a) single-entry edit breaks chain replay [13.41ms]
+(pass) Phase 4 · tamper matrix > (b) WHOLESALE truncate + consistent hash rebuild is caught by the signed head (F-08 kill proof) [14.87ms]
+(pass) Phase 4 · tamper matrix > (b2) rebuilding a forged head signature with the WRONG key fails [13.10ms]
+(pass) Phase 4 · tamper matrix > (c) key unavailable on a keyed install → limited verification (exit-code 2 state) [12.24ms]
+(pass) Phase 4 · tamper matrix > (d) re-key: old segment verifies to the re-key point; new segment verifies fully [11.41ms]
+(pass) Phase 4 · tamper matrix > counter gap (truncate-within-segment) is detected [12.57ms]
+(pass) Phase 4 · signed audit — default-cadence honest install (head freshness regression) > a keyed install well inside the checkpoint window verifies green (acceptance criterion 2) [10.61ms]
+(pass) Phase 4 · signed audit — default-cadence honest install (head freshness regression) > reopening the store preserves head freshness across process restarts [12.03ms]
+(pass) Phase 4 · signed audit — default-cadence honest install (head freshness regression) > tail-trim (deleting entries after the last refresh) is detected while the key is held [12.28ms]
+
+test/security/audit-anchor.test.ts:
+(pass) Phase 4 · anchor — sink classification + payload > sinkKind classifies schemes [0.09ms]
+(pass) Phase 4 · anchor — sink classification + payload > buildAnchorPayload is null on an unkeyed chain [9.85ms]
+(pass) Phase 4 · anchor — file sink round-trip > pushAnchor appends a line, records it, and it append-verifies [11.73ms]
+(pass) Phase 4 · anchor — file sink round-trip > anchor is skipped (no traffic) when disabled (the default) [10.53ms]
+(pass) Phase 4 · anchor — https sink egress gating (fail-safe) > an un-allowlisted https sink is blocked, audited, and the run continues [12.40ms]
+(pass) Phase 4 · anchor — https sink egress gating (fail-safe) > an allowlisted https sink round-trips through the egress gate [15.06ms]
+(pass) Phase 4 · anchor — append-verification rejects forgeries > a forged anchor record (wrong signature) fails verifyAnchors [10.64ms]
+
+test/security/nodevm-wording.test.ts:
+(pass) Phase 4 · T8 — node:vm is never described as a security boundary > no current source/doc describes node:vm or the VM realm as a boundary [234.14ms]
+(pass) Phase 4 · T8 — node:vm is never described as a security boundary > the canonical sandbox files carry the defense-in-depth disclaimer [0.20ms]
+
+test/security/phase31-bucket-a.test.ts:
+(pass) Phase 31 · A1 security headers > JSON/API responses get the strict CSP and never-store [0.27ms]
+(pass) Phase 31 · A1 security headers > HTML responses get the dashboard CSP + COOP/CORP [0.10ms]
+(pass) Phase 31 · A1 security headers > dashboard CSP: scripts are 'self'-only, no bare wildcards [0.08ms]
+(pass) Phase 31 · A1 security headers > a route-level CSP wins over the central floor [0.04ms]
+(pass) Phase 31 · A1 security headers > HSTS is https-only and SSE cache policy is preserved [0.06ms]
+(pass) Phase 31 · A6 daemon CORS > own origin is reflected exactly; foreign origins get nothing [0.04ms]
+(pass) Phase 31 · A2 dashboard escaping > escapeHtml neutralises a script payload in element text [1.25ms]
+(pass) Phase 31 · A2 dashboard escaping > escapeHtml is attribute-safe for both quote styles [0.09ms]
+(pass) Phase 31 · A2 dashboard escaping > act() serialises handler arguments without breaking the attribute [0.26ms]
+(pass) Phase 31 · A2 dashboard escaping > canonical server esc() matches the same contract [0.07ms]
+(pass) Phase 31 · A2 dashboard escaping > served script has no unsafe HTML sinks left [0.18ms]
+(pass) Phase 31 · A3 Telegram webhook secret > timing-safe compare: exact match only, length-agnostic [0.13ms]
+(pass) Phase 31 · A4 attachment validation > executable extensions are blocked; source files are not [0.04ms]
+(pass) Phase 31 · A4 attachment validation > magic bytes outrank the filename [0.34ms]
+(pass) Phase 31 · A4 attachment validation > size caps are enforced on the bytes in hand [0.03ms]
+(pass) Phase 31 · A4 attachment validation > the streaming sink aborts past the cap [0.11ms]
+(pass) Phase 31 · A4 attachment validation > temp names are random hex; labels are metadata-safe [0.10ms]
+(pass) Phase 31 · A5 provider URL guard > loopback http is refused without the hatch, allowed (loudly) with it [0.23ms]
+(pass) Phase 31 · A5 provider URL guard > cloud metadata and private ranges are refused [1.34ms]
+(pass) Phase 31 · A5 provider URL guard > official providers are allow-listed over https only [0.03ms]
+(pass) Phase 31 · A5 provider URL guard > public https passes; public http does not [0.05ms]
+(pass) Phase 31 · A5 provider URL guard > DNS answers are re-checked (rebinding defence) [0.27ms]
+(pass) Phase 31 · A5 provider URL guard > the hatch reader accepts only the literal '1' [0.02ms]
+(pass) Phase 31 · A8 log redaction > Luhn separates real PANs from other digit runs [0.42ms]
+(pass) Phase 31 · A8 log redaction > secrets and PII never survive redactString [0.32ms]
+(pass) Phase 31 · A8 log redaction > ordinary log text is not mangled [0.04ms]
+(pass) Phase 31 · A10 pairing rate limits > pairing paths are exactly the strict set [0.04ms]
+(pass) Phase 31 · A10 pairing rate limits > backoff: 5th failure blocks 1m, doubling to the 8m cap [0.13ms]
+(pass) Phase 31 · A10 pairing rate limits > the strict limiter allows 10/minute then refuses with Retry-After data [0.06ms]
+(pass) Phase 31 · A12 dev-mode gates > isDevMode requires the explicit opt-in [0.07ms]
+(pass) Phase 31 · A12 dev-mode gates > --verbose/--debug parse as no-ops outside dev mode [0.26ms]
+{"ts":"2026-10-26T05:23:47.208Z","level":"info","event":"http.request","route":"unmatched","method":"GET","mount":"surface","status":308,"duration_ms":1}
+(pass) Phase 31 · daemon handler integration > A13: security.txt redirects to the website copy, no auth needed [2.26ms]
+{"ts":"2026-10-26T05:23:47.210Z","level":"info","event":"http.request","route":"unmatched","method":"HEAD","mount":"legacy","status":200,"duration_ms":1}
+(pass) Phase 31 · daemon handler integration > A1: HEAD probes route as GET (curl -I works) [1.95ms]
+{"ts":"2026-10-26T05:23:47.210Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:23:47.211Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+{"ts":"2026-10-26T05:23:47.211Z","level":"info","event":"http.request","route":"health.get","method":"GET","mount":"legacy","status":200,"duration_ms":0}
+(pass) Phase 31 · daemon handler integration > A1/A6: health answers carry headers; CORS reflects only its own origin [1.53ms]
+(pass) Phase 31 · static tripwires (A7/A9/A11/A14/A15) > A7: source maps are off in production builds [0.72ms]
+(pass) Phase 31 · static tripwires (A7/A9/A11/A14/A15) > A9/A13: website serves security headers and discovery files [0.08ms]
+(pass) Phase 31 · static tripwires (A7/A9/A11/A14/A15) > A11: the audit gate script and CI wiring exist [0.34ms]
+(pass) Phase 31 · static tripwires (A7/A9/A11/A14/A15) > A14: desktop never persists credentials to localStorage [0.08ms]
+(pass) Phase 31 · static tripwires (A7/A9/A11/A14/A15) > A15: Tauri CSP keeps loopback http+ws and no bare wildcards [0.20ms]
+
+test/security/trust-handoff.test.ts:
+(pass) Phase 07 · trust-handoff classification > classifies .git/config as TRUST-HANDOFF [2.39ms]
+(pass) Phase 07 · trust-handoff classification > classifies nested .git/config [0.08ms]
+(pass) Phase 07 · trust-handoff classification > classifies .git/hooks/* as TRUST-HANDOFF [0.02ms]
+(pass) Phase 07 · trust-handoff classification > classifies .claude/settings.local.json and settings.json [0.02ms]
+(pass) Phase 07 · trust-handoff classification > classifies .vscode/tasks.json and settings.json as TRUST-HANDOFF [0.02ms]
+(pass) Phase 07 · trust-handoff classification > classifies *.code-workspace as TRUST-HANDOFF
+(pass) Phase 07 · trust-handoff classification > classifies package.json as EXECUTABLE-CONFIG [0.04ms]
+(pass) Phase 07 · trust-handoff classification > classifies Makefile / Dockerfile / CI as EXECUTABLE-CONFIG [0.06ms]
+(pass) Phase 07 · trust-handoff classification > classifies .env as REQUIRES-APPROVAL (secret exposure) [0.02ms]
+(pass) Phase 07 · trust-handoff classification > classifies shell rc files as TRUST-HANDOFF [0.05ms]
+(pass) Phase 07 · trust-handoff classification > does NOT over-block ordinary source/docs/config files [0.10ms]
+(pass) Phase 07 · trust-handoff classification > is case-insensitive on extensions/basenames [0.03ms]
+(pass) Phase 07 · trust-handoff classification > reduces an absolute workspace path to relative before matching [0.03ms]
+(pass) Phase 07 · trust-handoff classification > aggregates via requiresTrustHandoffApproval [0.01ms]
+(pass) Phase 07 · trust-handoff classification > rule set covers the spec's required sensitive paths [0.09ms]
+
+test/security/shield.test.ts:
+(pass) XR Shield — honesty doctrine (hermetic) > scan reality, state management, and audit integrity hold end-to-end [103.35ms]
+(pass) XR Shield — honesty doctrine (hermetic) > RUNS of the full battery emit every honesty checkpoint [79.12ms]
+
+test/security/canonical-bypass.test.ts:
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > plain read is BLOCKED (allowed:false) [0.86ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > plain write to it is BLOCKED [0.07ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > dot-slash-encoded read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > dot-slash-encoded write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > dot-slash-encoded-upper read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > dot-slash-encoded-upper write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-1x read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-1x write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-2x read is BLOCKED (allowed:false) [0.05ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-2x write to it is BLOCKED [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-3x read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-3x write to it is BLOCKED [0.03ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > traversal-prefix read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > traversal-prefix write to it is BLOCKED [0.05ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > double-slash-prefix read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > double-slash-prefix write to it is BLOCKED [0.03ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-1x-upper read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-1x-upper write to it is BLOCKED [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-2x-upper read is BLOCKED (allowed:false) [0.04ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/id_rsa > percent-all-2x-upper write to it is BLOCKED [0.11ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > plain read is BLOCKED (allowed:false) [0.05ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > plain write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > dot-slash-encoded read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > dot-slash-encoded write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > dot-slash-encoded-upper read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > dot-slash-encoded-upper write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-1x read is BLOCKED (allowed:false) [0.03ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-1x write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-2x read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-2x write to it is BLOCKED [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-3x read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-3x write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > traversal-prefix read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > traversal-prefix write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > double-slash-prefix read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > double-slash-prefix write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-1x-upper read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-1x-upper write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-2x-upper read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/passwd > percent-all-2x-upper write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > plain read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > plain write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > dot-slash-encoded read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > dot-slash-encoded write to it is BLOCKED [0.05ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > dot-slash-encoded-upper read is BLOCKED (allowed:false) [0.05ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > dot-slash-encoded-upper write to it is BLOCKED [0.04ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-1x read is BLOCKED (allowed:false) [0.03ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-1x write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-2x read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-2x write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-3x read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-3x write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > traversal-prefix read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > traversal-prefix write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > double-slash-prefix read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > double-slash-prefix write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-1x-upper read is BLOCKED (allowed:false) [0.04ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-1x-upper write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-2x-upper read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /private/etc/passwd > percent-all-2x-upper write to it is BLOCKED [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > plain read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > plain write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > dot-slash-encoded read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > dot-slash-encoded write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > dot-slash-encoded-upper read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > dot-slash-encoded-upper write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-1x read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-1x write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-2x read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-2x write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-3x read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-3x write to it is BLOCKED [0.08ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > traversal-prefix read is BLOCKED (allowed:false) [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > traversal-prefix write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > double-slash-prefix read is BLOCKED (allowed:false) [0.04ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > double-slash-prefix write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-1x-upper read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-1x-upper write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-2x-upper read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /home/user/.ssh/authorized_keys > percent-all-2x-upper write to it is BLOCKED [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > plain read is BLOCKED (allowed:false) [0.03ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > plain write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > dot-slash-encoded read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > dot-slash-encoded write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > dot-slash-encoded-upper read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > dot-slash-encoded-upper write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-1x read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-1x write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-2x read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-2x write to it is BLOCKED [0.02ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-3x read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-3x write to it is BLOCKED [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > traversal-prefix read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > traversal-prefix write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > double-slash-prefix read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > double-slash-prefix write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-1x-upper read is BLOCKED (allowed:false)
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-1x-upper write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-2x-upper read is BLOCKED (allowed:false) [0.01ms]
+(pass) Phase 10 · guard canonicalization bypass regression > secret target: /etc/shadow > percent-all-2x-upper write to it is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > egress canonicalization > egress to raw 127.0.0.1 (not allow-listed) is BLOCKED [0.12ms]
+(pass) Phase 10 · guard canonicalization bypass regression > egress canonicalization > egress to raw 2130706433 (not allow-listed) is BLOCKED [0.03ms]
+(pass) Phase 10 · guard canonicalization bypass regression > egress canonicalization > egress to raw 0x7f000001 (not allow-listed) is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > egress canonicalization > egress to raw 0177.0.0.1 (not allow-listed) is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > egress canonicalization > egress to raw [::1] (not allow-listed) is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > egress canonicalization > egress to raw [::ffff:127.0.0.1] (not allow-listed) is BLOCKED
+(pass) Phase 10 · guard canonicalization bypass regression > egress canonicalization > egress to raw 169.254.169.254 (not allow-listed) is BLOCKED
+
+test/security/shell-words.test.ts:
+(pass) shellWords — quote removal and operators, no expansion > quotes and escapes are removed the way a shell removes them [0.28ms]
+(pass) shellWords — quote removal and operators, no expansion > operators and redirects split words; comments are dropped [0.04ms]
+(pass) shellWords — quote removal and operators, no expansion > expansions and globs are marked dynamic (checked as written, never evaluated) [0.05ms]
+(pass) shellWords — quote removal and operators, no expansion > candidates include NAME=value, --flag=value and curl-style @file [0.16ms]
+(pass) checkAction(shell) — per-word secret-path decisions > the reason names the actual file, not `<cwd>/cat …` [0.34ms]
+(pass) checkAction(shell) — per-word secret-path decisions > false positives are gone: prose inside quotes, box-shadow, .env.example [0.27ms]
+(pass) checkAction(shell) — per-word secret-path decisions > quote/escape splitting no longer hides a secret path [0.24ms]
+(pass) checkAction(shell) — per-word secret-path decisions > bare names resolve against the command's working directory [0.16ms]
+(pass) checkAction(shell) — per-word secret-path decisions > dynamic words are still checked on their literal suffix [0.08ms]
+(pass) checkAction(shell) — per-word secret-path decisions > the denial keeps the stable tool-reason mapping (denied:secret-path) [0.18ms]
+(pass) checkAction(shell) — per-word secret-path decisions > ADVISORY (documented limit): a computed path is invisible to a static check — the sandbox is the boundary [0.08ms]
+(pass) checkAction(non-shell) — free-text behaviour is unchanged apart from .env templates > paths and key names in free text are still refused [0.06ms]
+(pass) checkAction(non-shell) — free-text behaviour is unchanged apart from .env templates > .env.example in free text is documentation, not a secret [0.04ms]
+
+test/security/filesystem-implicit.test.ts:
+(pass) FS14 blocked-path grant applies to metadata and list candidates, not just content [0.98ms]
+(pass) FS05 artifact hashing preserves allowed binary hashes and distinguishes denied from absent [0.99ms]
+(pass) FS05 compensation preimages retain authorized content and do not claim denied reads are missing [0.68ms]
+(pass) FS05 RAG index and fingerprint authorize before real local embedding requests [84.31ms]
+(pass) FS14 shell forwards the captured denied-policy identity; this is NOT mount enforcement [5.16ms]
+
+test/security/mcp-pinning.test.ts:
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > pin → identical contract matches [0.51ms]
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > poisoned description is drift → reapprove [0.13ms]
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > schema mutation is drift (authority change, not just prose) [0.08ms]
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > added and removed tools are drift [0.09ms]
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > re-approval re-pins; second call is normal again [0.17ms]
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > unpin restores legacy per-call approval behaviour [0.09ms]
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > corrupt pins file fails closed to unpinned (approvals still gate) [0.09ms]
+(pass) SEC-01 · MCP pinning (rug-pull simulation) > toolHash is stable and discriminative [0.02ms]
+
+test/security/phase31-bucket-b.test.ts:
+(pass) Phase 31 · B1–B4 legal pages exist with their mandated content > privacy: local collects nothing, rights route, grievance placeholder [0.57ms]
+(pass) Phase 31 · B1–B4 legal pages exist with their mandated content > terms: age clause (B8), refund link, DMCA, indemnification [0.33ms]
+(pass) Phase 31 · B1–B4 legal pages exist with their mandated content > cookies: the real inventory, and what is never used [0.22ms]
+(pass) Phase 31 · B1–B4 legal pages exist with their mandated content > refund: 14-day guarantee and how to claim it [0.19ms]
+(pass) Phase 31 · B1–B4 legal pages exist with their mandated content > dmca + notices pages exist (B10/B11) [1.18ms]
+(pass) Phase 31 · B1–B4 legal pages exist with their mandated content > B9: email compliance doc [0.40ms]
+(pass) Phase 31 · B5 consent banner > banner acknowledges via xr_cookie_ack and is mounted in Chrome [0.21ms]
+(pass) Phase 31 · B6/B7 honesty surface > footer: dynamic year, real X link, mailto, legal links, no fake status [0.29ms]
+(pass) Phase 31 · B6/B7 honesty surface > status page performs no monitoring it does not have [0.04ms]
+(pass) Phase 31 · B6/B7 honesty surface > careers lists no invented openings or benefits [0.30ms]
+(pass) Phase 31 · B6/B7 honesty surface > marketplace shows an em dash until real reviews exist [0.22ms]
+(pass) Phase 31 · B6/B7 honesty surface > desktop Settings → About points at the website legal pages [0.05ms]
+(pass) Phase 31 · B7 acceptance — no tracking scripts anywhere on the site > zero tracker domains in website source [10.79ms]
+
+test/trust/os-sandbox.test.ts:
+(pass) XR-LAUNCH-003 · native sandboxes are opt-in and remediation fits the OS > opt-in is off unless XR_OS_SANDBOX=experimental [0.03ms]
+(pass) XR-LAUNCH-003 · native sandboxes are opt-in and remediation fits the OS > macOS/Windows remediation never says to install bubblewrap [0.05ms]
+(pass) Seatbelt profile > deny-by-default, no network rule, paths only as parameters [0.08ms]
+(pass) Seatbelt profile > argv passes realpath'd roots via -D [0.18ms]
+(pass) Windows argument quoting (MSVCRT rules) > "plain" → "plain" [0.05ms]
+(pass) Windows argument quoting (MSVCRT rules) > "with space" → "\"with space\""
+(pass) Windows argument quoting (MSVCRT rules) > "say \"hi\"" → "\"say \\\"hi\\\"\""
+(pass) Windows argument quoting (MSVCRT rules) > "C:\\dir with space\\" → "\"C:\\dir with space\\\\\""
+(pass) Windows argument quoting (MSVCRT rules) > "" → "\"\""
+(skip) native sandbox smoke (linux) > (unnamed)
+(skip) native sandbox smoke (linux) > the mechanism is detected (self-check passed)
+(skip) native sandbox smoke (linux) > echo works
+(skip) native sandbox smoke (linux) > git status works in the workspace
+(skip) native sandbox smoke (linux) > in-workspace write succeeds
+(skip) native sandbox smoke (linux) > write beside the workspace is denied
+(skip) native sandbox smoke (linux) > reading a sibling secret is denied
+(skip) native sandbox smoke (linux) > network is denied
+(skip) native sandbox smoke (linux) > (unnamed)
+
+test/trust/namespace-confinement.test.ts:
+(pass) namespace sandbox (unshare) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged [97.63ms]
+68 |         const { ws, sibling } = layout(parent);
+69 |         const read = await sh(backend, ws, `cat ${JSON.stringify(sibling)}`);
+70 |         expect(read.ok).toBe(false);
+71 |         expect(read.stdout).not.toContain("SECRET");
+72 |         const write = await sh(backend, ws, `echo INJECTED >> ${JSON.stringify(sibling)}`);
+73 |         expect(write.ok).toBe(false);
+                              ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/home/user/xr/test/trust/namespace-confinement.test.ts:73:26)
+(fail) namespace sandbox (unshare) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged [97.12ms]
+(pass) namespace sandbox (unshare) confines the filesystem > HOME, /root and other /home entries are absent [52.92ms]
+(pass) namespace sandbox (unshare) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch [53.22ms]
+(pass) namespace sandbox (unshare) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing [48.74ms]
+(pass) namespace sandbox (unshare) confines the filesystem > network is none [56.66ms]
+(skip) namespace sandbox (bwrap) confines the filesystem > bwrap unavailable on this host — nothing to verify
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > HOME, /root and other /home entries are absent
+(skip) namespace sandbox (bwrap) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch
+(skip) namespace sandbox (bwrap) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing
+(skip) namespace sandbox (bwrap) confines the filesystem > network is none
+(pass) unshare setup fails closed > no staging mountpoint → the script refuses before mounting anything [0.21ms]
+(pass) unshare setup fails closed > every mount step is checked (no '|| true' on a confinement step) [0.71ms]
+(pass) unshare setup fails closed > a setup failure is reported as a refusal and the command never runs [67.36ms]
+
+test/trust/migration-rollback.test.ts:
+(pass) XR 4.2 migration & rollback safety > a 4.1-shaped record (no trust field) still loads (backward-compatible read) [1.88ms]
+(pass) XR 4.2 migration & rollback safety > rollback safety: the Tier-1 fallback flag can NEVER enable an unsafe high-risk fallback [0.36ms]
+(pass) XR 4.2 migration & rollback safety > rollback safety: low-risk work still uses the fast in-process path [0.77ms]
+(pass) XR 4.2 migration & rollback safety > high-risk work stays blocked even without any trust config (default fail-closed) [0.12ms]
+
+test/trust/execution-integration.test.ts:
+(pass) XR 4.2 execution-fabric trust integration > without opts.trust, behavior is unchanged (XR 4.1 fast path) [5.88ms]
+(pass) XR 4.2 execution-fabric trust integration > Tier 0 trusted action stays on the fast in-process path [3.03ms]
+(pass) XR 4.2 execution-fabric trust integration > Tier 2 shell runs INSIDE the namespace sandbox with a verified boundary [58.21ms]
+(pass) XR 4.2 execution-fabric trust integration > a high-risk action with NO isolated path is BLOCKED (fail closed, run not called) [2.17ms]
+(pass) XR 4.2 execution-fabric trust integration > credentials are scoped, injected, redacted from the record, and revoked [55.51ms]
+(pass) XR 4.2 execution-fabric trust integration > high-risk action is BLOCKED when no Tier-2 backend is available (no silent in-process) [2.08ms]
+
+test/trust/verify.test.ts:
+(pass) XR 4.2 isolation verification (fail closed) > strong backend + contained cwd + net=none verifies for Tier 2 [0.30ms]
+(pass) XR 4.2 isolation verification (fail closed) > placement mismatch fails verification [0.15ms]
+(pass) XR 4.2 isolation verification (fail closed) > Tier 2 on a backend without a kernel boundary fails verification [0.06ms]
+(pass) XR 4.2 isolation verification (fail closed) > cwd outside the granted writable roots fails verification [0.11ms]
+(pass) XR 4.2 isolation verification (fail closed) > a granted path hitting a blocked sensitive path fails verification [0.07ms]
+(pass) XR 4.2 isolation verification (fail closed) > a Tier-2 network ALLOWLIST is not enforceable by local backends → fails closed [0.08ms]
+(pass) XR 4.2 isolation verification (fail closed) > missing required credentials fails verification [0.05ms]
+
+test/trust/ux.test.ts:
+{"ts":"2026-10-26T05:23:48.436Z","level":"info","event":"http.request","route":"trust.get","method":"GET","mount":"legacy","status":200,"duration_ms":60}
+(pass) XR 4.2 daemon trust routes > GET /api/trust reports backend availability + health (secret-free) [72.31ms]
+{"ts":"2026-10-26T05:23:48.448Z","level":"info","event":"http.request","route":"trust.get","method":"GET","mount":"legacy","status":401,"duration_ms":0}
+(pass) XR 4.2 daemon trust routes > GET /api/trust requires auth [11.69ms]
+{"ts":"2026-10-26T05:23:48.519Z","level":"info","event":"http.request","route":"trust.classify.post","method":"POST","mount":"legacy","status":200,"duration_ms":61}
+(pass) XR 4.2 daemon trust routes > POST /api/trust/classify returns tier + placement for a shell command [71.81ms]
+(pass) XR 4.2 `xr trust` CLI command > `xr trust` prints backend availability [60.67ms]
+(pass) XR 4.2 `xr trust` CLI command > `xr trust classify <cmd>` prints the risk tier + placement [69.29ms]
+(pass) XR 4.2 `xr trust` CLI command > `xr trust --json` emits stable JSON [65.23ms]
+
+test/trust/authority.test.ts:
+(pass) XR 4.2 task-scoped authority grants > a grant is bounded to execution, workspace, tier, and a TTL [0.10ms]
+(pass) XR 4.2 task-scoped authority grants > valid within window for the matching execution + workspace [0.03ms]
+(pass) XR 4.2 task-scoped authority grants > expired grant is invalid (stale authority) [0.08ms]
+(pass) XR 4.2 task-scoped authority grants > grant bound to a different execution is invalid (approval/action mismatch) [0.03ms]
+(pass) XR 4.2 task-scoped authority grants > grant bound to a different workspace is invalid (workspace switch) [0.04ms]
+(pass) XR 4.2 task-scoped authority grants > registry revoke invalidates a grant [0.04ms]
+(pass) XR 4.2 task-scoped authority grants > revokeWorkspace revokes every grant for a workspace only [0.09ms]
+(pass) XR 4.2 task-scoped authority grants > prune drops expired/revoked grants [0.03ms]
+
+test/trust/lattice.test.ts:
+(pass) Phase 4 · T1 — restrictiveness lattice ordering > the total order is firecracker > gvisor > container > namespace > restricted > in-process [0.03ms]
+(pass) Phase 4 · T1 — restrictiveness lattice ordering > atLeastAsRestrictive is reflexive and transitive [0.02ms]
+(pass) Phase 4 · T1 — escalate-only merge > mergePlacements always picks the more restrictive element [0.03ms]
+(pass) Phase 4 · T1 — escalate-only merge > mergeAllPlacements folds a list to the strongest [0.04ms]
+(pass) Phase 4 · T1 — escalate-only merge > a later weaker request can never downgrade the merged placement [0.01ms]
+(pass) Phase 4 · T1 — effective tier (classified × declared × run) > a capability-declared minimum can only raise the effective tier [0.02ms]
+(pass) Phase 4 · T1 — effective tier (classified × declared × run) > run escalation is monotone: once escalated, never downgraded [0.01ms]
+(pass) Phase 4 · T1 — effective tier (classified × declared × run) > the max of all three inputs wins [0.07ms]
+(pass) Phase 4 · T1 — tier sufficiency > tier2 never accepts in-process or restricted placements [0.04ms]
+(pass) Phase 4 · T1 — tier sufficiency > tier1 accepts restricted and above, never in-process [0.01ms]
+(pass) Phase 4 · T1 — tier sufficiency > escalateOnly refuses a downgrade below the required tier [0.07ms]
+(pass) Phase 4 · T1 — placement decision honors the lattice > tier2 with only in-process/restricted available is BLOCKED [0.03ms]
+(pass) Phase 4 · T1 — placement decision honors the lattice > gVisor/Firecracker are selected only when actually available (fail-closed) [0.07ms]
+(pass) Phase 4 · T1 — placement decision honors the lattice > hardened mode refuses the tier1 in-process fallback even when configured [0.04ms]
+
+test/trust/namespace.test.ts:
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > backend detects and claims an honest kernel boundary [0.06ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > filesystem is confined: workspace is writable, host paths are ABSENT [0.15ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > network is blocked inside the sandbox (no routes, no DNS) [0.06ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > ambient host environment is NOT inherited [0.08ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > output is bounded (truncation raises a boundary event) [0.05ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > task-scoped credentials are injected then revoked on cleanup [0.08ms]
+(pass) XR 4.2 namespace sandbox (real kernel boundary) > a Tier-2 network allowlist is refused (not enforceable inside the boundary) [0.10ms]
+
+test/trust/canonical-shell-isolation.test.ts:
+(pass) Phase 4 · T1/T3 — canonical-path shell isolation > a shell call through the real agent loop runs inside the namespace sandbox [153.23ms]
+(pass) Phase 4 · T1/T3 — canonical-path shell isolation > hardened mode: no enforceable backend → the command is BLOCKED and provably never runs [15.70ms]
+(pass) Phase 4 · T1/T3 — canonical-path shell isolation > hardened OFF remains the explicit, audited legacy path (compat) [21.58ms]
+
+test/trust/mcp-isolation.test.ts:
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + sandbox → isolated [0.02ms]
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + no sandbox + no ack → BLOCKED (fail closed)
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + no sandbox + explicit ack (hardened OFF) → confined (warned) [0.07ms]
+(pass) XR 4.2 MCP stdio placement decision (pure) > high-risk + no sandbox + explicit ack (hardened ON) → BLOCKED [0.01ms]
+(pass) XR 4.2 MCP stdio placement decision (pure) > low-risk + sandbox + force → isolated; otherwise confined [0.02ms]
+(pass) XR 4.2 MCP server risk classification > stdio + apiKeyEnv → high [0.04ms]
+(pass) XR 4.2 MCP server risk classification > stdio + sensitive env key → high [0.07ms]
+(pass) XR 4.2 MCP server risk classification > stdio plain → low; http with key → low (network client, egress-gated elsewhere) [0.01ms]
+(pass) XR 4.2 isolated stdio spawn (real boundary) > buildIsolatedStdioSpawn produces a confined bwrap argv [0.09ms]
+(pass) XR 4.2 isolated stdio spawn (real boundary) > a spawned isolated stdio process is confined (host secret absent, no network) and passes stdio through [0.10ms]
+(pass) XR 4.2 isolated stdio spawn (real boundary) > a high-risk MCP stdio server connects INSIDE the sandbox (isIsolated=true) [0.05ms]
+
+test/trust/adapters-risk.test.ts:
+(pass) XR 4.2 adapter risk classification > MCP tool → Tier 1; MCP resource/prompt → Tier 0 [0.19ms]
+(pass) XR 4.2 adapter risk classification > control safe → Tier 0; sensitive → Tier 1; destructive → Tier 2 (host authority) [0.06ms]
+(pass) XR 4.2 adapter risk classification > plugin & skill operations → Tier 1 (VM/worker is not a hard boundary) [0.27ms]
+(pass) XR 4.2 adapter risk classification > a destructive control action is admitted in-process (host-authority gate), NOT blocked [61.64ms]
+
+test/trust/shell-tool.test.ts:
+(pass) XR 4.2 shell tool isolation wiring > uses the isolated runner with a Tier-2 request when available [2.22ms]
+(pass) XR 4.2 shell tool isolation wiring > fails closed when the isolated runner reports blocked [2.19ms]
+(pass) XR 4.2 shell tool isolation wiring > denied approval never reaches the runner [1.75ms]
+(pass) XR 4.2 shell tool isolation wiring > hardened mode: no runner wired → BLOCKED (never host-authority bash) [2.06ms]
+(pass) XR 4.2 shell tool isolation wiring > hardened OFF: falls back to the legacy in-process path when no runner is wired [7.56ms]
+
+test/trust/plugin-risk.test.ts:
+(pass) XR 4.2 plugin capability tier model > hard-boundary capabilities (shell/control/browser) are Tier 2 [0.06ms]
+(pass) XR 4.2 plugin capability tier model > secrets (credentials) is Tier 2; net is Tier 1 (egress-gated); reads are Tier 0 [0.03ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > a DECLARED shell the plugin is not granted is membrane-blocked and does not raise effective tier [0.15ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > granted net + fs:write → effective Tier 1 [0.02ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > granted secrets → effective Tier 2 with credential access [0.02ms]
+(pass) XR 4.2 declared-vs-effective plugin risk (declared ≠ authority) > declared shell+control with nothing granted → all membrane-blocked, effective Tier 0 [0.02ms]
+(pass) XR 4.2 plugin trust request from permissions > granted secrets → credential-bearing, destructive classification [0.13ms]
+(pass) XR 4.2 plugin trust request from permissions > declared shell but only fs:read granted → NOT credential-bearing, classified by effective (granted) risk [0.03ms]
+
+test/trust/credentials.test.ts:
+(pass) XR 4.2 credential broker (reference-only, redacting) > register returns a reference that carries NO raw value [0.07ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > scopeFor exposes env var NAMES only, never values (safe to persist) [0.08ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > prepareInjection yields the raw value transiently for the sandbox env only [0.03ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > revoke deletes the raw value (has() false, injection empty) [0.05ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > redact scrubs a registered secret value from arbitrary text [0.04ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > redact scrubs generic secret shapes (AWS key, JWT) even if unregistered [0.02ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > assertClean throws when a registered secret leaks into serialized output [0.13ms]
+(pass) XR 4.2 credential broker (reference-only, redacting) > expired refs are not injected [0.03ms]
+
+test/trust/policy.test.ts:
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 0 always uses the fast in-process path [0.17ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 2 selects the namespace sandbox when available [0.05ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 2 selects a container when only a container is available [0.04ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > preferContainer chooses container when both are available [0.04ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 2 with NO enforceable backend is BLOCKED (never silently in-process) [0.03ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 1 uses the restricted process when available [0.03ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 1 without a process sandbox fails closed by default [0.02ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > Tier 1 may use an explicit, logged in-process fallback only when enabled [0.03ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > running as root voids restricted/isolated placement (refused) [0.04ms]
+(pass) XR 4.2 policy-to-placement (fail closed) > the decision for Tier 2 is NEVER an admitted in_process placement [0.08ms]
+
+test/trust/tool-risk.test.ts:
+(pass) XR 4.2 requiresHostAuthority refinement > sandboxable Tier-2 with no executable is BLOCKED [0.21ms]
+(pass) XR 4.2 requiresHostAuthority refinement > Tier-2 that requires host authority is admitted in-process (elevated gate), NOT blocked [0.12ms]
+(pass) XR 4.2 requiresHostAuthority refinement > requiresHostAuthority is admitted in-process EVEN WITH NO sandbox backend (Windows scenario) [0.24ms]
+(pass) XR 4.2 per-tool risk declarations > read_file → Tier 0 [0.04ms]
+(pass) XR 4.2 per-tool risk declarations > write_file → Tier 1 [0.05ms]
+(pass) XR 4.2 per-tool risk declarations > fetch_url → Tier 1 with a network allowlist [0.06ms]
+(pass) XR 4.2 per-tool risk declarations > git_status → Tier 0; git_commit → Tier 1 [0.06ms]
+(pass) XR 4.2 tools execute through the trust gate (end-to-end, non-blocking) > read_file runs and is recorded as Tier 0 / in_process_ok [2.51ms]
+(pass) XR 4.2 tools execute through the trust gate (end-to-end, non-blocking) > write_file runs and is recorded as Tier 1 policy-only (admitted, not blocked) [2.22ms]
+
+test/trust/classify.test.ts:
+(pass) XR 4.2 deterministic risk classifier > read-only / pure action is Tier 0 (fast path) [0.08ms]
+(pass) XR 4.2 deterministic risk classifier > workspace filesystem write escalates to at least Tier 1 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > shell / process spawn is Tier 2 [0.04ms]
+(pass) XR 4.2 deterministic risk classifier > arbitrary/interpreted code is Tier 2 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > credential requirement is Tier 2 with task-scoped credentials [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > irreversible external write is Tier 2 + elevated approval [0.04ms]
+(pass) XR 4.2 deterministic risk classifier > untrusted/hostile content is Tier 2 [0.01ms]
+(pass) XR 4.2 deterministic risk classifier > control-plane 'destructive' maps to Tier 2; 'sensitive' to at least Tier 1 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > network access (without higher triggers) is at least Tier 1 with an allowlist [0.04ms]
+(pass) XR 4.2 deterministic risk classifier > touching paths outside the workspace escalates to at least Tier 1 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > dry-run performs no side effects and stays Tier 0 [0.02ms]
+(pass) XR 4.2 deterministic risk classifier > classification is deterministic (same input → same tier and reasons) [0.04ms]
+(pass) XR 4.2 deterministic risk classifier > a model cannot supply a tier to downgrade (no tier input field; objective facts decide) [0.05ms]
+(pass) XR 4.2 deterministic risk classifier > blocked paths include sensitive host credential locations [0.04ms]
+(pass) XR 4.2 deterministic risk classifier > Tier 2 derives stricter resource limits than Tier 0 [0.04ms]
+
+test/trust/guarantee-matrix.test.ts:
+(pass) Phase 4 · T2 — guarantee matrix from live probes > rows are consistent with the live policy decision on THIS host [118.22ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > no unsupported claim: a backend that reports no kernel boundary never shows one [53.81ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > tier2 with NO enforceable backend reports fail-closed=true [0.35ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > backends list matches the manager's live availability [110.41ms]
+(pass) Phase 4 · T2 — guarantee matrix from live probes > committed matrix doc is machine-generated and structurally complete (drift guard) [55.53ms]
+
+test/trust/persistence.test.ts:
+(pass) XR 4.2 trust metadata durability > trust block (tier, decision, verification, cleanup) round-trips through the repo [50.65ms]
+[suite-tmp] 47 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 47
+
+16 tests skipped:
+(skip) native sandbox smoke (linux) > (unnamed)
+(skip) native sandbox smoke (linux) > the mechanism is detected (self-check passed)
+(skip) native sandbox smoke (linux) > echo works
+(skip) native sandbox smoke (linux) > git status works in the workspace
+(skip) native sandbox smoke (linux) > in-workspace write succeeds
+(skip) native sandbox smoke (linux) > write beside the workspace is denied
+(skip) native sandbox smoke (linux) > reading a sibling secret is denied
+(skip) native sandbox smoke (linux) > network is denied
+(skip) native sandbox smoke (linux) > (unnamed)
+(skip) namespace sandbox (bwrap) confines the filesystem > bwrap unavailable on this host — nothing to verify
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under HOME (H1/H2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged
+(skip) namespace sandbox (bwrap) confines the filesystem > HOME, /root and other /home entries are absent
+(skip) namespace sandbox (bwrap) confines the filesystem > in-workspace writes reach the host; /tmp is private scratch
+(skip) namespace sandbox (bwrap) confines the filesystem > a symlink in the workspace pointing outside resolves to nothing
+(skip) namespace sandbox (bwrap) confines the filesystem > network is none
+
+
+1 tests failed:
+(fail) namespace sandbox (unshare) confines the filesystem > workspace under TMPDIR (SH1/SH2): sibling unreadable and unwritable; host file unchanged [97.12ms]
+
+ 615 pass
+ 16 skip
+ 1 fail
+ 2231 expect() calls
+Ran 632 tests across 58 files. [6.79s]

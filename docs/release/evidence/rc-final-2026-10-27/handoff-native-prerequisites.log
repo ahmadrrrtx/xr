@@ -1,0 +1,6 @@
+$ bash -c pkg-config --modversion gtk+-3.0 webkit2gtk-4.1
+Package gtk+-3.0 was not found in the pkg-config search path.
+Perhaps you should add the directory containing `gtk+-3.0.pc'
+to the PKG_CONFIG_PATH environment variable
+Package 'gtk+-3.0', required by 'virtual:world', not found
+Package 'webkit2gtk-4.1', required by 'virtual:world', not found

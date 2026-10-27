@@ -1,0 +1,108 @@
+$ bun test test/providers
+bun test v1.4.2 (744846f84)
+
+test/providers/request-guard.test.ts:
+(pass) GAP-001 — timeout resolution > defaults to the built-in ceiling; never unbounded [1.01ms]
+(pass) GAP-001 — timeout resolution > explicit > env > config > default [0.09ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > a stalled request times out instead of hanging [301.23ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > timeout is reported as a timeout, not as a cancellation [200.75ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > a caller signal aborts an in-flight request promptly [150.78ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > an already-aborted signal never opens a connection [0.19ms]
+(pass) GAP-001 — guardedRequest against a real stalling socket > successful requests are unaffected [0.97ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() against a stalling endpoint rejects on timeout [301.51ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() honors a caller AbortSignal [150.58ms]
+(pass) GAP-001 — OpenAICompatProvider.chat is bounded and cancellable > chat() still works normally with the guard in place [1.39ms]
+
+test/providers/credential-boundary.test.ts:
+22 |       globalThis.fetch = (async (url: string | URL | Request) => { urls.push(String(url)); return new Response(key, { status }); }) as typeof fetch;
+23 |       const p = new AnthropicProvider({ apiKeyEnv: "XR_TEST_ANTHROPIC_KEY" });
+24 |       let caught: unknown;
+25 |       try { await p.chat([{ role: "user", content: "private fixture" }], []); } catch (e) { caught = e; }
+26 |       expect(caught).toBeDefined(); expect(String(caught)).not.toContain(key);
+27 |       expect(urls).toEqual(["https://api.anthropic.com/v1/messages"]);
+                        ^
+error: expect(received).toEqual(expected)
+
+- [
+-   "https://api.anthropic.com/v1/messages",
+- ]
++ []
+
+- Expected  - 3
++ Received  + 1
+
+      at <anonymous> (/home/user/xr/test/providers/credential-boundary.test.ts:27:20)
+(fail) RC-203 credential and complete-request boundary > auth/rate/server errors never send vendor credentials or prompts to ANTHROPIC_BASE_URL [1.25ms]
+(pass) RC-203 credential and complete-request boundary > redacting api_key=value never reinserts the secret as a replacement capture [0.32ms]
+(pass) RC-203 credential and complete-request boundary > deadline extends beyond response headers through a stalled body [30.42ms]
+(pass) RC-203 credential and complete-request boundary > cancellation after headers aborts body consumption and remains cancellation [0.28ms]
+
+test/providers/capability-fixtures.test.ts:
+(pass) Phase 10 · provider capability-contract fixtures > manifest exists and declares catalog presets only [0.11ms]
+(pass) Phase 10 · provider capability-contract fixtures > every fixture is a real catalog preset and catalog-consistent (no drift) [0.14ms]
+(pass) Phase 10 · provider capability-contract fixtures > no capability drift between fixtures and the catalog (matrix gate) [0.35ms]
+(pass) Phase 10 · provider capability-contract fixtures > each fixture declares a usage-reporting policy (F-13 honesty) [0.09ms]
+
+test/providers/malformed-response.test.ts:
+(pass) Phase 06 · malformed provider response (spec step 29) > invalid JSON body → malformed_response error, not a silent success [7.24ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > missing required field (no choices[]) → malformed_response, never empty success [2.53ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > valid response still parses normally (no over-blocking) [2.16ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > HTTP error stays an error (not misclassified as malformed) [1.89ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > malformed factory redacts secrets from the detail [0.06ms]
+(pass) Phase 06 · malformed provider response (spec step 29) > streaming: garbage SSE lines are skipped without corrupting the stream [3.61ms]
+
+test/providers/gateway.test.ts:
+(pass) Provider Registry > registry has builtins [0.13ms]
+(pass) Provider Registry > getPreset returns preset [0.02ms]
+(pass) Provider Registry > resolve valid provider [0.04ms]
+(pass) Provider Registry > resolve invalid provider throws [0.04ms]
+(pass) Provider Registry > duplicate registration deterministically replaces [0.03ms]
+(pass) Provider Registry > registerOrThrow fails on duplicate [0.03ms]
+(pass) Provider Gateway > gateway list includes builtins [16.66ms]
+(pass) Provider Gateway > gateway getPreset [0.03ms]
+(pass) Provider Gateway > gateway has [0.02ms]
+(pass) Provider Gateway > gateway capabilities [0.08ms]
+(pass) Provider Gateway > gateway credential status for local provider (no key required) [0.02ms]
+(pass) Provider Gateway > gateway resolveModel [3.35ms]
+(pass) Provider Gateway > gateway catalog [0.37ms]
+(pass) Provider Gateway > gateway catalog fingerprint changes with config [0.22ms]
+(pass) Capability Resolver > supports boolean capabilities [0.02ms]
+(pass) Capability Resolver > local execution capability [0.01ms]
+(pass) Capability Resolver > filterByCapabilities [0.17ms]
+(pass) Capability Resolver > supportsModelClass [0.24ms]
+(pass) Provider Error Normalization > auth failure [0.04ms]
+(pass) Provider Error Normalization > rate limit [0.05ms]
+(pass) Provider Error Normalization > model unavailable [0.05ms]
+(pass) Provider Error Normalization > timeout [0.21ms]
+(pass) Provider Error Normalization > unknown failure [0.05ms]
+(pass) Provider Error Normalization > safe json redacts secrets [0.04ms]
+(pass) Provider Error Normalization > non-retryable errors are not retried [0.01ms]
+(pass) Provider Error Normalization > retryable errors [0.01ms]
+(pass) Fallback Chain > primary only when no fallback allowed [0.26ms]
+(pass) Fallback Chain > includes fallbackProvider when configured [8.31ms]
+(pass) Fallback Chain > chain explanation is auditable [0.17ms]
+(pass) Fallback Chain > deduplicates identical steps [0.11ms]
+(pass) Provider Health > health bounded and cached [1.17ms]
+(pass) Provider Health > healthAll parallel [1.92ms]
+(pass) Streaming > mock success provider streaming yields chunks [0.22ms]
+(pass) Streaming > gateway stream fallback when no chatStream [2.08ms]
+(pass) Usage Normalization > normalizeUsage [0.07ms]
+(pass) Usage Normalization > normalizeUsage with totalTokens [0.02ms]
+(pass) Provider Switching > model switch state machine preflight fails for unknown provider [2.53ms]
+(pass) Provider Switching > model switch rollback on swap failure [0.33ms]
+(pass) BYOK > credential status for provider requiring key [0.13ms]
+(pass) BYOK > resolve credential never throws [0.03ms]
+(pass) BYOK > credential not exposed in health [0.10ms]
+(pass) Retry Policy > retryable errors should be retried, non-retryable should not [0.03ms]
+(pass) Contract: Same task different provider structure > same messages produce same normalized ModelTurn structure via different providers [0.14ms]
+(pass) Phase 05 — Gateway Fallback Execution > a retryable primary failure falls back to the fallback provider (bounded, auditable) [0.45ms]
+(pass) Phase 05 — Gateway Fallback Execution > a NON-retryable (auth) failure is NOT blindly retried or fallen-back [0.18ms]
+(pass) Phase 05 — Gateway Fallback Execution > fallback is bounded: it does not fall back on cancellation (user stop wins) [0.42ms]
+
+1 tests failed:
+(fail) RC-203 credential and complete-request boundary > auth/rate/server errors never send vendor credentials or prompts to ANTHROPIC_BASE_URL [1.25ms]
+
+ 69 pass
+ 1 fail
+ 202 expect() calls
+Ran 70 tests across 5 files. [1269.00ms]

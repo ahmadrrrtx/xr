@@ -1,0 +1,159 @@
+$ bash -c cd desktop && bun run build
+$ tsc --noEmit && vite build
+[36mvite v8.3.3 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 3503 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/orb.html                                            1.17 kB │ gzip:   0.59 kB
+dist/theater.html                                        1.38 kB │ gzip:   0.66 kB
+dist/hud.html                                            2.05 kB │ gzip:   0.78 kB
+dist/index.html                                          3.11 kB │ gzip:   0.94 kB
+dist/assets/xr-avatar-128-pdspNNE0.webp                  7.44 kB
+dist/assets/xr-avatar-256-DSwqu_2R.webp                 22.14 kB
+dist/assets/xr-hero-DbCTikEP.webp                       22.88 kB
+dist/assets/xr-emblem-256-D3-4Rsd8.png                  33.25 kB
+dist/assets/xr-logo-320-DXXGGH4u.png                    47.48 kB
+dist/assets/xr-avatar-side-2-C_SiByV3.webp              51.08 kB
+dist/assets/xr-avatar-eTNslzcZ.png                      64.17 kB
+dist/assets/xr-avatar-512-T1Zpp8mC.webp                 67.90 kB
+dist/assets/xr-avatar-side-CR4S2IZ5.webp                69.74 kB
+dist/assets/xr-emblem-512-cAOJUMOT.png                  91.39 kB
+dist/assets/orb-sleeping-CrIffLND.png                   98.60 kB
+dist/assets/orb-idle-crimson-X7WXCBO4.png              117.01 kB
+dist/assets/orb-idle-Dbs0ohOS.png                      117.64 kB
+dist/assets/orb-error-Cxlv4OZ-.png                     117.80 kB
+dist/assets/orb-idle-emerald-B7FbvLyy.png              118.20 kB
+dist/assets/orb-approved-BIe3ttUm.png                  118.64 kB
+dist/assets/orb-idle-solar-DphDOd6a.png                118.78 kB
+dist/assets/orb-idle-nebula-CrzvXSHu.png               119.31 kB
+dist/assets/orb-waiting-approval-B85PDLsK.png          119.76 kB
+dist/assets/orb-thinking-GuWCkUWz.png                  120.58 kB
+dist/assets/orb-listening-MnczcKi4.png                 135.10 kB
+dist/assets/orb-speaking-XQ9_Veqx.png                  138.05 kB
+dist/assets/xr-logo-BIqWf6xF.png                       150.38 kB
+dist/assets/orb-sleeping-ug5U5lNE.webp                 189.22 kB
+dist/assets/orb-idle-nebula-DtvdrIR-.webp              207.59 kB
+dist/assets/orb-approved-KjLiZxRL.webp                 210.71 kB
+dist/assets/orb-idle-emerald-BT8QbmyE.webp             211.00 kB
+dist/assets/orb-denied-ChoDTJBY.webp                   214.25 kB
+dist/assets/orb-idle-crimson-CbkyDAzl.webp             214.46 kB
+dist/assets/orb-thinking-B2VmNEfi.webp                 215.91 kB
+dist/assets/orb-idle-Cr_bLmmR.webp                     221.25 kB
+dist/assets/orb-waiting-approval-CbBbL_lA.webp         223.50 kB
+dist/assets/orb-idle-solar-ByRtX02_.webp               223.87 kB
+dist/assets/orb-error-BPl5IyzZ.webp                    238.81 kB
+dist/assets/orb-speaking-DZ-7_dvu.webp                 319.30 kB
+dist/assets/xr-terminal-splash-sUKWg0AZ.png            327.32 kB
+dist/assets/xr-readme-hero-Dfe_5k0P.png                328.00 kB
+dist/assets/orb-listening-CLG6MpLe.webp                345.44 kB
+dist/assets/xr-avatar-sleeping-Bnya3TzG.gif            883.93 kB
+dist/assets/xr-avatar-thinking-CZ_z0i4M.gif          1,154.54 kB
+dist/assets/xr-avatar-idle-CjFtzEXZ.gif              1,166.72 kB
+dist/assets/xr-avatar-denied-cQyyxsAV.gif            1,247.23 kB
+dist/assets/xr-avatar-speaking-BXsGOJxk.gif          1,305.70 kB
+dist/assets/xr-avatar-error-CH7B5XaN.gif             1,318.10 kB
+dist/assets/xr-avatar-waiting-approval-BALWNa2s.gif  1,385.25 kB
+dist/assets/xr-avatar-approved-tpsXTbuO.gif          1,418.16 kB
+dist/assets/xr-avatar-listening-BbDtNGfe.gif         1,436.87 kB
+dist/assets/TerminalPane-BdKlxYby.css                    3.98 kB │ gzip:   1.01 kB
+dist/assets/theater-BzI87oe4.css                         9.23 kB │ gzip:   2.41 kB
+dist/assets/ResearchScreen-BkJQbGqy.css                 18.05 kB │ gzip:   3.66 kB
+dist/assets/BuilderScreen-DLrqLPU3.css                  22.43 kB │ gzip:   4.61 kB
+dist/assets/AgentsScreen-BVynrOF5.css                   25.65 kB │ gzip:   4.99 kB
+dist/assets/router-DFOk31bs.css                         56.35 kB │ gzip:   9.71 kB
+dist/assets/globals-C8iTtsYo.css                       137.09 kB │ gzip:  22.90 kB
+dist/assets/css-CdtkT07m.js                              0.05 kB │ gzip:   0.07 kB
+dist/assets/javascript-Yelw-5ZN.js                       0.06 kB │ gzip:   0.08 kB
+dist/assets/bash-BiGZg9Om.js                             0.06 kB │ gzip:   0.08 kB
+dist/assets/shell-BiGZg9Om.js                            0.06 kB │ gzip:   0.08 kB
+dist/assets/dist-js-jgaRAmh2.js                          0.11 kB │ gzip:   0.12 kB
+dist/assets/dist-js-DVzKoJMw.js                          0.12 kB │ gzip:   0.13 kB
+dist/assets/dist-js-BqAJu_PR.js                          0.20 kB │ gzip:   0.18 kB
+dist/assets/smartphone-CO-KwXSk.js                       0.23 kB │ gzip:   0.21 kB
+dist/assets/CompanionOrb-YfFAqz4a.js                     0.27 kB │ gzip:   0.22 kB
+dist/assets/save-B7ZrU0Zn.js                             0.36 kB │ gzip:   0.25 kB
+dist/assets/classPrivateFieldSet2-BE9xOnOO.js            0.42 kB │ gzip:   0.25 kB
+dist/assets/dist-js-Cigm3r0A.js                          0.55 kB │ gzip:   0.26 kB
+dist/assets/ui-wh5_hZuk.js                               0.57 kB │ gzip:   0.36 kB
+dist/assets/image-CaR874bQ.js                            0.61 kB │ gzip:   0.32 kB
+dist/assets/react-Ckr0nMrF.js                            0.64 kB │ gzip:   0.40 kB
+dist/assets/path-oWn306rE.js                             0.85 kB │ gzip:   0.44 kB
+dist/assets/providers-BJjtTbtn.js                        1.20 kB │ gzip:   0.64 kB
+dist/assets/hud-DyV8dp6V.js                              1.24 kB │ gzip:   0.66 kB
+dist/assets/event-BZF0eL6G.js                            1.42 kB │ gzip:   0.68 kB
+dist/assets/dist-js-DGJTrINh.js                          1.50 kB │ gzip:   0.52 kB
+dist/assets/dist-js-Dw-A808m.js                          1.52 kB │ gzip:   0.52 kB
+dist/assets/core-DyTF7cW7.js                             1.97 kB │ gzip:   0.84 kB
+dist/assets/dist-CnpFcfsB.js                             1.99 kB │ gzip:   1.26 kB
+dist/assets/json-qhed-kSA.js                             2.81 kB │ gzip:   0.77 kB
+dist/assets/orb-BeFf8tN8.js                              3.93 kB │ gzip:   1.79 kB
+dist/assets/wire-BZWOrKuk.js                             4.46 kB │ gzip:   1.92 kB
+dist/assets/budget-BLHIVigm.js                           4.54 kB │ gzip:   1.98 kB
+dist/assets/builder-YiTsp-hu.js                          4.72 kB │ gzip:   1.99 kB
+dist/assets/settingsApi-D1hzkjZ0.js                      4.98 kB │ gzip:   1.58 kB
+dist/assets/sessionsStore-DZO9KUkN.js                    5.01 kB │ gzip:   1.81 kB
+dist/assets/dist-js-UiNqLpm0.js                          6.95 kB │ gzip:   1.80 kB
+dist/assets/engineStore-uFVqU8_j.js                      7.09 kB │ gzip:   2.95 kB
+dist/assets/react-CYoUnH_4.js                            7.16 kB │ gzip:   2.83 kB
+dist/assets/persistent-store-B-DAsA-F.js                 7.69 kB │ gzip:   3.30 kB
+dist/assets/chat-Ba2_BJsq.js                            10.22 kB │ gzip:   4.05 kB
+dist/assets/yaml-rwi0_p6S.js                            10.49 kB │ gzip:   2.26 kB
+dist/assets/mockLLM-CKZZj5TM.js                         10.67 kB │ gzip:   4.57 kB
+dist/assets/theater-BMW11zSQ.js                         11.10 kB │ gzip:   4.30 kB
+dist/assets/github-light-EUqPIrTm.js                    11.18 kB │ gzip:   2.49 kB
+dist/assets/github-dark-C-LZuMrd.js                     11.40 kB │ gzip:   2.53 kB
+dist/assets/dist-DdcGE5-F.js                            11.56 kB │ gzip:   5.18 kB
+dist/assets/chatStore-DjSoYpmI.js                       11.62 kB │ gzip:   4.28 kB
+dist/assets/AvatarBust-D0_Cph5q.js                      11.67 kB │ gzip:   4.26 kB
+dist/assets/builderCore-Cmk1nKDv.js                     11.91 kB │ gzip:   4.90 kB
+dist/assets/window-DGc2oSqc.js                          12.82 kB │ gzip:   3.08 kB
+dist/assets/rust-Cfkwpbl8.js                            15.06 kB │ gzip:   2.71 kB
+dist/assets/builderStore-DWRHXeuU.js                    15.73 kB │ gzip:   5.93 kB
+dist/assets/runsStore-C1rI8NNm.js                       18.74 kB │ gzip:   7.11 kB
+dist/assets/shieldStore-DrFqMado.js                     22.03 kB │ gzip:   8.37 kB
+dist/assets/sql-BsFa4tDR.js                             23.42 kB │ gzip:   7.45 kB
+dist/assets/dist-E8AJo_y8.js                            26.50 kB │ gzip:   8.70 kB
+dist/assets/dist-Be9zYoHD.js                            26.90 kB │ gzip:  12.79 kB
+dist/assets/dist--9VKgLq-.js                            28.49 kB │ gzip:  11.58 kB
+dist/assets/alert-dialog-9F8OyJEq.js                    30.12 kB │ gzip:   9.76 kB
+dist/assets/workflowEditorStore-Be3RO43l.js             35.77 kB │ gzip:  11.20 kB
+dist/assets/AgentsScreen-4zSRpU6a.js                    37.41 kB │ gzip:  11.05 kB
+dist/assets/shellscript-CqHdAlCp.js                     41.46 kB │ gzip:   6.07 kB
+dist/assets/dist-C_NuciEy.js                            43.91 kB │ gzip:  15.16 kB
+dist/assets/dist-Dmr0F7MS.js                            44.70 kB │ gzip:  19.38 kB
+dist/assets/go-rLFTqkRN.js                              46.81 kB │ gzip:   5.14 kB
+dist/assets/css-LbU1hoFO.js                             49.02 kB │ gzip:  11.90 kB
+dist/assets/brainStore-tdcOtY6C.js                      51.42 kB │ gzip:  17.40 kB
+dist/assets/WorkflowsTab-Bz6sQ2pG.js                    54.81 kB │ gzip:  13.85 kB
+dist/assets/html-CVO8wu9Q.js                            57.24 kB │ gzip:  11.74 kB
+dist/assets/useSettingsSync-D80tpFM3.js                 58.76 kB │ gzip:  19.76 kB
+dist/assets/markdown-BYOwaDjH.js                        59.32 kB │ gzip:   5.66 kB
+dist/assets/ResearchScreen-BanwzAC9.js                  63.02 kB │ gzip:  19.34 kB
+dist/assets/main-CWUzFD-E.js                            66.52 kB │ gzip:  19.80 kB
+dist/assets/python-gzcpVVnB.js                          69.94 kB │ gzip:   9.09 kB
+dist/assets/dist-D6NZKYSO.js                            83.68 kB │ gzip:  30.65 kB
+dist/assets/dist-Cxg_a_KT.js                            84.73 kB │ gzip:  33.79 kB
+dist/assets/globals-BuB5Fc4_.js                        140.84 kB │ gzip:  45.79 kB
+dist/assets/VoiceOrb-CxSKYFwc.js                       156.56 kB │ gzip:  50.43 kB
+dist/assets/BuilderScreen-BKn9NPO4.js                  165.15 kB │ gzip:  52.61 kB
+dist/assets/javascript-BzbQS41l.js                     174.81 kB │ gzip:  16.62 kB
+dist/assets/tsx-udAQXfEw.js                            175.52 kB │ gzip:  16.62 kB
+dist/assets/jsx-Bz0zcwM4.js                            177.78 kB │ gzip:  16.71 kB
+dist/assets/typescript-bsJCZSQ-.js                     181.07 kB │ gzip:  16.23 kB
+dist/assets/CodeBlock-UMFU8PaD.js                      306.95 kB │ gzip:  96.13 kB
+dist/assets/dist-Cte7J4WU.js                           307.76 kB │ gzip:  99.88 kB
+dist/assets/StreamingCursor-BAyrOC_H.js                329.56 kB │ gzip: 110.25 kB
+dist/assets/TerminalPane-W6UJ3uOV.js                   340.13 kB │ gzip:  86.39 kB
+dist/assets/router-QTPU_WZL.js                       1,158.97 kB │ gzip: 324.24 kB
+
+[33m[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[33m[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/lib/detect.ts is dynamically imported by src/screens/Onboarding/StepDownload.tsx but also statically imported by src/screens/Builder/components/PreviewPane.tsx, src/screens/Onboarding/StepDownload.tsx, src/screens/Onboarding/StepMicSetup.tsx, src/screens/Onboarding/StepModelSetup.tsx, src/screens/Onboarding/StepSystemCheck.tsx, dynamic import will not move module into another chunk.
+[39m
+[33m[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/budget/enforce.ts is dynamically imported by src/screens/Budget/components/Playground.tsx, src/screens/Budget/components/SettingsTab.tsx, src/stores/budgetStore.ts, src/stores/researchStore.ts, src/stores/workflowEditorStore.ts but also statically imported by src/components/layout/AppShell.tsx, src/engine/chat.ts, src/lib/mockLLM.ts, src/stores/brainStore.ts, dynamic import will not move module into another chunk.
+[39m
+[32m✓ built in 2.77s[39m

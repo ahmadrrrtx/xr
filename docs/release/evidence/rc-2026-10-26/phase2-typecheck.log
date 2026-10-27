@@ -1,0 +1,5 @@
+$ bun --bun node_modules/typescript/bin/tsc --noEmit
+src/runtime/trust/environment/namespace.ts(309,72): error TS2339: Property 'cancelled' does not exist on type 'AppContainerResult'.
+src/runtime/trust/environment/namespace.ts(312,57): error TS2339: Property 'cancelled' does not exist on type 'AppContainerResult'.
+src/runtime/trust/environment/namespace.ts(317,22): error TS2339: Property 'cancelled' does not exist on type 'AppContainerResult'.
+src/runtime/trust/environment/namespace.ts(321,48): error TS2339: Property 'cancelled' does not exist on type 'AppContainerResult'.

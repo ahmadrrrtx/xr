@@ -1,0 +1,6 @@
+$ bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu
+[smoke] --version
+v1.1.0 (Graphite)
+[smoke] booting serve on :39417 (isolated XR_HOME)
+[smoke] health OK — token handshake banner present:
+[smoke] PASS

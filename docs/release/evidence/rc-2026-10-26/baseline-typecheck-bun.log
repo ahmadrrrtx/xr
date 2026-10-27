@@ -1,0 +1,1 @@
+$ bash -c bun run scripts/typecheck-preflight.ts && bun --bun node_modules/typescript/bin/tsc --noEmit && bun --bun desktop/node_modules/typescript/bin/tsc -p desktop/tsconfig.json

@@ -51,3 +51,15 @@ secret export/argv, self-signed production claims, disabled validation and
 publishing. Local Authenticode is separate from this repository's production
 GitHub signing/provenance/native gates; a hardware-only local signer needs a
 reviewed integration rather than pretending CI secrets are provisioned.
+
+
+## Submission packaging hygiene
+
+A pre-push review restored two baseline executable bits lost in a workspace
+snapshot (apply-branch-protection.sh and assert-clean-tree.sh). It also explicitly
+included the dated audit evidence logs that the repository's generic *.log
+ignore would otherwise omit. Only docs/release/evidence logs were added; a
+credential/private-key/PAT/bearer-material tripwire scan found no such material,
+and the actual current credential occurs in none of the repository/evidence
+files. No claim of a complete secret certification is inferred from that scan.
+These corrections are separate commits, not a history rewrite/force push.
