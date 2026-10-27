@@ -4,7 +4,7 @@
  * Tests assert EFFECTS (real responses from the in-process handler).
  */
 
-import { test, expect, beforeEach } from "bun:test";
+import { test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,13 +14,28 @@ import { listDaemonRoutes } from "../../src/daemon/routes/index.ts";
 import { API_CONTRACT } from "../../src/daemon/routes/contract.ts";
 
 let store: Store;
+let previousHome: string | undefined;
 const TOKEN = "t1-version-token";
 
+// Each test gets a fresh, fully migrated database. On loaded hosted runners
+// synchronous SQLite setup has exceeded Bun's default 5 s hook timeout. Keep a
+// bounded 20 s setup/cleanup budget (as in the Windows parity lane), and close
+// each connection instead of retaining every fixture until process exit.
 beforeEach(() => {
+  previousHome = process.env.XR_HOME;
   const tmp = mkdtempSync(join(tmpdir(), "xr-api-v1-"));
   process.env.XR_HOME = join(tmp, "home");
   store = new Store(join(tmp, "d.db"));
-});
+}, 20_000);
+
+afterEach(() => {
+  try {
+    store?.close();
+  } finally {
+    if (previousHome === undefined) delete process.env.XR_HOME;
+    else process.env.XR_HOME = previousHome;
+  }
+}, 20_000);
 
 function req(path: string, init: RequestInit = {}): Request {
   return new Request(`http://127.0.0.1:7842${path}`, {
