@@ -69,7 +69,7 @@
     {
       "id": "tauri.conf.json",
       "path": "desktop/src-tauri/tauri.conf.json",
-      "kind": "json-version-only",
+      "kind": "tauri-conf",
       "comment": "Installer-visible identity (what .msi/.dmg metadata shows). Added in launch-audit L-008 — previously unguarded."
     },
     {

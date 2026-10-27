@@ -61,7 +61,7 @@ export interface ProhibitedClaim {
 export interface StampTarget {
   id: string;
   path: string;
-  kind: "json-version" | "json-version-only" | "toml-version" | "cargo-lock-root" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
+  kind: "json-version" | "json-version-only" | "tauri-conf" | "toml-version" | "cargo-lock-root" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
 }
 
 /**
@@ -522,6 +522,69 @@ export function stampJsonVersionOnly(content: string, version: string): string {
 }
 
 /**
+ * MSI (WiX) needs a purely NUMERIC four-part version — `major.minor.build.revision`,
+ * major/minor ≤ 255, build/revision ≤ 65535 — so a semver pre-release cannot be
+ * expressed: the bundler refuses `-rc.1` outright ("optional pre-release
+ * identifier in app version must be numeric-only"). Leaving it to the bundler
+ * therefore breaks MSI for every preview tag, exactly when `1.1.1-rc.1` meets
+ * `windows — tauri bundle`.
+ *
+ * The mapped value must also ORDER correctly, because MSI compares it to decide
+ * upgrades: a pre-release has to sort BELOW the release it precedes, and above
+ * the previous release, or installing 1.1.1 over 1.1.1-rc.1 is a downgrade.
+ * Hence "step the patch down one and use the pre-release counter as the build
+ * field":
+ *
+ *   1.1.1-rc.1 → 1.1.0.1     (… > 1.1.0.0, < 1.1.1.0)
+ *   1.1.1-rc.2 → 1.1.0.2
+ *   2.1.0-rc.1 → 2.0.65535.1
+ *   2.0.0-rc.1 → 1.65535.65535.1
+ *
+ * Returns undefined for a stable version: Tauri's own derivation is correct
+ * there and the field must be absent so a later stable bump cannot inherit a
+ * stale pre-release mapping. This affects INSTALLER METADATA only — the app
+ * itself reports `identity.version`.
+ */
+export function msiWixVersion(version: string): string | undefined {
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(version);
+  if (!m) throw new Error(`not a semver version: ${version}`);
+  const [maj, min, pat] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const pre = m[4];
+  if (!pre) return undefined;
+  const tail = /(?:^|\.)(\d+)$/.exec(pre)?.[1];
+  const n = tail === undefined ? 1 : Number(tail);
+  if (!Number.isInteger(n) || n < 0 || n > 65535)
+    throw new Error(`pre-release counter ${tail} in ${version} is not an MSI build field (0..65535)`);
+  if (pat > 0) return `${maj}.${min}.${pat - 1}.${n}`;
+  if (min > 0) return `${maj}.${min - 1}.65535.${n}`;
+  if (maj > 0) return `${maj - 1}.65535.65535.${n}`;
+  throw new Error(`no MSI version below ${version}`);
+}
+
+/**
+ * tauri.conf.json carries the identity users see on every installer, and its
+ * Windows MSI needs the numeric pre-release mapping above. Everything else in
+ * the file is left byte-identical.
+ */
+export function stampTauriConf(content: string, version: string): string {
+  const doc = JSON.parse(stampJsonVersionOnly(content, version));
+  const wix = msiWixVersion(version);
+  const bundle = (doc.bundle ??= {});
+  if (wix === undefined) {
+    // Stable: drop any pre-release mapping so the bundler derives the version.
+    if (bundle.windows?.wix) {
+      delete bundle.windows.wix.version;
+      if (Object.keys(bundle.windows.wix).length === 0) delete bundle.windows.wix;
+      if (Object.keys(bundle.windows).length === 0) delete bundle.windows;
+    }
+  } else {
+    const windows = (bundle.windows ??= {});
+    windows.wix = { ...(windows.wix ?? {}), version: wix };
+  }
+  return JSON.stringify(doc, null, 2) + "\n";
+}
+
+/**
  * Launch-audit L-008 — stamp `version` inside the `[package]` section of a
  * Cargo.toml without touching anything else (comments, key order, spacing).
  * Fails loudly if the file has no package-version line — silent no-op
@@ -623,6 +686,8 @@ export function renderTarget(
       return stampPackageJson(current, id);
     case "json-version-only":
       return stampJsonVersionOnly(current, id.version);
+    case "tauri-conf":
+      return stampTauriConf(current, id.version);
     case "toml-version":
       return stampTomlPackageVersion(current, id.version);
     case "cargo-lock-root":

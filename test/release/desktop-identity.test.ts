@@ -11,7 +11,9 @@ import { join } from "node:path";
 import {
   evaluateSurfaces,
   loadManifest,
+  msiWixVersion,
   stampJsonVersionOnly,
+  stampTauriConf,
   stampTomlPackageVersion,
 } from "../../scripts/release-manifest.ts";
 
@@ -21,7 +23,7 @@ describe("desktop version-identity surfaces (L-008)", () => {
   test("manifest declares tauri.conf.json and Cargo.toml as stamped targets", () => {
     const manifest = loadManifest();
     const ids = manifest.stampTargets.map((t) => `${t.kind}:${t.id}`);
-    expect(ids).toContain("json-version-only:tauri.conf.json");
+    expect(ids).toContain("tauri-conf:tauri.conf.json");
     expect(ids).toContain("toml-version:Cargo.toml");
   });
 
@@ -43,6 +45,40 @@ describe("desktop version-identity surfaces (L-008)", () => {
     expect(stamped.bundle).toEqual(conf.bundle);
     expect(stamped.app).toEqual(conf.app);
     expect(Object.keys(stamped).sort()).toEqual(Object.keys(conf).sort());
+  });
+
+  // The MSI target refuses a semver pre-release ("optional pre-release
+  // identifier ... must be numeric-only"), so a preview tag could not bundle a
+  // .msi at all until the mapping below existed. It must ALSO order correctly:
+  // installing 1.1.1 over 1.1.1-rc.1 cannot be a downgrade.
+  test("tauri.conf.json: the MSI version is derived from a pre-release and orders below its release", () => {
+    expect(msiWixVersion("1.1.1-rc.1")).toBe("1.1.0.1");
+    expect(msiWixVersion("1.1.1-rc.2")).toBe("1.1.0.2");
+    expect(msiWixVersion("2.1.0-beta.3")).toBe("2.0.65535.3");
+    expect(msiWixVersion("2.0.0-rc.1")).toBe("1.65535.65535.1");
+    expect(msiWixVersion("1.1.1-rc")).toBe("1.1.0.1");
+    // Stable versions get NO override: Tauri's own derivation is right there,
+    // and a stale pre-release mapping must never leak into a stable build.
+    expect(msiWixVersion("1.1.1")).toBeUndefined();
+    expect(() => msiWixVersion("1.1.1-rc.70000")).toThrow(/0\.\.65535/);
+    expect(() => msiWixVersion("not-a-version")).toThrow(/semver/);
+
+    const conf = JSON.stringify({ version: "0.0.0", bundle: { windows: { nsis: { installMode: "currentUser" } } } }, null, 2) + "\n";
+    const pre = JSON.parse(stampTauriConf(conf, "1.1.1-rc.1"));
+    expect(pre.version).toBe("1.1.1-rc.1");
+    expect(pre.bundle.windows.wix.version).toBe("1.1.0.1");
+    // Everything else survives the stamp byte-for-byte.
+    expect(pre.bundle.windows.nsis).toEqual({ installMode: "currentUser" });
+    // A stable bump REMOVES the mapping instead of inheriting it.
+    const stable = JSON.parse(stampTauriConf(JSON.stringify(pre), "1.1.1"));
+    expect(stable.bundle.windows.wix).toBeUndefined();
+    expect(stable.bundle.windows.nsis).toEqual({ installMode: "currentUser" });
+  });
+
+  test("the committed tauri.conf.json MSI version matches the manifest identity", () => {
+    const manifest = loadManifest();
+    const conf = JSON.parse(readFileSync(join(ROOT, "desktop/src-tauri/tauri.conf.json"), "utf8"));
+    expect(conf.bundle.windows.wix.version).toBe(msiWixVersion(manifest.identity.version) as string);
   });
 
   test("stampTomlPackageVersion rewrites only the [package] version line and fails loudly without one", () => {

@@ -75,6 +75,29 @@ CLI release proofs are separate `SHA256SUMS`/cosign/SLSA subjects. CLI binaries
 are authenticated by those release proofs, not inferred desktop OS signatures.
 See [verification](VERIFYING_RELEASES.md) and [current evidence](RELEASE_CANDIDATE_REPORT.md).
 
+# # Windows MSI version for pre-release tags
+
+MSI (WiX) product versions are four numeric fields, so a semver pre-release
+cannot be expressed: Tauri's bundler refuses `1.1.1-rc.1` ("optional pre-release
+identifier in app version must be numeric-only"), which blocked the preview
+tag's `.msi` while the NSIS installer built fine. `bundle.windows.wix.version`
+is therefore DERIVED from the release identity by `scripts/release-manifest.ts`
+(`tauri-conf` surface) instead of being typed by hand:
+
+| identity | MSI product version |
+|---|---|
+| `1.1.1-rc.1` | `1.1.0.1` |
+| `1.1.1-rc.2` | `1.1.0.2` |
+| `2.1.0-beta.3` | `2.0.65535.3` |
+| `1.1.1` (stable) | field removed — the bundler derives `1.1.1` |
+
+The mapping steps the patch down and uses the pre-release counter as the build
+field, so a pre-release sorts below the release it precedes (installing the
+stable over the RC is an upgrade, not a downgrade) and above the previous
+release. It is installer metadata only: the application, `latest.json` and every
+other surface keep reporting the real identity. `bun run release:check` fails if
+the committed value drifts from the manifest.
+
 # # Updates and lifecycle
 
 Current updater pubkey/endpoints are unprovisioned. Keep that state until the
