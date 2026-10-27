@@ -15,6 +15,11 @@ defaults remain1.0.0; the withdrawn1.1.0 owner repair remains outstanding.
   closed when required signing is missing. Updater is unprovisioned.
 * CI source now exercises same-version reinstall/data retention, not a claimed
   executed cross-version or automatic-update lifecycle. Neither ran here.
+  Windows Installer ignores the fourth ProductVersion field: this candidate's
+  MSI version compares equal to the previous `1.1.0` product version, and RCs
+  differing only in that field compare equal. Native upgrade/rollback tests and
+  a reviewed versioning policy are required before publication; see
+  [desktop signing](../DESKTOP_SIGNING.md#windows-msi-version-for-pre-release-tags).
 * Provider facts are sourced, not live authentication/agent-quality proof.
   Credential presence is not authentication; Auto does not upgrade that claim.
   No model weights, paid live suite or competitor benchmark were run.

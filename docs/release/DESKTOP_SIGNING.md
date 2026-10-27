@@ -77,11 +77,10 @@ See [verification](VERIFYING_RELEASES.md) and [current evidence](RELEASE_CANDIDA
 
 # # Windows MSI version for pre-release tags
 
-MSI (WiX) product versions are four numeric fields, so a semver pre-release
-cannot be expressed: Tauri's bundler refuses `1.1.1-rc.1` ("optional pre-release
-identifier in app version must be numeric-only"), which blocked the preview
-tag's `.msi` while the NSIS installer built fine. `bundle.windows.wix.version`
-is therefore DERIVED from the release identity by `scripts/release-manifest.ts`
+WiX accepts a numeric version, not a semver pre-release: Tauri's bundler
+refused `1.1.1-rc.1` ("optional pre-release identifier in app version must be
+numeric-only"), blocking the preview `.msi`. `bundle.windows.wix.version` is
+therefore DERIVED from the release identity by `scripts/release-manifest.ts`
 (`tauri-conf` surface) instead of being typed by hand:
 
 | identity | MSI product version |
@@ -89,14 +88,21 @@ is therefore DERIVED from the release identity by `scripts/release-manifest.ts`
 | `1.1.1-rc.1` | `1.1.0.1` |
 | `1.1.1-rc.2` | `1.1.0.2` |
 | `2.1.0-beta.3` | `2.0.65535.3` |
+| `2.0.0-rc.1` | `1.255.65535.1` |
 | `1.1.1` (stable) | field removed — the bundler derives `1.1.1` |
 
-The mapping steps the patch down and uses the pre-release counter as the build
-field, so a pre-release sorts below the release it precedes (installing the
-stable over the RC is an upgrade, not a downgrade) and above the previous
-release. It is installer metadata only: the application, `latest.json` and every
-other surface keep reporting the real identity. `bun run release:check` fails if
-the committed value drifts from the manifest.
+**This is not proof of safe upgrades.** [Windows Installer compares only the
+first three fields](https://learn.microsoft.com/en-us/windows/win32/msi/productversion),
+so it sees `1.1.0`, `1.1.0.1` and `1.1.0.2` as the same ProductVersion. The
+preview sorts below `1.1.1`, but the mapping does not establish an upgrade
+from the previous stable or between RCs, nor does it prevent all downgrades.
+A reviewed versioning/installation policy and actual native upgrade/rollback
+tests remain prerequisites; do not publish on the strength of this mapping.
+Major/minor are bounded to 255 and the build/revision fields to 65535.
+
+The override is installer metadata only: the application, `latest.json` and
+every other surface keep reporting the real identity. `bun run release:check`
+fails if the committed value drifts from the manifest.
 
 # # Updates and lifecycle
 
