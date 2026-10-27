@@ -76,11 +76,25 @@ function linuxFailure(): never {
   throw new FilesystemError(errno === 2 ? "missing" : [38, 22, 7].includes(errno) ? "unsupported" : "denied");
 }
 
+/** Translate our logical flags to the Linux openat2 ABI, and always deny following links.
+ * Linux arm64 overrides the generic/x64 O_DIRECTORY and O_NOFOLLOW bits in
+ * arch/arm64/include/uapi/asm/fcntl.h; the x64 values instead mean O_DIRECT
+ * and O_LARGEFILE on arm64. Passing them raw makes O_PATH opens fail EINVAL.
+ * Other architectures remain unsupported rather than guessing their ABI.
+ */
+export function linuxOpenFlags(flags: number, targetArch: string): number {
+  const native = targetArch === "x64" ? { directory: 0x10000, nofollow: 0x20000 }
+    : targetArch === "arm64" ? { directory: 0x4000, nofollow: 0x8000 }
+    : unsupported();
+  const common = flags & ~(FD_FLAGS.DIRECTORY | FD_FLAGS.NOFOLLOW);
+  return common | FD_FLAGS.CLOEXEC | native.nofollow | (flags & FD_FLAGS.DIRECTORY ? native.directory : 0);
+}
+
 function linuxOpen(dir: number, name: string, flags: number, mode = 0, rootAcquisition = false): number {
   const n = str(name);
   // BENEATH | NO_XDEV | NO_SYMLINKS | NO_MAGICLINKS. Root acquisition may cross mounts on the
   // host-selected canonical path, but not follow links.
-  const how = new BigUint64Array([BigInt(flags | FD_FLAGS.CLOEXEC | FD_FLAGS.NOFOLLOW), BigInt(mode), BigInt(rootAcquisition ? 0x06 : 0x0f)]);
+  const how = new BigUint64Array([BigInt(linuxOpenFlags(flags, arch)), BigInt(mode), BigInt(rootAcquisition ? 0x06 : 0x0f)]);
   const fd = Number(linux().symbols.syscall(437, dir, ptr(n), ptr(how), 24));
   if (fd < 0) linuxFailure();
   return fd;

@@ -45,9 +45,9 @@ jobs:
     timeout-minutes: 40
     # Windows ARM64 is reported, not gating (D4/D7): its result is in the
     # evidence and the support matrix, but it cannot block a merge.
-    # Linux ARM64 is reported, not gating (owner decision, 2026-10-22): the
-    # file authority fails closed there (blocked:filesystem-unsupported) —
-    # disclosed in SUPPORT_MATRIX.md and the CHANGELOG.
+    # Linux ARM64 remains reported, not gating (owner decision, 2026-10-22).
+    # An openat2 ABI correction is under native verification; prior journeys
+    # failed closed. Do not promote the support claim without native evidence.
     continue-on-error: ${{ matrix.runsOn == 'windows-11-arm' || matrix.runsOn == 'ubuntu-24.04-arm' }}
     strategy:
       fail-fast: false
@@ -87,6 +87,15 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      # Exercise the real descriptor authority, including allowed operations,
+      # symlink/hardlink denials and approval-time swaps, on the native ABI.
+      # The npm and Docker journeys separately exercise their shipped payloads.
+      - name: Linux ARM64 native filesystem confinement regressions
+        if: matrix.runsOn == 'ubuntu-24.04-arm' && matrix.channel == 'binary'
+        run: |
+          # shellcheck disable=SC2016 # the single-quoted program is JavaScript, not shell
+          bun -e 'if (process.platform !== "linux" || process.arch !== "arm64") throw new Error(`expected native linux/arm64, got ${process.platform}/${process.arch}`)'
+          bun test --timeout 20000 test/security/fs-native-flags.test.ts test/security/filesystem-authority.test.ts test/security/filesystem-operations.test.ts test/security/filesystem-implicit.test.ts test/security/filesystem-index-context.test.ts
       - name: Journey
         run: bun run scripts/journey/cli-journey.ts --channel ${{ matrix.channel }} --evidence "evidence/cli-${{ matrix.channel }}-${{ matrix.runsOn }}.json"
       - name: Upload journey evidence
@@ -101,8 +110,8 @@ jobs:
     name: Docker image journey (linux/${{ matrix.arch }})
     runs-on: ${{ matrix.runsOn }}
     timeout-minutes: 40
-    # linux/arm64 is reported, not gating (same Linux ARM64 file-authority
-    # limitation as the cli job; disclosed in SUPPORT_MATRIX.md).
+    # linux/arm64 remains reported, not gating (owner decision; native
+    # file-authority and journey evidence is pending, see SUPPORT_MATRIX.md).
     continue-on-error: ${{ matrix.arch == 'arm64' }}
     strategy:
       fail-fast: false

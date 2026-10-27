@@ -63,3 +63,29 @@ credential/private-key/PAT/bearer-material tripwire scan found no such material,
 and the actual current credential occurs in none of the repository/evidence
 files. No claim of a complete secret certification is inferred from that scan.
 These corrections are separate commits, not a history rewrite/force push.
+
+## CI follow-up — 2026-10-27
+
+The originally linked run is historical: subsequent commits fixed its required
+mutation, security, truth, cross-platform and supply-chain gates. On the newer
+`764e3b68` run, the required Quality Gate failed because a hook in
+`test/api/v1-versioning.test.ts` exceeded Bun's five-second default. The log
+identifies a hook timeout, not a failed API assertion; it does not prove why the
+runner was slow. That suite now closes each independent SQLite store, restores
+its temporary home and gives fixture setup/cleanup a bounded 20-second budget.
+The API directory passed locally (115 tests, no retries).
+
+The three reported, non-gating Linux ARM64 journeys still failed while the
+file authority refused to initialize. Linux ARM64 uses different `O_DIRECTORY`
+and `O_NOFOLLOW` bits from x64. Under QEMU user-mode ARM64, the earlier code
+reproduced an `openat2` EINVAL with x64 flags; the candidate maps the logical
+flags to the correct ABI without changing the kernel's resolution constraints
+or adding a fallback. On this x64 Linux host, 23 ARM64-emulated filesystem
+regressions passed with a 20-second per-test limit and an explicit QEMU wrapper
+for child Bun processes. Local Linux x64 security regressions and the binary
+and npm clean-machine CLI journeys also passed. Emulation is not native or
+release evidence. `journey.yml` now runs the file-authority regression suite
+on a native ARM64 runner before the binary journey; the npm and Docker legs
+exercise their own payloads. All three remain non-gating under the existing
+owner decision pending reviewed native evidence. No release, tag, channel
+promotion or branch-protection change is authorized by this follow-up.
