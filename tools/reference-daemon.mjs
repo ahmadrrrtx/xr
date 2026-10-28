@@ -439,7 +439,12 @@ const server = createServer(
       return;
     }
 
-    const gate = mobileGate(pathname, session);
+    // V1-P5-002 (2026-10-28): the 403 wall must run against the CANONICAL path
+    // (/api/v1/x ≡ /api/x), mirroring src/daemon/server.ts — otherwise a
+    // versioned request slips past DANGEROUS_PREFIXES and gets a 404 instead of
+    // the mobile 403, weakening the harness's security verification.
+    const canonicalPath = pathname.startsWith('/api/v1/') ? `/api${pathname.slice(7)}` : pathname;
+    const gate = mobileGate(canonicalPath, session);
     if (gate) {
       json(res, { error: gate }, 403);
       return;
