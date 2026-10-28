@@ -49,6 +49,28 @@ id = "RUSTSEC-2026-0369"
 ignoreUntil = 2027-02-15
 reason = "zip 4.6.1 (CVSS 9.1) — permissions applied through extracted symlinks without confinement (fixed in zip 9.0.0). Same owner/tracking as RUSTSEC-2026-0367; the signature gate covers the updater path, and the settings import path is the tracked in-app face. Re-argue at expiry."
 
+# ── 2026-10-28 advisory drift (published hours after PR #201's CI round 3) ───
+# A fourth zip 4.6.1 advisory, GHSA-m665-v7pm-7grj / CVE-2026-115905
+# ("Zip Cloaking", CRITICAL): a parser differential between ZipArchive
+# (Central-Directory-authoritative) and ZipStreamReader (Local-Header-only)
+# lets one archive show different paths to different tools → overwrite/RCE.
+# Reachability in XR: the differential only bites when a validator and an
+# extractor read DIFFERENT headers. XR's import (data_safety.rs stage_import)
+# uses ZipArchive alone — validation (safe_relative: no `..`, no absolute
+# paths, no drive prefixes) and extraction both see the CDFH name; there is
+# no LFH/CDFH split to cloack. Extraction is staged into .pending-import
+# (never live data), entry-count and 4 GB total caps apply, and the process
+# is the unprivileged user. The updater's extraction is signature-gated (a
+# cloaked archive requires compromising the signed channel). Fix is 9.0.5 —
+# the same zip-9 major tauri-plugin-updater@2.14.0 (^4) cannot reach.
+# CRITICAL severity: SHORTER expiry than the sibling entries to force an
+# earlier re-argument.
+
+[[IgnoredVulns]]
+id = "GHSA-m665-v7pm-7grj"
+ignoreUntil = 2026-11-30
+reason = "zip 4.6.1 (CVE-2026-115905, CRITICAL) — Zip Cloaking parser differential between ZipArchive (CDFH) and ZipStreamReader (LFH), fixed in 9.0.5. XR's import face (data_safety.rs stage_import) reads and extracts through ZipArchive ONLY: the same CDFH name is both validated (safe_relative rejects `..`/absolute/drive prefixes) and extracted, so there is no second header view to differ from; output is staged to .pending-import (live data untouched) with entry-count and 4 GB caps, as the unprivileged user. Updater-side extraction sits behind its signature-verification gate. tauri-plugin-updater@2.14.0 pins zip ^4, so 9.0.5 is unreachable until the zip-9 migration. Re-argue at expiry."
+
 # zbus family: unmaintained-notice class (merged upstream into zbus 6.0.0's
 # names/wire modules; no vulnerability statement in the advisories). Migration
 # is a zbus 6 rework owned by upstream tauri/tauri-plugin deps (Linux side).
