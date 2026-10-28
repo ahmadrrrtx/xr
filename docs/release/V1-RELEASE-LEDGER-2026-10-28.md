@@ -141,12 +141,32 @@ management, approvals (allow+deny), cancellation, budget exhaustion,
 persistence-across-restart, provider errors, recovery. Renderer-level evidence
 labeled as such.
 
-### Phase 3.5 — UI/UX bug bash and visual polish  ·  **PENDING**
+### Phase 3.5 — UI/UX bug bash and visual polish  ·  **COMPLETE (2026-10-28 — programmatic audit; human-eye review remains owner-side, see note)**
 Inspect `previews/` assets; audit **all** screens (not just Research/Builder);
 sidebars expanded/collapsed/narrow/reopened; typography/design-token
 consistency; before/after screenshots at 1440×900, 1280×800, 1024×768, light/dark,
 empty/populated/loading/error, long content. Defect ledger §5 with dispositions.
 No redesign, no new framework, no decorative additions; reuse tokens.
+
+Executed via `tools/screenshots-desktop-v1.mjs` (new): the real app (vite dev
+seam → reference daemon) swept across **13 routes × 3 release viewports** =
+39 screenshots → `previews/v1-3.5/`, plus a measured layout/typography audit
+(`evidence/v1-2026-10-28/desktop-ui-audit.json`). This environment has no
+human eyes on pixels, so every finding is a **measured invariant** (horizontal
+overflow, viewport-piercing elements with scrollable-ancestor analysis,
+font-stack/size census, spinner persistence, console/page errors) and the PNGs
+ship alongside for owner review — nothing was promoted by inference. Results:
+overflow **0 px** on all 39 pages; true piercers **0** (all bleeding elements
+live in intentional `overflow-x:auto` strips: integrations chips, workspace
+template carousel, runs table scroller — reachable by scroll); console errors
+**0**; sidebar 72↔240 toggle (mod+b) verified at 1440/1024 + force-collapse
+<960 + persistence; typography = Inter + JetBrains Mono only, **one real
+defect found and fixed** (V1-P35-001: sonner toasts rendered the browser
+default stack — before/after computed-style evidence `ui-sans-serif` →
+`Inter`); sub-11px micro-labels RETAINED as a consistent eyebrow/mono-count
+convention (bumping ~130 elements = redesign, out of scope; axe-core a11y
+suite passes). Dark/light, populated states, and long-content variants beyond
+this sweep remain owner-side review against the shipped PNG set.
 
 ### Phase 4 — Windows/Linux packaging  ·  **PENDING (Linux portion feasible-attempt; Windows BLOCKED → native CI)**
 Repeatable CI-driven builds; Tauri packaging retained; Windows NSIS/MSI via
@@ -211,6 +231,7 @@ Disposition: FIXED(+commit) / NOT-REPRODUCED / RETAINED(rationale) / BLOCKED(own
 | V1-P5-001 | 2026-10-28 | 5 | mobile ↔ real daemon | **P0** | The mobile companion PWA cannot function against the **real** daemon; it only ever ran against the reference/demo harness. Evidence (all at HEAD `d04011ec`): (a) real daemon route registry (191 routes, `src/daemon/routes/*.routes.ts`) has **no** `/api/chats`, `/api/chats/:id/messages`, no `/api/meta/version`, and does not serve the PWA — no `/mobile/` static route exists in `src/daemon/server.ts` (only `tools/reference-daemon.mjs:259` serves `mobile/dist`); (b) shape mismatches: mobile expects `{models: []}` (`mobile/src/api/client.ts:107`) but real `/api/models` returns `{selected, runtimes, installed, catalog, …}` (`providers.routes.ts:315`); mobile expects cents budget (`types.ts` `spentTodayCents…`) but real `/api/budget` returns `{config:{perTaskUsd}, usage:{dayUsd, monthUsd}, burn:{monthlyCap}}` (`budget.routes.ts:11`); mobile expects `{approvals: []}` + `POST /api/approvals/{id}` but real serves `{pending}` + `POST /api/approvals/{id}/decision`; mobile `streamChat` posts `{chatId, content, model}` to `/api/v1/chat` but real `/api/chat` requires `{message, mode, sessionId}` (`chat.routes.ts:79`); (c) `docs/mobile/PWA.md` claims “The daemon serves the built PWA from /mobile/ when in LAN mode” — false for the real daemon; (d) the `mobile:test` chain runs only against the reference daemon and is not in CI, which is why this never failed. Both sides were born in commit `7d2338d6` and were never reconciled. | **FIXED** — daemon-side per D-5, in 4 units: `7c2a92c6` (/api/meta/version identity probe), `83889dfd` (companion read/act API: models/budget/approvals + shared-decide, PWA repointed, 7 dispatcher tests), `e638f583` (chat sync: mobile-scoped store `src/daemon/mobile-chats.ts` 0600/bounded, `/api/mobile/chat` adapter invoking the ONE `/api/chat` handler — no second loop, honest 503/429/400 pass-through, no phantom persistence on failed runs; PWA repointed; harness mirror), `4ce055f1` (real daemon serves the PWA at `/mobile/`: traversal-guarded, SPA fallback, app CSP, pre-auth shell only — data endpoints stay session-walled; verified end-to-end against `xr serve --lan` §7 #26). Retest: lan-flow 28/28, offline 12/12, segment 463 pass/0 fail, all repo gates green. Note (observation, pre-existing, retained): `os.homedir()` is snapshotted at process start in Bun, so suite files that pin `$HOME` at module load still write `~/.xr/devices.json` into the real home during tests; the new chat store reads `$HOME` per call and isolates correctly — devices registry left as-is (out of V1 scope, harmless in CI containers) |
 | V1-P5-002 | 2026-10-28 | 5 | mobile harness | P1 | Reference daemon passed the raw pathname to `mobileGate` (no `/api/v1/`→`/api/` canonicalization), so its 403-wall was weaker than production: versioned mobile requests got 404, not 403. | **FIXED** — `0ef8acfb`; lan-flow 403 checks red→green |
 | V1-P5-003 | 2026-10-28 | 5 | mobile DX | P2 | `bun run mobile:test` fails with a bare `ERR_MODULE_NOT_FOUND: web-push` instead of pointing at the documented prerequisite (`npm --prefix tools install`, `docs/mobile/PWA.md` §8); also `mobile:daemon:build` must run before `test-lan-flow` (imports `./.daemon-build/*`) with no hint. | **FIXED** — `tools/check-test-prereqs.mjs` (dependency-free preflight) gates `mobile:test`/`:lan`/`:offline` and prints the exact fix commands; new `mobile:screenshots` script follows the same gate |
+| V1-P35-001 | 2026-10-28 | 3.5 | desktop typography | P2 | Sonner `<Toaster>` in `desktop/src/App.tsx` styled colors/sizes but not the font, so every production toast (approvals, workspace ops, agent saves…) rendered the browser-default `ui-sans-serif` stack instead of the app's Inter — a visible typography break on a high-frequency surface. Found by the Phase-3.5 font-stack census (8 outlier elements across chat/builder/research). | **FIXED** — `fontFamily: 'inherit'` on the Toaster style; before/after computed-style probe: `ui-sans-serif` → `Inter` (§7 #31) |
 | V1-ENV-001 | 2026-10-28 | 0 | environment | note | Sandbox initially lacked `bubblewrap` and the Playwright Chromium binary — 26+ sandbox-security tests and all live-browser a11y tests skipped in the first full-suite run. Both were then installed and the suites re-run (§7 #17–#19). Recorded so skip-counts are interpretable. | RESOLVED in-session |
 
 ### V1-P5-001 remediation design (next implementation unit)
@@ -308,6 +329,7 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | 28 | 2026-10-28 | V1-P5-003 fix: `node tools/check-test-prereqs.mjs` (prereqs present → silent 0) + `bun run release:stamp` after package.json script additions | 0 | guard silent-passes when tools deps + `.daemon-build` exist; `release:check` → 0 after re-stamp (manifest surface hash refresh; version unchanged 1.1.1-rc.1) |
 | 29 | 2026-10-28 | Post-D gates re-run at `4ce055f1`: size-gate, claim-lint, placeholder-lint, api:schema:check, client:check, boundaries, `bun test test/release/` | 0 | all green (293 ops generated / schema-check OK); release segment 286 pass / 11 skip / 0 fail; evidence logs refreshed in `evidence/v1-2026-10-28/` (discovery-state logs preserved as `*-defect-discovery-6fail.log`, `*-pre-repoint.log`) |
 | 30 | 2026-10-28 | Phase 1 gap closure: `bun test test/desktop/{workspaces,agents,splash}-core.test.ts` + `bun run typecheck` + full `bun test test/desktop/` | 0 | **27 new tests, all pass** (10 + 13 + 4); desktop dir **452 pass / 0 fail**; typecheck green after the `landingRuns` generic extraction (behavior-identical; pinned by its tests) |
+| 31 | 2026-10-28 | Phase 3.5: `node tools/screenshots-desktop-v1.mjs` (real app × reference daemon; 13 routes × 1440×900/1280×800/1024×768) + sidebar mod+b probe + toast before/after probe | 0 | 39 screenshots → `previews/v1-3.5/`; audit JSON → evidence dir; overflow 0px and true piercers 0 on every page; console errors 0; sidebar 72↔240 ✓ at both widths; toast font `ui-sans-serif` → `Inter` after fix; `bun run typecheck` + desktop segment green post-fix |
 
 ### Prior-audit vs HEAD delta (Phase 0 exit item)
 
