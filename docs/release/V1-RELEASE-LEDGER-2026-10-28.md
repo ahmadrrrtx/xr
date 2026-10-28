@@ -192,11 +192,24 @@ convention (bumping ~130 elements = redesign, out of scope; axe-core a11y
 suite passes). Dark/light, populated states, and long-content variants beyond
 this sweep remain owner-side review against the shipped PNG set.
 
-### Phase 4 — Windows/Linux packaging  ·  **PENDING (Linux portion feasible-attempt; Windows BLOCKED → native CI)**
+### Phase 4 — Windows/Linux packaging  ·  **IN PROGRESS (2026-10-28 — toolchain + sidecar + cargo check LANDED; bundle outcome below; Windows BLOCKED → native CI)**
 Repeatable CI-driven builds; Tauri packaging retained; Windows NSIS/MSI via
 native runners (BLOCKED locally); Linux AppImage + .deb attempt locally;
 sidecar bundling verified; artifact manifest + hashes. A normal end user must
 not need Bun/Node/Rust/source.
+
+Executed (D-3 single job, after lighter gates green): `sudo apt-get install`
+GTK/WebKit dev stack (libwebkit2gtk-4.1-dev, libgtk-3-dev, appindicator,
+librsvg, soup3, javascriptcoregtk, openssl) — pkg-config webkit2gtk-4.1 OK;
+Debian cargo 1.85.1 too old for the dependency floor (several crates need
+rustc ≥ 1.88) → user-level rustup stable 1.99.1 (`~/.cargo`, system
+untouched); `bun run sidecar:compile` → `xr-engine-x86_64-unknown-linux-gnu`
+(116 MB, source/tool/target hash recorded by the script); desktop
+`tsc && vite build` PASS; **`cargo check` PASS in 2m45s** (the first real
+Rust-shell compile evidence on this line); `tauri build --bundles
+appimage,deb` attempted on 2 CPU / 2 GB — outcome recorded in §7 #34 either
+way. Environment note: `~/.cargo` and the cargo `target/` dir are NOT part of
+the workspace snapshot; re-bootstrap = rustup one-liner + the apt line above.
 
 ### Phase 5 — Mobile audit and repair  ·  **COMPLETE (2026-10-28; audit + V1-P5-001/-002/-003 remediation + retest; real-device matrix BLOCKED — see §3)**
 Actual mobile source/deps/scripts/network contracts; official-doc research
@@ -378,6 +391,7 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | 30 | 2026-10-28 | Phase 1 gap closure: `bun test test/desktop/{workspaces,agents,splash}-core.test.ts` + `bun run typecheck` + full `bun test test/desktop/` | 0 | **27 new tests, all pass** (10 + 13 + 4); desktop dir **452 pass / 0 fail**; typecheck green after the `landingRuns` generic extraction (behavior-identical; pinned by its tests) |
 | 31 | 2026-10-28 | Phase 3.5: `node tools/screenshots-desktop-v1.mjs` (real app × reference daemon; 13 routes × 1440×900/1280×800/1024×768) + sidebar mod+b probe + toast before/after probe | 0 | 39 screenshots → `previews/v1-3.5/`; audit JSON → evidence dir; overflow 0px and true piercers 0 on every page; console errors 0; sidebar 72↔240 ✓ at both widths; toast font `ui-sans-serif` → `Inter` after fix; `bun run typecheck` + desktop segment green post-fix |
 | 32 | 2026-10-28 | Phase 6: `bun test test/daemon/cross-surface-contract.test.ts` (new) + re-run of the provider/integration battery (`test/providers/`, `test/integrations/`) | 0 | cross-surface 5/5: approvals same durable rows + first-decision-wins (mobile deny sticks; desktop control/approve answers 200 {ok:false}, approvals plane 409 — one invariant, two truthful wire shapes); budget cents == desktop USD ×100; models never-empty invariant. Provider battery green (see §7 #16 parity log; files listed in Phase 6 notes) |
+| 33 | 2026-10-28 | Phase 4 toolchain: apt GTK/WebKit dev stack + rustup 1.99.1 + `bun run sidecar:compile` + desktop build + `cargo check` (desktop/src-tauri) | 0 | webkit2gtk-4.1 pkg-config OK; sidecar 116 MB with build hash; `tsc && vite build` green; **cargo check 0 errors** (Rust shell compiles against the real GTK/WebKit stack) |
 
 ### Prior-audit vs HEAD delta (Phase 0 exit item)
 
@@ -395,7 +409,7 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | D-3 | 2026-10-28 | Attempt GTK/WebKit dev install + `cargo check` in Phase 4, single job, only after lighter gates are green | Prior pass deemed it heavy for 2 GiB; sudo apt is available so attempt is legitimate, but it must not crowd out cheap evidence first |
 | D-4 | 2026-10-28 | Install environment tools to convert honest skips into evidence: `bubblewrap` (apt), Playwright Chromium, user-level Node 22 (`~/node22`, system Node untouched) for puppeteer | 45 suite skips were environmental, not product gaps; converting them yields real security/a11y/offline evidence at HEAD |
 | D-5 | 2026-10-28 | V1-P5-001 will be fixed **daemon-side** (companion adapter + `/mobile/` static + `/api/meta/version`), not by rewriting the mobile app | Preserves the shipped mobile app and documented intent (PWA.md); the daemon already owns every underlying surface; one execution authority preserved (§5 design) |
-| D-6 | 2026-10-28 | (a) `TREE_CEILING` 174,500 → **175,500** in two dated steps (175,000 at `83889dfd`, 175,500 at `e638f583`) with reason trails in `scripts/size-gate.ts` and `--stamp-docs` re-stamps; (b) commit the `evidence/v1-2026-10-28/` dir (logs + PWA PNGs, ~1.7 MB) into the repo | (a) the mobile companion repair legitimately adds ~500 LOC (store, adapter, static serving, tests) — the ceiling is a drift alarm, not a straitjacket; every raise is dated + attributed in the script. (b) The brief demands dated evidence; ledger rows citing logs that live only in the workspace would not survive the branch |
+| D-6 | 2026-10-28 | (a) `TREE_CEILING` 174,500 → **<!-- XR:TREE-CEILING -->175,500<!-- /XR:TREE-CEILING -->** in two dated steps (175,000 at `83889dfd`, the ceiling value above at `e638f583`) with reason trails in `scripts/size-gate.ts` and `--stamp-docs` re-stamps; (b) commit the `evidence/v1-2026-10-28/` dir (logs + PWA PNGs, ~1.7 MB) into the repo | (a) the mobile companion repair legitimately adds ~500 LOC (store, adapter, static serving, tests) — the ceiling is a drift alarm, not a straitjacket; every raise is dated + attributed in the script. (b) The brief demands dated evidence; ledger rows citing logs that live only in the workspace would not survive the branch |
 
 ## 9. Closure policy and drift controls
 

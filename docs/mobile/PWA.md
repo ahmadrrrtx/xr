@@ -16,12 +16,19 @@ your own WiFi. There is no XR cloud, no relay, no sync server.
 | Mobile PWA (React 18 + Vite + Workbox) | `mobile/` — its own package.json, its own build |
 | Daemon LAN mode (`xr serve --lan`) | `src/cli/serve-lan.ts`, `src/daemon/lan-tls.ts` |
 | Pairing, sessions, endpoint gating | `src/daemon/mobile-pairing.ts`, `src/daemon/mobile-devices.ts` |
+| Companion API (models / budget / approvals / chats / chat SSE) | `src/daemon/routes/mobile-companion.routes.ts` — one wire-form adapter over the desktop surfaces |
+| Companion chat store (mobile-scoped sync) | `src/daemon/mobile-chats.ts` (`~/.xr/mobile-chats.json`, 0600, bounded) |
+| PWA static serving (`/mobile/`) | `src/daemon/routes/mobile-companion.routes.ts` (LAN mode; `XR_MOBILE_DIST` overrides the `mobile/dist` location for packaged layouts) |
 | Web Push (VAPID + double encryption) | `src/daemon/web-push.ts` |
 | Desktop Settings → Mobile card | `desktop/src/components/settings/MobileCard.tsx` |
 | Reference daemon (test harness) | `tools/reference-daemon.mjs` |
 
 The daemon serves the built PWA from `/mobile/` when in LAN mode, so the phone
-needs nothing but a browser and your WiFi.
+needs nothing but a browser and your WiFi. The shell is static and loads
+before pairing; every data endpoint (`/api/mobile/*`) requires a paired
+session. Chat sends run through the same execution path as the desktop
+(`/api/chat` — preflight, lane serialization, durable approvals), and a
+provider that is offline answers 503 honestly on the phone.
 
 ## 2. Build & run
 
@@ -108,6 +115,8 @@ working on its next request), or phone **Settings → Unpair this device**.
 | Phone can't reach the LAN URL | Different network, client isolation on the router, or the desktop firewall. `xr serve` without `--lan` is loopback-only. |
 | Push never arrives | Desktop asleep/offline, or notifications denied in phone settings. Settings → Notifications shows the state. |
 | "Not available on mobile" (403) | Correct — files/terminal/git/MCP stay on desktop and CLI. |
+| Chat send answers 503 "Provider offline" | Honest state — the phone never fabricates a reply. Start/configure the provider the desktop uses. |
+| "mobile/dist absent" page at `/mobile/` | The PWA build isn't next to the daemon. Build it (`npm --prefix mobile run build`) or point `XR_MOBILE_DIST` at the packaged layout. |
 
 ## 8. Dev workflow
 
@@ -115,6 +124,8 @@ working on its next request), or phone **Settings → Unpair this device**.
 npm --prefix tools install      # once — harness deps (Node 22.12+ for puppeteer 25; never part of the shipped package)
 npm --prefix mobile run dev     # Vite on 127.0.0.1:5180, proxies /api to :3141
 npm run mobile:daemon:build     # bundle the daemon TS modules for the harness
+bun run mobile:test             # guarded preflight (tools deps + daemon build) → web-push, lan-flow, offline suites
+bun run mobile:screenshots      # evidence captures of the shipped PWA (needs the reference daemon + XR_DAEMON_TOKEN)
 npm run mobile:daemon:lan       # full route surface + demo data (boot banner prints the token)
 npm run mobile:test:lan         # pairing/gating/revocation assertions   (needs XR_DAEMON_TOKEN)
 npm run mobile:test:push        # RFC 8291/8188 cross-check vs web-push
