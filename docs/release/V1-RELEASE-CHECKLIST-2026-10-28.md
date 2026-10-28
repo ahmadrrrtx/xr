@@ -17,12 +17,12 @@
 | Typecheck (root + desktop) | PASS | §7 #7, #25–#32 passim |
 | Module boundaries | PASS | §7 #8 |
 | Desktop build (`tsc && vite build`) | PASS | §7 #9, re-run during Phase 4 |
-| Parity suite (55 segments, linux) | **5186 pass / 0 fail / 45 skip** at the Phase-0 baseline commit; RE-RUN REQUIRED at branch head before merge (§4 below) | §7 #16 |
+| Parity suite (55 segments, linux) | **AT HEAD `e61c7261`: 5230 tests · 5215 pass / 0 fail / 15 skip** (baseline 5145/41 → +44 new tests, +26 skip-conversions, 0 regressions) | §7 #35, `evidence/…/parity-suite-linux-final.log` |
 | OS-sandbox + namespace suites (bwrap installed) | 9+38 pass | §7 #17–#18 |
 | a11y suite (live Chromium) | 53 pass | §7 #19 |
-| Mobile harness battery (web-push, lan-flow, offline) | 28/28 + 12/12 + push crypto | §7 #22–#26 |
+| Mobile harness battery (web-push, lan-flow, offline) | 28/28 + 12/12 + push crypto (sources unchanged since `962cfadc`; mobile typecheck/build/audit re-run at HEAD: 0 vulns) | §7 #22–#26, #36 |
 | Rust shell `cargo check` (webkit2gtk-4.1, rustc 1.99.1) | PASS — first real compile evidence on this line | §7 #33 |
-| Rust shell `cargo test` | NOT RUN locally (RAM budget spent on the bundle build) — run in §4 before merge | AGENTS.md battery |
+| Rust shell `cargo test` | **PASS — 170 tests / 0 failed** (single-job; first attempt ENOSPC, freed + retried) | §7 #36, `evidence/…/cargo-test.log` |
 | Sidecar compile (bun → xr-engine-x86_64-unknown-linux-gnu) | PASS (116 MB, smoke-gated by the script) | Phase 4 log |
 | Linux bundle (AppImage + .deb) | **BUILT + INSTALL-VERIFIED** (AppImage 172.65 MiB, deb 76.52 MiB; dpkg -i + Xvfb launch + sidecar `--version` all pass) | §7 #34, `evidence/v1-2026-10-28/linux-artifacts.json` |
 | Size gate | PASS at TREE_CEILING <!-- XR:TREE-CEILING -->175,500<!-- /XR:TREE-CEILING --> (dated raises per ADR-0028 + D-6) | §5/D-6 |

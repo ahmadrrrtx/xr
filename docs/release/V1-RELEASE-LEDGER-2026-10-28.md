@@ -91,7 +91,7 @@ criteria are met or its residue is recorded in §5 with dispositions.
 - [x] Toolchain: bun installed, `bun install --frozen-lockfile` (root) PASS — 82 pkgs, 0.75s
 - [x] Root dependency install evidence re-verified for desktop + mobile (457 pkgs / lockfile clean)
 - [x] Baseline gate battery at HEAD executed and logged (§7 #3–#15): release:check, channel:check, claim-lint, placeholder-lint, boundaries, typecheck, unit-tier, desktop build, mobile install/typecheck/build — **all PASS**
-- [x] Full segmented Linux suite (`scripts/parity-suite-runner.sh linux`) — **PASS: 55 segments, 5186 tests, 0 fail, 45 skips** (skips resolved where possible: §7 #17–#19)
+- [x] Full segmented Linux suite (`scripts/parity-suite-runner.sh linux`) — **PASS at baseline AND at final HEAD `e61c7261`: 55 segments, 5230 tests, 5215 pass / 0 fail / 15 skip** (baseline 5186 ran / 41 skip; deltas = +44 new tests + 26 skip-conversions per §7 #35)
 - [x] Prior-audit-vs-HEAD delta reviewed: PR #199 (RC, 398 files) + PR #200 (CLI npm, 27 files) landed on main; RC evidence re-executed at HEAD instead of trusted; RC BLOCKED items still BLOCKED (§7 delta note)
 - [x] This ledger written, committed, linked from release docs index
 
@@ -282,16 +282,74 @@ malformed responses, rate limits, retries, timeouts, cancellation;
 desktop/mobile same-contract confirmation; capability docs match behavior;
 tested vs unverified providers distinguished.
 
-### Phase 7 — Tests and release gates  ·  **PENDING**
+### Phase 7 — Tests and release gates  ·  **COMPLETE (2026-10-28, at branch HEAD `e61c7261`)**
 Run the AGENTS.md battery to the extent the environment allows (§7 command
 list); fix regressions; record exact limitations. No gate-loosening, no
 silent skips.
 
-### Phase 8 — Version 1 release verification  ·  **PENDING (publication is owner-only)**
+Final battery, all at HEAD (§7 #35–#36 for the exact rows):
+- **Parity suite (the authority): `bash scripts/parity-suite-runner.sh linux`
+  → 55 segments, 5230 tests, 5215 pass / 0 fail / 15 skip, PARITY_EXIT=0**
+  (`evidence/v1-2026-10-28/parity-suite-linux-final.log`). Reconciled against
+  the Phase-0 baseline with the same metric (5186 ran / 5145 pass / 41 skip):
+  +44 new tests from this pass's defect work, and 26 environmental skips
+  CONVERTED to real passes by V1-ENV-001 (bwrap, Chromium, Node 22) — zero
+  regressions, zero gate-loosening. The remaining 15 skips are the honest
+  platform/OS-gated set (win32/darwin segments of platform-parity, live-API
+  canaries).
+- Fast gates at HEAD: release:check, channel:check, claim-lint,
+  placeholder-lint, size-gate (ceiling markers truthful), boundaries,
+  api:schema:check, client:check — all green (§7 #29, refreshed logs).
+- Typecheck (root + desktop) green; desktop `tsc && vite build` green (§7 #33).
+- Sidecar compile green (116 MB, hashed); **cargo check green** (§7 #33);
+  **cargo test** result in §7 #36.
+- Mobile at HEAD: typecheck, build, `npm audit --omit=dev` (0 vulns) green;
+  the harness battery (web-push / lan-flow 28/28 / offline 12/12) ran against
+  the identical daemon+mobile sources at `962cfadc` — the commits after it
+  touched desktop/docs only, so those logs remain the current evidence (noted
+  here so the log's commit association is explicit, not assumed).
+- Not run in this environment (BLOCKED, owner-side): native Windows/macOS
+  legs of the battery (CI), live-provider canaries, updater end-to-end.
+
+### Phase 8 — Version 1 release verification  ·  **COMPLETE for every owner-executable step (2026-10-28); publication itself remains owner-only by design**
 Manifest/workflow authority; artifact metadata/triples/checksums/SBOM;
 installability from candidate artifacts; updater across two versions (BLOCKED
 until owner provisions keys — never enable unprovisioned); signing/provenance
 gates = owner steps documented; final release checklist + honest verdict.
+
+Verified in this pass (all evidence-dated above):
+- **Manifest authority**: `release:check` (10 stamped surfaces in sync at
+  1.1.1-rc.1 after the package.json script additions were re-stamped) and
+  `channel:check` green at HEAD; `claim-lint` enforces every published number
+  (ceiling markers) and doc link. The manifest remains the single identity
+  authority — no hand-edited stamped surface at any point in this pass.
+- **Artifact metadata/checksums**: Linux AppImage + .deb with SHA256, control
+  blocks, sidecar-inclusion and install/launch evidence in
+  `evidence/v1-2026-10-28/linux-artifacts.json` (§7 #34). SBOM: the repo's
+  existing SBOM pipeline (supply-chain.yml) runs in CI with the native
+  matrix — not duplicable here and not fabricated.
+- **Installability from candidate artifacts**: the .deb was installed and the
+  app launched (Xvfb) with the bundled sidecar reporting the manifest version
+  (§7 #34). AppImage extraction verified. A normal end user needs no
+  Bun/Node/Rust/source.
+- **Updater across two versions**: BLOCKED — owner must provision
+  `TAURI_UPDATER_KEY` (L-011) before any end-to-end attempt; the updater
+  stays fail-closed/unprovisioned and NO unprovisioned enablement was done
+  (verified fail-closed state remains tested by the existing suite).
+- **Signing/provenance**: BLOCKED — owner secrets only; DESKTOP_SIGNING.md is
+  the runbook; nothing here pretended to sign.
+- **No-retag / no-push discipline**: zero remote operations in this pass —
+  branch `work/v1-release-stabilization-2026-10-28` is local-only with 15
+  commits; withdrawn v1.1.0 untouched; protected `main` untouched; no tags
+  created.
+- **Final checklist**: `V1-RELEASE-CHECKLIST-2026-10-28.md` (gate table,
+  dispositions, owner-side blockers, before-merge battery, after-merge order).
+- **Honest verdict**: the branch is mergeable from an engineering-evidence
+  standpoint (0 failing gates; P0/P1/P2 defects from this pass all FIXED and
+  regression-pinned). What stands between this branch and a published V1 is
+  exclusively owner-side: native Windows/macOS builds, signing + updater
+  keys, live-provider and real-device legs, human-eye UI review, and the
+  merge/tag/publish dispatch itself.
 
 ## 5. Defect ledger (living)
 
@@ -405,6 +463,8 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | 32 | 2026-10-28 | Phase 6: `bun test test/daemon/cross-surface-contract.test.ts` (new) + re-run of the provider/integration battery (`test/providers/`, `test/integrations/`) | 0 | cross-surface 5/5: approvals same durable rows + first-decision-wins (mobile deny sticks; desktop control/approve answers 200 {ok:false}, approvals plane 409 — one invariant, two truthful wire shapes); budget cents == desktop USD ×100; models never-empty invariant. Provider battery green (see §7 #16 parity log; files listed in Phase 6 notes) |
 | 33 | 2026-10-28 | Phase 4 toolchain: apt GTK/WebKit dev stack + rustup 1.99.1 + `bun run sidecar:compile` + desktop build + `cargo check` (desktop/src-tauri) | 0 | webkit2gtk-4.1 pkg-config OK; sidecar 116 MB with build hash; `tsc && vite build` green; **cargo check 0 errors** (Rust shell compiles against the real GTK/WebKit stack) |
 | 34 | 2026-10-28 | Phase 4 bundles: `tauri build --bundles appimage,deb` (retry with swap) + `dpkg -i` + `xvfb-run` launch + `xr-engine --version` | 0 | AppImage 172.65 MiB + deb 76.52 MiB (sha256 in `evidence/v1-2026-10-28/linux-artifacts.json`); deb installs on Debian 13; app launches under Xvfb (runs the full window); sidecar reports `v1.1.1-rc.1 (Graphite)`. First attempt honestly recorded: OOM SIGKILL on the final crate without swap |
+| 35 | 2026-10-28 | **Phase 7 final**: `bash scripts/parity-suite-runner.sh linux` at branch HEAD `e61c7261` | 0 | **55 segments · 5230 tests · 5215 pass / 0 fail / 15 skip** (`parity-suite-linux-final.log`). Same-metric reconciliation vs the Phase-0 baseline (5186 ran / 5145 pass / 41 skip): **+44 new tests** from this pass's defect work, **26 environmental skips converted to passes** (V1-ENV-001), zero regressions. Remaining 15 skips = platform-gated (win32/darwin segments, live-API canaries) |
+| 36 | 2026-10-28 | **Phase 7 final**: `cargo test` (desktop/src-tauri, single-job) + mobile gates at HEAD (`typecheck`, `build`, `audit --omit=dev`) | 0 | Rust shell **170 passed / 0 failed / 0 ignored** (cargo-test.log; first attempt hit ENOSPC from the bundle artifacts — freed by removing the swapfile + `cargo clean --release`, retried clean); mobile typecheck + build green, **0 vulnerabilities** |
 
 ### Prior-audit vs HEAD delta (Phase 0 exit item)
 
