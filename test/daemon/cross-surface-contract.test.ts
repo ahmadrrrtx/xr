@@ -45,7 +45,15 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  rmSync(process.env.HOME!, { recursive: true, force: true });
+  // PR #201 Windows lane: close the store this file opened before deleting its
+  // temp HOME (an open connection is EBUSY on win32), then retry the delete for
+  // the Windows delete-pending state — same layered cleanup as suite-tmp.
+  store?.close();
+  try {
+    rmSync(process.env.HOME!, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
+  } catch {
+    // Best effort; suite-tmp's start-up sweep reclaims the root.
+  }
 });
 
 const get = (path: string, headers: Record<string, string> = {}) =>

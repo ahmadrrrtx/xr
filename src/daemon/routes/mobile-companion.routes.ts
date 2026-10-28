@@ -18,7 +18,7 @@ import { BudgetService } from "../../services/budget-service.ts";
 import { decideApproval } from "./approvals.routes.ts";
 import { chatRoutes } from "./chat.routes.ts";
 import { appendMessage, createChat, listChats, listMessages } from "../mobile-chats.ts";
-import { extname, join, normalize, resolve } from "node:path";
+import { extname, join, normalize, resolve, sep } from "node:path";
 import { readFile, stat } from "node:fs/promises";
 
 /** Session wall: companion ops need a paired mobile session or a privileged
@@ -361,7 +361,14 @@ async function serveMobileDist(ctx: DaemonRouteContext): Promise<Response> {
       "referrer-policy": "no-referrer",
       "cross-origin-opener-policy": "same-origin",
       "service-worker-allowed": "/mobile/",
-      "cache-control": filePath.includes("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+      // V1 CI fix (2026-10-28, PR #201 Windows lane): `join` emits backslashes
+      // on win32, so a literal "/assets/" test failed there and hashed assets
+      // silently got "no-cache". Decide on a separator-normalized view of the
+      // FINAL served path (post directory→index.html and SPA fallback), so the
+      // cache policy follows the bytes actually being served.
+      "cache-control": filePath.split(sep).join("/").includes("/assets/")
+        ? "public, max-age=31536000, immutable"
+        : "no-cache",
     },
   });
 }

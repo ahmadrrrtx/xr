@@ -27,6 +27,7 @@ const BASE = "http://127.0.0.1:7847";
 const auth = { authorization: `Bearer ${TOKEN}` };
 
 let store!: import("../../src/state/workspace-store.ts").Store;
+let offStore!: import("../../src/state/workspace-store.ts").Store;
 type Dispatch = ReturnType<typeof import("../../src/daemon/server.ts").makeHandler>;
 let handler!: Dispatch;
 let offLan!: Dispatch;
@@ -42,11 +43,35 @@ beforeAll(async () => {
   const lan = await prepareLan(0);
   store = new Store(join(process.env.HOME!, "companion.db"));
   handler = makeHandler(store, TOKEN, { lan: { cert: lan.cert } });
-  offLan = makeHandler(new Store(join(process.env.HOME!, "offlan.db")), TOKEN);
+  offLan = makeHandler((offStore = new Store(join(process.env.HOME!, "offlan.db"))), TOKEN);
 });
 
-afterAll(() => {
-  rmSync(process.env.HOME!, { recursive: true, force: true });
+afterAll(async () => {
+  // PR #201 Windows lane: an open WorkspaceStore connection is EBUSY on every
+  // delete that follows (POSIX hides it by unlinking open files). Close the
+  // stores this file opened — plus any connection the handler's routes opened
+  // under THIS file's temp HOME (the /api/mobile/chat path opens
+  // $XR_HOME/xr.db internally) — scoped by canonical key so stores belonging
+  // to a parallel test file are never touched, then remove with the
+  // delete-pending retry (same layered cleanup as test/helpers/suite-tmp.ts).
+  store?.close();
+  offStore?.close();
+  const { WorkspaceStore } = await import("../../src/state/workspace-store.ts");
+  const { canonicalPathKey } = await import("../../src/util/paths.ts");
+  const home = canonicalPathKey(process.env.HOME!);
+  const registry = WorkspaceStore.sharedRegistry();
+  for (const key of [...registry.keys()]) {
+    if (!key.startsWith(home)) continue; // canonical keys: resolved + (win32) lowercased
+    const shared = registry.get(key)!;
+    registry.delete(key);
+    shared.gate.closeConnection(); // same forced close as store-hygiene's closeAllStores
+  }
+  try {
+    rmSync(process.env.HOME!, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
+  } catch {
+    // Best effort (suite-tmp's start-up sweep reclaims the root if a handle
+    // outlives the retries); a busy temp dir must not fail the suite.
+  }
 });
 
 const get = (path: string, headers: Record<string, string> = {}) =>
