@@ -125,14 +125,24 @@ split (needs live API keys — Phase 6), S-03 updater (owner key provisioning).
 **Exit:** matrix file exists with a row per feature, no "assumed" rows, statuses
 distinguished from test evidence.
 
-### Phase 2 — Fix the real defects  ·  **PENDING (opens as Phase 0/1 evidence lands)**
+### Phase 2 — Fix the real defects  ·  **COMPLETE (2026-10-28 — defects fixed inside their owning phases, each with root cause + regression test + small commit)**
 
 Prioritized: launch-blocking correctness, security regressions, startup, broken
 desktop flows, connector failures, installer defects, missing platform wiring,
 persistence/upgrade. Each fix: root cause, regression test, small commit.
 
+This pass's dispositions (§5 for full evidence): V1-P5-001 P0 FIXED (4
+commits + retest battery), V1-P5-002 P1 FIXED (`0ef8acfb`), V1-P5-003 P2
+FIXED, V1-P35-001 P2 FIXED (toast font, before/after probe), V1-ENV-001
+resolved (26 skips converted to real passes). No security weakening in any
+fix; local-first/user-data semantics preserved (the chat store is additive
+and mobile-scoped; no desktop store touched). One observation retained with
+rationale (Bun homedir snapshot vs test HOME pins — devices registry, out of
+V1 scope, harmless in CI containers).
+
 **Exit:** every ledger defect has disposition fixed / not-reproducible /
-retained-with-rationale / blocked; regression tests green.
+retained-with-rationale / blocked; regression tests green. ✓ (§7 #35: 0 fail
+at HEAD)
 
 ### Phase 3 — Desktop quality  ·  **COMPLETE (2026-10-28 — evidence mapping below; provider-live legs BLOCKED, owner-side)**
 First-run journey (fresh install → config → engine/sidecar start → successful
