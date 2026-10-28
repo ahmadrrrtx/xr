@@ -12,8 +12,40 @@
  * backward compatibility and forwards to the same durable store.
  */
 
-import { route, type DaemonRoute } from "./router.ts";
+import { route, type DaemonRoute, type DaemonRouteContext } from "./router.ts";
 import { getApprovalStore } from "../../control/approval-store.ts";
+
+/**
+ * V1-P5-001 — the ONE decide path, shared by the desktop decision route and
+ * the mobile companion route (first decision wins from ANY surface; the same
+ * durable store, the same audit trail, the same actor derived at the auth
+ * seam). Each surface parses its own wire form and hands the boolean here, so
+ * approval semantics cannot fork between surfaces.
+ */
+export async function decideApproval(
+  ctx: Pick<DaemonRouteContext, "json" | "state" | "config" | "actor">,
+  id: string,
+  approved: boolean,
+): Promise<Response> {
+  const approvalsCfg = ctx.config?.approvals;
+  const store = getApprovalStore(ctx.state.store, {
+    defaultTtlMs: approvalsCfg?.defaultTtlMs,
+    perSurface: approvalsCfg?.perSurface,
+  });
+  const record = store.get(id);
+  if (!record) return ctx.json({ error: "approval not found" }, 404);
+  const ok = store.decide(id, approved, {
+    channel: "daemon",
+    userId: ctx.actor ?? "anonymous",
+  });
+  if (!ok) {
+    return ctx.json(
+      { error: "approval already decided or timed out", decision: record.decision },
+      409,
+    );
+  }
+  return ctx.json({ ok: true, decision: approved ? "approved" : "denied" });
+}
 
 export function approvalRoutes(): DaemonRoute[] {
   return [
@@ -61,24 +93,7 @@ export function approvalRoutes(): DaemonRoute[] {
           if (typeof body?.approved !== "boolean") {
             return json({ error: "expected { approved: boolean }" }, 400);
           }
-          const approvalsCfg = config?.approvals;
-          const store = getApprovalStore(state.store, {
-            defaultTtlMs: approvalsCfg?.defaultTtlMs,
-            perSurface: approvalsCfg?.perSurface,
-          });
-          const record = store.get(id);
-          if (!record) return json({ error: "approval not found" }, 404);
-          const ok = store.decide(id, body.approved, {
-            channel: "daemon",
-            userId: actor ?? "anonymous",
-          });
-          if (!ok) {
-            return json(
-              { error: "approval already decided or timed out", decision: record.decision },
-              409,
-            );
-          }
-          return json({ ok: true, decision: body.approved ? "approved" : "denied" });
+          return await decideApproval({ json, state, config, actor }, id, body.approved);
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }

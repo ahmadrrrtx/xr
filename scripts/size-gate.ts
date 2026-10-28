@@ -187,8 +187,24 @@ export const THRESHOLD = 800;
 // extension/CI work added nothing under src/. No waived giant grew
 // (daemon/server.ts shrank by 10). Measured 174,068 (+403). Headroom ~432.
 // Needs maintainer sign-off.
-export const TREE_CEILING = 174_500; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
-// the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
+export const TREE_CEILING = 175_000; // V1 · Phase 5 mobile companion repair · 174,500 → 175,000 (2026-10-28):
+// V1-P5-001 (release ledger docs/release/V1-RELEASE-LEDGER-2026-10-28.md §5):
+// the shipped PWA spoke a companion contract that existed only in the reference
+// harness, so the production app could not function against the real daemon.
+// This pass adds the real serving surface: /api/meta/version identity probe
+// (meta.routes.ts) +15, the companion read/act API
+// (src/daemon/routes/mobile-companion.routes.ts, 142 LOC: models list, cents
+// budget with NO fabricated daily cap, approvals list + the shared decide path
+// extracted verbatim into approvals.routes.ts decideApproval so the phone and
+// the desktop cannot fork approval semantics) +30, and their contract/schema
+// entries + regenerated client. The chat adapter and /mobile/ static serving
+// land separately under the same ceiling. No waived giant grew
+// (approvals.routes.ts is net +30 from the extraction, not growth of a waived
+// module). Measured 174,686 (+186 over 174,500). Headroom ~314.
+// Needs maintainer sign-off.
+//
+// ── Phase 28 history (174,500's raise, 2026-10-13): the mobile companion's
+// LAN half: the opt-in `--lan` transport (self-signed
 // P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
 // the device registry (hashed session tokens, revocation, mobile-kind tag),
 // on-demand 6-digit pairing (10-minute TTL, single-use, per-source rate limit,

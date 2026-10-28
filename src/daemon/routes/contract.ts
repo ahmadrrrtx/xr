@@ -805,12 +805,6 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     tag: "system",
     stability: "experimental",
   },
-  "meta.version.get": {
-    summary:
-      "Companion identity probe: daemon version, host URL, LAN flag. Auth-gated (a 401 here is how the mobile app detects a revoked session).",
-    tag: "system",
-    stability: "stable",
-  },
   ...MOBILE_CONTRACT,
 };
 

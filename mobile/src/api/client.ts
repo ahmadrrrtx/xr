@@ -105,9 +105,9 @@ export const api = {
     request<{ fingerprint: string }>('/api/mobile/cert-fingerprint'),
 
   models: (): Promise<{ models: ModelInfo[] }> =>
-    request<{ models: ModelInfo[] }>('/api/v1/models'),
+    request<{ models: ModelInfo[] }>('/api/mobile/models'),
 
-  budget: (): Promise<Budget> => request<Budget>('/api/v1/budget'),
+  budget: (): Promise<Budget> => request<Budget>('/api/mobile/budget'),
 
   /* --------------------------------------------------------------- chats --- */
 
@@ -125,13 +125,13 @@ export const api = {
   /* ----------------------------------------------------------- approvals --- */
 
   approvals: (status: 'pending' | 'resolved' | 'all' = 'pending'): Promise<{ approvals: Approval[] }> =>
-    request<{ approvals: Approval[] }>(`/api/v1/approvals?status=${status}`),
+    request<{ approvals: Approval[] }>(`/api/mobile/approvals?status=${status}`),
 
   approval: (id: string): Promise<Approval> =>
-    request<Approval>(`/api/v1/approvals/${encodeURIComponent(id)}`),
+    request<Approval>(`/api/mobile/approvals/${encodeURIComponent(id)}`),
 
   decide: (id: string, decision: 'approve' | 'deny'): Promise<{ ok: true }> =>
-    request<{ ok: true }>(`/api/v1/approvals/${encodeURIComponent(id)}`, {
+    request<{ ok: true }>(`/api/mobile/approvals/${encodeURIComponent(id)}`, {
       method: 'POST',
       json: { decision },
     }),

@@ -204,13 +204,32 @@ const MODELS = [
   { id: 'qwen2.5-coder-32b-local', label: 'Qwen 2.5 Coder 32B (local)', provider: 'Ollama', local: true },
 ];
 
-const BUDGET = {
+/** V1-P5-001 — companion cents shape, mirroring the REAL daemon's
+ * /api/mobile/budget (no fabricated daily cap; per-task + monthly are the
+ * governed caps). */
+const COMPANION_BUDGET = {
   spentTodayCents: 382,
-  dailyCapCents: 500,
   spentMonthCents: 6140,
   monthCapCents: 15000,
+  perTaskCents: 25,
   currency: 'USD',
 };
+
+/** V1-P5-001 — the GENERAL /api/v1/budget shape the real daemon serves
+ * (budget.routes.ts): config + persisted + usage in USD, not cents. */
+const GENERAL_BUDGET = {
+  config: { perTaskUsd: 0.25, perTaskTokens: 250_000 },
+  persisted: { monthly_cap: 150 },
+  usage: { totalUsd: 61.4, totalTokens: 1_234_567, dayUsd: 3.82, monthUsd: 61.4 },
+  accounting: 'standard/declared token-cost estimates, not a provider invoice ceiling',
+};
+
+/** V1-P5-001 — the GENERAL /api/v1/models shape the real daemon serves
+ * (providers.routes.ts): selected + runtimes, not a bare model array. */
+const GENERAL_MODELS = {
+  selected: { runtime: 'ollama', model: 'qwen2.5-coder-32b-local', routing: 'hybrid', provider: 'ollama', enabled: true },
+};
+
 
 /* ------------------------------------------------------------------ helpers --- */
 
@@ -406,6 +425,53 @@ const server = createServer(
       return;
     }
 
+    /* V1-P5-001 — companion read/act API mirror. The REAL daemon serves these
+     * from src/daemon/routes/mobile-companion.routes.ts (same session wall:
+     * anonymous 401); the harness mirrors them HERE because the bundled
+     * pairing transport 404s every unknown /api/mobile/* path. */
+    {
+      const companionGet =
+        (pathname === '/api/mobile/models' || pathname === '/api/mobile/budget' || pathname === '/api/mobile/approvals') &&
+        req.method === 'GET';
+      const companionDecide = /^\/api\/mobile\/approvals\/[\w-]+$/.test(pathname) && req.method === 'POST';
+      if (companionGet || companionDecide) {
+        if (!session.device && !session.privileged) {
+          json(res, { error: 'Not paired' }, 401);
+          return;
+        }
+        if (pathname === '/api/mobile/models') {
+          json(res, { models: MODELS });
+          return;
+        }
+        if (pathname === '/api/mobile/budget') {
+          json(res, COMPANION_BUDGET);
+          return;
+        }
+        if (pathname === '/api/mobile/approvals') {
+          const status = searchParams.get('status') ?? 'pending';
+          const approvals = status === 'all' ? APPROVALS : APPROVALS.filter((a) => a.status === status);
+          json(res, { approvals });
+          return;
+        }
+        const id = pathname.split('/')[3] ?? '';
+        const approval = APPROVALS.find((a) => a.id === id);
+        if (!approval) {
+          json(res, { error: 'Not found' }, 404);
+          return;
+        }
+        let parsed = { decision: 'approve' };
+        try {
+          parsed = JSON.parse(await readBody(req));
+        } catch {
+          /* default */
+        }
+        approval.status = parsed.decision === 'deny' ? 'denied' : 'approved';
+        approval.resolvedAt = Date.now();
+        json(res, { ok: true, decision: approval.status === 'denied' ? 'denied' : 'approved' });
+        return;
+      }
+    }
+
     const mobileRoutes = await handleMobileRoutes(request, url, session, {
       ctx,
       vapidPublicKey,
@@ -456,11 +522,11 @@ const server = createServer(
         return;
 
       case pathname === '/api/v1/models':
-        json(res, { models: MODELS });
+        json(res, GENERAL_MODELS);
         return;
 
       case pathname === '/api/v1/budget':
-        json(res, BUDGET);
+        json(res, GENERAL_BUDGET);
         return;
 
       case pathname === '/api/v1/chats' && req.method === 'GET':

@@ -25,3 +25,9 @@ export const MobilePushSubscribeRequest = z.object({
 
 /** Mutating mobile operations with an intentionally EMPTY body (Phase 2.2: a stray key is surfaced, never swallowed). */
 export const MobileEmptyRequest = z.object({}).describe("No request fields.");
+
+/** V1-P5-001 — companion approval decision (the phone's wire form; the shared
+ * decide path converts to the durable store's boolean). */
+export const MobileApprovalDecideRequest = z.object({
+  decision: z.enum(["approve", "deny"]).describe("The companion's decision on a pending approval (first decision wins from any surface)."),
+});
