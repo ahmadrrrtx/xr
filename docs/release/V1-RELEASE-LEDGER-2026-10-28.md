@@ -91,12 +91,11 @@ criteria are met or its residue is recorded in §5 with dispositions.
 - [x] Toolchain: bun installed, `bun install --frozen-lockfile` (root) PASS — 82 pkgs, 0.75s
 - [x] Root dependency install evidence re-verified for desktop + mobile (457 pkgs / lockfile clean)
 - [x] Baseline gate battery at HEAD executed and logged (§7 #3–#15): release:check, channel:check, claim-lint, placeholder-lint, boundaries, typecheck, unit-tier, desktop build, mobile install/typecheck/build — **all PASS**
-- [ ] Full segmented Linux suite (`scripts/parity-suite-runner.sh linux`) — RUNNING (§7 #16)
+- [x] Full segmented Linux suite (`scripts/parity-suite-runner.sh linux`) — **PASS: 55 segments, 5186 tests, 0 fail, 45 skips** (skips resolved where possible: §7 #17–#19)
 - [x] Prior-audit-vs-HEAD delta reviewed: PR #199 (RC, 398 files) + PR #200 (CLI npm, 27 files) landed on main; RC evidence re-executed at HEAD instead of trusted; RC BLOCKED items still BLOCKED (§7 delta note)
 - [x] This ledger written, committed, linked from release docs index
 
-**Exit:** ledger committed; baseline gates logged with honest statuses; HEAD
-delta vs prior audits understood.
+**Exit: COMPLETE (2026-10-28).** Phase 1 bootstrap done (matrix file); Phase 2/5 opened by evidence (defect ledger §5).
 
 ### Phase 1 — Complete feature inventory  ·  **PENDING**
 
@@ -144,13 +143,25 @@ native runners (BLOCKED locally); Linux AppImage + .deb attempt locally;
 sidecar bundling verified; artifact manifest + hashes. A normal end user must
 not need Bun/Node/Rust/source.
 
-### Phase 5 — Mobile audit and repair  ·  **PENDING**
+### Phase 5 — Mobile audit and repair  ·  **IN PROGRESS (opened 2026-10-28)**
 Actual mobile source/deps/scripts/network contracts; official-doc research
 recorded; pairing/expiry/QR/TLS-fingerprint/authn/logout/reconnect; approvals +
 daemon-confirmed success only; offline queue/retry; Android/iOS browser layout,
 installability, keyboard, safe areas; tokens-not-in-localStorage; mobile-session
 endpoint prohibitions; `npm --prefix mobile run build/typecheck` + existing
 `mobile:test:*` tools. No hosted-service/telemetry additions.
+
+Evidence gathered 2026-10-28: build/typecheck PASS (#12/#13); production-dep
+audit 0 vulns (#14); web-push crypto cross-check PASS (#22); lan-flow vs
+reference daemon → **defect cluster found** (#23, §5 V1-P5-001/-002, one fix
+landed); offline SW/outbox behavior PASS in real headless Chrome (#24);
+security invariants verified in source (no token in localStorage — HttpOnly
+cookie; cert pin in IndexedDB; 6-digit single-use 10-min pairing code; 403
+wall on canonical path in real daemon).
+
+**Open:** V1-P5-001 (P0 companion-contract gap, remediation design in §5),
+V1-P5-003 (DX), real-device Android/iOS matrix (BLOCKED — no devices),
+adversarial retest after V1-P5-001 lands.
 
 ### Phase 6 — Connector and cross-surface regression  ·  **PENDING**
 Deterministic fixtures for supported providers/integrations; authn failures,
@@ -172,11 +183,50 @@ gates = owner steps documented; final release checklist + honest verdict.
 ## 5. Defect ledger (living)
 
 Severity: **P0** launch-blocker · **P1** release-quality · **P2** polish.
-Disposition: FIXED(+commit) / NOT-REPRODUCED / RETAINED(rationale) / BLOCKED(owner/env).
+Disposition: FIXED(+commit) / NOT-REPRODUCED / RETAINED(rationale) / BLOCKED(owner/env) / OPEN(in this pass).
 
 | ID | Date | Phase | Area | Severity | Finding + evidence | Disposition |
 |---|---|---|---|---|---|---|
-| — | — | — | — | — | *(none recorded at HEAD yet — Phase 0 baseline running)* | — |
+| V1-P5-001 | 2026-10-28 | 5 | mobile ↔ real daemon | **P0** | The mobile companion PWA cannot function against the **real** daemon; it only ever ran against the reference/demo harness. Evidence (all at HEAD `d04011ec`): (a) real daemon route registry (191 routes, `src/daemon/routes/*.routes.ts`) has **no** `/api/chats`, `/api/chats/:id/messages`, no `/api/meta/version`, and does not serve the PWA — no `/mobile/` static route exists in `src/daemon/server.ts` (only `tools/reference-daemon.mjs:259` serves `mobile/dist`); (b) shape mismatches: mobile expects `{models: []}` (`mobile/src/api/client.ts:107`) but real `/api/models` returns `{selected, runtimes, installed, catalog, …}` (`providers.routes.ts:315`); mobile expects cents budget (`types.ts` `spentTodayCents…`) but real `/api/budget` returns `{config:{perTaskUsd}, usage:{dayUsd, monthUsd}, burn:{monthlyCap}}` (`budget.routes.ts:11`); mobile expects `{approvals: []}` + `POST /api/approvals/{id}` but real serves `{pending}` + `POST /api/approvals/{id}/decision`; mobile `streamChat` posts `{chatId, content, model}` to `/api/v1/chat` but real `/api/chat` requires `{message, mode, sessionId}` (`chat.routes.ts:79`); (c) `docs/mobile/PWA.md` claims “The daemon serves the built PWA from /mobile/ when in LAN mode” — false for the real daemon; (d) the `mobile:test` chain runs only against the reference daemon and is not in CI, which is why this never failed. Both sides were born in commit `7d2338d6` and were never reconciled. | OPEN — remediation design below |
+| V1-P5-002 | 2026-10-28 | 5 | mobile harness | P1 | Reference daemon passed the raw pathname to `mobileGate` (no `/api/v1/`→`/api/` canonicalization), so its 403-wall was weaker than production: versioned mobile requests got 404, not 403. | **FIXED** — `0ef8acfb`; lan-flow 403 checks red→green |
+| V1-P5-003 | 2026-10-28 | 5 | mobile DX | P2 | `bun run mobile:test` fails with a bare `ERR_MODULE_NOT_FOUND: web-push` instead of pointing at the documented prerequisite (`npm --prefix tools install`, `docs/mobile/PWA.md` §8); also `mobile:daemon:build` must run before `test-lan-flow` (imports `./.daemon-build/*`) with no hint. | OPEN (small actionable-error fix) |
+| V1-ENV-001 | 2026-10-28 | 0 | environment | note | Sandbox initially lacked `bubblewrap` and the Playwright Chromium binary — 26+ sandbox-security tests and all live-browser a11y tests skipped in the first full-suite run. Both were then installed and the suites re-run (§7 #17–#19). Recorded so skip-counts are interpretable. | RESOLVED in-session |
+
+### V1-P5-001 remediation design (next implementation unit)
+
+Close the gap **daemon-side** (preserves the mobile app and the documented
+intent; the daemon already owns every underlying surface):
+
+1. `GET /api/meta/version` in the real daemon (mobile connection probe +
+   revoked-session detection; gate it like the rest of the API, as the
+   harness comment already specifies).
+2. Mobile companion API adapter under the existing mobile route family
+   (canonical, both mounts, behind the same session + 403 wall):
+   - `GET /api/v1/models` companion view: `{ models: ModelInfo[], selected }`
+     derived from the real models handler (installed/selected/catalog).
+   - `GET /api/v1/budget` companion view: cents fields derived from
+     `usage.dayUsd/monthUsd` + `persisted.monthly_cap`/`config.perTaskUsd`
+     (labels adjusted on the phone where semantics differ — per-task ≠ daily).
+   - `GET /api/v1/approvals?status=` → `{ approvals }` mapping of `{pending}`;
+     `POST /api/v1/approvals/{id}` → decision route (same approval store,
+     same audit events; mobile denial/consent semantics unchanged).
+   - `POST /api/v1/chat` adapter: `{chatId, content, model}` → existing
+     `/api/chat` SSE executor call (`{message, sessionId, mode:'ask'}`) —
+     one execution authority, no second loop.
+   - Server-side chat list/messages for companion sync: mobile-scoped,
+     persisted via the existing state store (design decision required:
+     reuse `state/ui`-style persistence vs. new mobile chat table — keep
+     it small and audit-logged).
+3. Serve the built PWA from `/mobile/` in LAN mode only (path-traversal
+   guarded, no directory listing, `Cache-Control` sane; fail closed when
+   `mobile/dist` is absent rather than 500).
+4. Sync `tools/reference-daemon.mjs` to the same contract (it must mirror,
+   not invent), update `test-lan-flow.mjs` to assert the companion
+   endpoints against BOTH the reference daemon and (contract tests) the
+   real daemon route registry.
+5. Regression tests: route-level tests in `test/daemon/` for every new
+   endpoint (auth 401 anon / 403 mobile-on-dangerous / shape assertions /
+   decision path parity with the desktop approval route).
 
 ### Carried-in items from prior audits — must be re-verified at HEAD before reuse
 
@@ -222,7 +272,15 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | 13 | 2026-10-28 | `npm --prefix mobile run build` | 0 | vite + PWA injectManifest; 27 precache entries (712 KiB); sw.js generated |
 | 14 | 2026-10-28 | `npm --prefix mobile audit --omit=dev` | 0 | 0 production vulnerabilities (4 low dev-only — P2 note) |
 | 15 | 2026-10-28 | `cd desktop && bun run build` | 0 | vite build 2.76 s; 2 pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warnings (detect.ts, budget/enforce.ts) — P2, relates to L-014 chunk-size work |
-| 16 | 2026-10-28 | `bash scripts/parity-suite-runner.sh linux` | RUNNING | full segmented Linux unit suite (repo parity authority); log `evidence/v1-2026-10-28/parity-suite-linux.log` |
+| 16 | 2026-10-28 | `bash scripts/parity-suite-runner.sh linux` | 0 | **55 segments · 5186 tests · 0 fail · 45 skips** (log: `evidence/v1-2026-10-28/parity-suite-linux.log`). Skips honest: bwrap absent (26), PowerShell absent (install.ps1 checks), no API keys (canaries), live-browser a11y (chromium absent) — then resolved, see #17–#19. |
+| 17 | 2026-10-28 | `sudo apt-get install bubblewrap` + `bun test test/trust/os-sandbox.test.ts` | 0 | 9 pass / 0 fail / 4 skip (the 4 = darwin/win32-gated smoke) — previously all skipped |
+| 18 | 2026-10-28 | `bun test test/trust/{namespace-confinement,namespace,inherited-submount,process-bounds}.test.ts` | 0 | **38 pass / 0 fail / 0 skip** — real Linux boundary-effect evidence at HEAD |
+| 19 | 2026-10-28 | `bunx playwright install chromium` + `bun test test/a11y/` | 0 | **53 pass / 0 fail / 0 skip** — live headless-Chromium a11y (axe-core WCAG 2.2 over real daemon, keyboard flows); historical "live-browser skips" converted to passes |
+| 20 | 2026-10-28 | `npm --prefix mobile run build` + `typecheck` (re-check) | 0 | (see #12/#13) |
+| 21 | 2026-10-28 | `npm --prefix tools install --omit=dev` + `node tools/build-daemon.mjs` | 0 | harness deps (web-push/esbuild present; puppeteer skipped — Node 20 vs engines 22.12, dev-only) |
+| 22 | 2026-10-28 | `node tools/test-web-push.mjs` | 0 | “All push encryption checks passed” — RFC 8291/8188 cross-check vs reference web-push |
+| 23 | 2026-10-28 | `node tools/test-lan-flow.mjs` (vs reference daemon) | 1 | **6 checks failed → defect cluster found (V1-P5-001/-002)**; after fix `0ef8acfb`: 4 checks green (mobile 403 wall), **2 still failing = the real companion-contract gap** (models/budget shapes) — correct and expected until V1-P5-001 lands |
+| 24 | 2026-10-28 | `node tools/test-offline.mjs` (Node 22 + puppeteer, real headless Chrome vs reference daemon) | 0 | **All offline checks passed**: SW registered/active (scope /mobile/), app shell precached, chats cached in IndexedDB, offline render + offline bar, offline send → outbox, outbox drains after reconnect |
 
 ### Prior-audit vs HEAD delta (Phase 0 exit item)
 
@@ -238,6 +296,8 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | D-1 | 2026-10-28 | Work on local branch `work/v1-release-stabilization-2026-10-28`, never on `main` | Brief forbids destructive ops and unauthorized pushes; keeps baseline reproducible |
 | D-2 | 2026-10-28 | Keep Bun 1.4.4 despite `.bun-version` 1.4.2 | Same 1.4 line; frozen-lockfile install green; swap to 1.4.2 only if a gate is version-sensitive |
 | D-3 | 2026-10-28 | Attempt GTK/WebKit dev install + `cargo check` in Phase 4, single job, only after lighter gates are green | Prior pass deemed it heavy for 2 GiB; sudo apt is available so attempt is legitimate, but it must not crowd out cheap evidence first |
+| D-4 | 2026-10-28 | Install environment tools to convert honest skips into evidence: `bubblewrap` (apt), Playwright Chromium, user-level Node 22 (`~/node22`, system Node untouched) for puppeteer | 45 suite skips were environmental, not product gaps; converting them yields real security/a11y/offline evidence at HEAD |
+| D-5 | 2026-10-28 | V1-P5-001 will be fixed **daemon-side** (companion adapter + `/mobile/` static + `/api/meta/version`), not by rewriting the mobile app | Preserves the shipped mobile app and documented intent (PWA.md); the daemon already owns every underlying surface; one execution authority preserved (§5 design) |
 
 ## 9. Closure policy and drift controls
 
