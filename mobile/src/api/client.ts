@@ -105,33 +105,33 @@ export const api = {
     request<{ fingerprint: string }>('/api/mobile/cert-fingerprint'),
 
   models: (): Promise<{ models: ModelInfo[] }> =>
-    request<{ models: ModelInfo[] }>('/api/v1/models'),
+    request<{ models: ModelInfo[] }>('/api/mobile/models'),
 
-  budget: (): Promise<Budget> => request<Budget>('/api/v1/budget'),
+  budget: (): Promise<Budget> => request<Budget>('/api/mobile/budget'),
 
   /* --------------------------------------------------------------- chats --- */
 
   chats: (limit = 50): Promise<{ chats: ChatSummary[] }> =>
-    request<{ chats: ChatSummary[] }>(`/api/v1/chats?limit=${limit}`),
+    request<{ chats: ChatSummary[] }>(`/api/mobile/chats?limit=${limit}`),
 
   messages: (chatId: string, limit = 200): Promise<{ messages: ChatMessage[] }> =>
     request<{ messages: ChatMessage[] }>(
-      `/api/v1/chats/${encodeURIComponent(chatId)}/messages?limit=${limit}`,
+      `/api/mobile/chats/${encodeURIComponent(chatId)}/messages?limit=${limit}`,
     ),
 
   newChat: (title?: string): Promise<{ id: string; title: string }> =>
-    request<{ id: string; title: string }>('/api/v1/chats', { method: 'POST', json: { title } }),
+    request<{ id: string; title: string }>('/api/mobile/chats', { method: 'POST', json: { title } }),
 
   /* ----------------------------------------------------------- approvals --- */
 
   approvals: (status: 'pending' | 'resolved' | 'all' = 'pending'): Promise<{ approvals: Approval[] }> =>
-    request<{ approvals: Approval[] }>(`/api/v1/approvals?status=${status}`),
+    request<{ approvals: Approval[] }>(`/api/mobile/approvals?status=${status}`),
 
   approval: (id: string): Promise<Approval> =>
-    request<Approval>(`/api/v1/approvals/${encodeURIComponent(id)}`),
+    request<Approval>(`/api/mobile/approvals/${encodeURIComponent(id)}`),
 
   decide: (id: string, decision: 'approve' | 'deny'): Promise<{ ok: true }> =>
-    request<{ ok: true }>(`/api/v1/approvals/${encodeURIComponent(id)}`, {
+    request<{ ok: true }>(`/api/mobile/approvals/${encodeURIComponent(id)}`, {
       method: 'POST',
       json: { decision },
     }),
@@ -267,7 +267,7 @@ export async function* streamChat(args: {
   model?: string | undefined;
   signal?: AbortSignal | undefined;
 }): AsyncGenerator<StreamEvent> {
-  const res = await fetch(`${BASE}/api/v1/chat`, {
+  const res = await fetch(`${BASE}/api/mobile/chat`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },

@@ -1,0 +1,27 @@
+# osv-scanner policy for mobile/package-lock.json (Supply Chain workflow).
+#
+# Same discipline as the shell's and extension's policy: every ignore names its
+# evidence and EXPIRES, so it is re-argued rather than forgotten. Re-add an
+# [[IgnoredVulns]] block only with a live advisory id, an expiry date and the
+# reason the finding is not reachable.
+
+# ── 2026-10-28 CI gate finding (GHSA published for CVE-2026-93753) ───────────
+# deepmerge 4.3.1's mergeObject() can prototype-poison the RETURNED object when
+# merging attacker-controlled input. Verified chain (npm ls):
+#   vite-plugin-pwa@0.21.2 → workbox-build@7.4.1 → @rollup/plugin-node-resolve@16.0.3
+#     → deepmerge@4.3.1
+# — i.e. it is reached only by the BUILD toolchain that generates the workbox
+# precache manifest. It is a devDependency-only path: grep finds no deepmerge
+# reference in mobile/src and none in the built mobile/dist bundle. The merged
+# inputs are rollup/plugin option objects from our own pinned lockfile, not
+# untrusted user input, so the poisoned-return vulnerability is not reachable.
+# No fixed 4.x exists (the advisory's last_affected is 4.3.1, the final 4.x
+# release; the fix is the deepmerge 5 major), and even the current
+# @rollup/plugin-node-resolve@16.0.3 still requires ^4.2.2, so no lockfile bump
+# can reach a patched version. Remove when workbox-build/plugin-node-resolve
+# move off deepmerge 4.x.
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2027-01-31
+reason = "deepmerge 4.3.1 (CVE-2026-93753) — mergeObject() prototype poisoning of the returned object, fixed only in the deepmerge 5 major (4.3.1 is the final, last_affected 4.x). Reached only through vite-plugin-pwa -> workbox-build -> @rollup/plugin-node-resolve (^4.2.2 required even at plugin 16.0.3, the latest), i.e. strictly build-time PWA precache generation: no reference in mobile/src and none in the built mobile/dist bundle, and the merged inputs are our own pinned plugin options, not attacker-controlled. Dev-tool exposure only; re-argue at expiry."

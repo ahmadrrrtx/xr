@@ -1,6 +1,6 @@
 /** Phase 2.4 · P1-1 — mobile contract entries (spread into contract.ts).
  * Every op mounts on BOTH mounts; only the TOFU fingerprint is `public: true`. */
-import type { ApiOperationMeta } from "./contract.ts"; import { MobileEmptyRequest, MobilePairRequest, MobilePushSubscribeRequest } from "./schemas-mobile.ts";
+import type { ApiOperationMeta } from "./contract.ts"; import { MobileApprovalDecideRequest, MobileChatsCreateRequest, MobileChatSendRequest, MobileEmptyRequest, MobilePairRequest, MobilePushSubscribeRequest } from "./schemas-mobile.ts";
 
 /** Defaults shared by every mobile op: experimental stability, its own tag. */
 const m = (summary: string, extra?: Partial<ApiOperationMeta>): ApiOperationMeta => ({
@@ -19,4 +19,24 @@ export const MOBILE_CONTRACT: Record<string, ApiOperationMeta> = {
   "mobile.push.subscribe.post": m("Attach or replace the paired device's Web Push subscription.", { request: MobilePushSubscribeRequest }),
   "mobile.push.subscribe.delete": m("Remove the paired device's Web Push subscription.", { request: MobileEmptyRequest }),
   "mobile.push.test.post": m("Send a test Web Push to the paired device (truthful ok:false when delivery fails).", { request: MobileEmptyRequest }),
+
+  // V1-P5-001 — companion read/act API (the shipped PWA's contract, served by
+  // the real daemon against the same stores the desktop surface uses).
+  // meta.version.get lives HERE, not in contract.ts, per that module's waiver
+  // plan ("held at two lines per phase"): the probe exists for the companion.
+  "meta.version.get": {
+    summary:
+      "Companion identity probe: daemon version, host URL, LAN flag. Auth-gated (a 401 here is how the mobile app detects a revoked session).",
+    tag: "system",
+    stability: "stable",
+  },
+  "mobile.companion.models.get": m("Model list for the companion picker (from the effective config; installed local models plus the effective selection)."),
+  "mobile.companion.budget.get": m("Budget summary in cents for the companion (today/month spend, monthly + per-task caps; no fabricated daily cap)."),
+  "mobile.companion.approvals.get": m("Pending approvals for the companion (same durable store as the desktop; decided records age out)."),
+  "mobile.companion.approvalDecide.post": m("Decide a pending approval from the phone (shared decide path — first decision wins from any surface).", { request: MobileApprovalDecideRequest }),
+  "mobile.companion.chats.get": m("Companion chat list (mobile-scoped store; newest first)."),
+  "mobile.companion.chats.create.post": m("Create a companion chat.", { request: MobileChatsCreateRequest }),
+  "mobile.companion.chatMessages.get": m("Companion chat messages (mobile-scoped; sync source for a re-installed or second phone)."),
+  "mobile.companion.chat.post": m("Send a companion chat message; streams the SAME canonical SSE as /api/chat (adapter: mode 'ask', per-chat lane). Provider-offline answers 503 honestly.", { request: MobileChatSendRequest }),
+  "mobile.pwa.get": m("Serve the built mobile PWA shell at /mobile/ (static bytes, no data — open path pre-auth like /assets/auth.js; LAN runtime only; honest 404 when mobile/dist is absent).", { tag: "surface", stability: "stable", surface: true }),
 };

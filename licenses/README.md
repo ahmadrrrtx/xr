@@ -13,5 +13,17 @@ alone is not a complete inventory of those components.
 
 This notice is not a determination that all redistribution, notice, source,
 relinking, or XR policy obligations have been met. Legal/owner review and an
-explicit policy decision are required before release; the license gate reports
-that review as outstanding. Replacing or upgrading Bun requires a fresh review.
+explicit policy decision are required before release; the license gate
+(`scripts/license-check.ts`) reports that review as outstanding until the
+owner records the decision as `licenses/bun-v<version>-REVIEW-ACK.json`
+(present, well-formed, version-matched, decision
+`acknowledged-for-redistribution`, with `decidedBy`/`decidedAt` provenance).
+Anything else — no file, a malformed file, or a version mismatch — fails
+closed as review-required.
+
+**Decision recorded (2026-10-28):** `bun-v1.4.2-REVIEW-ACK.json` — the
+repository owner acknowledged redistribution of the 1.4.2 platform packages
+as npm optionalDependencies (see that file for scope, provenance and the
+obligations awareness). Replacing or upgrading Bun requires a fresh review,
+which means a new ack file for the new version; the gate enforces this
+automatically because the ack is version-pinned.

@@ -75,7 +75,8 @@ export function SettingsScreen() {
 
   const copy = connectionCopy(status);
   const dot = status === 'connected' ? 'ok' : status === 'connecting' ? 'warn' : status === 'unpaired' ? 'warn' : 'bad';
-  const todayRatio = budget && budget.dailyCapCents > 0 ? budget.spentTodayCents / budget.dailyCapCents : 0;
+  const dailyCapCents = budget?.dailyCapCents ?? 0;
+  const todayRatio = budget && dailyCapCents > 0 ? budget.spentTodayCents / dailyCapCents : 0;
   const monthRatio = budget && budget.monthCapCents > 0 ? budget.spentMonthCents / budget.monthCapCents : 0;
   const currentModel = models.find((m) => m.id === model)?.label ?? model ?? 'Default';
 
@@ -244,7 +245,11 @@ export function SettingsScreen() {
                   <Progress value={todayRatio} tone={todayRatio > 0.9 ? 'danger' : todayRatio > 0.7 ? 'warning' : 'accent'} />
                 </div>
                 <p className="mt-1.5 text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>
-                  of {money(budget.dailyCapCents, budget.currency)} daily cap
+                  {budget.dailyCapCents && budget.dailyCapCents > 0
+                    ? `of ${money(budget.dailyCapCents, budget.currency)} daily cap`
+                    : budget.perTaskCents !== undefined
+                      ? `${money(budget.perTaskCents, budget.currency)} cap per task`
+                      : 'no daily cap configured'}
                 </p>
 
                 <div className="mt-3.5 flex items-baseline justify-between">

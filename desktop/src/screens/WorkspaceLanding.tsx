@@ -44,6 +44,25 @@ const RUN_DOT: Record<RunStatus, string> = {
   killed: 'var(--text-tertiary)',
 };
 
+/**
+ * Runs attached to a workspace for the landing screen — by id, or by name for
+ * seeded history — newest first, capped at five. Extracted as a pure helper
+ * (Phase 1 coverage: the contract is pinned by test/desktop/workspaces-core.test.ts).
+ */
+export function landingRuns<
+  T extends { archived?: boolean; startedAt: number; workspaceId?: string | null; workspace?: string | null },
+>(runs: Record<string, T>, ws: Pick<Workspace, "id" | "name">): T[] {
+  const name = ws.name.toLowerCase();
+  return Object.values(runs)
+    .filter(
+      (r) =>
+        !r.archived &&
+        (r.workspaceId === ws.id || (r.workspace ?? "").toLowerCase() === name),
+    )
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .slice(0, 5);
+}
+
 export default function WorkspaceLanding() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -78,16 +97,7 @@ export default function WorkspaceLanding() {
   }, [runsVersion]);
   const wsRuns = useMemo(() => {
     if (!ws) return [];
-    const name = ws.name.toLowerCase();
-    return Object.values(useRunsStore.getState().runs)
-      .filter(
-        (r) =>
-          !r.archived &&
-          (r.workspaceId === ws.id ||
-            (r.workspace ?? '').toLowerCase() === name)
-      )
-      .sort((a, b) => b.startedAt - a.startedAt)
-      .slice(0, 5);
+    return landingRuns(useRunsStore.getState().runs, ws);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws, runsVersion]);
 

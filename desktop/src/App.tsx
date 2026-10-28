@@ -29,7 +29,7 @@ const toasterBlock = (
   <Toaster
         position="bottom-right"
         duration={4000}
-        style={{ zIndex: 60 }}
+        style={{ zIndex: 60, fontFamily: 'inherit' }}
         toastOptions={{
           classNames: {
             toast:

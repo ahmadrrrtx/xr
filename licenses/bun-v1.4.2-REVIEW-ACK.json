@@ -1,0 +1,18 @@
+{
+  "component": "Bun runtime (platform @oven/bun-* packages)",
+  "version": "1.4.2",
+  "decision": "acknowledged-for-redistribution",
+  "decidedBy": "ahmadrrrtx (repository owner)",
+  "decidedAt": "2026-10-28",
+  "conveyedVia": "PR #201 release session (2026-10-28): the owner reviewed the gate's explanation of licenses/bun-v1.4.2-LICENSE.md and selected the explicit acknowledgement option. This file records that decision; it was not fabricated by tooling.",
+  "redistributionMode": "npm optionalDependencies: @oven/bun-*@1.4.2 platform packages are fetched from the npm registry at install time; the XR tarball contains no Bun binaries.",
+  "notice": "licenses/bun-v1.4.2-LICENSE.md",
+  "noticeSha256": "b9caf52728691b4057e371232c221a132883198be2f3d2ddf92c90404c984b1a",
+  "scope": "XR v1 npm coding-agent runtime only (bin/xr, bin/bun-runtime.js). Desktop (Tauri) and mobile (PWA) builds do not redistribute Bun.",
+  "lgplAwareness": "Bun statically links LGPL-2 licensed JavaScriptCore/WebKit and tinycc. The notice documents the relink path (oven-sh/WebKit source, bun sync-webkit-source, run build:local) which satisfies the object-code/modify-and-relink obligation. The upstream notice is shipped unmodified and verifiable via noticeSha256.",
+  "freshReviewRequiredOn": [
+    "any Bun version change (upgrade or downgrade) — this ack is pinned to 1.4.2",
+    "any change to the redistribution mode (e.g. vendoring binaries into the tarball, custom builds)",
+    "any change to the set of embedded LGPL components reported by the upstream notice"
+  ]
+}

@@ -28,6 +28,15 @@ describe("XR 4.2 adapter risk classification", () => {
     expect(classifyRisk(skillTrustRequest("skill", "run", "/tmp/ws")).tier).toBe("tier1_restricted");
   });
 
+  // PR #201 CI fix (2026-10-28): makeTrust() with the default backend set runs
+  // manager.init()'s availability probes on first use — ContainerBackend.detect
+  // budgets 8 s per runtime (docker, then podman on failure) and the namespace
+  // probe budgets 5 s (bwrap --version). On a loaded hosted runner a slow
+  // `docker info` alone can exceed bun's 5 s default test budget, killing this
+  // test as a timeout (observed: run 40752363419, "killed 1 dangling process").
+  // The assertion is placement-independent by design (host-authority
+  // short-circuit precedes the placement decision), so give the test the
+  // documented detection budget instead of weakening what it verifies.
   test("a destructive control action is admitted in-process (host-authority gate), NOT blocked", async () => {
     const h = makeTrust();
     await h.trust.onInit();
@@ -38,5 +47,5 @@ describe("XR 4.2 adapter risk classification", () => {
     expect(ev.outcome.kind).toBe("in_process_ok");
     expect(ev.trust.classification.tier).toBe("tier2_isolated");
     expect(ev.trust.decision.reason).toContain("host-authority");
-  });
+  }, 30_000);
 });

@@ -59,7 +59,11 @@ export interface Approval {
 
 export interface Budget {
   spentTodayCents: number;
-  dailyCapCents: number;
+  /** Present only when a daily ceiling actually exists — the governed daemon
+   * budget has a per-task + monthly cap instead (V1-P5-001 honesty fix). */
+  dailyCapCents?: number | undefined;
+  /** Per-task spend ceiling in cents (the daemon's real governed cap). */
+  perTaskCents?: number | undefined;
   spentMonthCents: number;
   monthCapCents: number;
   currency: string;

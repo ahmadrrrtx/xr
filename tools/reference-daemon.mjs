@@ -204,13 +204,32 @@ const MODELS = [
   { id: 'qwen2.5-coder-32b-local', label: 'Qwen 2.5 Coder 32B (local)', provider: 'Ollama', local: true },
 ];
 
-const BUDGET = {
+/** V1-P5-001 — companion cents shape, mirroring the REAL daemon's
+ * /api/mobile/budget (no fabricated daily cap; per-task + monthly are the
+ * governed caps). */
+const COMPANION_BUDGET = {
   spentTodayCents: 382,
-  dailyCapCents: 500,
   spentMonthCents: 6140,
   monthCapCents: 15000,
+  perTaskCents: 25,
   currency: 'USD',
 };
+
+/** V1-P5-001 — the GENERAL /api/v1/budget shape the real daemon serves
+ * (budget.routes.ts): config + persisted + usage in USD, not cents. */
+const GENERAL_BUDGET = {
+  config: { perTaskUsd: 0.25, perTaskTokens: 250_000 },
+  persisted: { monthly_cap: 150 },
+  usage: { totalUsd: 61.4, totalTokens: 1_234_567, dayUsd: 3.82, monthUsd: 61.4 },
+  accounting: 'standard/declared token-cost estimates, not a provider invoice ceiling',
+};
+
+/** V1-P5-001 — the GENERAL /api/v1/models shape the real daemon serves
+ * (providers.routes.ts): selected + runtimes, not a bare model array. */
+const GENERAL_MODELS = {
+  selected: { runtime: 'ollama', model: 'qwen2.5-coder-32b-local', routing: 'hybrid', provider: 'ollama', enabled: true },
+};
+
 
 /* ------------------------------------------------------------------ helpers --- */
 
@@ -406,6 +425,102 @@ const server = createServer(
       return;
     }
 
+    /* V1-P5-001 — companion read/act API mirror. The REAL daemon serves these
+     * from src/daemon/routes/mobile-companion.routes.ts (same session wall:
+     * anonymous 401); the harness mirrors them HERE because the bundled
+     * pairing transport 404s every unknown /api/mobile/* path. */
+    {
+      const companionGet =
+        (pathname === '/api/mobile/models' || pathname === '/api/mobile/budget' || pathname === '/api/mobile/approvals' || pathname === '/api/mobile/chats' || /^\/api\/mobile\/chats\/[\w.-]+\/messages$/.test(pathname)) &&
+        req.method === 'GET';
+      const companionPost =
+        (/^\/api\/mobile\/approvals\/[\w-]+$/.test(pathname) || pathname === '/api/mobile/chats' || pathname === '/api/mobile/chat') && req.method === 'POST';
+      if (companionGet || companionPost) {
+        if (!session.device && !session.privileged) {
+          json(res, { error: 'Not paired' }, 401);
+          return;
+        }
+        if (pathname === '/api/mobile/models') {
+          json(res, { models: MODELS });
+          return;
+        }
+        if (pathname === '/api/mobile/budget') {
+          json(res, COMPANION_BUDGET);
+          return;
+        }
+        if (pathname === '/api/mobile/approvals') {
+          const status = searchParams.get('status') ?? 'pending';
+          const approvals = status === 'all' ? APPROVALS : APPROVALS.filter((a) => a.status === status);
+          json(res, { approvals });
+          return;
+        }
+        /* Chat sync mirrors the real mobile-scoped store endpoints. */
+        if (pathname === '/api/mobile/chats' && req.method === 'GET') {
+          const limit = Number(searchParams.get('limit') ?? 50);
+          json(res, { chats: CHATS.slice(0, limit) });
+          return;
+        }
+        if (pathname === '/api/mobile/chats' && req.method === 'POST') {
+          let parsed = { title: undefined };
+          try {
+            parsed = JSON.parse(await readBody(req));
+          } catch {
+            /* default */
+          }
+          const chat = { id: `cht_${randomUUID().slice(0, 8)}`, title: parsed.title || 'New chat', updatedAt: Date.now(), lastMessage: '', unread: 0 };
+          CHATS.unshift({ ...chat });
+          MESSAGES[chat.id] = [];
+          json(res, { id: chat.id, title: chat.title }, 201);
+          return;
+        }
+        const msgsMatch = /^\/api\/mobile\/chats\/([\w.-]+)\/messages$/.exec(pathname);
+        if (msgsMatch && req.method === 'GET') {
+          json(res, { messages: MESSAGES[msgsMatch[1]] ?? [] });
+          return;
+        }
+        if (pathname === '/api/mobile/chat') {
+          let parsed = { chatId: '', content: '' };
+          try {
+            parsed = JSON.parse(await readBody(req));
+          } catch {
+            /* ignore */
+          }
+          const chatId = parsed.chatId ?? '';
+          const content = String(parsed.content ?? '');
+          const list = MESSAGES[chatId] ?? (MESSAGES[chatId] = []);
+          list.push({ id: `m_${randomUUID()}`, chatId, role: 'user', content, createdAt: Date.now() });
+          streamReply(req, res, content);
+          const reply =
+            'Here’s what I found. The local model handles this fine, and it keeps the bytes on your machine.\n\nI looked at the three call sites you mentioned. Two are trivial, one needs a decision from you — the admin route still relies on the shim for long-lived sessions.\n\nWant me to prepare the diff? I won’t apply it until you approve.';
+          setTimeout(() => {
+            list.push({ id: `m_${randomUUID()}`, chatId, role: 'assistant', content: reply, createdAt: Date.now() });
+            const chat = CHATS.find((c) => c.id === chatId);
+            if (chat) {
+              chat.lastMessage = reply.slice(0, 120);
+              chat.updatedAt = Date.now();
+            }
+          }, 900);
+          return;
+        }
+        const id = pathname.split('/')[3] ?? '';
+        const approval = APPROVALS.find((a) => a.id === id);
+        if (!approval) {
+          json(res, { error: 'Not found' }, 404);
+          return;
+        }
+        let parsed = { decision: 'approve' };
+        try {
+          parsed = JSON.parse(await readBody(req));
+        } catch {
+          /* default */
+        }
+        approval.status = parsed.decision === 'deny' ? 'denied' : 'approved';
+        approval.resolvedAt = Date.now();
+        json(res, { ok: true, decision: approval.status === 'denied' ? 'denied' : 'approved' });
+        return;
+      }
+    }
+
     const mobileRoutes = await handleMobileRoutes(request, url, session, {
       ctx,
       vapidPublicKey,
@@ -439,7 +554,12 @@ const server = createServer(
       return;
     }
 
-    const gate = mobileGate(pathname, session);
+    // V1-P5-002 (2026-10-28): the 403 wall must run against the CANONICAL path
+    // (/api/v1/x ≡ /api/x), mirroring src/daemon/server.ts — otherwise a
+    // versioned request slips past DANGEROUS_PREFIXES and gets a 404 instead of
+    // the mobile 403, weakening the harness's security verification.
+    const canonicalPath = pathname.startsWith('/api/v1/') ? `/api${pathname.slice(7)}` : pathname;
+    const gate = mobileGate(canonicalPath, session);
     if (gate) {
       json(res, { error: gate }, 403);
       return;
@@ -451,11 +571,11 @@ const server = createServer(
         return;
 
       case pathname === '/api/v1/models':
-        json(res, { models: MODELS });
+        json(res, GENERAL_MODELS);
         return;
 
       case pathname === '/api/v1/budget':
-        json(res, BUDGET);
+        json(res, GENERAL_BUDGET);
         return;
 
       case pathname === '/api/v1/chats' && req.method === 'GET':

@@ -25,3 +25,23 @@ export const MobilePushSubscribeRequest = z.object({
 
 /** Mutating mobile operations with an intentionally EMPTY body (Phase 2.2: a stray key is surfaced, never swallowed). */
 export const MobileEmptyRequest = z.object({}).describe("No request fields.");
+
+/** V1-P5-001 — companion approval decision (the phone's wire form; the shared
+ * decide path converts to the durable store's boolean). */
+export const MobileApprovalDecideRequest = z.object({
+  decision: z.enum(["approve", "deny"]).describe("The companion's decision on a pending approval (first decision wins from any surface)."),
+});
+
+/** V1-P5-001 — companion chat creation. */
+export const MobileChatsCreateRequest = z.object({
+  title: z.string().max(120).optional().describe("Optional human title (defaults to 'New chat', derived from the first message)."),
+});
+
+/** V1-P5-001 — companion chat send (the adapter forwards to the ONE /api/chat
+ * execution path with mode 'ask'; dangerous tools still raise durable
+ * approvals the phone decides via /api/mobile/approvals). */
+export const MobileChatSendRequest = z.object({
+  chatId: z.string().min(1).max(64).describe("Companion chat id (server-minted or the phone's local-first id)."),
+  content: z.string().min(1).describe("The user's message."),
+  model: z.string().max(200).optional().describe("Optional model override (defaults to the effective config selection)."),
+});

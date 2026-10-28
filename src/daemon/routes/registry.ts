@@ -42,6 +42,7 @@ import { telegramRoutes } from "./telegram.routes.ts";
 import { discordRoutes } from "./discord.routes.ts";
 import { whatsappRoutes } from "./whatsapp.routes.ts";
 import { mobileRoutes } from "./mobile.routes.ts"; // Phase 2.4 · P1-1
+import { mobileCompanionRoutes } from "./mobile-companion.routes.ts"; // V1-P5-001
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 
@@ -109,6 +110,9 @@ export function listBaseRoutes(): DaemonRoute[] {
     // one router; they self-answer 404 ("LAN mode is off") off-LAN, so the
     // default loopback daemon keeps exposing nothing.
     ...mobileRoutes(),
+    // V1-P5-001 — companion read/act API (models/budget/approvals + decide),
+    // same session wall and 404-off-LAN behaviour as the mobile ops above.
+    ...mobileCompanionRoutes(),
   ];
 }
 

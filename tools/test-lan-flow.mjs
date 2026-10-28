@@ -123,6 +123,28 @@ if (!TOKEN) {
   const budget = await call('/api/v1/budget', { headers: authed });
   check('paired device reads budget', budget.status === 200 && typeof budget.body?.config?.perTaskUsd === 'number');
 
+  /* 7b. V1-P5-001 — the companion surface the PWA actually calls ---------------- */
+  const cModels = await call('/api/mobile/models', { headers: authed });
+  check(
+    'companion models: { models: [{id,label,provider}] }',
+    cModels.status === 200 && Array.isArray(cModels.body?.models) && cModels.body.models.every?.((m) => typeof m?.id === 'string' && typeof m?.label === 'string' && typeof m?.provider === 'string'),
+    `got ${cModels.status}`,
+  );
+  const cBudget = await call('/api/mobile/budget', { headers: authed });
+  check(
+    'companion budget: cents summary without a fabricated daily cap',
+    cBudget.status === 200 && typeof cBudget.body?.spentTodayCents === 'number' && typeof cBudget.body?.monthCapCents === 'number' && cBudget.body?.dailyCapCents === undefined,
+    `got ${cBudget.status}`,
+  );
+  const cApprovals = await call('/api/mobile/approvals', { headers: authed });
+  check(
+    'companion approvals: { approvals: [...] }',
+    cApprovals.status === 200 && Array.isArray(cApprovals.body?.approvals),
+    `got ${cApprovals.status}`,
+  );
+  const cAnon = await call('/api/mobile/models');
+  check('companion surface refuses anonymous (401)', cAnon.status === 401, `got ${cAnon.status}`);
+
   /* 8. mobile is blocked from coding surfaces ------------------------------------ */
   for (const [label, path] of [
     ['files', '/api/v1/files/src/index.ts'],

@@ -58,4 +58,37 @@ describe("license check for optional native runtimes", () => {
     expect(embedded?.license).toContain("LGPL");
     expect(result.ok).toBe(false);
   });
+
+  test("a version-matched owner ack turns the embedded-components row ok", () => {
+    const f = fixture({ "@oven/bun-linux-x64": "MIT", "ordinary-dependency": "MIT" });
+    mkdirSync(join(f.root, "licenses"), { recursive: true });
+    writeFileSync(join(f.root, "licenses", "bun-v1.4.2-REVIEW-ACK.json"), JSON.stringify({
+      version: "1.4.2", decision: "acknowledged-for-redistribution",
+      decidedBy: "owner", decidedAt: "2026-10-28",
+    }));
+    const result = runLicenseCheck({ root: f.root, target: f.target });
+    const embedded = result.results.find((r) => r.name === "Bun embedded components");
+    expect(embedded?.status).toBe("ok");
+    expect(embedded?.license).toContain("acknowledged 2026-10-28 by owner");
+    expect(result.ok).toBe(true);
+  });
+
+  test("the ack is version-pinned: a mismatched or malformed ack fails closed", () => {
+    const f = fixture({ "@oven/bun-linux-x64": "MIT", "ordinary-dependency": "MIT" });
+    mkdirSync(join(f.root, "licenses"), { recursive: true });
+    // Ack names a different version than the locked runtime → fresh review.
+    writeFileSync(join(f.root, "licenses", "bun-v1.4.2-REVIEW-ACK.json"), JSON.stringify({
+      version: "1.5.0", decision: "acknowledged-for-redistribution",
+      decidedBy: "owner", decidedAt: "2026-10-28",
+    }));
+    expect(runLicenseCheck({ root: f.root, target: f.target }).results.find((r) => r.name === "Bun embedded components")?.status).toBe("review-required");
+    // Malformed JSON → fail closed, never a crash-based pass.
+    writeFileSync(join(f.root, "licenses", "bun-v1.4.2-REVIEW-ACK.json"), "{not json");
+    expect(runLicenseCheck({ root: f.root, target: f.target }).results.find((r) => r.name === "Bun embedded components")?.status).toBe("review-required");
+    // A decision value that is not the explicit acknowledgement → fail closed.
+    writeFileSync(join(f.root, "licenses", "bun-v1.4.2-REVIEW-ACK.json"), JSON.stringify({
+      version: "1.4.2", decision: "maybe", decidedBy: "", decidedAt: "",
+    }));
+    expect(runLicenseCheck({ root: f.root, target: f.target }).results.find((r) => r.name === "Bun embedded components")?.status).toBe("review-required");
+  });
 });

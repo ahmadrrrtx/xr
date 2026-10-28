@@ -1456,9 +1456,54 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/mobile/push/test");
   }
 
+  /** Model list for the companion picker (from the effective config; installed local models plus the effective selection). */
+  async mobileCompanionModelsGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/models");
+  }
+
+  /** Budget summary in cents for the companion (today/month spend, monthly + per-task caps; no fabricated daily cap). */
+  async mobileCompanionBudgetGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/budget");
+  }
+
+  /** Pending approvals for the companion (same durable store as the desktop; decided records age out). */
+  async mobileCompanionApprovalsGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/approvals");
+  }
+
+  /** Decide a pending approval from the phone (shared decide path — first decision wins from any surface). */
+  async mobileCompanionApprovalDecidePost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/approvals");
+  }
+
+  /** Companion chat list (mobile-scoped store; newest first). */
+  async mobileCompanionChatsGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/chats");
+  }
+
+  /** Create a companion chat. */
+  async mobileCompanionChatsCreatePost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/chats");
+  }
+
+  /** Companion chat messages (mobile-scoped; sync source for a re-installed or second phone). */
+  async mobileCompanionChatMessagesGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/chats");
+  }
+
+  /** Send a companion chat message; streams the SAME canonical SSE as /api/chat (adapter: mode 'ask', per-chat lane). Provider-offline answers 503 honestly. */
+  async mobileCompanionChatPost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/chat");
+  }
+
   /** API index: version, operation catalogue link, OpenAPI location. */
   async metaApiRootGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1");
+  }
+
+  /** Companion identity probe: daemon version, host URL, LAN flag. Auth-gated (a 401 here is how the mobile app detects a revoked session). */
+  async metaVersionGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/meta/version");
   }
 
   /** The generated OpenAPI 3.1 document for this daemon. */

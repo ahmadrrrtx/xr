@@ -17,8 +17,9 @@ export type SplashStatus =
   | 'Preparing memory...'
   | 'Ready.';
 
-/** Deterministic pseudo-random particles so SSR/tests are stable. */
-function particleField(count: number) {
+/** Deterministic pseudo-random particles so SSR/tests are stable.
+ * (Exported for test/desktop/splash-core.test.ts — Phase 1, D-17.) */
+export function particleField(count: number) {
   let seed = 42;
   const rand = () => {
     seed = (seed * 16807) % 2147483647;
