@@ -96,15 +96,15 @@
     "mobile:dev": "npm --prefix mobile run dev",
     "mobile:build": "npm --prefix mobile run build",
     "mobile:typecheck": "npm --prefix mobile run typecheck",
-    "mobile:test": "node tools/test-web-push.mjs && node tools/test-lan-flow.mjs && node tools/test-offline.mjs",
+    "mobile:test": "node tools/check-test-prereqs.mjs && node tools/test-web-push.mjs && node tools/test-lan-flow.mjs && node tools/test-offline.mjs",
     "mobile:test:push": "node tools/test-web-push.mjs",
-    "mobile:test:lan": "node tools/test-lan-flow.mjs",
-    "mobile:test:offline": "node tools/test-offline.mjs",
+    "mobile:test:lan": "node tools/check-test-prereqs.mjs && node tools/test-lan-flow.mjs",
+    "mobile:test:offline": "node tools/check-test-prereqs.mjs && node tools/test-offline.mjs",
     "mobile:daemon": "node tools/reference-daemon.mjs",
     "mobile:daemon:lan": "node tools/reference-daemon.mjs --lan",
     "mobile:daemon:build": "node tools/build-daemon.mjs",
     "mobile:icons": "node tools/gen-icons.mjs",
-    "mobile:screenshots": "node tools/screenshots.mjs"
+    "mobile:screenshots": "node tools/check-test-prereqs.mjs && node tools/screenshot-mobile.mjs"
   },
   "repository": {
     "type": "git",

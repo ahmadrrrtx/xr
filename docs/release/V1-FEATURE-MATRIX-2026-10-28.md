@@ -63,17 +63,19 @@ Source of routes: `desktop/src/router.tsx` (hash router; dev-only `/__brand`).
 
 Source: `mobile/` (React 18 + Vite + Workbox + zustand + idb-keyval).
 
-| # | Feature | Implementation | Status |
-|---|---|---|---|
-| M-01 | Pairing (code + expiry + QR + TLS cert pinning) | `screens/PairingScreen.tsx`, `lib/certpin.ts` | implemented; verification Phase 5 |
-| M-02 | Chat list + conversation | `screens/ChatListScreen.tsx`, `ConversationScreen.tsx` | implemented |
-| M-03 | Approvals | `screens/ApprovalsScreen.tsx`, `stores/approvals.ts` | implemented |
-| M-04 | Voice | `screens/VoiceScreen.tsx` | implemented |
-| M-05 | Settings / logout / unpair | `screens/SettingsScreen.tsx` | implemented |
-| M-06 | Offline queue + retry | `stores/queue.ts`, `lib/sync.ts`, `sw.ts` | implemented |
-| M-07 | Connection/reconnect | `stores/connection.ts` | implemented |
-| M-08 | Push notifications | service worker + `tools/test-web-push.mjs` | implemented |
-| M-09 | Security restrictions (no file/terminal/Git/MCP from mobile sessions) | daemon-side session policy | implemented; adversarial tests Phase 5 |
+| # | Feature | Implementation | Status @ `4ce055f1` (2026-10-28) | Coverage | Blocker / note |
+|---|---|---|---|---|---|
+| M-01 | Pairing (code + expiry + QR + TLS cert pinning) | `screens/PairingScreen.tsx`, `lib/certpin.ts`, daemon `mobile-pairing.ts` | implemented, **verified** | `tools/test-lan-flow.mjs` **28/28** (pair/re-pair/expiry/rate-limit/revoke/401-after-revoke); `test/daemon/mobile-pairing.test.ts` | |
+| M-02 | Chat list + conversation | `screens/ChatListScreen.tsx`, `ConversationScreen.tsx`; daemon `/api/mobile/chats*` + `/api/mobile/chat` (store: `src/daemon/mobile-chats.ts`) | implemented, **verified** (was V1-P5-001: no real-daemon backend) | `test/daemon/mobile-companion.test.ts` (round-trip, local-first adoption, honest 503, no phantom rows); offline outbox drain `tools/test-offline.mjs` **12/12**; real-daemon e2e §7 #26 | chat send needs a live provider for a 200 stream (env has none — 503 path verified instead) |
+| M-03 | Approvals | `screens/ApprovalsScreen.tsx`, `stores/approvals.ts`; daemon `/api/mobile/approvals(/:id)` | implemented, **verified** | `test/daemon/mobile-companion.test.ts` (shared decide path, 400/401/404 walls, first-decision-wins); lan-flow companion checks | |
+| M-04 | Voice | `screens/VoiceScreen.tsx` | implemented, **unverified** | no automated coverage found | Phase 1/6 gap; needs real-device mic (owner) for full journey |
+| M-05 | Settings / logout / unpair | `screens/SettingsScreen.tsx` | implemented, **verified** (models/budget read paths) | `test/daemon/mobile-companion.test.ts` (models list = installed + effective; cents budget = real store, no fabricated daily cap); logout/unpair via session.delete + revoke covered in lan-flow | |
+| M-06 | Offline queue + retry | `stores/queue.ts`, `lib/sync.ts`, `sw.ts` | implemented, **verified** | `tools/test-offline.mjs` **12/12** in real headless Chrome: SW scope `/mobile/`, precache, IndexedDB chat cache, offline render, outbox → drain after reconnect | |
+| M-07 | Connection/reconnect | `stores/connection.ts` + `/api/meta/version` probe | implemented, **verified** | probe endpoint `test/daemon/mobile-lan-integration.test.ts`; probe consumed by `stores/connection.ts` (401-on-revoked detection) | |
+| M-08 | Push notifications | service worker + `tools/test-web-push.mjs` | implemented, **verified** (crypto layer) | `tools/test-web-push.mjs` RFC 8291/8188 cross-check vs reference web-push — **all pass** | live push delivery needs APNs/FCM reachability from a real phone (owner) |
+| M-09 | Security restrictions (no file/terminal/Git/MCP from mobile sessions) | daemon-side session policy (`server.ts` mobile seam, 403 wall) | implemented, **verified** | adversarial: lan-flow 403-wall checks on canonical path; source audit 2026-10-28 (session carries device identity only; companion surface exposes read/act endpoints, never the tool surface) | |
+| M-10 | PWA serving from the real daemon | `src/daemon/routes/mobile-companion.routes.ts` (`/mobile/` static, LAN-only) | implemented, **verified** (was V1-P5-001c: harness-only) | `test/daemon/mobile-companion.test.ts` (pre-auth shell, CSP/SW-scope headers, SPA fallback, traversal probe, LAN-off 404, missing-build 404); real-daemon e2e §7 #26; screenshots `mobile-pwa-0*.png` | |
+| M-11 | Installability (manifest, icons, standalone) | `mobile/public/` (manifest.webmanifest, icons), served at `/mobile/` | implemented, **verified** (static) | manifest+icons served (e2e probe); `npm --prefix mobile run build` green | real-device Add-to-HomeScreen (owner) |
 
 ## 4. Platform and packaging
 
