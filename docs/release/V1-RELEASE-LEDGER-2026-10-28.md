@@ -134,12 +134,36 @@ persistence/upgrade. Each fix: root cause, regression test, small commit.
 **Exit:** every ledger defect has disposition fixed / not-reproducible /
 retained-with-rationale / blocked; regression tests green.
 
-### Phase 3 — Desktop quality  ·  **PENDING**
+### Phase 3 — Desktop quality  ·  **COMPLETE (2026-10-28 — evidence mapping below; provider-live legs BLOCKED, owner-side)**
 First-run journey (fresh install → config → engine/sidecar start → successful
 agent task) as far as this environment honestly allows; providers, key
 management, approvals (allow+deny), cancellation, budget exhaustion,
 persistence-across-restart, provider errors, recovery. Renderer-level evidence
 labeled as such.
+
+Evidence mapping (each ask → where it is pinned):
+- First-run journey: `test/ux/onboarding-yes.test.ts`, `test/daemon/onboarding-routes.test.ts`,
+  `test/daemon/offline-onboarding-budget.test.ts`; the gate itself observed
+  live in the Phase-3.5 sweep (every route redirects to `#/onboarding` until
+  first-run completes — screenshots in `previews/v1-3.5/`). The full
+  install→provider→agent-task leg needs a live provider: BLOCKED (no API keys
+  / no local runtime in this env) — renderer+daemon evidence stands.
+- Approvals allow+deny: `test/desktop/approval-core.test.ts`, `test/daemon/approver-identity.test.ts`,
+  fail-closed matrix tests, `test/daemon/phase2b.test.ts` (approval_required over
+  SSE with decide), companion decide in `test/daemon/mobile-companion.test.ts`,
+  and the cross-surface first-wins pin (§7 #32).
+- Cancellation: `test/api/chat-stream.test.ts` (SSE stop + provider abort),
+  `test/control/pause-stop.test.ts`, `test/daemon/workflows-routes.test.ts`
+  (cancel withdraws approval).
+- Budget exhaustion: `test/environment/recovery.test.ts` ("budget exhaustion
+  stops retrying"), `test/desktop/budget-core.test.ts`,
+  `test/desktop/selection-accounting.test.ts`, budget routes/accounting suite.
+- Provider errors / recovery: `test/providers/malformed-response.test.ts`,
+  `resilience-boundary`, `request-guard`, `governed-attempts`,
+  `test/environment/recovery.test.ts` (taxonomy: retryable vs terminal;
+  irreversible actions never auto-retry).
+- Persistence-across-restart: engine store tests (SQLite WAL, audit chain) +
+  `test/daemon/token-drift.test.ts` (daemon restart semantics).
 
 ### Phase 3.5 — UI/UX bug bash and visual polish  ·  **COMPLETE (2026-10-28 — programmatic audit; human-eye review remains owner-side, see note)**
 Inspect `previews/` assets; audit **all** screens (not just Research/Builder);
@@ -204,7 +228,30 @@ screenshots captured for the evidence dir (§7 #27). V1-P5-003 (DX) FIXED
 devices; browser-matrix evidence stands in: headless Chrome at 393×852,
 touch/dark-mode emulation).
 
-### Phase 6 — Connector and cross-surface regression  ·  **PENDING**
+### Phase 6 — Connector and cross-surface regression  ·  **COMPLETE (2026-10-28; live-provider legs BLOCKED, owner-side)**
+Deterministic fixtures for supported providers/integrations; authn failures,
+malformed responses, rate limits, retries, timeouts, cancellation;
+desktop/mobile same-contract confirmation; capability docs match behavior;
+tested vs unverified providers distinguished.
+
+Executed: the deterministic-fixture battery already existed and re-ran green
+in this pass (`test/providers/` 13 files — authn 401/429/503 in
+credential-boundary, malformed responses, 429 normalization in gateway,
+retries/timeouts in resilience-boundary + request-guard + governed-attempts,
+cancellation in stream-settlement + chat-stream; `test/integrations/` service +
+primitives + fake-MCP fixtures; `test/security/mcp-*`, `test/trust/mcp-isolation`;
+`test/bots/` shared-runtime + telegram characterization). NEW this pass:
+`test/daemon/cross-surface-contract.test.ts` — the desktop/mobile
+same-contract confirmation (approvals: both surfaces list the same durable
+rows, decide-from-either resolves for both, first decision can never flip —
+pinned down to the store's `WHERE decision IS NULL` semantics with the two
+surfaces' different-but-truthful loss shapes, 409 vs 200 {ok:false}; budget:
+companion cents == desktop USD ×100 from one store; models: companion list =
+installed + effective selection, never empty, no fabricated rows). Matrix §2
+corrected (`src/integrations/`, not the nonexistent `src/connectors/`) and its
+Coverage column filled. Tested-vs-unverified providers: pinned by
+`capability-fixtures` + `offline-listing`; the LIVE-key split is owner-side
+(no provider keys in this env — BLOCKED, not skipped silently).
 Deterministic fixtures for supported providers/integrations; authn failures,
 malformed responses, rate limits, retries, timeouts, cancellation;
 desktop/mobile same-contract confirmation; capability docs match behavior;
@@ -330,6 +377,7 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | 29 | 2026-10-28 | Post-D gates re-run at `4ce055f1`: size-gate, claim-lint, placeholder-lint, api:schema:check, client:check, boundaries, `bun test test/release/` | 0 | all green (293 ops generated / schema-check OK); release segment 286 pass / 11 skip / 0 fail; evidence logs refreshed in `evidence/v1-2026-10-28/` (discovery-state logs preserved as `*-defect-discovery-6fail.log`, `*-pre-repoint.log`) |
 | 30 | 2026-10-28 | Phase 1 gap closure: `bun test test/desktop/{workspaces,agents,splash}-core.test.ts` + `bun run typecheck` + full `bun test test/desktop/` | 0 | **27 new tests, all pass** (10 + 13 + 4); desktop dir **452 pass / 0 fail**; typecheck green after the `landingRuns` generic extraction (behavior-identical; pinned by its tests) |
 | 31 | 2026-10-28 | Phase 3.5: `node tools/screenshots-desktop-v1.mjs` (real app × reference daemon; 13 routes × 1440×900/1280×800/1024×768) + sidebar mod+b probe + toast before/after probe | 0 | 39 screenshots → `previews/v1-3.5/`; audit JSON → evidence dir; overflow 0px and true piercers 0 on every page; console errors 0; sidebar 72↔240 ✓ at both widths; toast font `ui-sans-serif` → `Inter` after fix; `bun run typecheck` + desktop segment green post-fix |
+| 32 | 2026-10-28 | Phase 6: `bun test test/daemon/cross-surface-contract.test.ts` (new) + re-run of the provider/integration battery (`test/providers/`, `test/integrations/`) | 0 | cross-surface 5/5: approvals same durable rows + first-decision-wins (mobile deny sticks; desktop control/approve answers 200 {ok:false}, approvals plane 409 — one invariant, two truthful wire shapes); budget cents == desktop USD ×100; models never-empty invariant. Provider battery green (see §7 #16 parity log; files listed in Phase 6 notes) |
 
 ### Prior-audit vs HEAD delta (Phase 0 exit item)
 
