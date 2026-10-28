@@ -345,10 +345,20 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       } else if (flavour.channel === "nsis") {
         const r = await sh([ctx.uninstaller, "/S"], { timeoutMs: 300_000 });
         need(r.status === 0, `uninstaller exit ${r.status}: ${tail(r.out)}`);
-        // The NSIS uninstaller re-launches itself from %TEMP% and returns at once.
+        // The NSIS uninstaller re-launches itself from %TEMP% and returns at
+        // once. It removes the HKCU registration AFTER the binaries (observed
+        // on the windows-11-arm runner, PR #201 CI: binary gone in ~1 s,
+        // registration lagging behind — x86-64 runners hide the race by being
+        // faster). Wait for BOTH to clear, then assert — the assertion is
+        // unchanged; only the "binary gone => uninstaller done" proxy is gone.
         for (let i = 0; i < 60 && existsSync(ctx.app); i++) await sleep(1000);
-        const reg = await sh(["pwsh.exe", "-NoProfile", "-Command", "@(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'XR' }).Count"]);
-        need(reg.out.trim() === "0", "HKCU uninstall registration still present");
+        let registered = true;
+        for (let i = 0; i < 30 && registered; i++) {
+          const reg = await sh(["pwsh.exe", "-NoProfile", "-Command", "@(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'XR' }).Count"]);
+          registered = reg.out.trim() !== "0";
+          if (registered) await sleep(1000);
+        }
+        need(!registered, "HKCU uninstall registration still present");
       } else {
         rmSync(ctx.installDir, { recursive: true, force: true });
       }
