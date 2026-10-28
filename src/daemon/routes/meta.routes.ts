@@ -57,6 +57,22 @@ export function metaRoutes(): DaemonRoute[] {
         }),
     }),
     route({
+      id: "meta.version.get",
+      path: "/api/meta/version",
+      method: "GET",
+      // V1-P5-001 — the mobile companion's reachability probe. Session-gated
+      // like the rest of the API (anonymous → 401): the app uses a 401 here to
+      // detect a revoked pairing, so it must NOT be public. `lan` mirrors the
+      // LAN runtime (mobile plumbing present), not the bind address.
+      handle: ({ json, url, mobile }) =>
+        json({
+          version: versionInfo().version,
+          host: `${url.protocol}//${url.host}`,
+          lan: Boolean(mobile),
+          deviceName: "XR desktop",
+        }),
+    }),
+    route({
       id: "meta.openapi.get",
       path: "/api/openapi.json",
       method: "GET",

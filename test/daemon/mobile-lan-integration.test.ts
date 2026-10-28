@@ -110,6 +110,23 @@ describe("Phase 2.4 · P1-1 — mobile LAN control path (real TLS serve())", () 
     expect(legacy.status).toBe(403);
   });
 
+  test("V1-P5-001: /api/meta/version is the companion probe — anon 401, paired 200, truthful shape", async () => {
+    // Anonymous must get 401 (NOT a public route): the mobile app relies on a
+    // 401 here to detect a revoked/unpaired session.
+    const anon = await fetch(`${base}/api/meta/version`);
+    expect(anon.status).toBe(401);
+    // Paired cookie gets the identity the app renders.
+    const cookie = (globalThis as Record<string, unknown>).__itCookie as string;
+    const res = await fetch(`${base}/api/meta/version`, { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { version?: string; host?: string; lan?: boolean; deviceName?: string };
+    expect(typeof body.version).toBe("string");
+    expect((body.version ?? "").length).toBeGreaterThan(0);
+    expect(typeof body.host).toBe("string");
+    expect(body.lan).toBe(true); // this listener IS the LAN runtime
+    expect(body.deviceName).toBe("XR desktop");
+  });
+
   test("revoke from desktop kills the mobile session", async () => {
     const cookie = (globalThis as Record<string, unknown>).__itCookie as string;
     const bearer = { authorization: `Bearer ${TOKEN}` };

@@ -1461,6 +1461,11 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1");
   }
 
+  /** Companion identity probe: daemon version, host URL, LAN flag. Auth-gated (a 401 here is how the mobile app detects a revoked session). */
+  async metaVersionGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/meta/version");
+  }
+
   /** The generated OpenAPI 3.1 document for this daemon. */
   async metaOpenapiGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/openapi.json");
