@@ -97,7 +97,7 @@ criteria are met or its residue is recorded in §5 with dispositions.
 
 **Exit: COMPLETE (2026-10-28).** Phase 1 bootstrap done (matrix file); Phase 2/5 opened by evidence (defect ledger §5).
 
-### Phase 1 — Complete feature inventory  ·  **PENDING**
+### Phase 1 — Complete feature inventory  ·  **COMPLETE (2026-10-28)**
 
 Deliverable: canonical feature-coverage matrix (§6 pointer) covering every
 desktop screen/window/route/workflow, connector/provider/MCP/skill, mobile
@@ -105,11 +105,22 @@ feature set, platform behaviors, shared engine deps — each with location,
 intended behavior, dependencies, status (implemented / tested / verified-on-real-OS /
 unverified / not-implemented), coverage and blockers.
 
-- [ ] Desktop: 16 screens (Onboarding, Chat, Brain, Workspaces, WorkspaceLanding, Builder, Research, Agents, SkillsStore, Shield, Runs, Memory, Budget, Integrations, Voice, Settings) + 4 windows (main, HUD, Orb, Theater) + tray/shortcuts/updater/crash-recovery — traced to source, matrix filled
-- [ ] Connectors/providers/MCP/plugins/skills inventory (from `src/`, `extensions/`, `plugins/`, `skills/`, capabilities/)
-- [ ] Mobile feature set (pairing, sessions, approvals, notifications, offline, reconnect, a11y, restrictions)
-- [ ] Windows/Linux platform behaviors + package assets
-- [ ] Shared engine/daemon/runtime dependency map; single-execution-authority confirmation
+- [x] Desktop: 16 screens (Onboarding, Chat, Brain, Workspaces, WorkspaceLanding, Builder, Research, Agents, SkillsStore, Shield, Runs, Memory, Budget, Integrations, Voice, Settings) + 4 windows (main, HUD, Orb, Theater) + tray/shortcuts/updater/crash-recovery — traced to source, matrix filled
+- [x] Connectors/providers/MCP/plugins/skills inventory (from `src/`, `extensions/`, `plugins/`, `skills/`, capabilities/)
+- [x] Mobile feature set (pairing, sessions, approvals, notifications, offline, reconnect, a11y, restrictions)
+- [x] Windows/Linux platform behaviors + package assets
+- [x] Shared engine/daemon/runtime dependency map; single-execution-authority confirmation
+
+Gap closure 2026-10-28 (this pass): the four unverified desktop rows now have
+dedicated coverage — `test/desktop/workspaces-core.test.ts` (D-04/D-05; incl.
+the `landingRuns` extraction), `agents-core.test.ts` (D-08),
+`splash-core.test.ts` (D-17); connectors/MCP/skills inventory got its Coverage
+column mapped to the real test tree (`test/providers/` 13 files,
+`test/integrations/`, `test/security/mcp-*`, `test/skills/`, `test/bots/`);
+mobile rows filled during Phase 5 (§7 #25–#29). Remaining unverified rows are
+capability-gated and say so exactly: S-02/S-04 (need a real display server),
+M-04 voice (needs a real microphone), provider presets tested-vs-unverified
+split (needs live API keys — Phase 6), S-03 updater (owner key provisioning).
 
 **Exit:** matrix file exists with a row per feature, no "assumed" rows, statuses
 distinguished from test evidence.
@@ -296,6 +307,7 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | 27 | 2026-10-28 | `node tools/screenshot-mobile.mjs` (new; puppeteer, 393×852 touch+dark, vs reference daemon) | 0 | 5/5 captured → `evidence/v1-2026-10-28/mobile-pwa-{01-pairing-screen,02-chats,03-conversation,04-approvals,05-settings}.png` — the pre-auth pairing journey and the paired app views, for the release evidence pack |
 | 28 | 2026-10-28 | V1-P5-003 fix: `node tools/check-test-prereqs.mjs` (prereqs present → silent 0) + `bun run release:stamp` after package.json script additions | 0 | guard silent-passes when tools deps + `.daemon-build` exist; `release:check` → 0 after re-stamp (manifest surface hash refresh; version unchanged 1.1.1-rc.1) |
 | 29 | 2026-10-28 | Post-D gates re-run at `4ce055f1`: size-gate, claim-lint, placeholder-lint, api:schema:check, client:check, boundaries, `bun test test/release/` | 0 | all green (293 ops generated / schema-check OK); release segment 286 pass / 11 skip / 0 fail; evidence logs refreshed in `evidence/v1-2026-10-28/` (discovery-state logs preserved as `*-defect-discovery-6fail.log`, `*-pre-repoint.log`) |
+| 30 | 2026-10-28 | Phase 1 gap closure: `bun test test/desktop/{workspaces,agents,splash}-core.test.ts` + `bun run typecheck` + full `bun test test/desktop/` | 0 | **27 new tests, all pass** (10 + 13 + 4); desktop dir **452 pass / 0 fail**; typecheck green after the `landingRuns` generic extraction (behavior-identical; pinned by its tests) |
 
 ### Prior-audit vs HEAD delta (Phase 0 exit item)
 

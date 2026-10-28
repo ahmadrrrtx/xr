@@ -19,11 +19,11 @@ Source of routes: `desktop/src/router.tsx` (hash router; dev-only `/__brand`).
 | D-01 | Onboarding (gate + screen) | `/onboarding` | `desktop/src/screens/Onboarding/` | implemented, tested | `test/ux/onboarding-yes.test.ts`; onboarding store in RC-208 tests | |
 | D-02 | Chat | `/chat/:sessionId?` | `desktop/src/screens/Chat/` | implemented, tested | `test/desktop/frontend-stores.test.ts` (chatStore: modes, attachments, offline queue, SR announcements) | |
 | D-03 | Brain (run inspector) | `/brain/:runId?` | `desktop/src/screens/Brain/` | implemented, tested | `frontend-stores.test.ts` (brainStore) | |
-| D-04 | Workspaces list | `/workspaces` | `desktop/src/screens/Workspaces/` | implemented, **unverified** | no dedicated test found in Phase-1 scan | Phase 1 gap to close |
-| D-05 | Workspace landing | `/workspaces/:id` | `desktop/src/screens/WorkspaceLanding.tsx` | implemented, **unverified** | none found | Phase 1 gap |
+| D-04 | Workspaces list | `/workspaces` | `desktop/src/screens/Workspaces/` | implemented, **verified** | `test/desktop/workspaces-core.test.ts` (filter/order/counts/withPatch; multi-select state machine; filter/search setters) | closed 2026-10-28 |
+| D-05 | Workspace landing | `/workspaces/:id` | `desktop/src/screens/WorkspaceLanding.tsx` | implemented, **verified** | `landingRuns` extracted pure helper + `test/desktop/workspaces-core.test.ts` (id/name match, archived excluded, newest-first, cap 5, empty-honesty) | closed 2026-10-28 |
 | D-06 | Builder | `/builder/:workspaceId?` | `desktop/src/screens/Builder/` | implemented, tested | `test/desktop/builder-core.test.ts` | Phase 3.5 audit target |
 | D-07 | Research | `/research` | `desktop/src/screens/Research/` | implemented, tested | `test/desktop/research-core.test.ts`, `research-reduce.test.ts` | Phase 3.5 audit target |
-| D-08 | Agents | `/agents` | `desktop/src/screens/Agents/` | implemented, **unverified** | none dedicated (multi-agent engine tests exist in `test/agents/`) | Phase 1 gap (UI level) |
+| D-08 | Agents | `/agents` | `desktop/src/screens/Agents/` | implemented, **verified** | `test/desktop/agents-core.test.ts` (summaryFromCustom permission/scope derivation, editor lifecycle incl. dirty-guard, template/edit/duplicate seeds, favorites persistence, validateForm limits) + engine `test/agents/` | closed 2026-10-28 |
 | D-09 | Skills Store | `/skills` | `desktop/src/screens/SkillsStore/` | implemented, tested | `test/desktop/skills-core.test.ts` | 65 bundled skills |
 | D-10 | Shield | `/shield` | `desktop/src/screens/Shield/` | implemented, tested | `test/desktop/shield-core.test.ts` | |
 | D-11 | Runs | `/runs` | `desktop/src/screens/Runs/` | implemented, tested | `runs-core.test.ts` + frontend-stores (empty-state honesty) | |
@@ -32,7 +32,7 @@ Source of routes: `desktop/src/router.tsx` (hash router; dev-only `/__brand`).
 | D-14 | Integrations | `/integrations` | `desktop/src/screens/Integrations/` | implemented, tested | `test/desktop/integrations-core.test.ts` | bots: discord/telegram/whatsapp |
 | D-15 | Voice | `/voice` | `desktop/src/screens/Voice/` | implemented, tested | `test/desktop/voice-audio.test.ts`, `test/voice/` (6 files) | mic-failure paths = Phase 3 |
 | D-16 | Settings | `/settings` | `desktop/src/screens/Settings/` | implemented, tested | `settings-core.test.ts` + frontend-stores (hydrate/persist/sync) | |
-| D-17 | Splash | boot | `desktop/src/screens/Splash.tsx` | implemented, **unverified** | none dedicated | minor |
+| D-17 | Splash | boot | `desktop/src/screens/Splash.tsx` | implemented, **verified** | `test/desktop/splash-core.test.ts` (boot status vocabulary, deterministic seeded particle field, bounds/ids) | closed 2026-10-28 |
 | W-01 | Main window | — | `desktop/src/App.tsx` | implemented, tested | deep-link listener tested in frontend-stores; shell parity `test/ux/shell-parity.test.ts` | |
 | W-02 | HUD window | — | `desktop/src/hud/App.tsx` | implemented, tested | `test/desktop/orb-core.test.ts` adjacency; HUD command surface in RC IPC gates | 96 HUD commands per RC report |
 | W-03 | Orb window | — | `desktop/src/orb/App.tsx` | implemented, tested | `test/desktop/orb-core.test.ts` | |
@@ -47,17 +47,17 @@ Source of routes: `desktop/src/router.tsx` (hash router; dev-only `/__brand`).
 
 ## 2. Providers, connectors, MCP, plugins, skills
 
-| Group | Inventory (from HEAD source) | Status |
-|---|---|---|
-| Provider presets (26) | anthropic, bedrock, cerebras, cohere, deepseek, fireworks, google, gpt4all, groq, huggingface, jan, koboldcpp, llamacpp, lmstudio, localai, mistral, ollama, openai, openrouter, perplexity, sambanova, sglang, textgenwebui, together, vllm, xai — `src/providers/presets.ts` | implemented; tested-vs-unverified split = Phase 6 |
-| Native adapters | anthropic, bedrock, cerebras, cohere, google, mistral, openai-responses (+ shared schemas/history) — `src/providers/native/` | implemented |
-| Custom/openai-compat endpoints | `src/providers/custom.ts`, `openai-compat.ts`, `gateway.ts` | implemented |
-| Connectors subsystem | `src/connectors/` (registry, service, runtime, credential vault adapter, MCP bridge, OAuth state) | implemented |
-| MCP | `src/mcp/` (client, manager, allowlist, pins, registry) | implemented |
-| Plugins | `plugins/github`, `plugins/hello` | implemented |
-| Extensions | `extensions/vscode` | implemented |
-| Skills | 65 bundled manifests in `skills/` | implemented |
-| Bots/integrations | discord, telegram, whatsapp (`src/bots/` — verify in Phase 1 deep pass) | implemented |
+| Group | Inventory (from HEAD source) | Status @ `4ce055f1`+ | Coverage (existing tests) |
+|---|---|---|---|
+| Provider presets (26) | anthropic, bedrock, cerebras, cohere, deepseek, fireworks, google, gpt4all, groq, huggingface, jan, koboldcpp, llamacpp, lmstudio, localai, mistral, ollama, openai, openrouter, perplexity, sambanova, sglang, textgenwebui, together, vllm, xai — `src/providers/presets.ts` | implemented | `test/providers/` 13 files: capability-fixtures (with `fixtures/`), credential-boundary, gateway, governed-attempts, malformed-response, native-continuation, offline-listing, probe-boundary, request-guard, resilience-boundary, service-authority, stream-settlement; tested-vs-unverified split per live key = Phase 6 |
+| Native adapters | anthropic, bedrock, cerebras, cohere, google, mistral, openai-responses (+ shared schemas/history) — `src/providers/native/` | implemented | `native-continuation.test.ts`, `malformed-response.test.ts`, `stream-settlement.test.ts` |
+| Custom/openai-compat endpoints | `src/providers/custom.ts`, `openai-compat.ts`, `gateway.ts` | implemented | `gateway.test.ts`, `credential-boundary.test.ts` |
+| Connectors subsystem | `src/connectors/` (registry, service, runtime, credential vault adapter, MCP bridge, OAuth state) | implemented | `test/integrations/` (integrations-service, integrations-primitives) + fake-MCP fixtures in `test/fixtures/` |
+| MCP | `src/mcp/` (client, manager, allowlist, pins, registry) | implemented | `test/integrations/integrations-mcp.test.ts`, `test/security/mcp-{allowlist,pinning,description-poison}.test.ts`, `test/trust/mcp-isolation.test.ts`, `test/phase8/mcp-isolation-grants.test.ts` |
+| Plugins | `plugins/github`, `plugins/hello` | implemented | `test/plugins/` (fs-authority, host, loader) |
+| Extensions | `extensions/vscode` | implemented | none found in test tree (IDE-side; out of daemon test reach) |
+| Skills | 65 bundled manifests in `skills/` | implemented | `test/skills/` (counts-authority, quality, quarantine-policy) |
+| Bots/integrations | discord, telegram, whatsapp (`src/bots/`) | implemented | `test/bots/shared-runtime.test.ts`, `telegram-characterization.test.ts`; discord/whatsapp characterization = Phase 6 |
 
 ## 3. Mobile companion (PWA)
 
