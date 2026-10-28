@@ -192,7 +192,7 @@ convention (bumping ~130 elements = redesign, out of scope; axe-core a11y
 suite passes). Dark/light, populated states, and long-content variants beyond
 this sweep remain owner-side review against the shipped PNG set.
 
-### Phase 4 — Windows/Linux packaging  ·  **IN PROGRESS (2026-10-28 — toolchain + sidecar + cargo check LANDED; bundle outcome below; Windows BLOCKED → native CI)**
+### Phase 4 — Windows/Linux packaging  ·  **COMPLETE for the Linux leg (2026-10-28 — AppImage + .deb built, installed, launch-verified; Windows/macOS BLOCKED → native CI; signing BLOCKED → owner keys)**
 Repeatable CI-driven builds; Tauri packaging retained; Windows NSIS/MSI via
 native runners (BLOCKED locally); Linux AppImage + .deb attempt locally;
 sidecar bundling verified; artifact manifest + hashes. A normal end user must
@@ -207,9 +207,21 @@ untouched); `bun run sidecar:compile` → `xr-engine-x86_64-unknown-linux-gnu`
 (116 MB, source/tool/target hash recorded by the script); desktop
 `tsc && vite build` PASS; **`cargo check` PASS in 2m45s** (the first real
 Rust-shell compile evidence on this line); `tauri build --bundles
-appimage,deb` attempted on 2 CPU / 2 GB — outcome recorded in §7 #34 either
-way. Environment note: `~/.cargo` and the cargo `target/` dir are NOT part of
-the workspace snapshot; re-bootstrap = rustup one-liner + the apt line above.
+appimage,deb` — first attempt OOM-killed on the final app crate (parallel
+codegen-units=1 needs >2 GB); retried single-job with 4 GB swap: **BOTH
+BUNDLES BUILT** — `XR_1.1.1-rc.1_amd64.AppImage` (172.65 MiB, sha256
+e349cbf6…03c5, extracts with both binaries) and `XR_1.1.1-rc.1_amd64.deb`
+(76.52 MiB, sha256 adbd0970…17f0d; correct Depends; sidecar bundled at
+/usr/bin/xr-engine). Install + launch verified in-sandbox on Debian 13:
+`dpkg -i` clean; the app started under Xvfb and stayed up the full window
+(benign headless warnings only); `/usr/bin/xr-engine --version` →
+`v1.1.1-rc.1 (Graphite)` matching the manifest. Manifest with all evidence:
+`evidence/v1-2026-10-28/linux-artifacts.json`. Honest limits: not a strict
+clean-OS install (build toolchain shares the runtime libs — the true matrix
+is CI's), unsigned (owner keys), no visual/interactive GUI verification
+(owner-side). Environment note: `~/.cargo` and the cargo `target/` dir are
+NOT part of the workspace snapshot; re-bootstrap = rustup one-liner + the apt
+line above.
 
 ### Phase 5 — Mobile audit and repair  ·  **COMPLETE (2026-10-28; audit + V1-P5-001/-002/-003 remediation + retest; real-device matrix BLOCKED — see §3)**
 Actual mobile source/deps/scripts/network contracts; official-doc research
@@ -392,6 +404,7 @@ All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `
 | 31 | 2026-10-28 | Phase 3.5: `node tools/screenshots-desktop-v1.mjs` (real app × reference daemon; 13 routes × 1440×900/1280×800/1024×768) + sidebar mod+b probe + toast before/after probe | 0 | 39 screenshots → `previews/v1-3.5/`; audit JSON → evidence dir; overflow 0px and true piercers 0 on every page; console errors 0; sidebar 72↔240 ✓ at both widths; toast font `ui-sans-serif` → `Inter` after fix; `bun run typecheck` + desktop segment green post-fix |
 | 32 | 2026-10-28 | Phase 6: `bun test test/daemon/cross-surface-contract.test.ts` (new) + re-run of the provider/integration battery (`test/providers/`, `test/integrations/`) | 0 | cross-surface 5/5: approvals same durable rows + first-decision-wins (mobile deny sticks; desktop control/approve answers 200 {ok:false}, approvals plane 409 — one invariant, two truthful wire shapes); budget cents == desktop USD ×100; models never-empty invariant. Provider battery green (see §7 #16 parity log; files listed in Phase 6 notes) |
 | 33 | 2026-10-28 | Phase 4 toolchain: apt GTK/WebKit dev stack + rustup 1.99.1 + `bun run sidecar:compile` + desktop build + `cargo check` (desktop/src-tauri) | 0 | webkit2gtk-4.1 pkg-config OK; sidecar 116 MB with build hash; `tsc && vite build` green; **cargo check 0 errors** (Rust shell compiles against the real GTK/WebKit stack) |
+| 34 | 2026-10-28 | Phase 4 bundles: `tauri build --bundles appimage,deb` (retry with swap) + `dpkg -i` + `xvfb-run` launch + `xr-engine --version` | 0 | AppImage 172.65 MiB + deb 76.52 MiB (sha256 in `evidence/v1-2026-10-28/linux-artifacts.json`); deb installs on Debian 13; app launches under Xvfb (runs the full window); sidecar reports `v1.1.1-rc.1 (Graphite)`. First attempt honestly recorded: OOM SIGKILL on the final crate without swap |
 
 ### Prior-audit vs HEAD delta (Phase 0 exit item)
 

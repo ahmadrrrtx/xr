@@ -22,8 +22,9 @@
 | a11y suite (live Chromium) | 53 pass | §7 #19 |
 | Mobile harness battery (web-push, lan-flow, offline) | 28/28 + 12/12 + push crypto | §7 #22–#26 |
 | Rust shell `cargo check` (webkit2gtk-4.1, rustc 1.99.1) | PASS — first real compile evidence on this line | §7 #33 |
+| Rust shell `cargo test` | NOT RUN locally (RAM budget spent on the bundle build) — run in §4 before merge | AGENTS.md battery |
 | Sidecar compile (bun → xr-engine-x86_64-unknown-linux-gnu) | PASS (116 MB, smoke-gated by the script) | Phase 4 log |
-| Linux bundle (AppImage + .deb) | see §7 #34 (this environment: 2 CPU / 2 GB) | Phase 4 log |
+| Linux bundle (AppImage + .deb) | **BUILT + INSTALL-VERIFIED** (AppImage 172.65 MiB, deb 76.52 MiB; dpkg -i + Xvfb launch + sidecar `--version` all pass) | §7 #34, `evidence/v1-2026-10-28/linux-artifacts.json` |
 | Size gate | PASS at TREE_CEILING <!-- XR:TREE-CEILING -->175,500<!-- /XR:TREE-CEILING --> (dated raises per ADR-0028 + D-6) | §5/D-6 |
 
 ## 2. What V1 fixed (defect ledger dispositions)

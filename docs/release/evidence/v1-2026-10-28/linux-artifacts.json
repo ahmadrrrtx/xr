@@ -1,0 +1,41 @@
+{
+  "comment": "V1 Phase 4 — Linux packaging evidence, built and verified in-sandbox 2026-10-28 (Debian 13, 2 CPU / 2 GB RAM + 4 GB swap, rustc 1.99.1 via rustup, GTK/WebKit dev stack via apt). Windows NSIS/MSI and macOS DMG remain BLOCKED → native CI (desktop-app.yml). Signing/provenance: NOT performed here (owner keys only — DESKTOP_SIGNING.md); these hashes are engineering evidence, not signed release artifacts.",
+  "version": "1.1.1-rc.1",
+  "build": {
+    "command": "./node_modules/.bin/tauri build --bundles appimage,deb (cwd desktop/, CARGO_BUILD_JOBS=1)",
+    "frontend": "tsc --noEmit && vite build (PASS)",
+    "sidecar": "bun run sidecar:compile → desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu (116250800 bytes)",
+    "cargo_check": "PASS (2m45s, 0 errors)",
+    "notes": "First attempt (parallel jobs) was OOM-killed (SIGKILL, signal 9) on the final app crate — codegen-units=1 + opt-level=3 needs >2 GB. Retried single-job with 4 GB swap: SUCCESS."
+  },
+  "artifacts": [
+    {
+      "path": "desktop/src-tauri/target/release/bundle/appimage/XR_1.1.1-rc.1_amd64.AppImage",
+      "size_bytes": 181037560,
+      "size_display": "172.65 MiB",
+      "sha256": "e349cbf68479bf7f42e00cf6ba68371b4304f10140045acce407428f71ce03c5",
+      "verified": {
+        "appimage_extract": "PASS — squashfs-root/usr/bin/{xr-desktop, xr-engine} both present (sidecar bundled)"
+      }
+    },
+    {
+      "path": "desktop/src-tauri/target/release/bundle/deb/XR_1.1.1-rc.1_amd64.deb",
+      "size_bytes": 80240546,
+      "size_display": "76.52 MiB",
+      "sha256": "adbd0970b16e3c8945f6c6147779380e0c1a4bb67135158014bbf33975617f0d",
+      "verified": {
+        "control": "Package: xr, Version: 1.1.1-rc.1, Architecture: amd64, Depends: libayatana-appindicator3-1, libwebkit2gtk-4.1-0, libgtk-3-0",
+        "contents": "usr/bin/xr-desktop (37908776) + usr/bin/xr-engine (116250800) + .desktop + hicolor icons",
+        "install": "PASS — sudo dpkg -i on Debian 13 sandbox; dpkg -l xr → ii 1.1.1-rc.1",
+        "launch": "PASS — xvfb-run: the app process started and stayed up for the full 25 s window (exit 124 = timeout-while-running); only benign headless warnings (appindicator deprecation, no session dbus in sandbox)",
+        "sidecar_version": "PASS — /usr/bin/xr-engine --version → 'v1.1.1-rc.1 (Graphite)' (matches release.manifest.json identity)"
+      }
+    }
+  ],
+  "honest_limitations": [
+    "Not a strict clean-OS install: the sandbox already had libwebkit2gtk-4.1-dev et al. from the build toolchain (the runtime deps are the same libraries); the true clean-OS matrix remains CI's native job.",
+    "No signing, no updater artifacts, no provenance — owner keys only (ledger §3, DESKTOP_SIGNING.md).",
+    "rpm target not attempted locally (tauri.conf lists it for CI).",
+    "The GUI was driven under Xvfb; visual/interactive verification (menus, tray, shortcuts) needs a real display — owner-side."
+  ]
+}
