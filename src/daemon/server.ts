@@ -467,7 +467,12 @@ export function makeHandler(
       path !== "/assets/auth.js" &&
       path !== LOGIN_PATH &&
       path !== "/api/telegram/webhook" &&
-      path !== "/api/discord/webhook"
+      path !== "/api/discord/webhook" &&
+      // V1-P5-001 · 4/5 — the PWA shell at /mobile/ is static bytes with no
+      // data (same posture as /assets/auth.js): an UNPAIRED phone must load
+      // the pairing UI before any session exists. Its data endpoints
+      // (/api/mobile/*) stay behind the session wall.
+      !((req.method === "GET" || req.method === "HEAD") && (path === "/mobile" || path.startsWith("/mobile/")))
     ) {
       let auth: ReturnType<typeof authorizeRequest> | { kind: "mobile" } = authorizeRequest(req, token, browser);
       // Phase 2.4 · P1-1 — a paired-device cookie becomes a narrowly recognised

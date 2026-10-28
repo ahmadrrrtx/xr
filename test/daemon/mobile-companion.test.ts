@@ -191,3 +191,65 @@ describe("V1-P5-001 · companion chat sync (mobile-scoped store)", () => {
     expect(anon.status).toBe(401);
   });
 });
+
+describe("V1-P5-001 · PWA static serving (/mobile/)", () => {
+  test("shell is open pre-auth with the app's CSP; SPA fallback; immutable hashed assets", async () => {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const dist = join(process.env.HOME!, "mobile-dist");
+    mkdirSync(join(dist, "assets"), { recursive: true });
+    writeFileSync(join(dist, "index.html"), "<!doctype html><title>XR Mobile</title>");
+    writeFileSync(join(dist, "assets", "app-abc123.js"), "console.log(1)");
+    writeFileSync(join(process.env.HOME!, "secret-outside.txt"), "secret");
+    process.env.XR_MOBILE_DIST = dist;
+    try {
+      // Anonymous GET (no bearer, no cookie): the phone loads the shell before
+      // any session exists — static bytes only, data endpoints stay gated.
+      const shell = await handler(get("/mobile/"));
+      expect(shell.status).toBe(200);
+      expect(shell.headers.get("content-type")).toContain("text/html");
+      // Route-level CSP wins over the floor: the mobile app's own policy
+      // (push-service connect targets) must survive applySecurityHeaders.
+      expect(shell.headers.get("content-security-policy")).toContain("https://updates.push.services.mozilla.com");
+      expect(shell.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      expect(shell.headers.get("service-worker-allowed")).toBe("/mobile/");
+      // Daemon policy (security-headers.ts): HTML is never stored — the SW's
+      // own cache API (not the HTTP cache) is what makes the shell offline.
+      expect(shell.headers.get("cache-control")).toBe("no-store");
+      expect(await shell.text()).toContain("XR Mobile");
+
+      const asset = await handler(get("/mobile/assets/app-abc123.js"));
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get("content-type")).toContain("text/javascript");
+      expect(asset.headers.get("cache-control")).toContain("immutable");
+
+      // Unknown route falls back to the shell (pair deep link).
+      const spa = await handler(get("/mobile/pair?code=123456"));
+      expect(spa.status).toBe(200);
+      expect(spa.headers.get("content-type")).toContain("text/html");
+
+      // Traversal probe: the WHATWG URL parser collapses %2e%2e before the
+      // request is even built, so the path leaves /mobile/ entirely and hits
+      // the auth wall — the secret file is never reachable this way. (The
+      // startsWith(dist) guard inside serveMobileDist is defense-in-depth for
+      // non-URL callers.)
+      const trav = await handler(get("/mobile/%2e%2e/secret-outside.txt"));
+      expect(trav.status).toBe(401);
+      expect(trav.headers.get("content-type")).toContain("text/html"); // sign-in page, not the file
+    } finally {
+      delete process.env.XR_MOBILE_DIST;
+    }
+  });
+
+  test("LAN off → 404; missing build → honest 404, not 500", async () => {
+    process.env.XR_MOBILE_DIST = join(process.env.HOME!, "no-such-dist");
+    try {
+      const missing = await handler(get("/mobile/"));
+      expect(missing.status).toBe(404);
+      expect((await missing.text()).includes("mobile/dist")).toBe(true);
+      const off = await offLan(get("/mobile/"));
+      expect(off.status).toBe(404);
+    } finally {
+      delete process.env.XR_MOBILE_DIST;
+    }
+  });
+});

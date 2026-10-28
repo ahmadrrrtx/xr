@@ -18,6 +18,8 @@ import { BudgetService } from "../../services/budget-service.ts";
 import { decideApproval } from "./approvals.routes.ts";
 import { chatRoutes } from "./chat.routes.ts";
 import { appendMessage, createChat, listChats, listMessages } from "../mobile-chats.ts";
+import { extname, join, normalize, resolve } from "node:path";
+import { readFile, stat } from "node:fs/promises";
 
 /** Session wall: companion ops need a paired mobile session or a privileged
  * desktop caller; anonymous gets the same 401 the rest of the API gives. */
@@ -243,6 +245,15 @@ export function mobileCompanionRoutes(): DaemonRoute[] {
         return new Response(persistingStream(res.body, chatId), { status: 200, headers: res.headers });
       },
     }),
+
+    /* ── PWA static serving (V1-P5-001 4/5) ──────────────────────────────── */
+
+    route({
+      id: "mobile.pwa.get",
+      prefix: `/mobile`,
+      method: "GET",
+      handle: (ctx) => serveMobileDist(ctx),
+    }),
   ];
 }
 
@@ -274,4 +285,83 @@ function persistingStream(body: ReadableStream<Uint8Array>, chatId: string): Rea
       },
     }),
   );
+}
+
+/* ── PWA static serving (V1-P5-001 4/5) ──────────────────────────────────── */
+
+/** The mobile app's own CSP (carried over verbatim from the reference harness
+ * that shipped it — same-origin everything, push-service connect targets,
+ * inline styles only, no framing). */
+const MOBILE_CSP = [
+  "default-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "script-src 'self'",
+  "connect-src 'self' wss: https://*.googleapis.com https://*.push.apple.com https://updates.push.services.mozilla.com",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "font-src 'self' data:",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+const MOBILE_MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".map": "application/json",
+};
+
+/** Built PWA location: packaged layouts can point XR_MOBILE_DIST at it;
+ * otherwise the repo checkout's mobile/dist beside the daemon. */
+function mobileDistDir(): string {
+  return resolve(process.env.XR_MOBILE_DIST ?? join(process.cwd(), "mobile", "dist"));
+}
+
+/** Serve the built PWA at /mobile/ (LAN runtime only). Path-traversal guarded,
+ * SPA fallback for unknown routes, honest 404 when the build is absent. */
+async function serveMobileDist(ctx: DaemonRouteContext): Promise<Response> {
+  if (!ctx.mobile) return ctx.json({ error: "LAN mode is off" }, 404);
+  const dist = mobileDistDir();
+  const relative = ctx.path.replace(/^\/mobile\/?/, "") || "index.html";
+  const safe = normalize(relative).replace(/^(\.\.[/\\])+/, "");
+  let filePath = join(dist, safe);
+  if (!filePath.startsWith(dist)) return new Response("Forbidden", { status: 403 });
+  try {
+    const info = await stat(filePath);
+    if (info.isDirectory()) filePath = join(filePath, "index.html");
+  } catch {
+    filePath = join(dist, "index.html"); // SPA fallback (/mobile/pair?code=…)
+  }
+  let body: Uint8Array;
+  try {
+    body = new Uint8Array(await readFile(filePath));
+  } catch {
+    return new Response(
+      "XR mobile app is not built next to this daemon (mobile/dist absent). Build it with: npm --prefix mobile run build",
+      { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
+  }
+  return new Response(body, {
+    headers: {
+      "content-type": MOBILE_MIME[extname(filePath)] ?? "application/octet-stream",
+      "content-length": String(body.byteLength),
+      "content-security-policy": MOBILE_CSP,
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "cross-origin-opener-policy": "same-origin",
+      "service-worker-allowed": "/mobile/",
+      "cache-control": filePath.includes("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+    },
+  });
 }

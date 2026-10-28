@@ -38,4 +38,5 @@ export const MOBILE_CONTRACT: Record<string, ApiOperationMeta> = {
   "mobile.companion.chats.create.post": m("Create a companion chat.", { request: MobileChatsCreateRequest }),
   "mobile.companion.chatMessages.get": m("Companion chat messages (mobile-scoped; sync source for a re-installed or second phone)."),
   "mobile.companion.chat.post": m("Send a companion chat message; streams the SAME canonical SSE as /api/chat (adapter: mode 'ask', per-chat lane). Provider-offline answers 503 honestly.", { request: MobileChatSendRequest }),
+  "mobile.pwa.get": m("Serve the built mobile PWA shell at /mobile/ (static bytes, no data — open path pre-auth like /assets/auth.js; LAN runtime only; honest 404 when mobile/dist is absent).", { tag: "surface", stability: "stable", surface: true }),
 };
