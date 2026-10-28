@@ -89,10 +89,11 @@ criteria are met or its residue is recorded in §5 with dispositions.
 - [x] Read prior evidence: `docs/release/RELEASE_CANDIDATE_REPORT.md`, `RELEASE_CANDIDATE_NOTES.md`, `IMPLEMENTATION_PLAN.md`, `PROGRESS.md`, `docs/launch/XR_LAUNCH_FINDINGS.md`, `docs/release/DESKTOP-SUPPORT-MATRIX.md`, `docs/mobile/PWA.md` + `SECURITY.md` (heads; deep-read per phase as needed)
 - [x] Real git state: `main` @ `d04011ec`, clean tree, no uncommitted user work; work branch created before any edit
 - [x] Toolchain: bun installed, `bun install --frozen-lockfile` (root) PASS — 82 pkgs, 0.75s
-- [ ] Root dependency install evidence re-verified for desktop + mobile
-- [ ] Baseline gate battery at HEAD executed and logged (§7) — release:check, channel:check, claim-lint, placeholder-lint, boundaries, typecheck, unit-tier
-- [ ] Prior-audit-vs-HEAD delta reviewed: RC report described **uncommitted** work on `audit/release-candidate-2026-10-26`; that branch merged via PR #199, then PR #200 landed. Which RC changes actually reached `main`, and did anything regress in the merge? (Evidence: git diff of merge commits; gates at HEAD.)
-- [ ] This ledger written, committed, linked from release docs index
+- [x] Root dependency install evidence re-verified for desktop + mobile (457 pkgs / lockfile clean)
+- [x] Baseline gate battery at HEAD executed and logged (§7 #3–#15): release:check, channel:check, claim-lint, placeholder-lint, boundaries, typecheck, unit-tier, desktop build, mobile install/typecheck/build — **all PASS**
+- [ ] Full segmented Linux suite (`scripts/parity-suite-runner.sh linux`) — RUNNING (§7 #16)
+- [x] Prior-audit-vs-HEAD delta reviewed: PR #199 (RC, 398 files) + PR #200 (CLI npm, 27 files) landed on main; RC evidence re-executed at HEAD instead of trusted; RC BLOCKED items still BLOCKED (§7 delta note)
+- [x] This ledger written, committed, linked from release docs index
 
 **Exit:** ledger committed; baseline gates logged with honest statuses; HEAD
 delta vs prior audits understood.
@@ -202,10 +203,33 @@ Target file: [`V1-FEATURE-MATRIX-2026-10-28.md`](V1-FEATURE-MATRIX-2026-10-28.md
 
 ## 7. Verification log (living)
 
+All commands executed at `work/v1-release-stabilization-2026-10-28` = `main` @ `d04011ec` + ledger commits. Raw logs in [`evidence/v1-2026-10-28/`](evidence/v1-2026-10-28/).
+
 | # | Date (UTC) | Command | Exit | Result / note |
 |---|---|---|---|---|
 | 1 | 2026-10-28 | `git clone https://github.com/ahmadrrrtx/xr.git` | 0 | HEAD `d04011ec`, `main`, clean |
 | 2 | 2026-10-28 | `bun install --frozen-lockfile` (root) | 0 | 82 packages, 753 ms |
+| 3 | 2026-10-28 | `bun run release:check` | 0 | all 10 surfaces in sync at 1.1.1-rc.1; Cargo.lock in sync |
+| 4 | 2026-10-28 | `bun run channel:check` | 0 | 5 stable channel configs in sync at public v1.0.0 |
+| 5 | 2026-10-28 | `bun run claim-lint` | 0 | 20 evidenced claims; Articles verified |
+| 6 | 2026-10-28 | `bun run placeholder-lint` | 0 | 77 website files scanned, no placeholders |
+| 7 | 2026-10-28 | `bun install --frozen-lockfile` (desktop) | 0 | 457 packages, 1.1 s |
+| 8 | 2026-10-28 | `bun run unit-tier` | 0 | 271 pass / 0 fail, 17 files, 1.54 s (budget 5 s) |
+| 9 | 2026-10-28 | `bun run typecheck` (root preflight + tsc root + desktop) | 0 | 39 s |
+| 10 | 2026-10-28 | `bun run boundaries` | 0 | 788 modules, 2600 deps; 0 errors (1 pre-existing warning) |
+| 11 | 2026-10-28 | `npm --prefix mobile install` | 0 | lockfile install clean |
+| 12 | 2026-10-28 | `npm --prefix mobile run typecheck` | 0 | `tsc -b` clean |
+| 13 | 2026-10-28 | `npm --prefix mobile run build` | 0 | vite + PWA injectManifest; 27 precache entries (712 KiB); sw.js generated |
+| 14 | 2026-10-28 | `npm --prefix mobile audit --omit=dev` | 0 | 0 production vulnerabilities (4 low dev-only — P2 note) |
+| 15 | 2026-10-28 | `cd desktop && bun run build` | 0 | vite build 2.76 s; 2 pre-existing `INEFFECTIVE_DYNAMIC_IMPORT` warnings (detect.ts, budget/enforce.ts) — P2, relates to L-014 chunk-size work |
+| 16 | 2026-10-28 | `bash scripts/parity-suite-runner.sh linux` | RUNNING | full segmented Linux unit suite (repo parity authority); log `evidence/v1-2026-10-28/parity-suite-linux.log` |
+
+### Prior-audit vs HEAD delta (Phase 0 exit item)
+
+- `main` @ `d04011ec` = PR #199 merge (`audit/release-candidate-2026-10-26`, **398 files** — the entire RC described in `RELEASE_CANDIDATE_REPORT.md`) + PR #200 merge (`work/npm-coding-agent-readiness`, **27 files**: `bin/bun-runtime.js`, npm pack smoke, coder CLI contracts, license/SBOM updates).
+- Therefore the RC report's claims now describe code that is *on main*, but its evidence was captured pre-merge; this pass re-executes the applicable gates at HEAD (§7) rather than trusting the report.
+- PR #200 is CLI/npm-scoped — under the §2 CLI freeze it must not gain features here, only not-regress.
+- RC BLOCKED items (signing certs, native Windows/macOS, updater key provisioning, live providers) remain BLOCKED at HEAD — no owner action has occurred since (no new tags/releases in git log; channel authority still 1.0.0).
 
 ## 8. Decision log (living)
 
