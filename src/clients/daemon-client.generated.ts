@@ -1476,6 +1476,26 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/mobile/approvals");
   }
 
+  /** Companion chat list (mobile-scoped store; newest first). */
+  async mobileCompanionChatsGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/chats");
+  }
+
+  /** Create a companion chat. */
+  async mobileCompanionChatsCreatePost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/chats");
+  }
+
+  /** Companion chat messages (mobile-scoped; sync source for a re-installed or second phone). */
+  async mobileCompanionChatMessagesGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/chats");
+  }
+
+  /** Send a companion chat message; streams the SAME canonical SSE as /api/chat (adapter: mode 'ask', per-chat lane). Provider-offline answers 503 honestly. */
+  async mobileCompanionChatPost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/chat");
+  }
+
   /** API index: version, operation catalogue link, OpenAPI location. */
   async metaApiRootGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1");

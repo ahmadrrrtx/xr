@@ -112,15 +112,15 @@ export const api = {
   /* --------------------------------------------------------------- chats --- */
 
   chats: (limit = 50): Promise<{ chats: ChatSummary[] }> =>
-    request<{ chats: ChatSummary[] }>(`/api/v1/chats?limit=${limit}`),
+    request<{ chats: ChatSummary[] }>(`/api/mobile/chats?limit=${limit}`),
 
   messages: (chatId: string, limit = 200): Promise<{ messages: ChatMessage[] }> =>
     request<{ messages: ChatMessage[] }>(
-      `/api/v1/chats/${encodeURIComponent(chatId)}/messages?limit=${limit}`,
+      `/api/mobile/chats/${encodeURIComponent(chatId)}/messages?limit=${limit}`,
     ),
 
   newChat: (title?: string): Promise<{ id: string; title: string }> =>
-    request<{ id: string; title: string }>('/api/v1/chats', { method: 'POST', json: { title } }),
+    request<{ id: string; title: string }>('/api/mobile/chats', { method: 'POST', json: { title } }),
 
   /* ----------------------------------------------------------- approvals --- */
 
@@ -267,7 +267,7 @@ export async function* streamChat(args: {
   model?: string | undefined;
   signal?: AbortSignal | undefined;
 }): AsyncGenerator<StreamEvent> {
-  const res = await fetch(`${BASE}/api/v1/chat`, {
+  const res = await fetch(`${BASE}/api/mobile/chat`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },

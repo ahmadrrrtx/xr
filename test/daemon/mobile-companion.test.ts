@@ -36,6 +36,9 @@ beforeAll(async () => {
   const { makeHandler } = await import("../../src/daemon/server.ts");
   const { Store } = await import("../../src/state/workspace-store.ts");
   ({ getApprovalStore } = await import("../../src/control/approval-store.ts"));
+  // The mobile chat store resolves $HOME per call; pin it to this suite's tmp
+  // home and start from a clean slate (state must never leak between runs).
+  await (await import("../../src/daemon/mobile-chats.ts")).resetMobileChatsForTest();
   const lan = await prepareLan(0);
   store = new Store(join(process.env.HOME!, "companion.db"));
   handler = makeHandler(store, TOKEN, { lan: { cert: lan.cert } });
@@ -133,5 +136,58 @@ describe("V1-P5-001 · companion approvals (shared store, shared decide path)", 
     expect(bad.status).toBe(400);
     const missing = await handler(post("/api/mobile/approvals/does-not-exist", { decision: "approve" }, auth));
     expect(missing.status).toBe(404);
+  });
+});
+
+describe("V1-P5-001 · companion chat sync (mobile-scoped store)", () => {
+  test("create → list → messages round-trip; local-first ids are adopted on append", async () => {
+    const { createChat, appendMessage, listChats, listMessages } = await import("../../src/daemon/mobile-chats.ts");
+    const created = await handler(post("/api/mobile/chats", { title: "Release check" }, auth));
+    expect(created.status).toBe(201);
+    const row = (await created.json()) as { id: string; title: string };
+    expect(row.id).toMatch(/^mcht_/);
+    expect(row.title).toBe("Release check");
+
+    // A phone-local id that never round-tripped is adopted on first append.
+    await appendMessage("chat_localfirst", "user", "hello from the phone");
+    await appendMessage("chat_localfirst", "assistant", "hi");
+
+    const list = await handler(get("/api/mobile/chats?limit=10", auth));
+    expect(list.status).toBe(200);
+    const body = (await list.json()) as { chats?: { id: string; title: string; lastMessage: string; messageCount: number }[] };
+    const ids = body.chats!.map((c) => c.id);
+    expect(ids).toContain(row.id);
+    expect(ids).toContain("chat_localfirst");
+    const local = body.chats!.find((c) => c.id === "chat_localfirst")!;
+    expect(local.messageCount).toBe(2);
+    expect(local.lastMessage).toBe("hi");
+
+    const msgs = await handler(get(`/api/mobile/chats/${row.id}/messages`, auth));
+    expect(msgs.status).toBe(200);
+    expect(((await msgs.json()) as { messages: unknown[] }).messages).toEqual([]);
+    const localMsgs = await handler(get("/api/mobile/chats/chat_localfirst/messages", auth));
+    const localBody = (await localMsgs.json()) as { messages: { role: string; content: string }[] };
+    expect(localBody.messages.map((m) => m.role)).toEqual(["user", "assistant"]);
+  });
+
+  test("send reaches the ONE /api/chat path and passes its honest state through", async () => {
+    // No provider is configured in this environment: the adapter must surface
+    // the real pipeline's 503 (or stream if one exists) — never a fabricated
+    // reply — and must NOT persist the user turn on a failed run.
+    const { listMessages } = await import("../../src/daemon/mobile-chats.ts");
+    const res = await handler(post("/api/mobile/chat", { chatId: "chat_probe", content: "ping" }, auth));
+    expect([200, 503]).toContain(res.status);
+    if (res.status === 503) {
+      const body = (await res.json()) as { error?: string };
+      expect(typeof body.error).toBe("string");
+      expect(await listMessages("chat_probe", 10)).toEqual([]);
+    }
+  });
+
+  test("invalid chat body → 400; anonymous chat → 401", async () => {
+    const bad = await handler(post("/api/mobile/chat", { chatId: "", content: "" }, auth));
+    expect(bad.status).toBe(400);
+    const anon = await handler(post("/api/mobile/chat", { chatId: "c", content: "hi" }));
+    expect(anon.status).toBe(401);
   });
 });

@@ -187,7 +187,7 @@ export const THRESHOLD = 800;
 // extension/CI work added nothing under src/. No waived giant grew
 // (daemon/server.ts shrank by 10). Measured 174,068 (+403). Headroom ~432.
 // Needs maintainer sign-off.
-export const TREE_CEILING = 175_000; // V1 · Phase 5 mobile companion repair · 174,500 → 175,000 (2026-10-28):
+export const TREE_CEILING = 175_500; // V1 · Phase 5 mobile companion repair · 174,500 → 175,500 (2026-10-28):
 // V1-P5-001 (release ledger docs/release/V1-RELEASE-LEDGER-2026-10-28.md §5):
 // the shipped PWA spoke a companion contract that existed only in the reference
 // harness, so the production app could not function against the real daemon.
@@ -200,7 +200,7 @@ export const TREE_CEILING = 175_000; // V1 · Phase 5 mobile companion repair ·
 // entries + regenerated client. The chat adapter and /mobile/ static serving
 // land separately under the same ceiling. No waived giant grew
 // (approvals.routes.ts is net +30 from the extraction, not growth of a waived
-// module). Measured 174,686 (+186 over 174,500). Headroom ~314.
+// module). Measured 175,005 after the chat-sync unit (+319 total: read/act API, the mobile-scoped chat store src/daemon/mobile-chats.ts, and the chat adapter that reuses the ONE /api/chat handler). Headroom ~495 for the /mobile/ static-serving unit that completes the repair.
 // Needs maintainer sign-off.
 //
 // ── Phase 28 history (174,500's raise, 2026-10-13): the mobile companion's

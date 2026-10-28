@@ -16,6 +16,8 @@ import { getApprovalStore } from "../../control/approval-store.ts";
 import { renderPreviewText } from "../../control/preview.ts";
 import { BudgetService } from "../../services/budget-service.ts";
 import { decideApproval } from "./approvals.routes.ts";
+import { chatRoutes } from "./chat.routes.ts";
+import { appendMessage, createChat, listChats, listMessages } from "../mobile-chats.ts";
 
 /** Session wall: companion ops need a paired mobile session or a privileged
  * desktop caller; anonymous gets the same 401 the rest of the API gives. */
@@ -138,5 +140,138 @@ export function mobileCompanionRoutes(): DaemonRoute[] {
         return decideApproval(ctx, decodeURIComponent(match[1]), body.decision === "approve");
       },
     }),
+
+    /* ── Companion chat sync (V1-P5-001 3/5) ──────────────────────────────── */
+
+    route({
+      id: "mobile.companion.chats.get",
+      path: `${P}/chats`,
+      method: "GET",
+      handle: async (ctx) => {
+        const denied = requireSession(ctx);
+        if (denied) return denied;
+        const limit = Math.min(Math.max(Number(new URL(ctx.url).searchParams.get("limit") ?? 50) || 50, 1), 200);
+        const chats = await listChats(limit);
+        const summaries = await Promise.all(
+          chats.map(async (c) => {
+            const messages = await listMessages(c.id, 500);
+            return {
+              id: c.id,
+              title: c.title,
+              updatedAt: c.updatedAt,
+              lastMessage: messages[messages.length - 1]?.content.slice(0, 140) ?? "",
+              messageCount: messages.length,
+            };
+          }),
+        );
+        return ctx.json({ chats: summaries });
+      },
+    }),
+
+    route({
+      id: "mobile.companion.chats.create.post",
+      path: `${P}/chats`,
+      method: "POST",
+      handle: async (ctx) => {
+        const denied = requireSession(ctx);
+        if (denied) return denied;
+        const body = (await ctx.req.json().catch(() => ({}))) as { title?: unknown };
+        const title = typeof body?.title === "string" ? body.title : "";
+        const row = await createChat(title);
+        return ctx.json({ id: row.id, title: row.title }, 201);
+      },
+    }),
+
+    route({
+      id: "mobile.companion.chatMessages.get",
+      pattern: /^\/api\/mobile\/chats\/[\w.-]+\/messages$/,
+      prefix: `${P}/chats`,
+      method: "GET",
+      handle: async (ctx) => {
+        const denied = requireSession(ctx);
+        if (denied) return denied;
+        const match = ctx.path.match(/^\/api\/mobile\/chats\/([^/]+)\/messages$/);
+        if (!match) return null;
+        const chatId = decodeURIComponent(match[1]);
+        const limit = Math.min(Math.max(Number(new URL(ctx.url).searchParams.get("limit") ?? 200) || 200, 1), 500);
+        const messages = await listMessages(chatId, limit);
+        return ctx.json({ messages });
+      },
+    }),
+
+    route({
+      id: "mobile.companion.chat.post",
+      path: `${P}/chat`,
+      method: "POST",
+      handle: async (ctx) => {
+        const denied = requireSession(ctx);
+        if (denied) return denied;
+        const body = (await ctx.req.json().catch(() => ({}))) as { chatId?: unknown; content?: unknown; model?: unknown };
+        const chatId = typeof body?.chatId === "string" ? body.chatId.slice(0, 64) : "";
+        const content = typeof body?.content === "string" ? body.content : "";
+        if (!chatId || !content) {
+          return ctx.json({ error: "expected { chatId: string, content: string }" }, 400);
+        }
+        const model = typeof body?.model === "string" && body.model ? body.model : undefined;
+        // ONE execution path: the adapter translates the wire form and invokes
+        // the SAME /api/chat handler (preflight, lane serialization, coop
+        // cancellation, durable approvals, canonical SSE) — no second loop.
+        const chatHandler = chatRoutes().find((r) => r.id === "chat.stream.post")!.handle;
+        const res = await chatHandler({
+          ...ctx,
+          path: "/api/chat",
+          req: new Request(ctx.req.url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              message: content,
+              mode: "ask",
+              sessionId: chatId,
+              ...(model ? { model } : {}),
+            }),
+          }),
+        });
+        // Honest pass-through: provider-offline 503, busy-lane 429, bad-body
+        // 400 — the phone sees the real state, never a fabricated stream.
+        if (!res || res.status !== 200 || !res.body) {
+          return res ?? ctx.json({ error: "chat unavailable" }, 503);
+        }
+        // The stream is real: persist the user turn, and tee the reply through
+        // a transform that captures the done frame so the assistant turn lands
+        // in the store for the next sync. Persistence must never break the stream.
+        void appendMessage(chatId, "user", content);
+        return new Response(persistingStream(res.body, chatId), { status: 200, headers: res.headers });
+      },
+    }),
   ];
+}
+
+/** Wraps the chat SSE body so the assistant reply (the done frame's fullText)
+ * is appended to the mobile chat store when the stream completes. */
+function persistingStream(body: ReadableStream<Uint8Array>, chatId: string): ReadableStream<Uint8Array> {
+  let text = "";
+  const decoder = new TextDecoder();
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        text += decoder.decode(chunk, { stream: true });
+        controller.enqueue(chunk);
+      },
+      flush() {
+        void (async () => {
+          try {
+            const m = /data: (\{[^\n]*"type":"done"[^\n]*\})/.exec(text);
+            if (m) {
+              const done = JSON.parse(m[1]) as { fullText?: string };
+              if (typeof done.fullText === "string" && done.fullText) {
+                await appendMessage(chatId, "assistant", done.fullText);
+              }
+            }
+          } catch {
+            /* persistence failure must never surface as a stream error */
+          }
+        })();
+      },
+    }),
+  );
 }

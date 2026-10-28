@@ -431,10 +431,11 @@ const server = createServer(
      * pairing transport 404s every unknown /api/mobile/* path. */
     {
       const companionGet =
-        (pathname === '/api/mobile/models' || pathname === '/api/mobile/budget' || pathname === '/api/mobile/approvals') &&
+        (pathname === '/api/mobile/models' || pathname === '/api/mobile/budget' || pathname === '/api/mobile/approvals' || pathname === '/api/mobile/chats' || /^\/api\/mobile\/chats\/[\w.-]+\/messages$/.test(pathname)) &&
         req.method === 'GET';
-      const companionDecide = /^\/api\/mobile\/approvals\/[\w-]+$/.test(pathname) && req.method === 'POST';
-      if (companionGet || companionDecide) {
+      const companionPost =
+        (/^\/api\/mobile\/approvals\/[\w-]+$/.test(pathname) || pathname === '/api/mobile/chats' || pathname === '/api/mobile/chat') && req.method === 'POST';
+      if (companionGet || companionPost) {
         if (!session.device && !session.privileged) {
           json(res, { error: 'Not paired' }, 401);
           return;
@@ -451,6 +452,54 @@ const server = createServer(
           const status = searchParams.get('status') ?? 'pending';
           const approvals = status === 'all' ? APPROVALS : APPROVALS.filter((a) => a.status === status);
           json(res, { approvals });
+          return;
+        }
+        /* Chat sync mirrors the real mobile-scoped store endpoints. */
+        if (pathname === '/api/mobile/chats' && req.method === 'GET') {
+          const limit = Number(searchParams.get('limit') ?? 50);
+          json(res, { chats: CHATS.slice(0, limit) });
+          return;
+        }
+        if (pathname === '/api/mobile/chats' && req.method === 'POST') {
+          let parsed = { title: undefined };
+          try {
+            parsed = JSON.parse(await readBody(req));
+          } catch {
+            /* default */
+          }
+          const chat = { id: `cht_${randomUUID().slice(0, 8)}`, title: parsed.title || 'New chat', updatedAt: Date.now(), lastMessage: '', unread: 0 };
+          CHATS.unshift({ ...chat });
+          MESSAGES[chat.id] = [];
+          json(res, { id: chat.id, title: chat.title }, 201);
+          return;
+        }
+        const msgsMatch = /^\/api\/mobile\/chats\/([\w.-]+)\/messages$/.exec(pathname);
+        if (msgsMatch && req.method === 'GET') {
+          json(res, { messages: MESSAGES[msgsMatch[1]] ?? [] });
+          return;
+        }
+        if (pathname === '/api/mobile/chat') {
+          let parsed = { chatId: '', content: '' };
+          try {
+            parsed = JSON.parse(await readBody(req));
+          } catch {
+            /* ignore */
+          }
+          const chatId = parsed.chatId ?? '';
+          const content = String(parsed.content ?? '');
+          const list = MESSAGES[chatId] ?? (MESSAGES[chatId] = []);
+          list.push({ id: `m_${randomUUID()}`, chatId, role: 'user', content, createdAt: Date.now() });
+          streamReply(req, res, content);
+          const reply =
+            'Here’s what I found. The local model handles this fine, and it keeps the bytes on your machine.\n\nI looked at the three call sites you mentioned. Two are trivial, one needs a decision from you — the admin route still relies on the shim for long-lived sessions.\n\nWant me to prepare the diff? I won’t apply it until you approve.';
+          setTimeout(() => {
+            list.push({ id: `m_${randomUUID()}`, chatId, role: 'assistant', content: reply, createdAt: Date.now() });
+            const chat = CHATS.find((c) => c.id === chatId);
+            if (chat) {
+              chat.lastMessage = reply.slice(0, 120);
+              chat.updatedAt = Date.now();
+            }
+          }, 900);
           return;
         }
         const id = pathname.split('/')[3] ?? '';
