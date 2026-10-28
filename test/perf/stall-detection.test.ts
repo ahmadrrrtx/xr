@@ -29,6 +29,15 @@ describe("Phase 3 · T3 — stall detection", () => {
     expect(violations[0]!.durationMs).toBeGreaterThanOrEqual(50);
   }, 10_000);
 
+  // PR #202 CI fix (2026-10-28, macOS lane run 40778341482): the assertion is
+  // exactly "a healthy async loop produces no false positives" — but on a
+  // shared hosted runner the OS can starve the event loop >50 ms with no
+  // product code involved (observed: one 109 ms violation during the pure
+  // async sleep; the detector itself was correct). Same contention class the
+  // other perf tests tolerate (see daemon-routes.test.ts's hosted-runner
+  // budget notes). Retry rather than weaken: OS starvation is random and
+  // passes a re-run; a deterministic stall (a real regression) exhausts the
+  // retries and still fails. The assertion itself is unchanged.
   test("golden path reports zero violations", async () => {
     const detector = new StallDetector({ heartbeatMs: 10, stallThresholdMs: 50 });
     detector.attach();
@@ -37,7 +46,7 @@ describe("Phase 3 · T3 — stall detection", () => {
     const violations = detector.violations(50);
     detector.detach();
     expect(violations).toEqual([]);
-  }, 10_000);
+  }, { timeout: 10_000, retry: 3 });
 
   test("detach is idempotent and stops monitoring", async () => {
     const detector = new StallDetector({ heartbeatMs: 10, stallThresholdMs: 50 });
