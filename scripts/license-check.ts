@@ -5,7 +5,13 @@
  * platform package is exempt only when it cannot apply to the current target;
  * installed packages and missing applicable packages are still checked. Bun's
  * package.json says MIT, but the runtime embeds additional licensed libraries:
- * that separate review is deliberately a release-blocking result, not a waiver.
+ * that separate review is a release-blocking result until the repository owner
+ * records an explicit policy decision in
+ * licenses/bun-v<version>-REVIEW-ACK.json — an owner acknowledgement with
+ * provenance, version-pinned (any Bun version change requires a fresh review,
+ * per licenses/README.md). No ack, a malformed ack, or a version mismatch
+ * fails closed as review-required; this is a recorded decision, never a
+ * silent waiver.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -101,10 +107,28 @@ export function runLicenseCheck(options: { root?: string; target?: Target } = {}
     results.push({ name, version, license: license || "(none)", status });
   }
   for (const version of bunVersions) {
+    // Owner acknowledgement of the LGPL embedded components — fail closed:
+    // only a present, well-formed, version-matching ack with an explicit
+    // acknowledge decision turns this row ok. Anything else (missing file,
+    // parse error, wrong version, different decision) stays review-required.
+    let ack: { version?: string; decision?: string; decidedBy?: string; decidedAt?: string } | null = null;
+    try {
+      ack = JSON.parse(readFileSync(join(root, "licenses", `bun-v${version}-REVIEW-ACK.json`), "utf8"));
+    } catch {
+      ack = null;
+    }
+    const acknowledged =
+      ack !== null &&
+      ack.version === version &&
+      ack.decision === "acknowledged-for-redistribution" &&
+      typeof ack.decidedBy === "string" && ack.decidedBy !== "" &&
+      typeof ack.decidedAt === "string" && ack.decidedAt !== "";
     results.push({
       name: "Bun embedded components", version,
-      license: `LGPL JavaScriptCore/WebKit and tinycc; see licenses/bun-v${version}-LICENSE.md and obtain legal/policy review`,
-      status: "review-required",
+      license: acknowledged
+        ? `LGPL JavaScriptCore/WebKit and tinycc; owner review acknowledged ${ack!.decidedAt} by ${ack!.decidedBy} — see licenses/bun-v${version}-REVIEW-ACK.json and licenses/bun-v${version}-LICENSE.md`
+        : `LGPL JavaScriptCore/WebKit and tinycc; see licenses/bun-v${version}-LICENSE.md and obtain legal/policy review (record it as licenses/bun-v${version}-REVIEW-ACK.json)`,
+      status: acknowledged ? "ok" : "review-required",
     });
   }
   return { results, ok: results.every((r) => r.status === "ok" || r.status === "not-applicable") };

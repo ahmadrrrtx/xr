@@ -61,6 +61,12 @@
    `RELEASING.md` §3/§3b; never retag withdrawn v1.1.0; `channel:live` must
    assert bytes before any public promotion.
 
+**Decided 2026-10-28 (was an open owner item, now recorded):** the LGPL
+review for the npm runtime's Bun redistribution — owner acknowledgement is
+`licenses/bun-v1.4.2-REVIEW-ACK.json` (version-pinned; the license gate
+fails closed again on any Bun change). A future Bun upgrade requires a new
+owner review + ack file.
+
 ## 4. Before merge (run at branch HEAD, fresh environment)
 
 ```bash
