@@ -831,7 +831,7 @@ jobs:
       - name: Attest native installer build provenance (not a local fixture proof)
         if: github.ref_type == 'tag'
         id: attest
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3 official annotated tag resolved
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v3 official annotated tag resolved
         with:
           subject-path: desktop-release/DESKTOP-SHA256SUMS
       - name: Verify native provenance exact workflow/ref/source commit
