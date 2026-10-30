@@ -273,7 +273,9 @@ if (!process.env.SKIP_RESEARCH) {
     }
     // evidence matrix
     const matrixBtn = await page.evaluateHandle(() => [...document.querySelectorAll('[data-testid="stage-rail"] button')].find((b) => b.textContent?.includes('Evidence')));
-    if (matrixBtn && (await matrixBtn.asElement()?.click())) {
+    const matrixEl = matrixBtn.asElement();
+    if (matrixEl) {
+      await matrixEl.click();
       await page.waitForSelector('[data-testid="evidence-matrix"]', { timeout: 5000 }).then(() => ok('evidence matrix rendered')).catch(() => fail('evidence matrix did not render'));
       await wait(600);
       await shot(page, 'research-04-evidence-matrix');

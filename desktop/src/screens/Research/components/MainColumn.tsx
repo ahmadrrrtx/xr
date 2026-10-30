@@ -124,7 +124,9 @@ function ErrorCard() {
   if (!error) return null;
   return (
     <div className="xr-error" role="alert" data-testid="research-error">
-      <h3>Research couldn't complete</h3>
+      {/* h2 — the error card is a top-level section under the screen h1; an
+          h3 here skips a level and trips axe heading-order. */}
+      <h2 className="xr-error-title">Research couldn't complete</h2>
       <p>{error.message}</p>
       {error.egressBlocked ? (
         <p data-testid="egress-copy">By default XR doesn't access the public internet. Enable web egress in Shield to research online sources, or drop PDFs/local files.</p>

@@ -41,39 +41,41 @@ export function EvidenceMatrix() {
         {rows.map(({ id, n, src }) => {
           const local = isLocalSource(src);
           return (
-            <button
-              key={id}
-              type="button"
-              className="xr-matrix-row"
-              role="row"
-              data-testid="evidence-row"
-              data-source-id={id}
-              onClick={() => focusCitation(id)}
-              title={`Focus source ${src.domain} in the sources panel`}
-            >
-              <span className="c-n" role="cell">
-                {n}
-              </span>
-              <span className="c-src" role="cell">
-                <span className="d">{local ? src.url.replace('local://', '') : src.domain}</span>
-                <span className="t">{src.title}</span>
-              </span>
-              <span className="c-ev" role="cell">
-                {src.evidence.length ? <q>{src.evidence[0]}</q> : <span className="none">read, no evidence block extracted</span>}
-              </span>
-              <span className="c-tr" role="cell">
-                {src.status === 'failed' ? (
-                  <X size={12} aria-label="fetch failed" />
-                ) : src.evidence.length ? (
-                  <span className="xr-matrix-trust">
-                    <Check size={11} aria-hidden="true" />
-                    {Math.round(src.trust * 100)}%
+            <div key={id} role="row" className="xr-matrix-rowwrap" data-testid="evidence-row" data-source-id={id}>
+              {/* a11y: a button cannot carry role="row" (aria-allowed-role) and
+                  a row's children must be cells (aria-required-children) — so the
+                  row owns ONE cell, and the button inside it carries the visual
+                  grid and the interaction, the same hit-area pattern as SourceCard. */}
+              <div role="cell" className="xr-matrix-cellwrap">
+                <button
+                  type="button"
+                  className="xr-matrix-row xr-matrix-data"
+                  onClick={() => focusCitation(id)}
+                  title={`Focus source ${src.domain} in the sources panel`}
+                >
+                  <span className="c-n">{n}</span>
+                  <span className="c-src">
+                    <span className="d">{local ? src.url.replace('local://', '') : src.domain}</span>
+                    <span className="t">{src.title}</span>
                   </span>
-                ) : (
-                  <Minus size={12} aria-label="no evidence" />
-                )}
-              </span>
-            </button>
+                  <span className="c-ev">
+                    {src.evidence.length ? <q>{src.evidence[0]}</q> : <span className="none">read, no evidence block extracted</span>}
+                  </span>
+                  <span className="c-tr">
+                    {src.status === 'failed' ? (
+                      <X size={12} aria-label="fetch failed" />
+                    ) : src.evidence.length ? (
+                      <span className="xr-matrix-trust">
+                        <Check size={11} aria-hidden="true" />
+                        {Math.round(src.trust * 100)}%
+                      </span>
+                    ) : (
+                      <Minus size={12} aria-label="no evidence" />
+                    )}
+                  </span>
+                </button>
+              </div>
+            </div>
           );
         })}
       </div>

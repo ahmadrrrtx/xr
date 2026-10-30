@@ -13,10 +13,12 @@
 import { create } from 'zustand';
 import { toast } from 'sonner';
 
+import { catalogQuote } from '@/engine/catalog';
 import { EngineDown, EngineHttpError } from '@/engine/transport';
 import type { EngineRunRecorder } from '@/brain/engine';
 import { readSettingJSON, writeSettingJSON } from '@/lib/persistent-store';
 import { useBrainStore } from '@/stores/brainStore';
+import { useEngineStore } from '@/stores/engineStore';
 import * as api from '@/research/api';
 import {
   announcementFor,
@@ -383,8 +385,25 @@ export const useResearchStore = create<ResearchState>()((set, get) => ({
       const { budgetGate } = await import('@/budget/enforce');
       const est = estimatedTokens(depth);
       const model = settings?.model || 'unknown';
+      // Quote from the engine catalog when the engine declares rates the
+      // local price table lacks (operator-declared rates, remote tariffs) —
+      // the same contract the chat surface uses (engine/chat.ts). Without a
+      // finite quote the call omits `estimatedCost`, so the gate prices the
+      // model locally and fails closed exactly as before.
+      const provider =
+        settings?.provider ??
+        useEngineStore.getState().providers?.primary ??
+        '';
+      const quote = catalogQuote(
+        useEngineStore.getState().catalog,
+        provider,
+        model,
+        est.tokensIn,
+        est.tokensOut
+      );
       const check = await budgetGate({
         model,
+        estimatedCost: Number.isFinite(quote) ? quote : undefined,
         estimatedTokensIn: est.tokensIn,
         estimatedTokensOut: est.tokensOut,
         agent: 'researcher',

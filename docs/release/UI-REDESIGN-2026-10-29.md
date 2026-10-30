@@ -67,12 +67,19 @@ Blueprints were references, not templates. No unrelated refactoring.
   run's real phase + an Evidence shortcut (scrolls to the matrix).
 - **Evidence matrix** (`evidence-matrix`): one row per cited source in
   citation order, first evidence line quoted, trust + status; rows focus the
-  matching source card.
+  matching source card. **(a11y, 2026-10-30)** rows are ARIA-valid: the
+  `role="row"` owns exactly one `role="cell"`, and the interactive element is
+  a real button inside that cell carrying the visual grid (a button cannot
+  carry `role="row"`, and a row's children must be cells — axe
+  `aria-allowed-role` + `aria-required-children` both stay at 0).
 - **Grounded chat dock** (`research-chat`, ⌘J): answers FROM the run on
   screen — `research/grounded.ts` builds a bounded digest (report excerpt,
   cited sources + evidence, contradictions, open questions) handed to the
   existing chat stream (mode `ask`), so budget gates and transport are
   unchanged. `[sN]` markers in replies focus source cards.
+- **Error card (a11y, 2026-10-30)**: the failure heading is an `h2` (it sits
+  directly under the screen `h1`; the previous `h3` skipped a level — axe
+  `heading-order`).
 - **SourceCard (a11y)**: plain div + real `<button class="xr-card-hit">`
   summary hit area (aria-expanded there), actions outside it.
 - **Landmarks/scroll (a11y)**: article column `<main>` → `<section>`
@@ -88,6 +95,28 @@ Blueprints were references, not templates. No unrelated refactoring.
   validators (ollama 0.40.x OpenAI-compat) rejected the bare-string form
   with HTTP 400 on every native-path chat. Prose is preserved as
   `description`; regression tests in `native-continuation.test.ts`.
+
+### Live-provider budget fixes (found by the 2026-10-30 Groq leg)
+Running research against a real hosted provider exposed two gaps where the
+budget governors priced a model WITHOUT the operator-declared rates the rest
+of the system honors — so any model absent from the sourced registry failed
+closed with "price unavailable" even when the operator had declared rates:
+- **Engine — research pipeline** (`src/research/budget.ts`,
+  `run-deps.ts`, `cli.ts`): a shared `operatorRateFor(config, provider,
+  model)` now feeds every `priceFor` on the research path, the same override
+  `agent-service` already passed. Without a declaration the run still fails
+  closed (never invents a price). Regression tests:
+  `test/research/budget-rates.test.ts`.
+- **Desktop — research gate** (`stores/researchStore.ts`): the screen now
+  quotes the engine catalog (`catalogQuote`, the exact `engine/chat.ts`
+  contract) and passes `estimatedCost` to the budget gate, instead of pricing
+  the model against the local table only. No quote → no estimate → the gate
+  fails closed exactly as before. Regression test pinned in
+  `test/desktop/selection-accounting.test.ts`.
+
+Both were verified live: a Groq `openai/gpt-oss-120b` research run passes
+both gates with the operator-declared rate ($0.15/$0.60 per MTok) and the
+meter settles in USD against it.
 
 ## Verification
 
@@ -106,12 +135,34 @@ the real app + engine:
 | ipc-acl, capability gate, sink-lint, claim-lint, placeholder-lint, hot-path-lint, ownership, boundaries, size-gate, release/channel/platform-parity/marketplace checks | all green |
 | `changelog:check` | fails **identically on origin/main** (release-time gate for the unreleased 1.1.1-rc.1) — not a regression |
 
-**Pending (needs the owner's Groq key, re-run after the second rebuild):**
-research live leg (`XR_RESEARCH_RUN=1` — 3 local QEC PDFs, real citations),
-grounded-chat live answer, gallery HTML, and the final re-run of the
-sidebar+builder sweep on this second tree (same code, re-verified from the
-same contracts; the first rebuild's measured results are above).
+Second rebuild (this tree, 2026-10-30 — code re-derived from the same
+contracts, then the live provider legs):
+
+| Gate | Result |
+| --- | --- |
+| UI sweep, full (`XR_RESEARCH_RUN=1`) | **ALL CHECKS PASSED, exit 0** — every sidebar/builder/theme check above, PLUS the live research leg (below) |
+| Research live leg | **DONE in 14s** on Groq `openai/gpt-oss-120b` (planning → reading → synthesizing → done), 3 local QEC PDFs read as sources, 3 source cards, source inspector, **evidence matrix rendered**, grounded chat answered with citations |
+| axe (WCAG 2.2 AA) Research | **0 violations** (after the error-card heading + matrix-row role fixes) |
+| `bun test` (this tree, chunked) | research suites, frontend-stores, budget-core, selection-accounting, ipc-acl, openapi — all pass, incl. the new `budget-rates` (3) and the selection-accounting research-gate pin |
+| `typecheck` desktop | clean |
+| `typecheck` root | **not run to completion on this sandbox** (2 CPU / 1.9 GB — tsc OOMs or exceeds 30 min; it was green on the first environment's box for the same contracts). The 2026-10-30 engine delta (3 files + 1 test) is covered instead by unit tests that execute it and by the live daemon running it end-to-end |
+| Avatar hero / welcome | 112×98 hero (512 master), 24px sidebar icon, no console errors |
+
+Run configuration for the live leg (owner machine, not repo state): Groq key
+stored durably through the onboarding route (`POST /api/onboarding/provider`,
+probe HTTP 200 @ 81 ms), defaults `groq / openai/gpt-oss-120b`, and an
+operator-declared rate for that model in
+`config.providerEngine.providerCapabilities` ($0.15/$0.60 per MTok, from
+Groq's public pricing) — which is exactly the path the two budget fixes
+above make work.
+
+One sweep-tool bug was found and fixed during this leg (reconstruction
+artifact, not an app bug): the live-leg evidence check tested
+`await handle.click()` for truthiness — `click()` resolves to `void`, so the
+branch could never pass. The stored-session leg already used the correct
+form; the live leg now matches it.
 
 ## Not done / out of scope
 - A9 CI portable-journey leg (pending, separate).
+- The Groq preset's `knownModels` still lists 2024-era ids (`llama-3.3-70b-versatile` is retired on Groq in 2026); updating provider presets is a provider-catalog change, out of this redesign's scope — the operator-declared rate path this branch fixes is the supported way to run such models today.
 - No merge to main, no tags, no publish (owner's call).

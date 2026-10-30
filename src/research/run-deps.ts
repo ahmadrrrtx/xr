@@ -16,7 +16,7 @@ import type { Store } from "../state/workspace-store.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, pricingLabel, isLocal } from "../cost/pricing.ts";
 import { WebSearchCapability } from "./search.ts";
-import { GovernedResearchBudget, LocalResearchBudget, governedProviderRoute } from "./budget.ts";
+import { GovernedResearchBudget, LocalResearchBudget, governedProviderRoute, operatorRateFor } from "./budget.ts";
 import type { ResearchBudgetGuard, ResearchEngineDeps } from "./engine.ts";
 import type { RunEventSink, RunUsage } from "./run-events.ts";
 
@@ -48,12 +48,17 @@ export function buildRunDeps(store: Store, config: XRConfig, opts: RunDepsOption
   const requested = opts.provider ?? config.defaults.provider;
   const model = opts.model ?? config.defaults.model;
 
+  // Operator-declared rates apply to every priceFor on this path (same
+  // contract as agent-service) so a governed research run honors rates the
+  // sourced registry lacks instead of stopping on "price unavailable".
+  const rate = (p: string, m: string) => priceFor(p, m, { override: operatorRateFor(config, p, m) });
+
   // Budget-aware fallback to local — the decision runs INSIDE the Governor
   // (Phase 2 · F-12), through the same helper the CLI uses.
   const { providerId, fallbackReason } = governedProviderRoute(
     store,
     { maxUsd: opts.perTaskBudgetUsd ?? config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
-    priceFor(requested, model),
+    rate(requested, model),
     requested,
     isLocal(requested),
   );
@@ -77,10 +82,10 @@ export function buildRunDeps(store: Store, config: XRConfig, opts: RunDepsOption
     : new GovernedResearchBudget(
         store,
         { maxUsd: opts.perTaskBudgetUsd ?? config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
-        priceFor(providerId, model),
+        rate(providerId, model),
       );
 
-  const price = priceFor(providerId, model);
+  const price = rate(providerId, model);
   const priceKnown = isLocal(providerId) || pricingLabel(providerId, model) !== "unknown";
   let inTokens = 0;
   let outTokens = 0;

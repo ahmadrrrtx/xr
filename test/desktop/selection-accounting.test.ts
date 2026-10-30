@@ -186,6 +186,71 @@ test("catalog quote shares long-context rates, preserves unavailable remote-loca
     priceFor("ollama", "qwen2.5:3b", { override: { known: false } }).known,
   ).toBe(false);
 });
+test("research gate: engine-declared rates admit an otherwise unpriced model — without them it still fails closed", () => {
+  // 2026 posture: the provider is Groq, the model is absent from the local
+  // price table (like every gpt-oss id), and the operator declares rates in
+  // the engine config. researchStore quotes the engine catalog before the
+  // budget gate (mirroring engine/chat.ts) — this pins that contract.
+  const config = ConfigSchema.parse({
+    defaults: { provider: "groq", model: "openai/gpt-oss-120b" },
+    providerEngine: {
+      providerCapabilities: {
+        groq: {
+          models: {
+            "openai/gpt-oss-120b": {
+              cost: {
+                source: "test-only operator document",
+                inPerMTok: 0.15,
+                outPerMTok: 0.6,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  invalidateCatalogCache();
+  const engine = buildCatalog(config);
+  const catalog: EngineCatalog = {
+    builtAt: NOW,
+    models: engine.models.map((m) => ({
+      ...m,
+      locality: m.locality.locality,
+      contextWindow: m.context.contextWindow,
+    })),
+  };
+  // The settings.model string research hands to the gate (unqualified).
+  const model = "openai/gpt-oss-120b";
+  // The local table cannot price it — the exact failure the live run hit.
+  expect(Number.isFinite(estimateCost(model, 36000, 6000, NOW))).toBe(false);
+  // The engine catalog carries the operator declaration; the quote is finite.
+  const quote = catalogQuote(catalog, "groq", model, 36000, 6000, NOW);
+  expect(quote).toBe((36000 * 0.15 + 6000 * 0.6) / 1_000_000); // 0.009
+  const req = {
+    model,
+    estimatedTokensIn: 36000,
+    estimatedTokensOut: 6000,
+    agent: "researcher",
+    workspace: null,
+    sessionId: null,
+    surface: "research" as const,
+  };
+  const allowed = checkPreCall(DEFAULT_BUDGET_SETTINGS, emptyCounters(), {
+    ...req,
+    estimatedCost: quote,
+  }, { now: NOW });
+  expect(allowed.allowed).toBe(true);
+  expect(allowed.code).toBe("ok");
+  // Without the catalog quote the identical call fails closed.
+  const denied = checkPreCall(
+    DEFAULT_BUDGET_SETTINGS,
+    emptyCounters(),
+    req,
+    { now: NOW },
+  );
+  expect(denied.allowed).toBe(false);
+  expect(denied.code).toBe("price-unavailable");
+});
 test("credential presence is separate from authentication, but missing credentials still reject an execution candidate", () => {
   const config = ConfigSchema.parse({});
   const model = buildCatalog(config).models.find(
