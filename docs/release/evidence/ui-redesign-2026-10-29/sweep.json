@@ -1,0 +1,261 @@
+{
+  "base": "http://127.0.0.1:5173",
+  "generatedAt": "2026-10-30T13:25:43.546Z",
+  "geometry": {
+    "collapsed": {
+      "railW": 56,
+      "railX": 0,
+      "count": 14,
+      "rows": [
+        {
+          "label": "Chat",
+          "btn": {
+            "x": 0,
+            "y": 124,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 144
+          },
+          "bar": null,
+          "title": "Chat — Conversations with XR — the core experience."
+        },
+        {
+          "label": "Workspaces",
+          "btn": {
+            "x": 0,
+            "y": 168,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 188
+          },
+          "bar": null,
+          "title": "Workspaces — Launch pad — create, organize and launch project folders."
+        },
+        {
+          "label": "Brain",
+          "btn": {
+            "x": 0,
+            "y": 212,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 232
+          },
+          "bar": null,
+          "title": "Brain — Live agent run trace — the proof-of-trust view."
+        },
+        {
+          "label": "Builder",
+          "btn": {
+            "x": 0,
+            "y": 256,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 276
+          },
+          "bar": null,
+          "title": "Builder — Three-pane build environment for code work."
+        },
+        {
+          "label": "Research",
+          "btn": {
+            "x": 0,
+            "y": 300,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 320
+          },
+          "bar": {
+            "left": 0,
+            "w": 4
+          },
+          "title": "Research — Deep research reports with citations."
+        },
+        {
+          "label": "Agents",
+          "btn": {
+            "x": 0,
+            "y": 344,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 364
+          },
+          "bar": null,
+          "title": "Agents — Prebuilt, custom agents and workflows."
+        },
+        {
+          "label": "Skills Store",
+          "btn": {
+            "x": 0,
+            "y": 388,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 408
+          },
+          "bar": null,
+          "title": "Skills Store — Installable skills with quarantine review."
+        },
+        {
+          "label": "Shield",
+          "btn": {
+            "x": 0,
+            "y": 432,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 452
+          },
+          "bar": {
+            "left": 22.5,
+            "w": 6
+          },
+          "title": "Shield — Trust center — approvals, audit chain, permissions."
+        },
+        {
+          "label": "Control Room",
+          "btn": {
+            "x": 0,
+            "y": 476,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 496
+          },
+          "bar": null,
+          "title": "Control Room — Every agent run, live — stop, inspect, export."
+        },
+        {
+          "label": "Memory",
+          "btn": {
+            "x": 0,
+            "y": 520,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 540
+          },
+          "bar": null,
+          "title": "Memory — Explore what XR remembers and forgets."
+        },
+        {
+          "label": "Budget",
+          "btn": {
+            "x": 0,
+            "y": 564,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 584
+          },
+          "bar": {
+            "left": 22.5,
+            "w": 6
+          },
+          "title": "Budget — Spend governor, limits and cost breakdowns."
+        },
+        {
+          "label": "Integrations",
+          "btn": {
+            "x": 0,
+            "y": 608,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 628
+          },
+          "bar": null,
+          "title": "Integrations — OAuth-connected apps and services."
+        },
+        {
+          "label": "Voice",
+          "btn": {
+            "x": 0,
+            "y": 652,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 672
+          },
+          "bar": null,
+          "title": "Voice — Voice setup, STT/TTS and the Theater."
+        },
+        {
+          "label": "Settings",
+          "btn": {
+            "x": 0,
+            "y": 696,
+            "w": 55,
+            "h": 40
+          },
+          "icon": {
+            "cx": 27.5,
+            "cy": 716
+          },
+          "bar": null,
+          "title": "Settings — Appearance, models, security and preferences."
+        }
+      ]
+    },
+    "expandedW": 240
+  },
+  "phases": {},
+  "axe": {
+    "builder": {
+      "violations": []
+    }
+  },
+  "consoleErrors": {},
+  "shots": [
+    "theme-xr-native-collapsed",
+    "theme-xr-native-expanded",
+    "theme-graphite-collapsed",
+    "theme-graphite-expanded",
+    "theme-midnight-collapsed",
+    "theme-midnight-expanded",
+    "theme-paper-collapsed",
+    "theme-paper-expanded",
+    "theme-arctic-collapsed",
+    "theme-arctic-expanded",
+    "builder-01-default-preview-closed",
+    "builder-02-preview-open",
+    "builder-03-bottom-panel-terminal",
+    "builder-04-panel-problems",
+    "builder-04-panel-output",
+    "builder-04-panel-tests",
+    "builder-04-panel-ports",
+    "builder-05-alt-layout-1280"
+  ],
+  "failures": 0
+}
