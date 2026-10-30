@@ -921,3 +921,13 @@ html[data-theme='midnight'] .budget-hero-glow {
 /* EmptyState sentinel float (Bucket F F6) — disabled under reduced motion
    by the motion-safe: variant at the call site. */
 @keyframes xr-empty-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+
+/* UI-redesign 2026-10-29: slim 56px icon rail (Sidebar) and the Builder's
+   file-tree rail stay visually clean — a scrollbar inside a 56px rail
+   steals icon space and breaks the centered hit target. Thin-themed
+   scrollbars remain everywhere else (rule above). */
+.xr-rail-scroll::-webkit-scrollbar,
+.xb-nav-scroll::-webkit-scrollbar { width: 0; height: 0; }
+.xr-rail-scroll,
+.xb-nav-scroll { scrollbar-width: none; }

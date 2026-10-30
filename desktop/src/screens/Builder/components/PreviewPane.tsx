@@ -1,7 +1,11 @@
 /*
  * PreviewPane (Phase 17) — the right column: 32px bar, sandboxed iframe of
- * the engine-managed dev server, placeholder / starting / port-closed states
- * and the Console (dev-server output) under a horizontal resizer.
+ * the engine-managed dev server, placeholder / starting / port-closed states.
+ *
+ * UI-redesign 2026-10-29: the dev-server Console moved to the Builder's
+ * bottom panel (Output tab); this pane is purely the preview surface. The
+ * pane itself is mounted only while the workbench's preview is open
+ * (builderStore.previewVisible — see TopBar / palette).
  *
  * Sandbox: `allow-scripts allow-forms allow-popups allow-modals
  * allow-same-origin`. The frame's origin is the dev server's (http://
@@ -9,13 +13,12 @@
  * localStorage and module workers run inside that origin only. The app's
  * CSP keeps `frame-src` to localhost/127.0.0.1.
  */
-import { ArrowLeft, ArrowRight, ExternalLink, Loader2, Monitor, Play, RotateCw, Smartphone, Square, Tablet, Terminal, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, ExternalLink, Loader2, Monitor, Play, RotateCw, Smartphone, Square, Tablet } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-import { Resizer } from '@/components/Resizer';
 import { openExternal } from '@/lib/detect';
-import { DEVICE_WIDTHS, formatClock, formatReady, type ConsoleLevel, type PreviewDevice } from '@/lib/builderCore';
+import { DEVICE_WIDTHS, formatReady, type PreviewDevice } from '@/lib/builderCore';
 import { cn } from '@/lib/utils';
 import { useBuilderStore } from '@/stores/builderStore';
 
@@ -25,14 +28,13 @@ const DEVICES: Array<{ id: PreviewDevice; label: string; Icon: typeof Monitor }>
   { id: 'mobile', label: 'Mobile · 375', Icon: Smartphone },
 ];
 
-export function PreviewPane({ consoleHeight, onConsoleHeight, paneHeight }: { consoleHeight: number; onConsoleHeight: (px: number) => void; paneHeight: number }) {
+export function PreviewPane() {
   const status = useBuilderStore((s) => s.devServer);
   const detected = useBuilderStore((s) => s.detected);
   const busy = useBuilderStore((s) => s.busy);
   const device = useBuilderStore((s) => s.previewDevice);
   const nonce = useBuilderStore((s) => s.previewNonce);
   const override = useBuilderStore((s) => s.previewUrlOverride);
-  const lines = useBuilderStore((s) => s.consoleLines);
   const [history, setHistory] = useState<{ urls: string[]; at: number; seen: string | null }>({ urls: [], at: -1, seen: null });
 
   const running = status?.state === 'running' && !!status.url;
@@ -40,7 +42,6 @@ export function PreviewPane({ consoleHeight, onConsoleHeight, paneHeight }: { co
   const exited = status?.state === 'exited';
   const url = override ?? status?.url ?? null;
   const width = DEVICE_WIDTHS[device];
-  const consoleOpen = consoleHeight > 0;
 
   // Our own URL history (the frame is cross-origin; its history is not ours to
   // read). Adjusted during render when the URL prop changes — React's
@@ -84,6 +85,9 @@ export function PreviewPane({ consoleHeight, onConsoleHeight, paneHeight }: { co
   );
 
   const st = useBuilderStore.getState;
+  // Last two dev-server lines, shown inside the starting/stopped placeholders
+  // (the full log lives in the bottom panel's Output tab).
+  const lines = useBuilderStore((s) => s.consoleLines);
   const tail = useMemo(() => lines.slice(-2), [lines]);
 
   return (
@@ -111,9 +115,6 @@ export function PreviewPane({ consoleHeight, onConsoleHeight, paneHeight }: { co
             </button>
           ))}
         </span>
-        <button type="button" className="xb-icon-btn" aria-pressed={consoleOpen} aria-label="Toggle console" title="Console" onClick={() => onConsoleHeight(consoleOpen ? 0 : Math.round(paneHeight * 0.3))}>
-          <Terminal size={13} />
-        </button>
         {chip}
       </div>
 
@@ -184,66 +185,6 @@ export function PreviewPane({ consoleHeight, onConsoleHeight, paneHeight }: { co
             </button>
           </div>
         ) : null}
-        {consoleOpen ? (
-          <>
-            <Resizer orientation="horizontal" storageKey="xr.builder.panes.console" value={consoleHeight} onChange={onConsoleHeight} min={80} max={Math.max(80, Math.round(paneHeight * 0.5))} defaultValue={Math.round(paneHeight * 0.3)} invert label="Resize console" />
-            <Console height={consoleHeight} onClose={() => onConsoleHeight(0)} />
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function Console({ height, onClose }: { height: number; onClose: () => void }) {
-  const lines = useBuilderStore((s) => s.consoleLines);
-  const filter = useBuilderStore((s) => s.consoleFilter);
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const stick = useRef(true);
-  const shown = useMemo(() => (filter === 'all' ? lines : lines.filter((l) => l.level === filter)), [lines, filter]);
-
-  useEffect(() => {
-    const el = listRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [shown.length]);
-
-  return (
-    <div className="xb-console" style={{ height }} data-testid="builder-console">
-      <div className="xb-console-head">
-        <span className="xb-pane-title">Console</span>
-        <span className="text-text-tertiary text-[11px]">dev server output</span>
-        <span className="xb-top-spacer" />
-        <select className="xb-console-filter" aria-label="Filter console" value={filter} onChange={(e) => useBuilderStore.getState().setConsoleFilter(e.target.value as ConsoleLevel | 'all')}>
-          <option value="all">All</option>
-          <option value="log">Log</option>
-          <option value="info">Info</option>
-          <option value="warn">Warn</option>
-          <option value="error">Error</option>
-        </select>
-        <button type="button" className="xb-icon-btn" aria-label="Clear console" onClick={() => useBuilderStore.getState().clearConsole()}>
-          <Trash2 size={12} />
-        </button>
-        <button type="button" className="xb-icon-btn" aria-label="Close console" onClick={onClose}>
-          ×
-        </button>
-      </div>
-      <div
-        ref={listRef}
-        className="xb-console-list"
-        role="log"
-        aria-live="off"
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-        }}
-      >
-        {shown.length === 0 ? <div className="xb-console-row text-text-tertiary">{lines.length ? 'Nothing at this level.' : 'No output yet.'}</div> : null}
-        {shown.map((l) => (
-          <div key={l.id} className={cn('xb-console-row', `is-${l.level}`)}>
-            <span className="ts">{formatClock(l.ts)}</span>
-            <span>{l.text}</span>
-          </div>
-        ))}
       </div>
     </div>
   );

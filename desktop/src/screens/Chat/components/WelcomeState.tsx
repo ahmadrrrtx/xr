@@ -1,12 +1,17 @@
 /*
- * Welcome / empty state (Phase 4) — centered Avatar (80px, idle), greeting
- * with the user's name, 4 suggestion chips. A chip starts a new session and
- * sends the prompt as the first message.
+ * Welcome / empty state (Phase 4) — centered avatar bust, greeting with the
+ * user's name, 4 suggestion chips. A chip starts a new session and sends the
+ * prompt as the first message.
+ *
+ * UI-redesign 2026-10-29: the welcome moment now leads with the owner's new
+ * front-facing avatar render (static bust, soft float) instead of the idle
+ * GIF — a calmer first impression that matches the sentinel style used
+ * across the redesign.
  */
 import { Code2, FolderOpen, Mail, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { AnimatedAvatar } from '@/components/brand/Avatar';
+import { XR_AVATAR_PNG } from '@/components/brand/assets';
 import { useChatStore } from '@/stores/chatStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { useUIStore } from '@/stores/ui';
@@ -33,7 +38,14 @@ export function WelcomeState() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-      <AnimatedAvatar state="idle" size={160} decorative />
+      <img
+        src={XR_AVATAR_PNG}
+        alt="XR — Ahmad's assistant avatar"
+        width={112}
+        height={98}
+        draggable={false}
+        className="motion-safe:animate-[xr-empty-float_6s_ease-in-out_infinite] rounded-[28px] shadow-2xl shadow-black/40 ring-1 ring-white/10"
+      />
       <h1 className="text-text-primary mt-6 text-[22px] font-semibold tracking-[-0.01em]">
         Hey{first ? ` ${first}` : ''}. What are we building today?
       </h1>

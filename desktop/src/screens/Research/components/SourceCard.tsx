@@ -2,6 +2,11 @@
  * One source — status edge (queued · reading · cited · fetched · failed),
  * relevance meter, hover actions (open · copy), inline expansion with type,
  * freshness, trust and the evidence lines the engine extracted.
+ *
+ * UI-redesign 2026-10-29 (a11y): the card is a plain div; the expand hit
+ * area is a real <button class="xr-card-hit"> covering the summary rows
+ * (aria-expanded + label live there) and the open/copy actions sit OUTSIDE
+ * it — no nested interactives, no div-with-role-buttons.
  */
 import { Check, Copy, ExternalLink, FileText, X } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -71,10 +76,6 @@ export const SourceCard = memo(function SourceCard({ source: s, citationNumber, 
   return (
     <div
       ref={ref}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      aria-label={`${citationNumber ? `Citation ${citationNumber}, ` : ''}source: ${s.domain}, ${statusText}`}
       data-testid="source-card"
       data-source-id={s.id}
       data-status={s.status}
@@ -82,17 +83,17 @@ export const SourceCard = memo(function SourceCard({ source: s, citationNumber, 
       data-active={active ? 'true' : 'false'}
       className={cn('xr-card', animateIn && !reducedMotion && 'xr-card-in', flash && 'xr-card-flash')}
       style={animateIn && !reducedMotion ? { animationDelay: `${Math.min(29, s.seq) * 60}ms` } : undefined}
-      onClick={() => onToggle(s.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onToggle(s.id);
-        }
-      }}
       onAnimationEnd={(e) => {
         if (e.animationName === 'xr-card-flash') setSeenNonce(flashNonce);
       }}
     >
+      <button
+        type="button"
+        className="xr-card-hit"
+        aria-expanded={expanded}
+        aria-label={`${citationNumber ? `Citation ${citationNumber}, ` : ''}source: ${s.domain}, ${statusText}${s.title ? ` — ${s.title}` : ''}`}
+        onClick={() => onToggle(s.id)}
+      >
       <div className="head">
         <Favicon domain={s.domain} local={local} size={20} />
         <span className="d">{local ? s.url.replace('local://', '') : s.domain}</span>
@@ -112,7 +113,8 @@ export const SourceCard = memo(function SourceCard({ source: s, citationNumber, 
       <div className="xr-meter" title={`Relevance ${Math.round(s.relevance * 100)}%`} aria-hidden="true">
         <span style={{ width: `${Math.round(s.relevance * 100)}%` }} />
       </div>
-      <div className="actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      </button>
+      <div className="actions">
         {href ? (
           <button type="button" className="xr-mini" aria-label={`Open ${s.domain} in browser`} title="Open ↗" onClick={() => void openExternal(href)}>
             <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />

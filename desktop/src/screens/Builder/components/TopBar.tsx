@@ -1,8 +1,12 @@
 /*
  * TopBar (Phase 17) — 44px: breadcrumb, git chip, preview target, sync dot,
  * Save / Push / Deploy. Push and Deploy are honest stubs (toast), never dead.
+ *
+ * UI-redesign 2026-10-29: the preview pane is no longer always mounted —
+ * this bar owns its toggle (VS Code's right-panel toggle), persisted in
+ * builderStore.previewVisible.
  */
-import { GitBranch, Rocket, Save, Upload } from 'lucide-react';
+import { GitBranch, PanelRight, Rocket, Save, Upload } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -18,6 +22,7 @@ export function TopBar({ workspace }: { workspace: Workspace | null }) {
   const sync = useBuilderStore((s) => s.sync);
   const dirtyCount = useBuilderStore(selectDirtyCount);
   const project = useBuilderStore((s) => s.project);
+  const previewVisible = useBuilderStore((s) => s.previewVisible);
 
   const syncLabel = sync === 'saving' ? 'Saving…' : sync === 'unsaved' ? 'Unsaved' : sync === 'error' ? 'Save failed' : 'Saved';
   const syncDot = sync === 'saving' ? 'is-accent' : sync === 'unsaved' ? 'is-warn' : sync === 'error' ? 'is-danger' : 'is-ok';
@@ -64,6 +69,17 @@ export function TopBar({ workspace }: { workspace: Workspace | null }) {
           </SelectItem>
         </SelectContent>
       </Select>
+      <button
+        type="button"
+        className="xb-icon-btn"
+        data-testid="builder-preview-toggle"
+        aria-pressed={previewVisible}
+        aria-label={previewVisible ? 'Hide preview pane' : 'Show preview pane'}
+        title={`${previewVisible ? 'Hide' : 'Show'} preview`}
+        onClick={() => useBuilderStore.getState().togglePreview()}
+      >
+        <PanelRight size={13} />
+      </button>
       <span className="xb-sync" role="status" aria-live="polite" data-testid="builder-sync">
         <span className={cn('xb-dot', syncDot)} aria-hidden="true" />
         {syncLabel}

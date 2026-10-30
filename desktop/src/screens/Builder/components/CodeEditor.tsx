@@ -15,6 +15,7 @@ import { registerDocGetter, useBuilderStore, type BufferState } from '@/stores/b
 
 import { Minimap } from './Minimap';
 import { baseExtensions, compartments, engineTsLinter, indentExtension, isLanguageLoaded, languageExtension, lezerLinter, loadLanguage, setFlash, wrapExtension } from '../lib/cmSetup';
+import { basenameOf } from '@/lib/builderCore';
 import { editorStateCache as stateCache } from '../lib/editorStateCache';
 
 const TS_LINT = new Set(['typescript', 'tsx', 'javascript', 'jsx']);
@@ -88,6 +89,14 @@ export function CodeEditor({ projectId, buffer, wrap, minimap }: { projectId: st
     });
     viewRef.current = view;
     setView(view);
+    // A11y: label the editable region and make the editor's scroll DOM a
+    // proper keyboard-focusable region (CodeMirror's scroller is not one by
+    // default — axe flags the widget as missing a label otherwise). The
+    // path is re-read on every doc swap below.
+    const labelFor = (path: string | null | undefined) => `Code editor${path ? ` — ${basenameOf(path)}` : ''}`;
+    view.contentDOM.setAttribute('aria-label', labelFor(pathRef.current));
+    view.scrollDOM.tabIndex = 0;
+    view.scrollDOM.setAttribute('aria-label', labelFor(pathRef.current));
     return () => {
       stateCache.set(pathRef.current, view.state);
       registerDocGetter(pathRef.current, null);
@@ -108,6 +117,10 @@ export function CodeEditor({ projectId, buffer, wrap, minimap }: { projectId: st
     }
     pathRef.current = buffer.path;
     dirtyRef.current = buffer.dirty;
+    // A11y (UI-redesign): the editor's label follows the active file.
+    const label = `Code editor — ${basenameOf(buffer.path)}`;
+    view.contentDOM.setAttribute('aria-label', label);
+    view.scrollDOM.setAttribute('aria-label', label);
     revisionRef.current = buffer.revision;
     const cached = stateCache.get(buffer.path);
     const state =

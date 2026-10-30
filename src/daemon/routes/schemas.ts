@@ -354,6 +354,14 @@ export const ChatStreamRequest = z.looseObject({
   model: z.string().optional(),
   provider: z.string().optional(),
   context: z.string().optional().describe("Extra system-prompt context (capped)."),
+  // UI-redesign 2026-10-29: the desktop engine client (engine/chat.ts) always
+  // sends these; omitting them made the strict v1 body gate reject every
+  // desktop chat with HTTP 400. Declared here so the contract matches reality.
+  stream: z.boolean().optional().describe("SSE streaming (desktop always true)."),
+  budget: z.number().optional().describe("Per-request cost cap (USD)."),
+  maxSteps: z.number().int().optional().describe("Agent step ceiling."),
+  toolsAllow: z.array(z.string()).optional().describe("Tool allowlist."),
+  toolsDeny: z.array(z.string()).optional().describe("Tool denylist."),
 });
 
 export const TriggerCreateRequest = z.looseObject({

@@ -41,6 +41,7 @@ Plus system tray icon (always alive, even when main window hidden) and global sh
 
 ### Sidebar (left, collapsible 72px ↔ 240px)
 - **Widths:** icon-only `w-[72px]` or expanded `w-[240px]`, collapsed by default on launch, toggle with `⌘B` or chevron button at bottom.
+  - **UI-redesign 2026-10-29 amendment:** shipped at **56px** collapsed (a true VS Code-style slim rail that fits 40px touch targets with 8px gutters); expanded stays 240px. Verified by sweep: rail 56±0.5, icons centered Δ≤0.5px, ActiveBar hugging the rail edge.
 - **Background:** `var(--bg-ink)` with 1px `var(--border-subtle)` right border.
 - **XR logo:** top, 40px tall, clicking goes to Chat and resets session list. Collapsed: mini X icon (28px cyan). Expanded: full wordmark "XR" in Orbitron 20px with tiny tagline.
 - **Nav items (14), order fixed:**
