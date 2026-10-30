@@ -1,6 +1,6 @@
 {
   "base": "http://127.0.0.1:5173",
-  "generatedAt": "2026-10-30T13:25:43.546Z",
+  "generatedAt": "2026-10-30T14:50:51.121Z",
   "geometry": {
     "collapsed": {
       "railW": 56,
@@ -230,9 +230,12 @@
     },
     "expandedW": 240
   },
-  "phases": {},
+  "phases": {
+    "last": "done",
+    "final": "done"
+  },
   "axe": {
-    "builder": {
+    "research": {
       "violations": []
     }
   },
@@ -255,7 +258,12 @@
     "builder-04-panel-output",
     "builder-04-panel-tests",
     "builder-04-panel-ports",
-    "builder-05-alt-layout-1280"
+    "builder-05-alt-layout-1280",
+    "research-01-report-and-stages",
+    "research-02-sources-panel",
+    "research-03-source-inspector",
+    "research-04-evidence-matrix",
+    "research-05-grounded-chat"
   ],
   "failures": 0
 }
