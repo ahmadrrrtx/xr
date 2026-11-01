@@ -66,5 +66,24 @@ A first dispatch was triggered 2026-11-01 on the redesign branch (see §7 for th
 
 ## 7 · Dispatch record
 
-- **2026-11-01 · run 41292497162** on `work/ui-redesign-2026-10-29` @ `49112b1` — https://github.com/ahmadrrrtx/xr/actions/runs/41292497162
-  Artifacts when complete (per leg): `xr-desktop-linux-x64` (deb/rpm/AppImage), `xr-desktop-darwin-arm64` + `xr-desktop-darwin-x64` (dmg/.app.tar.gz), `xr-desktop-windows-x64` (msi + nsis setup), `xr-desktop-windows-arm64` (nsis), `xr-portable-windows-x64` (no-install zip), `xr-msix-windows-x64` (test-signed MSIX + .cer). Development (unsigned) build per §3 — fully use-able.
+### Run 41292497162 — 2026-11-01 @ `49112b1` (the exe deliverable)
+
+https://github.com/ahmadrrrtx/xr/actions/runs/41292497162 — **all 5 bundle legs + all 7 journey boots green**; the only red is the report-only flatpak from-source build (infra, see below).
+
+| Artifact | Contents | Size |
+|---|---|---|
+| `xr-desktop-windows-x64` | `XR_1.1.1-rc.1_x64_en-US.msi` + `*-setup.exe` (NSIS, per-user) | 554 MB |
+| `xr-portable-windows-x64` | no-install: `xr-desktop.exe` + `xr-engine-x86_64-pc-windows-msvc.exe` (verified contents) | 67 MB |
+| `xr-msix-windows-x64` | test-signed MSIX + `.cer` | 68 MB |
+| `xr-desktop-windows-arm64` | NSIS ARM64 setup | 242 MB |
+| `xr-desktop-darwin-arm64` / `-x64` | `XR_1.1.1-rc.1_aarch64.dmg` / `_x64.dmg` + `.app.tar.gz` | 104 / 110 MB |
+| `xr-desktop-linux-x64` | `.deb` + `.rpm` + `.AppImage` | 268 MB |
+
+Journey proof: each bundle was installed and booted on its real OS (macOS 14/15, Intel mac, Windows x64/arm64, Ubuntu 22.04/24.04) — a green run means the exes RUN, not merely compile.
+
+**Two infra fixes made from this run's findings** (both pushed, validated by the follow-up dispatch):
+
+1. **Flatpak leg red**: `Nothing matches org.freedesktop.Sdk.Extension.rust-stable in remote flathub` — flathub retired the EOL GNOME 46 runtime's SDK extensions. The XR-side validations all passed (desktop entry, AppStream, manifest). Fix: `runtime-version: "46" → "48"` in `packaging/flatpak/ai.rrrtx.xr-desktop.yml` (`116e994`). The from-source flatpak build remains report-only per the manifest's own status note.
+2. **Portable "zip" was a TAR**: the Windows runner's `tar -a -c -f x.zip` writes a TAR despite the `.zip` name (bsdtar has no zip writer). The artifact's contents were correct (`xr-portable/xr-desktop.exe` + sidecar) but the format was wrong. Fix: `Compress-Archive` + a PK-signature assert in the workflow (`a3edc16`).
+
+Development (unsigned) build per §3 — fully use-able. Download: open the run page → Artifacts (each leg's zip contains the installers); signing secrets are the only gate to a signed tag build.
