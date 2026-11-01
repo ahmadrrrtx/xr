@@ -684,6 +684,179 @@ bun run ci local verdict unchanged FAIL (OOM monolith + changelog:check EXIT=1 D
 
 ---
 
+## §6b XR-P00 verification and XR-P01 preflight (2026-11-02, baseline `4adcec2b`)
+
+**E-36 — `XR-P00` verified against the repository at `4adcec2b` (Plan Owner, 2026-11-02)** ✅ in-repo / 🚫 owner half
+
+```
+clone: HEAD 4adcec2b881dd163f35196eef62cc9228bfba29e, tree CLEAN
+diff 230ad998..4adcec2b: .github/workflows/ci.yml (+17), test/architecture/gate-enforcement.test.ts (+292), 4 docs files
+  → ZERO product files; CHANGELOG.md diff empty
+bun test test/architecture/gate-enforcement.test.ts → 3 pass / 0 fail / 106 ms
+negative test 1 (delete placeholder-lint step from ci.yml) → 2 pass / 1 FAIL; restored, md5 identical
+negative test 2 (drop truth-gate from quality-gate.needs)  → 2 pass / 1 FAIL; restored, md5 identical
+gates wired at ci.yml:158-165; each run locally → EXIT 0
+bun run changelog:check → EXIT 1 ("no CHANGELOG.md entry for 1.1.1-rc.1") — D-020 still undecided
+segmented parity (linux, excl. test/e2e-blackbox/) → 474/474 files, 5122 pass / 0 fail / 41 skip
+  (+3 pass / +1 file over the pre-P00 5119 / 473 baseline — exactly the new gate test)
+Executed 2026-11-01; report claims accurate, no overclaiming found.
+```
+
+**E-37 — The governance gap is now empirically proven, not merely argued** ❌ (owner action outstanding) 🔁 (extends E-32/E-33)
+
+```
+GET /repos/ahmadrrrtx/xr/pulls/206 → merged 2026-11-01T18:55Z by ahmadrrrtx, 5 commits, reviews = 0
+GET /repos/ahmadrrrtx/xr/rulesets/19119579 → required_approving_review_count 0,
+  require_code_owner_review false, required_status_checks ["Quality Gate" x2], strict false, bypass_actors []
+.github/required-checks.json declares 6 aggregates; the live ruleset requires 1 (twice)
+```
+
+A PR merged with **zero reviews** while a ruleset named "main protection" is active is the
+behavioural proof that `P00-AC1` was never applied. This does not change the P00 verdict
+(the executor correctly reported it BLOCKED); it converts the risk from *asserted* to
+*observed*. Obligation still owned by the repo admin (`PHASE_STATUS.md` §obligations).
+
+**E-38 — `MASTER_PLAN` §P01.5 (extend `/api/v1/health`) is NOT executable as written** 🚫 (prompt r1 supersedes it)
+
+```
+live probe, fresh XR_HOME, `bun run src/index.ts serve`:
+  GET /api/v1/health                              (anon)        → 200 {"ok":true,"ts":…}
+  GET /api/health                                 (anon)        → 200 {"ok":true,"ts":…}
+  GET /api/v1/meta/version                        (anon)        → 401 {"error":"unauthorized — local bearer token or session cookie required"}
+  GET /api/v1/meta/version  (Authorization: Bearer …)           → 200 {"version":"1.1.1-rc.1","host":"http://127.0.0.1:PORT","lan":false,"deviceName":"XR desktop"}
+src/daemon/server.ts:459-467  → /api/health and /api/v1/health are the ONLY open data paths
+src/daemon/routes/system.routes.ts:25-31 → Phase 34 · R1 (audit P2-21) removed name/version/host/binding on purpose (loopback fingerprinting)
+test/daemon/origin-host-guard.test.ts:169-171 → PINS "{ok, ts} only — no name/version/host/binding/configCache" on BOTH mounts
+```
+
+Adding identity fields to the open probe would reverse a deliberate security decision and
+turn an existing test red. r1 relocates the change to the **session-gated**
+`/api/v1/meta/version`, which already carries version+host and is absent from
+`API_CONTRACT` (hence from OpenAPI — `registry.ts`: `if (!meta || meta.surface) continue;`).
+
+**E-39 — The desktop's engine identity surface is a dead contract** ℹ️
+
+```
+desktop/src/engine/types.ts:216-224  EngineHealth = {ok, name?, version?, host?, binding?, auth?, ts?}
+engine actually sends only {ok, ts}  (E-38)
+reference counts in desktop/src:  version 3 · ok 3 · ts 2 · name 0 · host 0 · binding 0 · auth 0
+engineVersion() (engineStore.ts:294-296) reads health.version → always null at runtime
+```
+
+The UI has a version slot that is structurally unable to be non-null. This is `XRD-001`'s
+"degraded-but-silent" failure mode already present, before any stale-sidecar scenario.
+
+**E-40 — There is no timeout anywhere on the readiness path** ❌
+
+```
+grep -n "timeout|AbortSignal|AbortController|signal" desktop/src/engine/transport.ts → 0 matches
+engineFetch(): plain fetch(), no signal; catch() maps every non-Abort error to EngineDown('unreachable')
+engineStore.refresh(): awaits engineFetch('/health') with no deadline → status stays 'checking'/'starting' indefinitely
+```
+
+`transport.ts` handles `AbortError` defensively but nothing ever aborts. "Infinite
+`starting`" is therefore not a hypothetical — it is the current behaviour on a hung probe.
+
+**E-41 — XR-P01 gate baseline at `4adcec2b`** ✅
+
+```
+bun run typecheck        → ROOT_TSC_EXIT=0, DESKTOP_TSC_EXIT=0
+bun run api:schema:check → 0
+bun run client:check     → 0
+bun run api:compat       → 0
+bun run boundaries       → 0
+segmented parity         → 5122 pass / 0 fail / 41 skip / 474 files
+bun run changelog:check  → 1   (D-020 undecided; E-27/E-34 — NOT an XR-P01 regresssion)
+```
+
+**E-42 — The diagnostics surface already exists on the native side; §P01.15's citation is stale** ℹ️
+
+```
+engine.rs:409-412   #[tauri::command] engine_logs_tail(state, lines) -> Vec<String>
+engine.rs:324       EngineStatus.stderr_tail = StderrTail.last(20)
+lib.rs:261-266      engine_link, engine_restart, engine_logs_tail all registered in invoke_handler
+engine_state.rs:52-93  bounded VecDeque ring, newest-wins, test at :218
+engine_state.rs:155    dashboard lines carrying ?token=… are deliberately NOT parsed
+⇒ no Rust change is needed for the diagnostics export; reading it over IPC is enough
+MASTER_PLAN §P01.15 cites `EngineDownBanner.tsx:31` and `via:'sidecar'|'vite-proxy'`;
+   transport.ts:17 defines `EngineVia = 'sidecar' | 'dev-proxy'` and the banner branches
+   on `'sidecar'` at :34 and :92 — the plan's wording is stale, the invariant is not.
+```
+
+**E-43 — D-008 migration blast radius** ℹ️
+
+```
+files importing useEngineStore under desktop/src: 26
+files that both import the store and reference `status`: 22
+raw `status === '…'` scan: 30 matches, of which several belong to OTHER stores
+  (ProviderConfigModal 'testing'/'done', PaletteQuickAsk 'streaming', CompromisedModal 'fail')
+  → the migration is a typed remap, not a find/replace
+test/desktop/frontend-stores.test.ts:33,43,56  already sets 'down'/'starting'/'up' under `as never`
+```
+
+`frontend-stores.test.ts` passes today only because the unknown statuses are cast away — a
+13th-signal that D-008 was always the intended direction. `'starting'` at :43 survives the
+migration unchanged; `'down'` and `'up'` become `'disconnected'` and `'ready'`.
+**E-44 — Plan Owner acceptance ruling on `XR-P00` (2026-11-02)** ⚖️ (split ruling; see D-024)
+
+```
+P00-AC1  BLOCKED — OWNER ACTION   ruleset 19119579 still shallow (E-37); AC1's verification column explicitly allows this outcome
+P00-AC2  BLOCKED — OWNER ACTION   depends on AC1
+P00-AC3  PASS     remote-proven   Truth gate SUCCESS at 761df3df; 4 gates wired at ci.yml:158-165; all EXIT 0 locally
+P00-AC4  BLOCKED — OWNER DECISION D-020 undecided; changelog:check EXIT 1
+P00-AC5  FAIL     environmental    monolithic bun test OOM-killed EXIT 137 (1.9 GiB, 2 vCPU, no swap); segmented runner substitutes
+P00-AC6  PASS     verified here    3/3 pass; fails on gate-step deletion (E-36)
+P00-AC7  PASS     verified here    fails when truth-gate dropped from quality-gate.needs (E-36)
+P00-AC8  PASS     gates exit 0
+P00-AC9  PASS     zero product files in diff (E-36)
+P00-AC10 PASS     obligations recorded with date + owner
+P00-AC11 PASS     plan-owner documents intact
+§7 hard constraints: NONE violated (checked individually)
+Ruling: VERIFIED — IN-REPO HALF. Owner actions carried as obligations (D-024.1).
+Unlocks: XR-P01 in-repo half only. Does NOT unlock any governance/release-identity action.
+```
+
+**E-45 — Ruleset `19119579` deepened (partially) and behaviourally proven (2026-11-02)** ✅ AC1-partial / ✅ AC2
+
+```
+BEFORE: required_status_checks = ["Quality Gate" x2]   (duplicate), approvals 0, code_owner false
+AFTER : required_status_checks = ["Quality Gate", "Cross-Platform gate", "Supply Chain gate", "npm Pack Smoke gate"]
+        (integration_id 15368 on each; strict=false; do_not_enforce_on_create=false; bypass_actors [])
+PUT /repos/ahmadrrrtx/xr/rulesets/19119579 → HTTP 200, updated_at 2026-11-02T00:26:01+05:00
+approvals 0 / code_owner false deliberately UNCHANGED — see D-025 (would brick all PRs)
+
+Preconditions checked before requiring each context: all four workflows fire on pull_request
+(ci.yml, cross-platform.yml, supply-chain.yml, npm-pack-smoke.yml) and all four are green
+check-runs at 4adcec2b. The two red lanes (Desktop gate, Clean-Machine Journey gate) were NOT added.
+
+D-023 behavioural proof (all three signals):
+1. settings read  → four distinct contexts, duplicate gone, bypass []          ✅
+2. rejected push  → git push 04122b76:refs/heads/main
+   "remote: error: GH013: Repository rule violations found for refs/heads/main
+    remote: - 4 of 4 required status checks are expected."            PUSH_EXIT=1  ✅
+3. blocked merge  → PUT /pulls/207/merge → HTTP 405 "Repository rule violations found
+                    2 of 4 required status checks are expected."                  ✅
+   PR #207 left OPEN, merged=false; main verified still 4adcec2b after both attempts.
+Aggregates observed registering on the PR head: Supply Chain gate completed/success,
+npm Pack Smoke gate queued — i.e. the newly-required contexts do run on pull_request.
+```
+
+**E-46 — `require_code_owner_review` would be fatal in this repository (data, not opinion)** 🚫
+
+```
+GET /repos/ahmadrrrtx/xr/collaborators → 1 entry: ahmadrrrtx (admin)
+CODEOWNERS routes .github/**, src/**, test/**, docs/** (and more) to a single owner
+GitHub forbids self-approval → with code_owner_review=true or approvals>=1,
+every PR touching those paths is permanently unmergeable by the only collaborator
+```
+
+This is why D-025 leaves both at their current values and records the precondition
+(add a second reviewer) that would make D-001 satisfiable. It is not a loosening of D-001;
+it is the observation that D-001's mechanism cannot function in a one-person repository.
+
+
+---
+
 ## §7 Actions deliberately **not** taken (and why)
 
 | Action | Reason |

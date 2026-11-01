@@ -385,3 +385,70 @@ engineering governance, release identity, or legal/compliance surfaces.
 | Affected | `XR-P00` preflight and acceptance (`P00-AC1`, `P00-AC2`), `EVIDENCE_LOG.md` method notes, this plan's own verification habits. |
 | Approval | **APPROVED** |
 | Revision | R1 2026-11-01. |
+
+---
+
+## D-024 — `XR-P00` acceptance ruling (repo half) and the boundary of what acceptance may unlock
+
+| Field | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Problem | `XR-P00` is `IMPLEMENTATION_REPORTED`. The Plan Owner must rule on it. The phase has two halves: an **in-repo** half (wired gates + a gate-enforcement test + no scope violation) and an **owner-actions** half (deepen ruleset `19119579`; resolve D-020). Ruling "accept" or "reject" wholesale is wrong in both directions: rejecting the repo half discards verified, correct work; accepting the owner half would mark a governance control as in force while `E-37` shows a PR merged with **zero reviews**. |
+| Options | (a) `ACCEPTED` outright. (b) `FAILED` (owner items unmet). (c) **Split ruling**: `VERIFIED — IN-REPO HALF`, owner actions carried as dated, named, tracked obligations, and a standing prohibition on using P00 as an authorization to act on governance. |
+| Decision | **(c)**. `P00-AC3/AC6…AC11` = **PASS**, independently re-verified 2026-11-02 (`E-36`). `P00-AC1/AC2/AC4` = **BLOCKED — OWNER ACTION**, exactly as the prompt's own verification column permits for AC1. `P00-AC5` = **FAIL, environmental** (monolithic `bun test` OOM-killed, EXIT 137; a segmented runner substitutes file coverage). No `§7` hard constraint was violated — checked individually, none applies. |
+| Reasoning | The prompt states *"violating any one \[hard constraint\] fails the phase"* and lists no constraint on §4.1/§4.2/§4.3 being externally applied. `MASTER_PLAN` §P01.4 requires only `XR-P00 ACCEPTED` as P01's gate. The audit's `XRD-013` — gate enforcement — **is** closed and is the phase's substance. Therefore the repo half is acceptable and does **not** authorize anything governance-related. The ruleset and D-020 are real debts with a real owner and are carried forward, not absorbed. |
+| Trade-offs | An "accepted" phase with open owner items can look like papering over. Mitigated by (i) recording the split explicitly here, (ii) keeping the obligations rows in `PHASE_STATUS.md`, and (iii) forbidding any phase to *rely* on a governance control until the obligation is discharged. A stricter reading would block P01 indefinitely on a setting only the repo admin can change — that stalls the critical path without improving safety. |
+| Affected | `PHASE_STATUS.md` (`XR-P00`, `XR-P01`), `EVIDENCE_LOG.md` (`E-44`), this entry. |
+| Approval | **APPROVED** by Plan Owner (Agent Mode, acting on the user's instruction of 2026-11-02). **Open point for the repository owner:** this ruling is recorded *in-repo*; the owner's countersignature on D-024 (and on D-001/D-022) is what makes the governance half binding. |
+| Revision | R1 2026-11-02. |
+
+### D-024.1 — Standing prohibitions carried by this acceptance
+
+1. **No phase may treat `/api/health`, ruleset state, or `bun run ci` as green on the strength of this acceptance.** `changelog:check` is still EXIT 1; `bun run ci` still cannot exit 0.
+2. **`XR-P01` may proceed on the in-repo half only.** Its §4 does not touch governance, settings, or release identity, so no owner action is required to start it. If P01 finds it needs any of those, it stops and escalates.
+3. **The P00 owner payload is not to be re-attempted by any executor.** It needs repo admin; executors do not have it and must not request it.
+4. **Acceptance is not a re-scope of D-020.** D-020 remains `OWNER-REQUIRED`; the `GATE_EXEMPTIONS` entry for `changelog:check` is a self-expiring marker, not a permanent waiver.
+
+---
+
+## D-025 — Which ruleset parameters were changed, and which were deliberately not
+
+| Field | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Problem | D-001/D-022 call for `required_approving_review_count: 1` **and** `require_code_owner_review: true`. Applying either is, in this repository, catastrophic rather than merely strict: `E-46` shows exactly **one** collaborator (`ahmadrrrtx`, admin), `CODEOWNERS` routes `.github/**`, `src/**`, `test/**`, `docs/**` to a single owner, and GitHub forbids self-approval. Every PR would become permanently unmergeable — including the PR carrying the fix. |
+| Options | (a) Follow D-001 literally (approvals 1 + code-owner). (b) Change nothing. (c) **Apply the part that is provably safe now** (de-duplicate the required checks + require the aggregates that are actually green on `pull_request`), and hold the review parameters behind a named precondition. |
+| Decision | **(c)**. Applied 2026-11-02 (`E-45`): required checks `["Quality Gate" ×2]` → `["Quality Gate", "Cross-Platform gate", "Supply Chain gate", "npm Pack Smoke gate"]`; all four verified to fire on `pull_request` and green at `4adcec2`. `required_approving_review_count` stays `0` and `require_code_owner_review` stays `false` **until a second reviewer exists**. |
+| Reasoning | Requiring a context that does not run on PRs, or a review that cannot physically be given, does not add enforcement — it adds a permanent deadlock and trains everyone to bypass. The enforceable half was applied and proven behaviourally (rejected push, blocked merge); the unenforceable half is documented with its precondition instead of being silently dropped or blindly applied. |
+| Trade-offs | The "one actor self-merges" weakness persists until a second collaborator is added — this is a real, unresolved gap, recorded as an obligation, not a solved problem. `Cross-Platform gate` was green at `4adcec2` but is a heavy matrix; if it flakes, it is now merge-blocking. |
+| Precondition to finish D-001 | Add a second collaborator (or an org team) with `write`; then set `required_approving_review_count: 1` and `require_code_owner_review: true`. Both are one `PUT` away; the payload is in `E-45`. |
+| Affected | Ruleset `19119579`; `PHASE_STATUS.md` obligations; `P00-AC1`. |
+| Approval | **APPROVED** by Plan Owner (Agent Mode) on the user's explicit instruction of 2026-11-02 to act as decision-maker on the data. **Repository-owner countersignature still required** — this ruling is recorded in-repo; the setting already changed. |
+| Revision | R1 2026-11-02. |
+
+### D-025.1 — Why the two aggregates that are red were left out
+
+`Desktop gate (bundles + latest.json + journey)` and `Clean-Machine Journey gate` were
+**failure/cancelled at `4adcec2`**. Requiring them now would block every merge for a reason
+unrelated to the PR. They stay out, and `XR-P09` must add them once green — unchanged from
+the existing obligation. The remaining two declared-but-not-required aggregates
+(`Desktop gate`, `Clean-Machine Journey gate`) are therefore still unenforced, which is
+recorded rather than papered over.
+
+---
+
+## D-026 — D-020 resolved: Option A, **after** the `previousTagFor` prerelease fix
+
+| Field | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Problem | D-020 left the choice open and the executor stopped correctly. Deciding needs one fact the earlier analysis had only inferred: what the generator does at `1.1.1-rc.1`. Reproduced here: `"1.1.1-rc.1".split(".").map(Number)` → `[1,1,NaN,1]` (JSON `[1,1,null,1]`). The `patch < target[2]` comparison is `NaN < 1` → `false`, so `v1.1.0` is never classified as *older* and the range falls back to `v1.0.0` — pulling 247 already-published commits into the new section (`E-35`). `test/release/changelog.test.ts:63-68` only exercises clean `x.y.z` versions, which is why this survived. |
+| Options | (a) D-020a as-is: generate and wire now. (b) Fix `previousTagFor` first, then generate + wire. (c) D-020b: re-scope to release-only, which requires editing the protected `AGENTS.md`. |
+| Decision | **(b)** — the substance of D-020a, gated on a two-line correctness fix. `previousTagFor` must strip prerelease/build metadata before numeric comparison (`version.split("-")[0]`, likewise for tags), and `test/release/changelog.test.ts` gains the prerelease case that would have caught it. Then `bun run changelog:generate`, wire `changelog:check`, and **delete** the `GATE_EXEMPTIONS` entry (it is self-expiring by design; leaving it is a lie about coverage). |
+| Reasoning | (a) writes a changelog section containing 247 commits that are already published — corrupting the exact surface the gate exists to protect. That is worse than the red gate. (c) pays a governance cost (editing a protected file) to weaken coverage, solving nothing. (b) is the only option where the gate ends up both **green and true**. |
+| Why not "fix it and wire it right now" | It edits a release-evidence surface (`CHANGELOG.md`) and a generator, and its output must be reviewed by a human against the real commit range. That is `XR-P08`'s subject (documentation and claims integrity), which is parallel-eligible now that P00 is `ACCEPTED`. It is a small, bounded task there, not a silent act at the end of a governance phase. |
+| Owner action if they prefer speed | The fix is 2 lines + 1 test; say the word and it lands as its own PR against `main` in minutes, before P08 opens. |
+| Status of `changelog:check` | **Still EXIT 1.** The `GATE_EXEMPTIONS` entry in `test/architecture/gate-enforcement.test.ts` remains valid and accurate: it records an exemption, it does not claim coverage. |
+| Affected | `scripts/changelog.ts`, `test/release/changelog.test.ts`, `CHANGELOG.md`, `test/architecture/gate-enforcement.test.ts` (`GATE_EXEMPTIONS`), `package.json` (`ci` unchanged), `AGENTS.md` (**unchanged** — option (b) of D-020 is not taken). |
+| Approval | **APPROVED** by Plan Owner (Agent Mode) on the user's instruction of 2026-11-02. Scope assigned to `XR-P08`; `P00-AC4` moves from `BLOCKED — OWNER DECISION` to **`OPEN — SCHEDULED (XR-P08)`**. |
+| Revision | R1 2026-11-02. |
