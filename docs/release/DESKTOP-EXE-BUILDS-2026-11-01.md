@@ -66,4 +66,5 @@ A first dispatch was triggered 2026-11-01 on the redesign branch (see §7 for th
 
 ## 7 · Dispatch record
 
-- (filled in below as the run progresses — run URL + artifacts)
+- **2026-11-01 · run 41292497162** on `work/ui-redesign-2026-10-29` @ `49112b1` — https://github.com/ahmadrrrtx/xr/actions/runs/41292497162
+  Artifacts when complete (per leg): `xr-desktop-linux-x64` (deb/rpm/AppImage), `xr-desktop-darwin-arm64` + `xr-desktop-darwin-x64` (dmg/.app.tar.gz), `xr-desktop-windows-x64` (msi + nsis setup), `xr-desktop-windows-arm64` (nsis), `xr-portable-windows-x64` (no-install zip), `xr-msix-windows-x64` (test-signed MSIX + .cer). Development (unsigned) build per §3 — fully use-able.
