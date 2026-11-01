@@ -87,3 +87,9 @@ Journey proof: each bundle was installed and booted on its real OS (macOS 14/15,
 2. **Portable "zip" was a TAR**: the Windows runner's `tar -a -c -f x.zip` writes a TAR despite the `.zip` name (bsdtar has no zip writer). The artifact's contents were correct (`xr-portable/xr-desktop.exe` + sidecar) but the format was wrong. Fix: `Compress-Archive` + a PK-signature assert in the workflow (`a3edc16`).
 
 Development (unsigned) build per §3 — fully use-able. Download: open the run page → Artifacts (each leg's zip contains the installers); signing secrets are the only gate to a signed tag build.
+
+### Run 41294769244 — 2026-11-01 @ `116e994` (fix validation)
+
+Same five bundle legs, all green. **The portable flavor is now verified a REAL zip** (PK signature; contents `xr-portable/xr-desktop.exe` 40.5 MB + `xr-portable/xr-engine-x86_64-pc-windows-msvc.exe` 93.2 MB) — download it from https://github.com/ahmadrrrtx/xr/actions/runs/41294769244 → Artifacts → `xr-portable-windows-x64`, unzip anywhere, double-click `xr-desktop.exe`, no install needed.
+
+Its flatpak leg still failed (it dispatched before the runtime fix landed) — fixed afterwards in `1c1d2cb` (GNOME 48 + fdo ext `//24.08` refs that actually exist; lane made report-only/non-gating per the manifest's documented status). The next dispatch on the branch tip is expected fully green.
