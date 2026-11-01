@@ -434,3 +434,21 @@ unrelated to the PR. They stay out, and `XR-P09` must add them once green — un
 the existing obligation. The remaining two declared-but-not-required aggregates
 (`Desktop gate`, `Clean-Machine Journey gate`) are therefore still unenforced, which is
 recorded rather than papered over.
+
+---
+
+## D-026 — D-020 resolved: Option A, **after** the `previousTagFor` prerelease fix
+
+| Field | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Problem | D-020 left the choice open and the executor stopped correctly. Deciding needs one fact the earlier analysis had only inferred: what the generator does at `1.1.1-rc.1`. Reproduced here: `"1.1.1-rc.1".split(".").map(Number)` → `[1,1,NaN,1]` (JSON `[1,1,null,1]`). The `patch < target[2]` comparison is `NaN < 1` → `false`, so `v1.1.0` is never classified as *older* and the range falls back to `v1.0.0` — pulling 247 already-published commits into the new section (`E-35`). `test/release/changelog.test.ts:63-68` only exercises clean `x.y.z` versions, which is why this survived. |
+| Options | (a) D-020a as-is: generate and wire now. (b) Fix `previousTagFor` first, then generate + wire. (c) D-020b: re-scope to release-only, which requires editing the protected `AGENTS.md`. |
+| Decision | **(b)** — the substance of D-020a, gated on a two-line correctness fix. `previousTagFor` must strip prerelease/build metadata before numeric comparison (`version.split("-")[0]`, likewise for tags), and `test/release/changelog.test.ts` gains the prerelease case that would have caught it. Then `bun run changelog:generate`, wire `changelog:check`, and **delete** the `GATE_EXEMPTIONS` entry (it is self-expiring by design; leaving it is a lie about coverage). |
+| Reasoning | (a) writes a changelog section containing 247 commits that are already published — corrupting the exact surface the gate exists to protect. That is worse than the red gate. (c) pays a governance cost (editing a protected file) to weaken coverage, solving nothing. (b) is the only option where the gate ends up both **green and true**. |
+| Why not "fix it and wire it right now" | It edits a release-evidence surface (`CHANGELOG.md`) and a generator, and its output must be reviewed by a human against the real commit range. That is `XR-P08`'s subject (documentation and claims integrity), which is parallel-eligible now that P00 is `ACCEPTED`. It is a small, bounded task there, not a silent act at the end of a governance phase. |
+| Owner action if they prefer speed | The fix is 2 lines + 1 test; say the word and it lands as its own PR against `main` in minutes, before P08 opens. |
+| Status of `changelog:check` | **Still EXIT 1.** The `GATE_EXEMPTIONS` entry in `test/architecture/gate-enforcement.test.ts` remains valid and accurate: it records an exemption, it does not claim coverage. |
+| Affected | `scripts/changelog.ts`, `test/release/changelog.test.ts`, `CHANGELOG.md`, `test/architecture/gate-enforcement.test.ts` (`GATE_EXEMPTIONS`), `package.json` (`ci` unchanged), `AGENTS.md` (**unchanged** — option (b) of D-020 is not taken). |
+| Approval | **APPROVED** by Plan Owner (Agent Mode) on the user's instruction of 2026-11-02. Scope assigned to `XR-P08`; `P00-AC4` moves from `BLOCKED — OWNER DECISION` to **`OPEN — SCHEDULED (XR-P08)`**. |
+| Revision | R1 2026-11-02. |
