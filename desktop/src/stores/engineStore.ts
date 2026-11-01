@@ -1,16 +1,25 @@
 /*
- * Engine link state (Phase 14) — the single store every surface reads to
- * know whether the XR engine daemon is reachable, which provider/model it
- * will run, and what it offers (providers, local models).
+ * Engine link state (Phase 14; readiness truth XR-P01) — the single store
+ * every surface reads to know whether the XR engine daemon is usable,
+ * which engine it is, and what it offers (providers, local models).
  *
- *   status    unknown → checking → up | down | unauthorized
- *   health    `/api/v1/health` body (version) + measured latency
- *   providers `/api/v1/providers` (primary/model, keys, health)
- *   models    `/api/v1/models` (local runtime, installed models, hardware)
+ * Readiness vocabulary (D-008, exactly these five):
+ *   starting | ready | degraded | disconnected | failed(reason)
+ * with reason ∈ unauthorized | incompatible | crashed | timeout | unreachable.
  *
- * Polling is adaptive: 15 s while up, 3 s while down (so a restart is
- * noticed quickly), paused when the tab is hidden. Nothing here fabricates
- * a state — `up` means a real 200 arrived.
+ * No state is entered on optimism: `nextEngineState` — the ONE function
+ * that computes the next state — reads only the last observed probe, the
+ * elapsed time since the current link attempt began, and the observed
+ * contract handshake. `starting` is bounded by ENGINE_BOOT_DEADLINE_MS;
+ * past it, a silent engine is `failed(timeout)` and the sidecar stderr
+ * tail is captured for diagnosis, never an infinite spinner.
+ *
+ * D-008 mapping from the pre-P01 vocabulary:
+ *   unknown → starting · checking → starting · up → ready ·
+ *   down → disconnected · unauthorized → failed(unauthorized)
+ *
+ * Polling is adaptive: 15 s while ready/degraded, 3 s otherwise, paused
+ * when the tab is hidden.
  */
 import { create } from 'zustand';
 
@@ -19,12 +28,16 @@ import { modelOptions, type EngineCatalog } from '@/engine/catalog';
 export type { EngineModelOption } from '@/engine/catalog';
 import {
   EngineDown,
+  EngineIncompatible,
   engineEndpoint,
   engineFetch,
+  engineHandshake,
   engineJson,
   enginePost,
+  resetEngineHandshake,
   resetEngineLink,
   type EngineEndpoint,
+  type HandshakeOutcome,
 } from '@/engine/transport';
 import type {
   EngineHealth,
@@ -34,12 +47,107 @@ import type {
 import { isTauri } from '@/lib/tauri';
 
 export type EngineStatus =
-  'unknown' | 'checking' | 'up' | 'down' | 'unauthorized';
+  | 'starting'
+  | 'ready'
+  | 'degraded'
+  | 'disconnected'
+  | 'failed';
+
+export type EngineFailureReason =
+  | 'unauthorized'
+  | 'incompatible'
+  | 'crashed'
+  | 'timeout'
+  | 'unreachable';
+
+/** XR-P01 — `starting` may not outlive this bound (sidecar pairs in ~1–3 s). */
+export const ENGINE_BOOT_DEADLINE_MS = 30_000;
+
+/** One observed probe of the engine link (health and/or handshake). */
+export interface EngineProbe {
+  outcome:
+    | 'pending'
+    | 'ok'
+    | 'unauthorized'
+    | 'incompatible'
+    | 'unreachable'
+    | 'timeout'
+    | 'crashed';
+  error?: string | null;
+}
+
+export interface EngineReadiness {
+  status: EngineStatus;
+  failureReason: EngineFailureReason | null;
+}
+
+/**
+ * THE readiness transition function (XR-P01). Pure: (last observed probe,
+ * elapsed since this link attempt began, observed handshake) → next state.
+ * Nothing else in the app may invent a readiness value.
+ *
+ *  · `ready`/`degraded` require an `ok` probe AND an observed handshake —
+ *    a 200 from the open `/health` alone is only ever `starting`.
+ *  · legacy handshake (engine predates contract reporting) ⇒ `degraded`:
+ *    reachable, explicitly unverified, never `ready`.
+ *  · a probe that never resolves (`pending`/`timeout`) past the boot
+ *    deadline ⇒ `failed(timeout)`; the same probe after a link WAS
+ *    established ⇒ `disconnected` (the engine went away).
+ *  · `unreachable` during the boot window ⇒ still `starting` (the sidecar
+ *    is pairing); after it, or after an established link ⇒ `disconnected`.
+ */
+export function nextEngineState(
+  probe: EngineProbe,
+  elapsedMs: number,
+  handshake: HandshakeOutcome | null,
+): EngineReadiness {
+  const established = handshake !== null; // a contract was observed on this link
+  switch (probe.outcome) {
+    case 'unauthorized':
+      return { status: 'failed', failureReason: 'unauthorized' };
+    case 'incompatible':
+      return { status: 'failed', failureReason: 'incompatible' };
+    case 'crashed':
+      return { status: 'failed', failureReason: 'crashed' };
+    case 'ok': {
+      if (!handshake) return { status: 'starting', failureReason: null };
+      if (handshake.kind === 'legacy') return { status: 'degraded', failureReason: null };
+      if (handshake.kind === 'incompatible')
+        return { status: 'failed', failureReason: 'incompatible' };
+      return { status: 'ready', failureReason: null };
+    }
+    case 'timeout':
+    case 'pending': {
+      if (established) return { status: 'disconnected', failureReason: null };
+      if (elapsedMs >= ENGINE_BOOT_DEADLINE_MS)
+        return { status: 'failed', failureReason: 'timeout' };
+      return { status: 'starting', failureReason: null };
+    }
+    case 'unreachable': {
+      if (!established && elapsedMs < ENGINE_BOOT_DEADLINE_MS)
+        return { status: 'starting', failureReason: null };
+      return { status: 'disconnected', failureReason: null };
+    }
+  }
+}
+
+/** Reachable AND identified enough to work with (ready, or legacy-degraded). */
+export function isEngineUsable(status: EngineStatus): boolean {
+  return status === 'ready' || status === 'degraded';
+}
 
 interface EngineState {
   status: EngineStatus;
+  /** Set iff status === 'failed'. */
+  failureReason: EngineFailureReason | null;
   endpoint: EngineEndpoint | null;
   health: EngineHealth | null;
+  /** XR-P01: the observed contract handshake for the current link. */
+  handshake: HandshakeOutcome | null;
+  /** XR-P01: sidecar stderr tail captured on failed(timeout|crashed). */
+  stderrTail: string[];
+  /** When the current link attempt began (boot-deadline anchor). */
+  attemptStartedAt: number | null;
   latencyMs: number | null;
   lastChecked: number | null;
   /** Consecutive failed polls (drives the banner only after the first). */
@@ -74,18 +182,25 @@ let pollTimer: number | null = null;
 let polling = 0; // ref count (several surfaces may ask)
 let inflight: Promise<boolean> | null = null;
 
-function versionString(h: EngineHealth | null): string | null {
-  if (!h) return null;
-  if (typeof h.version === 'string') return h.version;
-  if (h.version && typeof h.version.display === 'string')
-    return h.version.display;
-  return null;
+/** The shell's existing stderr tail (Rust `engine_logs_tail`); [] outside Tauri. */
+async function fetchStderrTail(): Promise<string[]> {
+  if (!isTauri()) return [];
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<string[]>('engine_logs_tail', { lines: 40 });
+  } catch {
+    return [];
+  }
 }
 
 export const useEngineStore = create<EngineState>()((set, get) => ({
-  status: 'unknown',
+  status: 'starting',
+  failureReason: null,
   endpoint: null,
   health: null,
+  handshake: null,
+  stderrTail: [],
+  attemptStartedAt: null,
   latencyMs: null,
   lastChecked: null,
   failures: 0,
@@ -101,44 +216,91 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   refresh: () => {
     if (inflight) return inflight;
     inflight = (async () => {
-      if (get().status === 'unknown') set({ status: 'checking' });
+      // Anchor the boot deadline at the first attempt of a link cycle.
+      if (get().attemptStartedAt === null && !isEngineUsable(get().status)) {
+        set({ attemptStartedAt: Date.now() });
+      }
+      const elapsed = (): number => {
+        const t0 = get().attemptStartedAt;
+        return t0 === null ? ENGINE_BOOT_DEADLINE_MS : Date.now() - t0;
+      };
       const started = performance.now();
       try {
         const endpoint = await engineEndpoint();
         const res = await engineFetch('/health');
         if (!res.ok) throw new Error(`health ${res.status}`);
         const health = (await res.json()) as EngineHealth;
-        const wasUp = get().status === 'up';
+        // Identity comes ONLY from the session-gated handshake (XR-P01):
+        // /health proved "something answered", nothing more.
+        const handshake = await engineHandshake();
+        const next = nextEngineState({ outcome: 'ok' }, elapsed(), handshake);
+        const wasUsable = isEngineUsable(get().status);
         set({
-          status: 'up',
+          status: next.status,
+          failureReason: next.failureReason,
           endpoint,
           health,
+          handshake,
           latencyMs: Math.round(performance.now() - started),
           lastChecked: Date.now(),
           failures: 0,
-          lastError: null,
-          upSince: wasUp ? get().upSince : Date.now(),
+          lastError:
+            handshake.kind === 'legacy'
+              ? `Engine ${handshake.engineVersion ?? '(unknown version)'} does not report a contract version — running degraded. Restart with the bundled engine or update the engine.`
+              : null,
+          stderrTail: [],
+          attemptStartedAt: null,
+          upSince: wasUsable ? get().upSince : Date.now(),
         });
         // A fresh link: (re)load what it offers.
-        if (!wasUp) void get().loadCatalog({ force: true });
-        return true;
+        if (!wasUsable) void get().loadCatalog({ force: true });
+        return isEngineUsable(next.status);
       } catch (e) {
-        const unauthorized =
-          e instanceof EngineDown && e.kind === 'unauthorized';
         const endpoint = await engineEndpoint().catch(() => null);
+        let probe: EngineProbe;
+        if (e instanceof EngineIncompatible) {
+          probe = { outcome: 'incompatible', error: e.message };
+        } else if (e instanceof EngineDown && e.kind === 'unauthorized') {
+          probe = { outcome: 'unauthorized', error: 'The engine rejected this session token.' };
+        } else if (
+          (e instanceof EngineDown && e.kind === 'timeout') ||
+          (e instanceof DOMException && (e.name === 'AbortError' || e.name === 'TimeoutError'))
+        ) {
+          probe = { outcome: 'timeout', error: e instanceof Error ? e.message : null };
+        } else if (endpoint?.reason) {
+          // The shell observed the spawn itself fail — that is a crash,
+          // not a network guess.
+          probe = { outcome: 'crashed', error: endpoint.reason };
+        } else {
+          probe = {
+            outcome: 'unreachable',
+            error:
+              e instanceof Error && e.message !== 'Engine unreachable'
+                ? e.message
+                : 'No engine answered on the local port.',
+          };
+        }
+        const prevHandshake = get().handshake;
+        const next = nextEngineState(probe, elapsed(), prevHandshake);
+        // A lost/refused link invalidates the observed contract: the next
+        // successful probe must re-negotiate before `ready` again.
+        const linkLost = next.status === 'disconnected' || next.status === 'failed';
+        if (linkLost) resetEngineHandshake();
+        const stderrTail =
+          next.status === 'failed' &&
+          (next.failureReason === 'timeout' || next.failureReason === 'crashed')
+            ? await fetchStderrTail()
+            : get().stderrTail;
         set((st) => ({
-          status: unauthorized ? 'unauthorized' : 'down',
+          status: next.status,
+          failureReason: next.failureReason,
           endpoint,
+          handshake: linkLost ? null : prevHandshake,
+          stderrTail,
           latencyMs: null,
           lastChecked: Date.now(),
           failures: st.failures + 1,
-          lastError: unauthorized
-            ? 'The engine rejected this session token.'
-            : endpoint?.reason
-              ? endpoint.reason
-              : e instanceof Error && e.message !== 'Engine unreachable'
-                ? e.message
-                : 'No engine answered on the local port.',
+          lastError: probe.error ?? st.lastError,
           upSince: null,
         }));
         return false;
@@ -195,7 +357,8 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   },
 
   startOrRestart: async () => {
-    set({ restarting: true });
+    // An observed operator action starts a new, deadline-bounded attempt.
+    set({ restarting: true, status: 'starting', failureReason: null, attemptStartedAt: Date.now() });
     try {
       if (isTauri()) {
         const { invoke } = await import('@tauri-apps/api/core');
@@ -258,7 +421,7 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
       if (pollTimer !== null) window.clearTimeout(pollTimer);
       pollTimer = window.setTimeout(
         () => void tick(),
-        get().status === 'up' ? POLL_UP_MS : POLL_DOWN_MS
+        isEngineUsable(get().status) ? POLL_UP_MS : POLL_DOWN_MS
       );
     };
     const onVisible = (): void => {
@@ -291,8 +454,10 @@ async function waitForEngine(timeoutMs: number): Promise<boolean> {
 
 /* ── Derived views ─────────────────────────────────────────────────────── */
 
+/** XR-P01: from the observed handshake — /health no longer pretends to know. */
 export function engineVersion(): string | null {
-  return versionString(useEngineStore.getState().health);
+  const hs = useEngineStore.getState().handshake;
+  return typeof hs?.meta.version === 'string' ? hs.meta.version : null;
 }
 
 /** The engine's current default model as a desktop id (`qwen2.5:0.5b`, `gpt-4o`). */

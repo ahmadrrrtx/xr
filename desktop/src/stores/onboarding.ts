@@ -193,19 +193,22 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     await writeSettingJSON(ONBOARDED_AT_KEY, Date.now());
     await writeSettingJSON('xr.user.name', s.userName || 'You');
     await writeSettingJSON(BUDGET_KEY, s.budget);
-    const { useEngineStore } = await import('@/stores/engineStore');
+    const { isEngineUsable, useEngineStore } = await import('@/stores/engineStore');
     const { saveProviderKeyToEngine, setEngineDefault } =
       await import('@/engine/providers');
     const prepared = await prepareModelSetup(s.modelChoice, {
       saveSecret: async (input) => {
-        if (useEngineStore.getState().status !== 'up')
+        // XR-P01: a credential write requires a VERIFIED contract
+        // (`ready`). `degraded` (legacy engine, contract unobserved) may
+        // keep working for reads, but no secret is handed to it.
+        if (useEngineStore.getState().status !== 'ready')
           throw new Error(
             'Engine not running; no key saved. Start it and retry, or choose guest mode.'
           );
         return saveProviderKeyToEngine(input);
       },
       setDefault: async (providerId, model) => {
-        if (useEngineStore.getState().status === 'up')
+        if (isEngineUsable(useEngineStore.getState().status))
           await setEngineDefault(providerId, model);
       },
     });

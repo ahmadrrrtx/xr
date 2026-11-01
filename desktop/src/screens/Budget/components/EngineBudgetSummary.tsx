@@ -3,7 +3,7 @@ import { fmtUsd } from '@/budget/core';
 import { applyOwnerEngineLimits, readEngineBudget } from '@/engine/budget';
 import type { EngineBudget } from '@/engine/types';
 import { useBudgetStore } from '@/stores/budgetStore';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 /** Explicitly separate authoritative shared estimates from observed UI history. */
 export function EngineBudgetSummary() {
   const status = useEngineStore((s) => s.status);
@@ -20,7 +20,7 @@ export function EngineBudgetSummary() {
     }
   };
   useEffect(() => {
-    if (status !== 'up') return;
+    if (!isEngineUsable(status)) return;
     let current = true;
     void readEngineBudget()
       .then((value) => {
@@ -71,21 +71,21 @@ export function EngineBudgetSummary() {
           {ledger ? ' · showing last-known ledger' : ''}
         </p>
       )}
-      {status !== 'up' && (
+      {!isEngineUsable(status) && (
         <p role="status">
           Engine offline; displayed engine data, if any, is last-known.
         </p>
       )}
       <div className="mt-1 flex gap-3">
         <button
-          disabled={busy || status !== 'up'}
+          disabled={busy || !isEngineUsable(status)}
           onClick={() => void refresh()}
           className="text-accent"
         >
           Refresh ledger
         </button>
         <button
-          disabled={busy || status !== 'up'}
+          disabled={busy || !isEngineUsable(status)}
           className="text-accent"
           onClick={() => {
             setBusy(true);

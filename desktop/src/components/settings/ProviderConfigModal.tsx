@@ -27,7 +27,7 @@ import {
   sampleExchangeUsd,
   saveProviderKeyToEngine,
 } from '@/engine/providers';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import type { ProviderConfig, ProviderKind } from '@/stores/settingsStore';
 import { fmtUsd } from '@/budget/core';
 
@@ -114,7 +114,7 @@ function ProviderForm({
     tone: 'ok' | 'warn' | 'error';
     text: string;
   } | null>(null);
-  const engineUp = useEngineStore((s) => s.status === 'up');
+  const engineUp = useEngineStore((s) => isEngineUsable(s.status));
   const engineModel = useEngineStore((s) => s.providers?.model ?? null);
 
   const isOllama = entry.kind === 'ollama';
@@ -188,7 +188,9 @@ function ProviderForm({
         return;
       }
       if (engineTakesKey && key) {
-        if (!engineUp) {
+        // XR-P01: a key is written only to an engine whose contract was
+        // observed (`ready`) — never to a legacy `degraded` one.
+        if (useEngineStore.getState().status !== 'ready') {
           setEngineNote({
             tone: 'error',
             text: 'Engine not running — it is the process that calls providers, so it must store this key. Start it and save again.',

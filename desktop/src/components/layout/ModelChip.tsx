@@ -10,13 +10,13 @@ import { Cpu } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 import { ModelPicker } from '@/screens/Chat/components/ModelPicker';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 
 export const OPEN_MODEL_PICKER_EVENT = 'xr:open-model-picker';
 
 export function ModelChip() {
   const { pathname } = useLocation();
-  const engineUp = useEngineStore((s) => s.status === 'up');
+  const engineUp = useEngineStore((s) => isEngineUsable(s.status));
   const sessionId = /^\/chat\/([^/]+)/.exec(pathname)?.[1] ?? null;
 
   return (

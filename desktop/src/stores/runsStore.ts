@@ -40,7 +40,7 @@ import {
   type SortState,
   type StatusFilter,
 } from '@/runs/core';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { startDemoRun } from '@/brain/demo';
 import { isEngineRunId, useBrainStore } from '@/stores/brainStore';
 
@@ -313,7 +313,7 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       // Phase 14: with the engine reachable the rows are real engine runs
       // (bridged from brainStore); the scripted demo history only seeds a
       // window that has no engine link — never next to real runs.
-      const engineUp = useEngineStore.getState().status === 'up';
+      const engineUp = isEngineUsable(useEngineStore.getState().status);
       // XR-LAUNCH-009: `import.meta.env.DEV` is the literal `false` in a
       // production build, so this branch — and the seed module with its
       // scripted titles/costs — is dropped from the shipped bundle (CI greps

@@ -137,8 +137,8 @@ const SYNC_MS = 5_000;
  * a decision here resolves them on the engine. Each id is bridged once.
  */
 export async function syncPendingEngineApprovals(): Promise<number> {
-  const { useEngineStore } = await import('@/stores/engineStore');
-  if (useEngineStore.getState().status !== 'up') return 0;
+  const { isEngineUsable, useEngineStore } = await import('@/stores/engineStore');
+  if (!isEngineUsable(useEngineStore.getState().status)) return 0;
   const { useApprovalStore } = await import('@/stores/approvalStore');
   let pending: EnginePendingApproval[];
   try {

@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { isTauri } from '@/lib/tauri';
 import { theaterToggle } from '@/lib/theater';
 
@@ -89,7 +89,7 @@ export function useVoiceIpc(): void {
   useEffect(
     () =>
       useEngineStore.subscribe((s, prev) => {
-        if (prev.status === 'up' && s.status !== 'up' && useVoiceStore.getState().active) {
+        if (isEngineUsable(prev.status) && !isEngineUsable(s.status) && useVoiceStore.getState().active) {
           void voice.stop('engine');
           toast.warning('Voice stopped — the engine went away.');
         }
