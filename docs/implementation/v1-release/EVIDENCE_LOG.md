@@ -587,6 +587,68 @@ desktop-app.yml    Desktop gate (bundles + latest.json + journey) (aggregate)
 supply-chain.yml   (runs on this repo; green at 6b9cb599)
 ```
 
+**E-32 — Governance is enforced by a RULESET, not legacy branch protection** 🔁 (corrects E-16)
+
+`E-16` reported `protected: {enabled: false}` from
+`GET /repos/ahmadrrrtx/xr/branches/main` and concluded `main` was unprotected. **That
+endpoint does not report repository rulesets, and the conclusion was wrong.**
+
+```
+$ curl -H "Authorization: token ***" .../repos/ahmadrrrtx/xr/rulesets
+HTTP=200
+id=19119579 name='main protection' target=branch enforcement=active
+
+$ curl .../repos/ahmadrrrtx/xr/rulesets/19119579
+name: main protection | enforcement: active | target: branch
+conditions: {"ref_name": {"exclude": [], "include": ["refs/heads/main"]}}
+
+  RULE deletion
+  RULE non_fast_forward
+  RULE pull_request
+     required_approving_review_count: 0
+     dismiss_stale_reviews_on_push: False
+     required_reviewers: []
+     require_code_owner_review: False
+     require_last_push_approval: False
+     required_review_thread_resolution: False
+     allowed_merge_methods: ['merge','squash','rebase']
+     require_extra_approval_for_unattributed_changes: True
+  RULE required_status_checks
+     strict_required_status_checks_policy: False
+     do_not_enforce_on_create: False
+     required_status_checks: [{'context':'Quality Gate','integration_id':15368},
+                              {'context':'Quality Gate','integration_id':15368}]   ← duplicated
+
+bypass_actors: []
+```
+
+**Corrected reading.** Direct pushes, force-pushes and deletion are blocked; a PR is
+required; `Quality Gate` is required. What is **not** enforced: any approving review
+(`0`), code-owner review (`false`), the native lanes, and strict up-to-date checks. So
+`CODEOWNERS` is documentation, not enforcement, and one actor can self-merge a PR in a
+single step.
+
+**E-33 — Behavioural proof (and the mechanism that caught the error)** ✅
+
+Attempting the requested push of the plan documents:
+
+```
+$ git push origin main
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: - Changes must be made through a pull request.
+remote: - 2 of 2 required status checks are expected.
+ ! [remote rejected]   main -> main (push declined due to repository rule violations)
+```
+
+The rejection is the authoritative evidence that protection is active — and it is also how
+`E-32`'s correction was discovered: a *settings* read had said the opposite for days of
+this session. Method change adopted as **D-023**: governance claims now require the
+ruleset list **and** the full rule parameters **and** a behavioural proof.
+
+Method note: the push used `GIT_ASKPASS` with a `0600` helper script so the credential was
+never written into the remote URL, `.git/config`, or any tracked file; a `grep` for the
+token fragment across the whole worktree returned **zero** matches before and after.
+
 ---
 
 ## §7 Actions deliberately **not** taken (and why)

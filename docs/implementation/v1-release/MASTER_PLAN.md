@@ -48,9 +48,11 @@ regression; and the audit's CI claim is **stale** — Supply Chain is now green,
 
 **The real release blockers are different, and five of them are structural:**
 
-1. **`main` is unprotected with zero required checks** (`E-16`). Every "we will not
-   weaken a gate" promise in `AGENTS.md`, the Constitution and the previous ledgers is
-   currently unenforceable by the platform. This is why `XR-P00` precedes everything.
+1. **Governance is enforced but shallow** (`E-32`, `E-33` — corrected from an earlier
+   wrong reading): an active ruleset blocks direct pushes and requires `Quality Gate`, but
+   it requires **zero approvals**, does not require code-owner review, and requires none
+   of the native lanes. `CODEOWNERS` is therefore documentation rather than enforcement.
+   This is why `XR-P00` precedes product work.
 2. **Two red native CI lanes at the integration commit** — macOS full parity and the
    Linux desktop journey (`E-14`) — with causes **unknown** because job logs require
    admin (`E-15`).
@@ -161,7 +163,7 @@ Traced from code, not from documentation. Node names are the real module paths.
 | B7 | Artifact vocabulary | verifier exists; **no** `ArtifactRecord`, **no** generic API (`E-24`) | The product cannot show what it made |
 | B8 | Automation plane vs surface | scheduler + 4 routes exist; zero desktop call-sites (`E-24`) | A shipped capability is unreachable |
 | B9 | Permission plane vs surface | enforcement real; no consolidated capability surface (`E-23`) | Trust exists but is not demonstrable |
-| B10 | Governance substrate | `protected: {enabled: false}` (`E-16`) | All other gates are advisory |
+| B10 | Governance substrate | Ruleset active, but 0 approvals + 1 aggregate check + no code-owner review (`E-32`, `E-33`) | Review requirements are nominal; native lanes do not block |
 | B11 | Documentation integrity | 8+ docs with fused number/word tokens; stale README baseline (`E-18`, `E-19`) | Release artifacts are defective and claims drift |
 | B12 | Declared gate list vs. enforced gate list | 22 gates in `bun run ci`, 5 run by no workflow; battery red at HEAD (`E-27`, `E-29`) | "CI-enforced" rules are not universally enforced |
 
@@ -182,7 +184,7 @@ Ranked. "User symptom" is what was reported; "verified cause" is what the code p
 
 | ID | Finding | Verified? | Why it blocks | Phase |
 |---|---|---|---|---|
-| `XRD-006` | `main` unprotected, zero required checks | ✅ `E-16` | Every other gate is unenforceable; a red suite can merge | `XR-P00` |
+| `XRD-006` | Governance enforced but shallow: 0 required approvals, no code-owner review, only the `ci.yml` aggregate required (corrected — `main` **is** protected) | ✅ `E-32`, `E-33` | `CODEOWNERS` is not enforced; native lanes do not block | `XR-P00` (D-022, D-023) |
 | `AUD-009` | macOS parity + Linux desktop journey red at `6b9cb599` | ✅ `E-14` | A red native lane at the integration commit is disqualifying | `XR-P09` (investigate in `XR-P01` where the readiness path is in scope) |
 | `XRD-001` | No desktop⇄engine contract negotiation | ✅ `E-20` | Independent homes make version skew normal; failure is silent | `XR-P01` |
 | `XRD-004` | Onboarding completes with no working engine/provider | ✅ `E-21` | First-run promise is unmet at the last step | `XR-P02` |
@@ -330,17 +332,20 @@ risk is unequal.
 
 ### XR-P00 — Governance and evidence substrate *(no product code)*
 
-1. **Purpose.** Make every later guarantee enforceable. Establish this plan as the
-   single authority and turn `AGENTS.md`'s rules into repository settings.
+1. **Purpose.** Make every later guarantee enforceable: deepen the existing ruleset so
+   review is real and the right checks block, close the five-gate gap in `ci.yml`,
+   and establish this plan as the single authority.
 2. **Addresses.** `XRD-006` / `AUD-010` (branch protection), `XRD-009` (competing plans),
    the missing platform evidence index (`AUD-012` precondition).
-3. **Why first.** Without required checks, every "tests must pass" exit criterion below
-   is advisory. Sequencing anything else first would build on an unenforced promise —
-   and `XRD-013` proves the gap is real today: five "CI-enforced" gates are not run by
-   any workflow, and the documented battery cannot pass at HEAD.
+3. **Why first.** Enforcement exists but is thin, and `XRD-013` proves five "CI-enforced"
+   gates are invoked by no workflow at all — a hole the required aggregate cannot cover,
+   because `ci.yml` never runs them. Sequencing product work first would build on
+   guarantees that are partly nominal.
 4. **Prerequisites.** None. **Decisions required:** D-001 (branch protection — owner
    approval), D-005 (plan precedence), D-006 (required-check set).
-5. **In scope.** `.github/` repository settings (via API/UI action by the owner);
+5. **In scope.** The **existing** ruleset 19119579 (deepen: required approvals ≥1,
+   `require_code_owner_review`, add native aggregate checks once green, fix the duplicated
+   `Quality Gate` entry) — not building protection from scratch;
    **wiring the five unenforced gates into `ci.yml`** (`placeholder-lint`,
    `desktop:sink-lint`, `ci-capability-gate`, `website:marketplace:check`, and — per
    D-020 — `changelog:check`);
@@ -358,9 +363,10 @@ risk is unequal.
    `protected.enabled=true` with a named required-check list, and a negative proof that
    a red PR cannot merge (a scratch branch with a deliberately failing commit, closed
    without merge).
-9. **Functional acceptance.** `main` requires: the CI/Core, Cross-Platform, Desktop-App
-   and Supply-Chain gate jobs; at least one review on `CODEOWNERS` paths; no bypass.
-   Plan precedence banner present in all four prior docs.
+9. **Functional acceptance.** The ruleset still blocks direct pushes; it additionally
+   requires ≥1 approval, requires code-owner review, requires the native aggregate gates
+   **once they are green**, and has no duplicate entries. Plan precedence banner present
+   in all four prior docs.
 10. **Security/privacy acceptance.** Protection must include the governance paths
     (`AGENTS.md`, `docs/CONSTITUTION.md`, `docs/security/**`, `src/xr-shield/**`,
     `scripts/release-*`, `.github/workflows/**`) as require-review.
@@ -388,8 +394,8 @@ risk is unequal.
    precondition for `XR-P03`/`XR-P06`.
 3. **Why here.** Every UI truth claim downstream needs a trustworthy "is the engine
    usable, and which engine is it?" answer. Nothing else can be verified without it.
-4. **Prerequisites.** `XR-P00` `ACCEPTED`. **Decisions:** D-003 (contract-version policy),
-   D-008 (readiness state vocabulary).
+4. **Prerequisites.** `XR-P00` `ACCEPTED`. **Decisions:** D-008 (readiness state
+   vocabulary); XR-P01 itself needs no release-identity decision.
 5. **In scope.** Extend `GET /api/v1/health` with engine/schema/contract versions +
    capability list (additive, via `contract.ts` so OpenAPI/client gates apply);
    `desktop/src/engine/transport.ts` handshake + typed incompatibility error;
@@ -991,7 +997,8 @@ A claim of readiness is **per platform** and **per surface**. It is forbidden to
 
 ### I.1 Universal conditions (all platforms)
 
-1. `main` protected with required checks; the tagged candidate SHA is the one that passed.
+1. The `main` ruleset requires review, code-owner review, and every aggregate gate
+   including both native lanes; the tagged candidate SHA is the one that passed.
 2. `bun run ci` green at the candidate SHA, plus `release:verify` in its strict mode where
    material exists.
 3. A fresh user with a clean profile completes: install → launch → consent → engine ready →
@@ -1083,7 +1090,7 @@ disclosed benchmark (settings, versions, costs, baselines). No phase may add one
 | No phase depends on an unaccepted later phase | ✅ graph is acyclic; P08's parallel edge is to P00/P09 only |
 | Each phase has an observable definition of done | ✅ each uses tests/API reads, not adjectives |
 | No acceptance criterion relies on a platform not available here | ✅ native-only criteria are explicitly `Not run`/`Blocked` with the required evidence named |
-| No phase authorizes weakening a gate, test, budget or policy | ✅ stated global rule; `XR-P00`/`XR-P08` are the only governance-adjacent phases and both require owner approval |
+| No phase authorizes weakening a gate, test, budget or policy | ✅ stated global rule; `XR-P00`/`XR-P08` are the only governance-adjacent phases and both require owner approval. `XR-P00` **adds** enforcement only |
 | Confirmed defects ≠ audit claims are separable | ✅ `AUD-*` vs `XRD-*` IDs, no overlap |
 | Plan does not promise a fix for an unverified claim | ✅ Windows black screen is a *diagnose-then-fix* obligation with an evidence requirement |
 | Duplicate authorities are named, not multiplied | ✅ B1–B11 table; no new registry/ledger/runner introduced |

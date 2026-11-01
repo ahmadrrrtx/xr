@@ -30,7 +30,7 @@ It is updated **after** evidence review, never on an executor's self-report.
 
 | Phase | Title | Status | Depends on | Prompt rev | Impl. commit | Unresolved blockers | Next permitted action |
 |---|---|---|---|---|---|---|---|
-| `XR-P00` | Governance and evidence substrate | **PROMPT_GENERATED** | — | `r1` (`6b9cb59`) | — | **D-001 / D-006 owner approval** (branch protection + required-check set) and **D-022** (required-check contexts). Gate wiring (D-021) is pre-approved; `changelog:check` sequencing needs **D-020**. GitHub **admin access** is required for the settings change. | Executor runs `phase-prompts/XR-P00-r1-6b9cb59.md`; Plan Owner reviews via `REVIEW PHASE REPORT XR-P00` |
+| `XR-P00` | Governance and evidence substrate | **PROMPT_GENERATED** | — | `r2` (`6b9cb59`) | — | **D-001 / D-006 owner approval** (branch protection + required-check set) and **D-022** (required-check contexts). Gate wiring (D-021) is pre-approved; `changelog:check` sequencing needs **D-020**. GitHub **admin access** is required for the settings change. | Executor runs `phase-prompts/XR-P00-r1-6b9cb59.md`; Plan Owner reviews via `REVIEW PHASE REPORT XR-P00` |
 | `XR-P01` | Engine contract, readiness, recovery truth | `PLANNED` | P00 | — | — | — | waits on P00 `ACCEPTED` |
 | `XR-P02` | Onboarding state machine + consent | `PLANNED` | P01 | — | — | **D-004** (owner-authored privacy/terms text); consent sub-task will be `BLOCKED` until supplied | waits on P01 |
 | `XR-P03` | Provider single source of truth | `PLANNED` | P01 | — | — | D-011, D-012 approved | waits on P01 |
@@ -56,7 +56,7 @@ reverts from `ACCEPTED` to `VERIFYING`.
 | Root + desktop typecheck green (`E-11`) | Audit baseline | Every phase exit |
 | Production bundle contains zero seed probes (`E-09`) | Audit baseline | `XR-P04`, `XR-P09` |
 | 26 providers served live (`E-06`) | Audit baseline | `XR-P03`, `XR-P09` |
-| `main` protection enabled with required checks (`D-001`) | `XR-P00` | `XR-P09` (must still be on at the tag) |
+| `main` ruleset deepened: ≥1 approval + code-owner review + native aggregate gates required (`D-001`, `D-022`, `D-023`) | `XR-P00` | `XR-P09` (must still be in force at the tag) |
 | Two native CI lanes green at the candidate SHA (`E-14` currently red) | `XR-P09` | tag time |
 
 ---
@@ -75,7 +75,7 @@ reverts from `ACCEPTED` to `VERIFYING`.
 
 | Item | Why | What unblocks |
 |---|---|---|
-| `XR-P00` execution | Requires GitHub admin to change protection settings, and D-001/D-006 approval | Owner approval + admin access |
+| `XR-P00` §4.1 | Requires GitHub **admin** to PATCH ruleset 19119579, and owner approval of D-001/D-022 | Owner approval + admin access (the pushing identity `ahmadrrrtx` has `admin: true`) |
 | `XR-P00` changelog step | `bun run ci` is red at HEAD on `changelog:check` (`E-27`); fixing it writes a changelog entry for an unpublished identity | D-020 decision |
 | `XR-P02` consent sub-task | No privacy/terms document exists (`D-004`) | Owner supplies or approves the document |
 | `XR-P09` signing/provenance | No Apple/Windows certificates, no updater keys | Owner material |
@@ -88,4 +88,5 @@ reverts from `ACCEPTED` to `VERIFYING`.
 
 | Phase | Rev | File | Baseline SHA | Plan rev | Generated | Status |
 |---|---|---|---|---|---|---|
-| `XR-P00` | r1 | `phase-prompts/XR-P00-r1-6b9cb59.md` | `6b9cb59` | R1 | 2026-11-01 | issued, awaiting execution |
+| `XR-P00` | r1 | `phase-prompts/XR-P00-r1-6b9cb59.md` | `6b9cb59` | R1 | 2026-11-01 | **SUPERSEDED by r2** (r1 assumed `main` was unprotected — wrong, see `E-32`) |
+| `XR-P00` | r2 | `phase-prompts/XR-P00-r2-6b9cb59.md` | `6b9cb59` | R1 | 2026-11-01 | **CURRENT** — issued, awaiting execution |

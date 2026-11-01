@@ -208,14 +208,14 @@ material discrepancy and it changes the phase ordering (see `MASTER_PLAN.md` §D
 | Field | Value |
 |---|---|
 | Original claim | Prompt instructions cannot stop an agent from changing code and tests together; enforce through GitHub, CODEOWNERS, CI and review. |
-| Verification status | **CONFIRMED — and worse than stated.** |
-| Evidence | `AGENTS.md` carries hard, CI-enforced rules (claims need evidence, never weaken security, one computation authority, layering, size gate, Article citations) and `CODEOWNERS` exists with per-subsystem owners. But the **enforcement substrate is absent**: `GET /repos/ahmadrrrtx/xr/branches/main` returns `protected: {enabled: false, required_status_checks: {enforcement_level: "off", contexts: [], checks: []}}`. There are **no required checks, no review requirement and no bypass control** on `main`, so every rule in `AGENTS.md` is advisory: a single actor can push directly to `main` with a red suite. `test/quarantine.json` is a genuine control (owner, issue, expiry ≤45 days, `ci:policy` fails on expiry) but runs *inside* a job that is not required. |
-| Reproduction | Live API read (E-16). |
-| Root cause | Governance was written as documentation and a local gate battery, but never as repository **settings**. |
+| Verification status | **DISPROVEN as stated — CORRECTED.** The audit's *recommendation* (enforce through the platform, not prompts) stands, and part of it is already implemented. My first-pass verdict of "worse than stated" was wrong on the facts; see the correction row below. |
+| Evidence | `AGENTS.md` carries hard, CI-enforced rules and `CODEOWNERS` exists with per-subsystem owners. The enforcement substrate **does exist**, via **repository rulesets** (not legacy branch protection): `GET /repos/ahmadrrrtx/xr/rulesets` → `id=19119579, name="main protection", enforcement=active, target=branch, condition refs/heads/main`. Rules in force (`E-32`): `deletion`, `non_fast_forward`, `pull_request` (approvals=0, `require_code_owner_review=false`, `allowed_merge_methods=[merge,squash,rebase]`, `dismiss_stale_reviews_on_push=false`), and `required_status_checks` = **`Quality Gate` ×2 (duplicated entry)** with `strict_required_status_checks_policy=false`. `bypass_actors: []`. Independent confirmation from a real push: direct `git push origin main` was **rejected** with `GH013 … Changes must be made through a pull request · 2 of 2 required status checks are expected` (`E-33`). **Genuine residual gaps** (not the ones the audit described): (a) zero required approvals and `require_code_owner_review=false`, so a PR can be self-approved and merged in one step, making the `CODEOWNERS` protection nominal; (b) only one aggregate check is required — the `Cross-Platform gate` and `Desktop gate` are not; (c) `strict_required_status_checks_policy=false` lets a stale branch merge without re-running against the new base; (d) `dismiss_stale_reviews_on_push=false`; (e) `test/quarantine.json` — a genuine control — runs in a job that is not required. |
+| Reproduction | Ruleset API read (`E-32`) + a rejected push attempt (`E-33`). The legacy `GET /branches/main` read in `E-16` reported `protected: false` **while this ruleset was active** — that endpoint does not report rulesets. |
+| Root cause | Not "governance was never enforced" — it *is* enforced. The drift is narrower: the required-check set covers only the `ci.yml` aggregate, review enforcement is switched off, and bypass-free PR-only policy has no review depth. |
 | Scope | Repository/process, not product code. |
-| Severity | **Release-blocking (process)** — it invalidates every other "we will not weaken a gate" guarantee in this plan. |
+| Severity | **Medium** (downgraded from release-blocking). Enforcement exists; approval depth and native-lane coverage are the gaps. |
 | Dependencies | GitHub repository settings (admin), `CODEOWNERS`, `.github/workflows/{ci,cross-platform,desktop-app}.yml`. |
-| Proposed remedy | `XR-P00`: turn branch protection on with the real check names as **required**, disallow bypass, require review for `CODEOWNERS`-owned paths. This is an **owner action** requiring explicit approval (`DECISIONS.md` D-001) because it changes protected engineering governance. |
+| Proposed remedy | `XR-P00` (narrowed to D-022 + new D-023): set `required_approving_review_count` ≥ 1 and `require_code_owner_review=true`; add `Cross-Platform gate` and `Desktop gate` to required checks **once green** (they are red at `6b9cb599`); consider `strict_required_status_checks_policy`; fix the duplicated `Quality Gate` entry. **Do not** rebuild what already works. |
 | Regression test | Not code-testable; verification is a recorded API read showing protection enabled with a named required-check set, plus a negative test (a deliberately red PR cannot merge). |
 | Plan disposition | **IMPLEMENT (governance, owner-approved)** (`XR-P00`). |
 
@@ -309,12 +309,32 @@ there is no per-step checkpoint, no partial-configuration record and no recovery
 a crash mid-download (the download step's Ollama pull is not resumable across app death).
 The audit's resumability requirement is unimplemented.
 
-### XRD-006 — `main` is unprotected; no required checks (governance)
+### XRD-006 — Governance enforcement is real but shallow: no required review, one aggregate check
 
-**Status:** CONFIRMED · **Severity:** release-blocking (process) · **Owner phase:** `XR-P00`
-See AUD-010. Consequence for *this plan*: every phase's "tests must pass" exit criterion is
-unenforceable by the platform until D-001 is executed. Recorded as the reason `XR-P00`
-precedes all product work.
+**Status:** **CONFIRMED — as corrected** (originally mis-stated as "`main` is unprotected") ·
+**Severity:** medium · **Owner phase:** `XR-P00`
+
+> **Correction notice (2026-11-01).** This entry originally read *"`main` is unprotected; no
+> required checks"* and called it release-blocking. That was **wrong**. The error came from
+> trusting `GET /repos/{owner}/{repo}/branches/main`, whose `protected: false` field
+> **does not report repository rulesets**. A real `git push origin main` was rejected, which
+> is what exposed it (`E-33`). The refutation is kept here rather than deleted because the
+> same wrong conclusion would be reached by any agent using the same endpoint.
+
+What is actually in force: an active ruleset `main protection` (id 19119579) with
+`deletion`, `non_fast_forward` and `pull_request` (0 approvals, no code-owner review)
+plus one required status check, `Quality Gate` (listed twice). `bypass_actors: []`.
+
+The residual, verified gaps are: **no required approvals / no code-owner review** (the
+`CODEOWNERS` file is therefore documentation, not enforcement); **only the `ci.yml`
+aggregate is required**, so the two currently-red native lanes would not block a merge
+once the aggregate is green; no strict status-check policy; and the duplicated entry
+suggests the ruleset was configured by hand.
+
+Consequence for *this plan*: `XR-P00` is still first, but its governance item shrinks from
+"build protection" to "deepen it" — and the phase's real centre of gravity becomes
+**`XRD-013`** (five gates invoked by no workflow), which `Quality Gate` cannot cover
+because `ci.yml` never runs them.
 
 ### XRD-007 — Corrupted release documents (number/word fusion)
 
@@ -464,7 +484,7 @@ script named in the `ci` script string is invoked by at least one workflow — t
 | AUD-007 Chat progress/artifacts/file opening | CONFIRMED for artifacts; PARTIALLY CONFIRMED for progress |
 | AUD-008 Automations | CONFIRMED |
 | AUD-009 CI failures | PARTIALLY CONFIRMED, **out of date** (two *new* failing workflows) |
-| AUD-010 Governance instruction-only | CONFIRMED, worse (no branch protection) |
+| AUD-010 Governance instruction-only | **DISPROVEN as stated** — a ruleset is active and blocks direct pushes; the real gap is review depth (0 approvals, no code-owner review) and missing native-lane checks |
 | AUD-011 Claims exceed evidence | PARTIALLY CONFIRMED (identity honest; docs corrupted; baseline stale) |
 | AUD-012 Signing/install/upgrade gates | CONFIRMED (as inherited, owner material absent) |
 

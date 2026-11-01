@@ -15,11 +15,11 @@ engineering governance, release identity, or legal/compliance surfaces.
 | Field | Value |
 |---|---|
 | Date | 2026-11-01 |
-| Problem | `main` reports `protected: {enabled: false, required_status_checks: {enforcement_level: "off"}}` (`E-16`). Every rule in `AGENTS.md`/`docs/CONSTITUTION.md` and every prior ledger is therefore advisory — a single actor can merge a red suite. This is the single largest integrity risk in the project. |
+| Problem | **Corrected 2026-11-01.** This entry originally claimed `main` was unprotected. It is **not**: ruleset `main protection` (id 19119579) is active and rejects direct pushes (`E-32`, `E-33`). The real problem is depth — `required_approving_review_count: 0`, `require_code_owner_review: false`, one required check (`Quality Gate`, duplicated), no native-lane checks, `strict_required_status_checks_policy: false`. |
 | Options considered | (a) Leave as-is and rely on discipline. (b) Enable protection with the real check names as required, require review on `CODEOWNERS` paths, disallow bypass. (c) Enable protection but allow admin bypass. |
-| Decision | **(b)**. Required: the CI/Core, Cross-Platform, Desktop App and Supply Chain gate jobs; ≥1 review for `CODEOWNERS`-owned paths; no bypass; force-push and deletion blocked on `main`. |
-| Reasoning | Prompt instructions cannot prevent an agent (or a human) from changing code and tests together; only the platform can. (a) leaves the plan's own exit criteria unenforceable. (c) reproduces the same hole with extra steps. |
-| Trade-offs | Slower landing; a red lane now blocks everything, including urgent fixes — which is the point. Some required jobs are currently **red** (`E-14`), so protection will initially block `main` merges until `XR-P09` (or an owner-approved quarantine under `test/quarantine.json`) resolves them. That is an intended consequence and must be communicated to the owner. |
+| Decision | **(b), amended to "deepen the existing ruleset"**: set required approvals ≥1, enable `require_code_owner_review`, add `Cross-Platform gate` and `Desktop gate` once green, de-duplicate the `Quality Gate` entry, keep `bypass_actors: []`, keep deletion/force-push blocked (already in force). |
+| Reasoning | The platform layer already blocks the worst case (direct pushes). What remains is review depth: with 0 approvals and no code-owner review, a single actor can open and merge their own PR in one step, which defeats `CODEOWNERS` while technically satisfying the rule. (a) leaves that hole; (c) re-opens the bypass hole. |
+| Trade-offs | Requiring approvals costs one extra human step per PR — acceptable and intended. Adding the native lanes as required while they are **red** (`E-14`) would block all merges, so they are added at `XR-P09` (D-006), not now. |
 | Affected components | Repository settings, `.github/workflows/*` (names only, content untouched), `CODEOWNERS`, `test/quarantine.json`. |
 | Approval | **OWNER-REQUIRED** |
 | Revision history | R1 2026-11-01 proposed. |
@@ -368,4 +368,20 @@ engineering governance, release identity, or legal/compliance surfaces.
 | Trade-offs | A single aggregate name is a coarser signal in the PR UI; the failing job is still visible in the run. |
 | Affected | Repository branch protection settings; `PHASE_STATUS.md` obligations. |
 | Approval | **OWNER-REQUIRED** (part of D-001) |
+| Revision | R1 2026-11-01. |
+
+---
+
+## D-023 — How required-check context names are asserted (and the endpoint trap)
+
+| Field | Value |
+|---|---|
+| Date | 2026-11-01 |
+| Problem | Verification of governance state used `GET /repos/{owner}/{repo}/branches/main`, which returned `protected: false` while an **active ruleset** was in force. That produced a wrong finding (`XRD-006` as first written), a wrong Tier-0 ranking, and a phase prompt that told an executor to "enable protection". Discovered only when a real `git push origin main` was rejected with `GH013` (`E-33`). |
+| Options | (a) Keep using the branches endpoint and note the caveat. (b) Require **all three** signals before any governance claim: `GET /rulesets`, `GET /rulesets/{id}`, and an actual push/merge attempt. |
+| Decision | **(b)**. Any phase that asserts a governance rule is in force must record: the ruleset list, the full rule parameters, and a behavioural proof (a rejected push or a blocked merge). A settings read alone is never sufficient. |
+| Reasoning | The two APIs report different subsystems, and a claim about enforcement is a claim about *behaviour*; only behaviour can verify it. This mirrors `AGENTS.md` rule 1 ("claims need evidence") applied to governance claims themselves. |
+| Trade-offs | Slightly more work per governance check; a push attempt must be made against a scratch ref, never `main`'s history. |
+| Affected | `XR-P00` preflight and acceptance (`P00-AC1`, `P00-AC2`), `EVIDENCE_LOG.md` method notes, this plan's own verification habits. |
+| Approval | **APPROVED** |
 | Revision | R1 2026-11-01. |
