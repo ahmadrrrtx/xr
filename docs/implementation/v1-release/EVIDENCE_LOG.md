@@ -885,6 +885,39 @@ it is the observation that D-001's mechanism cannot function in a one-person rep
 5. **Two red CI lanes on the verified SHA** (E-14) with **unknown** causes (E-15). No
    phase may claim a green native lane until this is resolved at the candidate SHA.
 
+**E-47 — Correction to E-38: `meta.version.get` IS in `API_CONTRACT`** ℹ️ (XR-P01 executor, 2026-11-02)
+
+```
+grep "meta.version.get" src/daemon/routes/*.ts at 4adcec2:
+  contract-mobile.ts registers it (comment: "lives HERE, not in contract.ts,
+  per that module's waiver plan"); contract.ts spreads ...MOBILE_CONTRACT
+  → apiRegistry() includes it; committed openapi.json + daemon-client.generated.ts
+    already contain /api/v1/meta/version (grep count 1 each at 4adcec2)
+```
+
+E-38's "absent from `API_CONTRACT` (hence from OpenAPI — registry skips it)" is
+wrong in that detail. What E-38 got right stands: health is pinned to `{ok, ts}`,
+meta/version is session-gated (401 anon), and prompt §0's relocation is still the
+correct course. XR-P01 initially added a duplicate entry that the later
+`...MOBILE_CONTRACT` spread silently overwrote; removed in `0ff86cbe` (D-027).
+
+**E-48 — XR-P01 execution measurements (executor, branch `phase/P01-engine-readiness`, 2026-11-02)** ✅ in-repo
+
+```
+live probe AFTER change (isolated XR_HOME): health 200 {ok,ts} both mounts;
+  meta/version 401 anon; 200 auth with contractVersion 1, minDesktopVersion "0.2.0",
+  schemaVersion 12 (= LATEST_SCHEMA_VERSION, src/state/migrations.ts), capabilities[]
+segmented parity: 5146 pass / 0 fail / 41 skip / 476 files, EXIT 0
+  (= E-41 baseline 5122/0/41/474 + exactly the 24 new P01 tests in 2 new files)
+bun run typecheck 0 · api:schema:check 0 · client:check 0 · api:compat 0 · boundaries 0
+changelog:check EXIT 1 (D-020, resolved→XR-P08 by D-026); bun run ci NOT claimed green
+fail-before: product reverted, meta test fails only on new fields; restored 24/0
+first parity run FAILED on size-gate (contract.ts 846 > waived 816) — caught and
+  fixed per the waiver plan (D-027); re-run fully green. Not run: native
+  Windows/macOS, display, audio, live provider (report §5).
+  DEPENDS: D-027 approval. DEADLINE: XR-P01 acceptance review.
+```
+
 ---
 
 *Entries are append-only. Corrections are added as new dated entries that reference the
