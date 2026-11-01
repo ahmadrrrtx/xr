@@ -11,13 +11,16 @@
 
 ---
 
-## 0. Relationship to `MASTER_PLAN.md` §P01 — read this before anything else
+## 0. Relationship to the master plan, §F → `XR-P01` — read this before anything else
 
-`MASTER_PLAN.md` §P01 was written before anyone had read the daemon's health route
+**The master plan is `docs/implementation/v1-release/MASTER_PLAN.md`** — section **§F**, sub-section
+**`XR-P01`** (verified at `4adcec2`: §F opens at line 319, the `XR-P01` block at line **387**, and
+`XR-P02` at 450 — so `XR-P01` is `MASTER_PLAN.md:387-449`). Where this prompt says "§P01" it means
+`MASTER_PLAN.md` §F → `XR-P01`, item `n`. That block was written before anyone had read the daemon's health route
 alongside its own anti-fingerprinting test. One instruction in it is **not executable as
-written**, and this prompt replaces it. Everything else in §P01 stands.
+written**, and this prompt replaces it. Everything else in the `XR-P01` block stands.
 
-**The conflict.** §P01.5 says: *"Extend `GET /api/v1/health` with engine/schema/contract
+**The conflict.** `MASTER_PLAN.md` §F → `XR-P01` item **5** says: *"Extend `GET /api/v1/health` with engine/schema/contract
 versions + capability list"*. That cannot be done:
 
 - `src/daemon/routes/system.routes.ts:25-31` serves `{ok, ts}` and carries an explicit
@@ -29,10 +32,10 @@ versions + capability list"*. That cannot be done:
 - `test/daemon/origin-host-guard.test.ts:169-171` **pins that invariant** for both mounts:
   *"unauth health returns {ok, ts} only — no name/version/host/binding/configCache"*.
 
-So §P01.5 as written would (a) reverse a deliberate security decision and (b) turn an
+So `MASTER_PLAN.md` §F `XR-P01` item 5 as written would (a) reverse a deliberate security decision and (b) turn an
 existing test red. An executor that "follows the plan" here produces a regression.
 
-**The replacement (this prompt governs; §P01.5 is superseded).** Split the concern along
+**The replacement (this prompt governs; `MASTER_PLAN.md` §F `XR-P01` item 5 is superseded by this section).** Split the concern along
 the auth boundary that already exists:
 
 | Concern | Endpoint | Auth | Change |
@@ -82,11 +85,11 @@ Read, in this order.
 
 | # | File | Why |
 |---|---|---|
-| 1 | `docs/implementation/v1-release/MASTER_PLAN.md` §A, §E, §F (XR-P01), §G, §I — **with §0 of this prompt overriding §P01.5** | Scope, boundaries, global invariants |
+| 1 | **`docs/implementation/v1-release/MASTER_PLAN.md`** — §A (executive summary), §E (explicit scope), **§F → `XR-P01`** (this phase's 19 items), §G (dependency graph), §I (release-ready definition). **§0 of this prompt overrides §F `XR-P01` item 5.** | Scope, boundaries, global invariants |
 | 2 | `docs/implementation/v1-release/AUDIT_VERIFICATION.md` — **`XRD-001`** (release-blocking, owner phase = this one), `AUD-001` (cause c), `AUD-002` | The verified findings this phase closes |
 | 3 | `docs/implementation/v1-release/EVIDENCE_LOG.md` — **E-36 … E-42** (recorded 2026-11-02 for this phase), plus E-01 and §8 | The measurements this prompt is built on. **Do not re-derive what they already establish; do verify they still hold.** |
 | 4 | `docs/implementation/v1-release/DECISIONS.md` — **D-008** (readiness vocabulary, APPROVED), **D-005** (precedence), and D-001/D-020/D-022/D-023 (context for what is still blocked) | Approved decisions. D-008 binds your vocabulary exactly. |
-| 5 | `/home/user/uploads/XR_Release_Readiness_Audit_and_Roadmap.md` (or the in-repo copy) — the engine-readiness findings | The originating audit prose |
+| 5 | `docs/implementation/v1-release/AUDIT_VERIFICATION.md` — `XRD-001` **again, in full**, plus the `AUD-001`/`AUD-002` cross-references | The originating audit findings, as verified against this repository (this is the in-repo authority; do not look for the audit elsewhere) |
 | 6 | `AGENTS.md` (whole file) and `docs/CONSTITUTION.md` (evidence, release identity, CI articles) | Binding rules; you may not edit either |
 | 7 | `src/daemon/routes/system.routes.ts`, `src/daemon/routes/meta.routes.ts`, `src/daemon/routes/contract.ts`, `src/daemon/routes/registry.ts`, `src/daemon/server.ts` (the open-path list only) | The daemon seam you are extending — and the two you must not touch |
 | 8 | `desktop/src/engine/transport.ts`, `desktop/src/stores/engineStore.ts`, `desktop/src/engine/types.ts`, `desktop/src/components/engine/EngineDownBanner.tsx` | The renderer seam |
@@ -129,7 +132,7 @@ Report every answer in your final report. If any answer contradicts the expectat
    (`engine_state.rs:52-93`). **You must not add or change a Rust command** — that is
    out of scope (§5.2) and unnecessary.
 7. Confirm `EngineDownBanner.tsx` already models the dev/prod split you must not break:
-   `endpoint?.via === 'sidecar'` at :34, :92 (E-42; MASTER_PLAN §P01.15's
+   `endpoint?.via === 'sidecar'` at :34, :92 (E-42; `MASTER_PLAN.md` §F `XR-P01` item 15's
    `via: 'sidecar'|'vite-proxy'` and `EngineDownBanner.tsx:31` are **stale** — the type is
    `'sidecar' | 'dev-proxy'` at `transport.ts:17`).
 8. Record baseline exit codes for the phase's gate set (§8). All are expected **0** at
@@ -189,7 +192,7 @@ In `desktop/src/engine/transport.ts`:
   same way `kind` already distinguishes those two.
 - **Legacy rule:** an engine that answers `/meta/version` **without** `contractVersion` is
   *legacy*, not healthy. It must produce `degraded` with an actionable message — the
-  `MASTER_PLAN` §P01.8 test is explicit that this must **not** be `ready`. Do not guess a
+  `MASTER_PLAN.md` §F `XR-P01` item 8 test is explicit that this must **not** be `ready`. Do not guess a
   contract version from the package version.
 - Every request in this file gets a **bounded timeout** (`AbortSignal.timeout(...)` or an
   `AbortController` with a single exported constant). `engineFetch` currently cannot fail
@@ -220,7 +223,7 @@ Required properties, each of which is a test in §4.5:
   comment **and** in your report.
 - `degraded` is for *connected but not fully usable* (legacy/incompatible contract, failed
   catalog load). It must not become a catch-all for "something felt off" — a single
-  over-eager `degraded` masks a healthy engine (MASTER_PLAN §P01.15) and fails this phase.
+  over-eager `degraded` masks a healthy engine (`MASTER_PLAN.md` §F `XR-P01` item 15) and fails this phase.
 
 **Blast radius you must handle, not avoid.** ~22 files under `desktop/src/` consume
 `useEngineStore` and there are ~30 `status === '…'` comparisons (E-38). Every one must be
@@ -257,11 +260,11 @@ deterministic — no sockets, no timers longer than a few ms, no sleeps.
 | # | Test | Asserts |
 |---|---|---|
 | 1 | Contract present and matching | handshake ⇒ `ready` |
-| 2 | **Legacy payload** (no `contractVersion`) | ⇒ `degraded` **and** an actionable message; **never** `ready` (§P01.8) |
+| 2 | **Legacy payload** (no `contractVersion`) | ⇒ `degraded` **and** an actionable message; **never** `ready` (`MASTER_PLAN.md` §F `XR-P01` item 8) |
 | 3 | Older/newer contract | ⇒ `failed(incompatible)`, blocking and actionable |
 | 4 | Each of the five states reachable | one test per state, each arriving via an observed probe |
 | 5 | No state without a probe | the machine cannot enter `ready`/`degraded` from `starting` absent a probe result |
-| 6 | **Bounded boot** | a sidecar that never prints a banner yields `failed(timeout)` within the bounded window with the captured stderr tail — *never* an infinite `starting` (§P01.8) |
+| 6 | **Bounded boot** | a sidecar that never prints a banner yields `failed(timeout)` within the bounded window with the captured stderr tail — *never* an infinite `starting` (`MASTER_PLAN.md` §F `XR-P01` item 8) |
 | 7 | Unauthorized ≠ crashed | 401 ⇒ `failed(unauthorized)`; a non-401 transport error ⇒ a different reason |
 | 8 | **Redaction specimen** | export built from a fixture whose tail contains a planted `Bearer <token>`, `?token=…`, and `sk-…`; assert none of the three appear in the serialized export, and assert the allow-list field set exactly |
 | 9 | Daemon: `/api/v1/meta/version` shape | 401 anon; 200 paired; new fields present; existing four fields unchanged |
@@ -279,7 +282,7 @@ pass.
    in `server.ts`.** No new fingerprints, no new open paths.
 2. **Do not touch Rust.** No new `#[tauri::command]`, no `engine.rs` spawn-argument change,
    no change to `StderrTail`. If you believe a Rust gap exists, prove it and record it —
-   MASTER_PLAN §P01.7 says *read-only unless a real gap is proven*.
+   `MASTER_PLAN.md` §F `XR-P01` item 7 says *read-only unless a real gap is proven*.
 3. Do not touch provider-list semantics (`XR-P03`), onboarding (`XR-P02`), sidecar
    containment, the SSE protocol, or `engine_state.rs`'s parser.
 4. Do not fix anything you find outside §4 — record it in your report. In particular: the
@@ -392,8 +395,8 @@ report it unmet — do not redefine it.
     decision (e.g. the `API_CONTRACT` choice in §4.1). Number it `D-024`+, mark it
     `PROPOSED` unless the owner approves it, and justify it in one table.
   - `docs/implementation/v1-release/phase-reports/XR-P01-report-r1.md` — your report.
-- Do **not** edit `MASTER_PLAN.md` to match what you built. If §P01 was wrong, that is a
-  finding for the Plan Owner (`§0` of this prompt already supersedes §P01.5).
+- Do **not** edit `MASTER_PLAN.md` to match what you built. If the `XR-P01` block was wrong, that is a
+  finding for the Plan Owner (`§0` of this prompt already supersedes `MASTER_PLAN.md` §F `XR-P01` item 5).
 
 ---
 
@@ -449,7 +452,7 @@ an explicit **`Not run`** section.
 ## 12. What this phase unlocks
 
 `XR-P02` (onboarding) and `XR-P03` (provider single source of truth) both consume readiness
-and are **disjoint in files** (MASTER_PLAN §G) — parallel only with owner authorization.
+and are **disjoint in files** (`MASTER_PLAN.md` §G) — parallel only with owner authorization.
 `XR-P05`/`XR-P06` consume the same seam later.
 
 **Unblocks nothing in P00's governance debt.** The ruleset is still shallow (approvals 0,
