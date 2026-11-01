@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { CodeBlock } from '@/screens/Chat/components/CodeBlock';
+import { scrollFocus } from '@/screens/Research/scroll';
 import { headingSlug, plainHeading, reportOutline } from '@/research/core';
 import { fmtAgo, fmtCost, isLocalSource, rewriteCitations, type CitationIndex, type Contradiction, type Stats, type UiDepth, type UiSource } from '@/research/core';
 import { useResearchStore } from '@/stores/researchStore';
@@ -181,7 +182,6 @@ interface Props {
 }
 
 function ReportOutline({ body }: { body: string }) {
-  const reduced = useReducedMotion();
   const outline = useMemo(() => reportOutline(body), [body]);
   if (outline.length < 2) return null;
   return (
@@ -192,11 +192,7 @@ function ReportOutline({ body }: { body: string }) {
           <li key={entry.slug} style={{ paddingLeft: `${(entry.level - 1) * 12}px` }}>
             <button
               type="button"
-              onClick={() =>
-                document
-                  .getElementById(`report-${entry.slug}`)
-                  ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
-              }
+              onClick={() => scrollFocus(document.getElementById(`report-${entry.slug}`), { block: 'start' })}
             >
               {entry.text}
             </button>

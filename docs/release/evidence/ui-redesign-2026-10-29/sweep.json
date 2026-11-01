@@ -1,6 +1,6 @@
 {
   "base": "http://127.0.0.1:5173",
-  "generatedAt": "2026-10-30T14:50:51.121Z",
+  "generatedAt": "2026-11-01T08:46:33.717Z",
   "geometry": {
     "collapsed": {
       "railW": 56,
@@ -263,7 +263,65 @@
     "research-02-sources-panel",
     "research-03-source-inspector",
     "research-04-evidence-matrix",
-    "research-05-grounded-chat"
+    "research-05-grounded-chat",
+    "chat-welcome-avatar",
+    "settings-models-provider-catalog"
+  ],
+  "avatar": {
+    "src": "assets/xr-avatar-128.webp",
+    "w": 128,
+    "h": 112,
+    "rendered": 24
+  },
+  "engineProviders": {
+    "status": 200,
+    "count": 26
+  },
+  "providerCatalog": {
+    "count": 27,
+    "groups": [
+      "Hosted APIs",
+      "Local runtimes",
+      "Custom"
+    ]
+  },
+  "voicePresets": [
+    {
+      "id": "piper-kusal",
+      "label": "Ahmad",
+      "gender": "male"
+    },
+    {
+      "id": "piper-kristin",
+      "label": "Nova",
+      "gender": "female"
+    },
+    {
+      "id": "piper-ryan",
+      "label": "Atlas",
+      "gender": "male"
+    },
+    {
+      "id": "piper-amy",
+      "label": "Sage",
+      "gender": "female"
+    },
+    {
+      "id": "alloy",
+      "label": "OpenAI alloy"
+    },
+    {
+      "id": "nova",
+      "label": "OpenAI nova"
+    },
+    {
+      "id": "onyx",
+      "label": "OpenAI onyx"
+    },
+    {
+      "id": "shimmer",
+      "label": "OpenAI shimmer"
+    }
   ],
   "failures": 0
 }

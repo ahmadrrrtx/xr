@@ -1,20 +1,52 @@
 import { ChevronDown, Cloud, Download, User } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { recommendModel } from '@/lib/detect';
+import { useEngineStore } from '@/stores/engineStore';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { OptionCard, Reveal, StepHeader } from './parts';
 
 /**
  * Step 4 — model setup. The recommended local card is RAM-based (plan §4);
  * BYO key expands inline; guest mode continues without a model.
+ * 2026-11-01: the provider list comes from the engine's live provider
+ * catalog (every hosted preset it supports), not a hardcoded five.
  */
 export function StepModelSetup() {
   const { systemInfo, ollama, modelChoice, setModelChoice } =
     useOnboardingStore();
+  const engineProviders = useEngineStore(
+    (state) => state.providers?.providers ?? null
+  );
   const [cloudOpen, setCloudOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [providerId, setProviderId] = useState('openai');
+
+  // Keyed, hosted providers only — local runtimes have their own card above
+  // and keyless entries make no sense in a "bring a key" flow.
+  const cloudProviders = useMemo(() => {
+    const list = (engineProviders ?? []).filter(
+      (p) => p.kind !== 'local' && p.keyless !== true
+    );
+    if (list.length === 0) {
+      // Engine offline: keep onboarding usable with the usual suspects.
+      return [
+        { id: 'openai', label: 'OpenAI' },
+        { id: 'anthropic', label: 'Anthropic' },
+        { id: 'google', label: 'Google Gemini' },
+        { id: 'groq', label: 'Groq' },
+        { id: 'openrouter', label: 'OpenRouter' },
+      ];
+    }
+    return list
+      .map((p) => ({ id: p.id, label: p.label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [engineProviders]);
+
+  // Keep the selection valid if the engine list lacks the default id.
+  const effectiveProviderId = cloudProviders.some((p) => p.id === providerId)
+    ? providerId
+    : cloudProviders[0]?.id ?? 'openai';
 
   const ram = systemInfo?.totalMemoryGb ?? null;
   const rec = recommendModel(ram ?? 0);
@@ -60,8 +92,8 @@ export function StepModelSetup() {
             onClick={() => {
               setModelChoice(
                 apiKey
-                  ? { source: 'cloud', providerId, apiKey }
-                  : { source: 'cloud', providerId }
+                  ? { source: 'cloud', providerId: effectiveProviderId, apiKey }
+                  : { source: 'cloud', providerId: effectiveProviderId }
               );
               setCloudOpen(true);
             }}
@@ -85,7 +117,7 @@ export function StepModelSetup() {
               </label>
               <select
                 id="setup-provider"
-                value={providerId}
+                value={effectiveProviderId}
                 onChange={(event) => {
                   setProviderId(event.target.value);
                   setModelChoice({
@@ -95,12 +127,13 @@ export function StepModelSetup() {
                   });
                 }}
                 className="border-border-default bg-bg-void text-text-primary mb-3 w-full rounded border p-2 text-sm"
+                data-testid="setup-provider-select"
               >
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="google">Google</option>
-                <option value="groq">Groq</option>
-                <option value="openrouter">OpenRouter</option>
+                {cloudProviders.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
               </select>
               <label className="text-text-tertiary mb-1.5 block text-[11px] font-semibold tracking-wide uppercase">
                 API key
@@ -112,7 +145,7 @@ export function StepModelSetup() {
                   setApiKey(e.target.value);
                   setModelChoice({
                     source: 'cloud',
-                    providerId,
+                    providerId: effectiveProviderId,
                     apiKey: e.target.value,
                   });
                 }}

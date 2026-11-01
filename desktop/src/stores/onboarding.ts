@@ -119,7 +119,7 @@ const initial = {
   micSelected: null,
   noiseSuppression: true,
   wakeWordEnabled: true,
-  ttsVoice: 'ahmad',
+  ttsVoice: 'piper-kusal',
   userName: '',
   theme: 'xr-native' as ThemeId,
   budget: 5,

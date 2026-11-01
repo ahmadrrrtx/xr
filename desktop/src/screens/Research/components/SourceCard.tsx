@@ -14,6 +14,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { isLocalSource, type UiSource } from '@/research/core';
 import { copyLink, openExternal } from '@/research/open';
+import { scrollFocus } from '@/screens/Research/scroll';
 
 const STATUS_LABEL: Record<UiSource['status'], string> = {
   discovering: 'queued',
@@ -65,11 +66,13 @@ export const SourceCard = memo(function SourceCard({ source: s, citationNumber, 
   const flash = active && flashNonce > seenNonce;
   const local = isLocalSource(s);
 
-  // Citation click → scroll into view (DOM side effect only).
+  // Citation click → programmatic scroll into view (scroll.ts; DOM only).
+  // The card keeps its own .xr-card-flash nonce logic — scrollFocus adds
+  // only the motion-safe scroll here.
   useEffect(() => {
     if (!active || !flashNonce) return;
-    ref.current?.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
-  }, [active, flashNonce, reducedMotion]);
+    scrollFocus(ref.current, { flash: false });
+  }, [active, flashNonce]);
 
   const statusText = STATUS_LABEL[s.status];
   const href = local ? null : s.url;

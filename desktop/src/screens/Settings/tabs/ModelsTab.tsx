@@ -1,15 +1,16 @@
 /*
  * Settings → Models & Providers (Phase 8) — provider list with connection
- * status, a 12-entry add catalog, default-model-by-capability selects, and
- * the local-Ollama card (detect + pull with live progress).
+ * status, the add catalog (2026-11-01: derived LIVE from the engine's
+ * provider list — 26 presets + custom, not a hardcoded subset), default-
+ * model-by-capability selects, and the local-Ollama card (detect + pull
+ * with live progress).
  * Keys are held by the engine secret broker, never generic desktop settings.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import {
   ProviderConfigModal,
-  type ProviderCatalogEntry,
 } from '@/components/settings/ProviderConfigModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,20 +23,14 @@ import {
 import { SettingRow, SettingsSection } from '@/components/settings/primitives';
 import { Select } from '@/components/settings/controls';
 import {
-  Sparkles,
-  Bot,
-  Cpu,
-  Brain,
   Boxes,
-  Globe,
-  Zap,
-  Cloud,
-  Flower2,
-  Rocket,
-  Wrench,
   Download,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import {
+  buildProviderCatalog,
+  type ProviderCatalogEntryUi,
+} from '@/engine/providerCatalog';
+import { useEngineStore } from '@/stores/engineStore';
 import { isTauri } from '@/lib/tauri';
 import {
   detectSystem,
@@ -51,121 +46,6 @@ import { useSettingsStore } from '@/stores/settingsStore';
 
 /* ── Catalog (12) ─────────────────────────────────────────────── */
 
-interface CatalogEntry extends ProviderCatalogEntry {
-  icon: LucideIcon;
-}
-
-const CATALOG: CatalogEntry[] = [
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    kind: 'openai-compatible',
-    tagline: 'Current GPT models and manual legacy choices.',
-    baseUrl: 'https://api.openai.com/v1',
-    keysUrl: 'https://platform.openai.com/api-keys',
-    icon: Sparkles,
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    kind: 'anthropic',
-    tagline: 'Claude models.',
-    baseUrl: 'https://api.anthropic.com',
-    keysUrl: 'https://console.anthropic.com/settings/keys',
-    icon: Brain,
-  },
-  {
-    id: 'google',
-    name: 'Google Gemini',
-    kind: 'gemini',
-    tagline: 'Gemini models.',
-    baseUrl: 'https://generativelanguage.googleapis.com',
-    keysUrl: 'https://aistudio.google.com/apikey',
-    icon: Flower2,
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    kind: 'openai-compatible',
-    tagline: 'One key, every model.',
-    baseUrl: 'https://openrouter.ai/api',
-    keysUrl: 'https://openrouter.ai/keys',
-    icon: Boxes,
-  },
-  {
-    id: 'ollama',
-    name: 'Ollama (local)',
-    kind: 'ollama',
-    tagline: 'Local models on this machine — no key needed.',
-    baseUrl: 'http://localhost:11434',
-    keyless: true,
-    icon: Cpu,
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral',
-    kind: 'openai-compatible',
-    tagline: 'Mistral and Codestral models.',
-    baseUrl: 'https://api.mistral.ai/v1',
-    keysUrl: 'https://console.mistral.ai/api-keys',
-    icon: Cloud,
-  },
-  {
-    id: 'groq',
-    name: 'Groq',
-    kind: 'openai-compatible',
-    tagline: 'Fast inference for open models.',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    keysUrl: 'https://console.groq.com/keys',
-    icon: Zap,
-  },
-  {
-    id: 'together',
-    name: 'Together',
-    kind: 'openai-compatible',
-    tagline: 'Open models, hosted.',
-    baseUrl: 'https://api.together.xyz/v1',
-    keysUrl: 'https://api.together.ai/settings/api-keys',
-    icon: Rocket,
-  },
-  {
-    id: 'xai',
-    name: 'xAI',
-    kind: 'openai-compatible',
-    tagline: 'Grok models.',
-    baseUrl: 'https://api.x.ai/v1',
-    keysUrl: 'https://console.x.ai',
-    icon: Bot,
-  },
-  {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    kind: 'openai-compatible',
-    tagline: 'DeepSeek chat and reasoner.',
-    baseUrl: 'https://api.deepseek.com/v1',
-    keysUrl: 'https://platform.deepseek.com/api_keys',
-    icon: Globe,
-  },
-  {
-    id: 'cohere',
-    name: 'Cohere',
-    kind: 'openai-compatible',
-    tagline: 'Command models.',
-    baseUrl: 'https://api.cohere.com/compatibility/v1',
-    keysUrl: 'https://dashboard.cohere.com/api-keys',
-    icon: Wrench,
-  },
-  {
-    id: 'custom',
-    name: 'Custom Endpoint',
-    kind: 'custom',
-    tagline: 'Any OpenAI-compatible base URL.',
-    baseUrl: '',
-    icon: Wrench,
-  },
-];
-
-const OLLAMA_ENTRY = CATALOG.find((entry) => entry.id === 'ollama')!;
 
 const CAPABILITIES: Array<{
   key: keyof CapabilityDefaults;
@@ -219,9 +99,19 @@ const CURATED: CuratedModel[] = [
 export function ModelsTab() {
   const models = useSettingsStore((state) => state.settings.models);
   const update = useSettingsStore((state) => state.update);
+  const engineProviders = useEngineStore((state) => state.providers?.providers ?? null);
+
+  // The add-provider catalog comes from the ENGINE (26 presets + any custom
+  // providers), merged with presentation metadata — see engine/providerCatalog.
+  const catalog = useMemo(
+    () => buildProviderCatalog(engineProviders),
+    [engineProviders]
+  );
+  const CATALOG = catalog.entries;
+  const OLLAMA_ENTRY = CATALOG.find((entry) => entry.id === 'ollama');
 
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const [configFor, setConfigFor] = useState<CatalogEntry | null>(null);
+  const [configFor, setConfigFor] = useState<ProviderCatalogEntryUi | null>(null);
   const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[] | null>(
     null
   );
@@ -268,7 +158,7 @@ export function ModelsTab() {
     })),
   ];
 
-  const openProvider = (entry: CatalogEntry): void => {
+  const openProvider = (entry: ProviderCatalogEntryUi): void => {
     setCatalogOpen(false);
     setConfigFor(entry);
   };
@@ -460,6 +350,9 @@ export function ModelsTab() {
                           tagline: 'Configured provider.',
                           baseUrl: provider.baseUrl ?? '',
                           icon: Boxes,
+                          engineKind: 'custom',
+                          hasKey: false,
+                          healthy: false,
                         }
                       )
                     }
@@ -563,7 +456,8 @@ export function ModelsTab() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => openProvider(OLLAMA_ENTRY)}
+              disabled={!OLLAMA_ENTRY}
+              onClick={() => OLLAMA_ENTRY && openProvider(OLLAMA_ENTRY)}
             >
               Use Ollama in XR
             </Button>
@@ -590,41 +484,63 @@ export function ModelsTab() {
             Add a provider
           </DialogTitle>
           <DialogDescription className="text-text-tertiary text-xs">
-            Bring a key from a provider, or run models locally with Ollama.
+            {catalog.degraded
+              ? 'Engine offline — showing the basic set. Start the engine for every provider it supports.'
+              : `${catalog.counts.hosted} hosted + ${catalog.counts.local} local runtimes from the engine, plus a custom endpoint.`}
           </DialogDescription>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {CATALOG.map((entry) => {
-              const Icon = entry.icon;
-              const configured = providers.some(
-                (provider) => provider.id === entry.id
+          <div className="mt-2 max-h-[60vh] overflow-y-auto pr-1" data-testid="provider-catalog">
+            {(['hosted', 'local', 'custom'] as const).map((group) => {
+              const groupEntries = CATALOG.filter((entry) =>
+                group === 'custom'
+                  ? entry.engineKind === 'custom'
+                  : group === 'local'
+                    ? entry.engineKind === 'local'
+                    : entry.engineKind === 'hosted' || entry.engineKind === 'cloud'
               );
+              if (groupEntries.length === 0) return null;
               return (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => openProvider(entry)}
-                  className="border-border-subtle bg-bg-raised hover:border-accent/50 flex items-center gap-3 rounded-lg border p-3 text-left transition-colors"
-                >
-                  <span className="border-border-subtle bg-bg-ink text-accent flex size-8 shrink-0 items-center justify-center rounded-md border">
-                    <Icon size={15} strokeWidth={1.5} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="text-text-primary flex items-center gap-1.5 text-[13px] font-medium">
-                      {entry.name}
-                      {configured ? (
-                        <Badge
-                          variant="secondary"
-                          className="text-[9px] uppercase"
+                <div key={group} className="mb-3">
+                  <p className="text-text-tertiary mb-1.5 text-[10px] font-semibold tracking-[0.08em] uppercase">
+                    {group === 'hosted' ? 'Hosted APIs' : group === 'local' ? 'Local runtimes' : 'Custom'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {groupEntries.map((entry) => {
+                      const Icon = entry.icon;
+                      const configured = providers.some(
+                        (provider) => provider.id === entry.id
+                      );
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          onClick={() => openProvider(entry)}
+                          data-testid={`provider-catalog-${entry.id}`}
+                          className="border-border-subtle bg-bg-raised hover:border-accent/50 flex items-center gap-3 rounded-lg border p-3 text-left transition-colors"
                         >
-                          Added
-                        </Badge>
-                      ) : null}
-                    </span>
-                    <span className="text-text-tertiary block truncate text-[11px]">
-                      {entry.tagline}
-                    </span>
-                  </span>
-                </button>
+                          <span className="border-border-subtle bg-bg-ink text-accent flex size-8 shrink-0 items-center justify-center rounded-md border">
+                            <Icon size={15} strokeWidth={1.5} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="text-text-primary flex items-center gap-1.5 text-[13px] font-medium">
+                              {entry.name}
+                              {configured ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[9px] uppercase"
+                                >
+                                  Added
+                                </Badge>
+                              ) : null}
+                            </span>
+                            <span className="text-text-tertiary block truncate text-[11px]">
+                              {entry.keyless ? 'No key needed' : entry.tagline}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>

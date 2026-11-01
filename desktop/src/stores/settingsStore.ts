@@ -239,7 +239,7 @@ export const DEFAULT_SETTINGS: XRSettings = {
     wakeSensitivity: 'medium',
     wakeSound: true,
     sttModel: 'sherpa-small-en',
-    ttsVoice: 'piper-lessac',
+    ttsVoice: 'piper-kusal',
     pitch: 0,
     theaterEnabled: false,
     autoExitSilence: 30,

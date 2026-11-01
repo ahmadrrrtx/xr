@@ -4,168 +4,168 @@
   "files": [
     {
       "path": "desktop/src-tauri/icons/128x128.png",
-      "bytes": 11468,
-      "sha256": "17cc6bde014db3753a656574d715e5b3c05b4d6177c940eca0ee35f0cdaa43b2"
+      "bytes": 12089,
+      "sha256": "0992a4ef903972d3caae001eb2b23ac961ac674e32e342132dd4f19012204544"
     },
     {
       "path": "desktop/src-tauri/icons/128x128@2x.png",
-      "bytes": 32526,
-      "sha256": "6d70df1e5f626f8d79295d28864181cbf6ca4ae537daa04ee4b3f56a4fd443eb"
+      "bytes": 41499,
+      "sha256": "7605cb7dd63f044eef7798f747ac7030dc865fee32a4d13952b8c279f5674fd2"
     },
     {
       "path": "desktop/src-tauri/icons/32x32.png",
-      "bytes": 1609,
-      "sha256": "7f1862658f6383fb1f7ff2b4c829ef5d81a5984268ce54f23f45acc219ebd4bc"
+      "bytes": 1343,
+      "sha256": "b75c1ca692391ba78e3a8b8c52ca2ea094ec5d303f5819cf9e5767285001e7c5"
     },
     {
       "path": "desktop/src-tauri/icons/64x64.png",
-      "bytes": 4084,
-      "sha256": "851095aed596a3905841d5914f832deb7d3418c5562bf5202814604ebdf3dd8b"
+      "bytes": 3869,
+      "sha256": "689ccad7bdc2d0bc89d4a77e625a752ca989d42449e8a31ba2fb3f231daba01f"
     },
     {
       "path": "desktop/src-tauri/icons/icon.icns",
-      "bytes": 250801,
-      "sha256": "9dd4fabe084b7278619de523a83deb92df7fa442393a0be4cef0fc3b8c315c8f"
+      "bytes": 673499,
+      "sha256": "a4ef6e695d717258bf56fdd1799f18f19ae302499b9dd295068b7290a1cf4ddf"
     },
     {
       "path": "desktop/src-tauri/icons/icon.ico",
-      "bytes": 56885,
-      "sha256": "8869f505aada1afe08e6d6638f6e0911f0886504c6497502c02accbf11abfd6d"
+      "bytes": 65126,
+      "sha256": "4e451661e3e758d9c2142b48b3e48d098777a282329106b6f59435ac086e0b70"
     },
     {
       "path": "desktop/src-tauri/icons/icon.png",
-      "bytes": 94517,
-      "sha256": "f82a8316db61cd4bfede49fd7db670a1db51ba31b32fdfd6b3a8e2ccd85ffafc"
+      "bytes": 31920,
+      "sha256": "7be3cc01b732eaecd36fe3ae8c46347b614366dc8fef11032591fca3f57fa061"
     },
     {
       "path": "desktop/src-tauri/icons/Square107x107Logo.png",
-      "bytes": 11648,
-      "sha256": "879c0aeacc16404d5c7839d6258b79b2c3c70a736e0e7efdeadea914301a3fd5"
+      "bytes": 9053,
+      "sha256": "4318abe71174c78169fc00a1dbad9c8f89702f5a09f36f25ea2b49c412b04a26"
     },
     {
       "path": "desktop/src-tauri/icons/Square142x142Logo.png",
-      "bytes": 17706,
-      "sha256": "75c46f30564d671354fa565ef2f8ad8513d843e473d52ccff5e89867a7ef6d0f"
+      "bytes": 14607,
+      "sha256": "c15cc2ba62e5b69c426cd34e96611ee08a7fe13ded954820f9a59b5fb29ad35f"
     },
     {
       "path": "desktop/src-tauri/icons/Square150x150Logo.png",
-      "bytes": 18812,
-      "sha256": "4704b6e3d9628f14c3dd03bebd241fee6e62136d08fd54f3f66ed3aefc0852cc"
+      "bytes": 15952,
+      "sha256": "9061113042ce871cab529adc0490dc466f237fc309c09a6f751391b18bfc53f7"
     },
     {
       "path": "desktop/src-tauri/icons/Square284x284Logo.png",
-      "bytes": 49447,
-      "sha256": "c11d42be7e61c065fdeb57777cef14b1b5993f24801621d9f5ea6dcdbc133b2a"
+      "bytes": 49776,
+      "sha256": "f0cb8d216beacf4add3b768fda12815dadefa9944834961de139e570769f76c7"
     },
     {
       "path": "desktop/src-tauri/icons/Square30x30Logo.png",
-      "bytes": 1703,
-      "sha256": "d0167ffdd08451ddac14282c7fd363ffe60f0b77bf939325c88d44eb3ce2e0e6"
+      "bytes": 1213,
+      "sha256": "af1ffd67e6f701ddc4ecf088a0126ca95118db5b2bd41e1e0426d88b542ec7be"
     },
     {
       "path": "desktop/src-tauri/icons/Square310x310Logo.png",
-      "bytes": 56592,
-      "sha256": "4c5bf989a97e44c42155613c2c5de024e12d4cb49533f56910fbf8ca7a20bf7b"
+      "bytes": 58323,
+      "sha256": "254e20a2c38e703f1da74f37d33d01262aed63cb7c096712682679e4e6cb897e"
     },
     {
       "path": "desktop/src-tauri/icons/Square44x44Logo.png",
-      "bytes": 3461,
-      "sha256": "0ee4c9eb31815bbeb9d7df49899123f158dd13bb4b7c52cc38e3ffd706f3dfdf"
+      "bytes": 2122,
+      "sha256": "dad7049f74db8313d3b59c29d2bef8607ab74cf1ed6a9a6ebfb463f3c487b36b"
     },
     {
       "path": "desktop/src-tauri/icons/Square71x71Logo.png",
-      "bytes": 6473,
-      "sha256": "aa8aad2700b274dae46ea8b6d8aedcb49fe47780f3a87430a877fc12467dbc36"
+      "bytes": 4627,
+      "sha256": "8fa448abb45047ab9d550654c87b46c320d026fb3db428491f0bed07018a5cf1"
     },
     {
       "path": "desktop/src-tauri/icons/Square89x89Logo.png",
-      "bytes": 9100,
-      "sha256": "a9ede7fe72eeb205ed638d731d441dbc1aa9ce34b6377ed48c116640bb4b0dd7"
+      "bytes": 6613,
+      "sha256": "913e83ac73ecc95b71d34db727844a366d29931eb2876a1440e91b0f72f86c94"
     },
     {
       "path": "desktop/src-tauri/icons/StoreLogo.png",
-      "bytes": 3637,
-      "sha256": "b139d8c6cde41de6b02b12c5d30ed066d3965e5b14715c08c0cb712dd67a859d"
+      "bytes": 2629,
+      "sha256": "651f782def5f0b29ef193f2d6474b978003bf7e18477367be62c75d76a01a671"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-128-badge.png",
-      "bytes": 4132,
-      "sha256": "5a452b7cfbda3e4c00e0a0b4aa67eb62b99d7eeef9e8296e9ef8186edf4962b3"
+      "bytes": 2623,
+      "sha256": "619b08b3c45ebcef26db0df942bcf7b1db1e9e6d692aec8d3c55feb5fb454bf6"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-128.png",
-      "bytes": 4556,
-      "sha256": "43ed3aea9906cc08827a5452bad0bb031ea69993905a854161455694b6f6d9b9"
+      "bytes": 2816,
+      "sha256": "5ea9372ee14028dc10dac61cf4d21c1025656f07dfc2875ba2f246c39b79c1fd"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-22-badge.png",
-      "bytes": 438,
-      "sha256": "33214efc69dd5a50af76940326cb7d700fd5049749c2be412ccd149990ac9477"
+      "bytes": 388,
+      "sha256": "29311ee21abe83e9aa0e9cbaea119137dcbe4af1ac4e000dcb396316b4ccb94b"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-22.png",
-      "bytes": 464,
-      "sha256": "e8babcd1f22d47d32f55c73f753c2e24136790dfe84b71dfaf1cad2b3b79b818"
+      "bytes": 400,
+      "sha256": "58cd515db8e0d61fdcdce66eda2e4828cd3dc125c34c3c863e38a6c78c2c0d82"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-24-badge.png",
-      "bytes": 488,
-      "sha256": "2a4aeeb160dd002583382aee48b7701b8e17c0911a798f1eed7cde915efcaf73"
+      "bytes": 424,
+      "sha256": "6e873b9d7e9aa409b0fe0f5ced0169796576c571358af5269de29bf65a6b747e"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-24.png",
-      "bytes": 526,
-      "sha256": "65ac93279281cf490bfc55ca9352da004741a7880c6e81e564c38bfeb0675de7"
+      "bytes": 443,
+      "sha256": "61b72e1e08d648e8892901b83b57974b3e5ef451b7d1f578d64cf0a316a3f42f"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-32-badge.png",
-      "bytes": 689,
-      "sha256": "92527b01fa8b2180b59396092f7887da2401da61f130d2ab39f2e96dad44f5ad"
+      "bytes": 562,
+      "sha256": "6dc7c9ac9464508363dce18fcf0170690f8a44c14b43605653a7839ac7367e7c"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-32.png",
-      "bytes": 728,
-      "sha256": "e60b3403a34a94468139b1c2a131efbe228ff8a2522759f45b3b167b43b5b2ad"
+      "bytes": 572,
+      "sha256": "3f2efcbbe738410e1d35227be63102f9ae65e23ee4f2891d3bcf84627187ebc4"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-48-badge.png",
-      "bytes": 1107,
-      "sha256": "57464ac369d985cca6da2f1be91d76e088883a412addf708b8ed7d22914e92ff"
+      "bytes": 848,
+      "sha256": "d2204b63cc0b844bce4279bd684b59aba59112a2af95d0ff162b5c277aa93c9c"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-48.png",
-      "bytes": 1199,
-      "sha256": "0fd23c7d203991c2c33e4e987acee6d7b3628766eb1728b269d3adabe69543c8"
+      "bytes": 887,
+      "sha256": "48cd214d6986cea9f2c568e4d0738a74a9e054d578bba759e91698da8f5e8d44"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-64-badge.png",
-      "bytes": 1650,
-      "sha256": "1aae7e22b72de14b74456bdb1e80c884c6a3cc9fa55d98059c4088f1be9ccdac"
+      "bytes": 1170,
+      "sha256": "ca8eba722efefc13faf8c77eee6cee7f6e46ecc4f83632ebd685b778be0012c8"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-linux-64.png",
-      "bytes": 1777,
-      "sha256": "377f7b1553b3815146aae98aacaebab6d14bb2ca38cd7ad49bd931b5e81f5e8e"
+      "bytes": 1220,
+      "sha256": "1b420ea52d7199113a9f7e0c14c1831c8980817c385ce138572fbfac98d6131e"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-mac-template.png",
-      "bytes": 443,
-      "sha256": "a4e4843531c7b1e82e716e14a9932f32b3a2778c606a19e42002e5d0a74457ba"
+      "bytes": 335,
+      "sha256": "7085c5e6c2609326cad5f8be7d4352f5c0f3455b8c6ac0cab65ee85f04d2c2da"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-mac-template@2x.png",
-      "bytes": 1056,
-      "sha256": "45bac9871679264387b1f409d1515d6f3ff7c425d1c1209278ba9666de852ce3"
+      "bytes": 684,
+      "sha256": "2026a42083d7cb87dc1fe9c5ee5dfa80af60d24307686e3f53c67c67c9e62946"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-win-badge.ico",
-      "bytes": 1053,
-      "sha256": "576bdb46482e82a63160f1d81d901c2f277b38dd7602e761bd068916580becb0"
+      "bytes": 894,
+      "sha256": "60dedc4e6d421d0521a630cb082247f4d0541d207cede4bd9d4f99c9f704164d"
     },
     {
       "path": "desktop/src-tauri/icons/tray/tray-win.ico",
-      "bytes": 1104,
-      "sha256": "d539a27832f0b648b6e700cd5c195e9454705ccf82a0ab4e69ff92320dd030de"
+      "bytes": 909,
+      "sha256": "a1a2f5b9690afe5c31bad70f554627e12c0be8f83a947f0b04ec25056cc8ce8b"
     },
     {
       "path": "desktop/src/assets/avatar-states/xr-avatar-approved.gif",
@@ -389,18 +389,18 @@
     },
     {
       "path": "desktop/src/assets/xr-avatar-128.webp",
-      "bytes": 7446,
-      "sha256": "bc80b67c04e29a64d387d384cd753cfafba4e9f64322a07b3a28fa1e1332d227"
+      "bytes": 7936,
+      "sha256": "15953e125f08f255c344beca08f818d979c9946939bd8e4ff5ba1f6216ae66e4"
     },
     {
       "path": "desktop/src/assets/xr-avatar-256.webp",
-      "bytes": 22146,
-      "sha256": "6e7fcf5ea32481eae6ffdc072fc716a3144d337ca4798c7781df0b5f83bc0ab8"
+      "bytes": 23568,
+      "sha256": "7e0b81fe1a604818c91a0ea66fcbb157d77096efcee92f1872bd825b1979bf44"
     },
     {
       "path": "desktop/src/assets/xr-avatar-512.webp",
-      "bytes": 67906,
-      "sha256": "40a5b874d9419c9f7901183cc90b8e6ef1e43acf3f407358dffba3052c9b030b"
+      "bytes": 78530,
+      "sha256": "3b10e7268069b874567a4287fce2c6d1596e83fdb37f8b632cbe8d14ca6da7ad"
     },
     {
       "path": "desktop/src/assets/xr-avatar-side-2.webp",
@@ -414,8 +414,8 @@
     },
     {
       "path": "desktop/src/assets/xr-avatar.png",
-      "bytes": 64173,
-      "sha256": "b3ca94a1699d33c4e8a02a1a02db03042c2d25532ef8a7846a3a84f52af02e07"
+      "bytes": 63289,
+      "sha256": "c2afd48ba43755ebfbbb121250678aab5cf5e67d800701b7286e07e993e61a65"
     },
     {
       "path": "desktop/src/assets/xr-emblem-256.png",

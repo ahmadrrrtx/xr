@@ -1476,3 +1476,25 @@
   outline: 1px solid color-mix(in oklab, var(--accent) 60%, transparent);
   outline-offset: 1px;
 }
+
+/* ── Programmatic scroll landing flash (scroll.ts) ─────────────────────
+ * Same visual language as .xr-card-flash, for the targets of in-app jumps
+ * (evidence matrix, report sections). The class is added by scrollFocus()
+ * and removed when the animation completes. */
+.xr-scroll-flash {
+  animation: xr-scroll-flash 700ms ease-out 1;
+}
+@keyframes xr-scroll-flash {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 0 0 22px -4px var(--accent-glow);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xr-scroll-flash {
+    animation: none;
+  }
+}

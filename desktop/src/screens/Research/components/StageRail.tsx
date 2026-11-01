@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 
 import { planSteps } from '@/research/core';
 import { cn } from '@/lib/utils';
+import { scrollFocus } from '@/screens/Research/scroll';
 import { useResearchStore } from '@/stores/researchStore';
 
 export function StageRail() {
@@ -18,8 +19,10 @@ export function StageRail() {
   const report = useResearchStore((s) => s.report);
   const sourceCount = useResearchStore((s) => s.sources.length);
 
+  // 2026-11-01: in-app jumps are programmatic (scroll.ts) — motion-safe and
+  // with a landing flash, the same contract as citation → source card.
   const scrollToMatrix = useCallback(() => {
-    document.querySelector('[data-testid="evidence-matrix"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollFocus(document.querySelector<HTMLElement>('[data-testid="evidence-matrix"]'), { block: 'start' });
   }, []);
 
   const steps = planSteps(phase);

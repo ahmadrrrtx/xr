@@ -15,9 +15,10 @@ export const XR_LOGO_320 = new URL('../../assets/xr-logo-320.png', import.meta.u
 /* Emblem only (favicon-sized marks) */
 export const XR_EMBLEM_512 = new URL('../../assets/xr-emblem-512.png', import.meta.url).href;
 export const XR_EMBLEM_256 = new URL('../../assets/xr-emblem-256.png', import.meta.url).href;
-/* Front sentinel bust — 2026-10-30: master swapped to the owner's newly
- * delivered avatar (1772380044.png, front-facing); derivatives reconverted
- * in-place so every surface that imports XR_AVATAR_* picked it up. */
+/* Front sentinel bust — 2026-11-01: master restored to the ORIGINAL avatar
+ * (the owner's front-facing artwork, same art as assets/avatar.png; the
+ * 2026-10-30 swap to the 1772380044 render was wrong — that was not the
+ * avatar). Derivatives regenerated with tools/gen-avatar.py. */
 export const XR_AVATAR_512 = new URL('../../assets/xr-avatar-512.webp', import.meta.url).href;
 export const XR_AVATAR_256 = new URL('../../assets/xr-avatar-256.webp', import.meta.url).href;
 export const XR_AVATAR_128 = new URL('../../assets/xr-avatar-128.webp', import.meta.url).href;

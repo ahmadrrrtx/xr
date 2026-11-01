@@ -4,18 +4,26 @@ import { useEffect, useRef, useState } from 'react';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { OptionCard, Reveal, StepHeader } from './parts';
 
+/*
+ * Voice presets (2026-11-01 revision). The ids ARE the engine's TTS voice
+ * ids (src/voice/models.ts TTS_VOICES) so the wizard's choice lands in the
+ * engine settings verbatim. "Ahmad" is a BOY: the engine voice is the
+ * youthful male Piper kusal (the old default was the female lessac voice —
+ * wrong, and rejected); the Web Speech stand-in approximates the character
+ * with a male OS voice and a slightly raised pitch.
+ */
 const VOICES = [
-  { id: 'ahmad', name: 'Ahmad', tag: 'Default · warm, direct', pitch: 1.0, rate: 1.0, gender: 'male' },
-  { id: 'nova', name: 'Nova', tag: 'Bright, quick', pitch: 1.25, rate: 1.05, gender: 'female' },
-  { id: 'atlas', name: 'Atlas', tag: 'Deep, measured', pitch: 0.8, rate: 0.95, gender: 'male' },
-  { id: 'sage', name: 'Sage', tag: 'Calm, considered', pitch: 1.05, rate: 0.9, gender: 'female' },
+  { id: 'piper-kusal', name: 'Ahmad', tag: 'Default · a boy, warm and direct', pitch: 1.12, rate: 1.0, gender: 'male' },
+  { id: 'piper-kristin', name: 'Nova', tag: 'Bright, quick', pitch: 1.25, rate: 1.05, gender: 'female' },
+  { id: 'piper-ryan', name: 'Atlas', tag: 'Deep, measured', pitch: 0.8, rate: 0.95, gender: 'male' },
+  { id: 'piper-amy', name: 'Sage', tag: 'Calm, considered', pitch: 1.05, rate: 0.9, gender: 'female' },
 ] as const;
 
 const SAMPLE: Record<string, string> = {
-  ahmad: "Hey. I'm XR — good to meet you.",
-  nova: "Hey! I'm XR — ready when you are.",
-  atlas: "Hello. I'm XR. Let's begin.",
-  sage: "Hi — I'm XR. Take your time.",
+  'piper-kusal': "Hey. I'm XR — good to meet you.",
+  'piper-kristin': "Hey! I'm XR — ready when you are.",
+  'piper-ryan': 'Hello. I\'m XR. Let\'s begin.',
+  'piper-amy': "Hi — I'm XR. Take your time.",
 };
 
 /**
@@ -52,7 +60,7 @@ export function StepVoice() {
     if (typeof speechSynthesis === 'undefined') return;
     speechSynthesis.cancel();
     const v = VOICES.find((x) => x.id === id)!;
-    const u = new SpeechSynthesisUtterance(SAMPLE[id] ?? SAMPLE.ahmad!);
+    const u = new SpeechSynthesisUtterance(SAMPLE[id] ?? SAMPLE['piper-kusal']!);
     // Best-effort OS voice match; pitch/rate carry the character either way.
     const pool = voicesRef.current.filter((x) => x.lang.startsWith('en'));
     const match =

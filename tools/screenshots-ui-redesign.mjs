@@ -61,7 +61,7 @@ const ok = (msg) => console.log(`  ✓ ${msg}`);
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` }).then(() => report.shots.push(name));
 
 /* ── boot ─────────────────────────────────────────────────────────────────── */
-const browser = await puppeteer.launch({ headless: 'new', protocolTimeout: 600_000, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+let browser = await puppeteer.launch({ headless: 'new', protocolTimeout: 600_000, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 900 });
 page.on('console', (m) => {
@@ -277,8 +277,37 @@ if (!process.env.SKIP_RESEARCH) {
     if (matrixEl) {
       await matrixEl.click();
       await page.waitForSelector('[data-testid="evidence-matrix"]', { timeout: 5000 }).then(() => ok('evidence matrix rendered')).catch(() => fail('evidence matrix did not render'));
-      await wait(600);
+      // 2026-11-01 programmatic scroll: the jump lands via scrollFocus() —
+      // motion-safe scroll + landing flash on the target.
+      const flash = await page.evaluate(() => {
+        const m = document.querySelector('[data-testid="evidence-matrix"]');
+        if (!m) return { err: 'matrix missing' };
+        const r = m.getBoundingClientRect();
+        return { flashed: m.classList.contains('xr-scroll-flash'), inView: r.top < innerHeight && r.bottom > 0 };
+      });
+      flash.flashed ? ok('evidence matrix scrolled programmatically (landing flash)') : fail(`evidence matrix did not flash: ${JSON.stringify(flash)}`);
+      await wait(700); // let the smooth scroll land before asserting geometry
+      const inView = await page.evaluate(() => {
+        const m = document.querySelector('[data-testid="evidence-matrix"]');
+        if (!m) return false;
+        const r = m.getBoundingClientRect();
+        return r.top < innerHeight && r.bottom > 0;
+      });
+      inView ? ok('evidence matrix in viewport after jump') : fail('evidence matrix out of viewport after jump');
       await shot(page, 'research-04-evidence-matrix');
+      // Outline jump → same programmatic contract on the report section.
+      const outlineBtn = await page.evaluateHandle(() => document.querySelector('[data-testid="report-outline"] button'));
+      const ob = outlineBtn.asElement();
+      if (ob) {
+        await ob.click();
+        await wait(150);
+        const oflash = await page.evaluate(() => {
+          const secs = [...document.querySelectorAll('[id^="report-"]')];
+          const f = secs.find((el) => el.classList.contains('xr-scroll-flash'));
+          return { flashed: !!f, id: f?.id ?? null };
+        });
+        oflash.flashed ? ok(`outline jump flashed section ${oflash.id}`) : fail('outline jump did not flash the report section');
+      }
     } else fail('Evidence stage button not found');
     // grounded chat
     await chord(page, 'Meta', 'j');
@@ -320,8 +349,37 @@ if (!process.env.SKIP_RESEARCH) {
     if (matrixEl) {
       await matrixEl.click();
       await page.waitForSelector('[data-testid="evidence-matrix"]', { timeout: 5000 }).then(() => ok('evidence matrix rendered')).catch(() => fail('evidence matrix did not render'));
-      await wait(600);
+      // 2026-11-01 programmatic scroll: the jump lands via scrollFocus() —
+      // motion-safe scroll + landing flash on the target.
+      const flash = await page.evaluate(() => {
+        const m = document.querySelector('[data-testid="evidence-matrix"]');
+        if (!m) return { err: 'matrix missing' };
+        const r = m.getBoundingClientRect();
+        return { flashed: m.classList.contains('xr-scroll-flash'), inView: r.top < innerHeight && r.bottom > 0 };
+      });
+      flash.flashed ? ok('evidence matrix scrolled programmatically (landing flash)') : fail(`evidence matrix did not flash: ${JSON.stringify(flash)}`);
+      await wait(700); // let the smooth scroll land before asserting geometry
+      const inView = await page.evaluate(() => {
+        const m = document.querySelector('[data-testid="evidence-matrix"]');
+        if (!m) return false;
+        const r = m.getBoundingClientRect();
+        return r.top < innerHeight && r.bottom > 0;
+      });
+      inView ? ok('evidence matrix in viewport after jump') : fail('evidence matrix out of viewport after jump');
       await shot(page, 'research-04-evidence-matrix');
+      // Outline jump → same programmatic contract on the report section.
+      const outlineBtn = await page.evaluateHandle(() => document.querySelector('[data-testid="report-outline"] button'));
+      const ob = outlineBtn.asElement();
+      if (ob) {
+        await ob.click();
+        await wait(150);
+        const oflash = await page.evaluate(() => {
+          const secs = [...document.querySelectorAll('[id^="report-"]')];
+          const f = secs.find((el) => el.classList.contains('xr-scroll-flash'));
+          return { flashed: !!f, id: f?.id ?? null };
+        });
+        oflash.flashed ? ok(`outline jump flashed section ${oflash.id}`) : fail('outline jump did not flash the report section');
+      }
     } else fail('Evidence stage button not found');
     await chord(page, 'Meta', 'j');
     await page.waitForSelector('[data-testid="research-chat"]', { timeout: 5000 }).catch(() => fail('chat dock did not open'));
@@ -333,6 +391,7 @@ if (!process.env.SKIP_RESEARCH) {
     await shot(page, 'research-05-grounded-chat');
   }
 }
+
 
 /* ═══ 5 · axe-core (WCAG 2.2 AA) on the redesigned surfaces ═══════════════ */
 console.log('\n■ axe-core (wcag2a/aa/21aa/22aa)');
@@ -351,6 +410,117 @@ for (const [name, selector] of [['research', '[data-testid="research-screen"]'],
 }
 
 await browser.close();
+/* ═══ 6 · 2026-11-01 fixes — avatar, engine-driven providers, voices ════ */
+console.log('\n■ 2026-11-01 fixes — avatar, providers, voices (dedicated page)');
+{
+  // A dedicated BROWSER: the research screen's long-lived SSE streams can
+  // exhaust the headless browser by this point (observed: the CDP connection
+  // is closed after the grounded-chat check), so this section relaunches.
+  await browser.close().catch(() => {});
+  browser = await puppeteer.launch({ headless: 'new', protocolTimeout: 600_000, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 1440, height: 900 });
+  page.on('console', (m) => {
+    if (m.type() === 'error') {
+      const k = (report.consoleErrors[page.__page] ?? (report.consoleErrors[page.__page] = []));
+      if (k.length < 8) k.push(m.text().slice(0, 180));
+    }
+  });
+  page.on('pageerror', (e) => {
+    const k = (report.consoleErrors[page.__page] ?? (report.consoleErrors[page.__page] = []));
+    if (k.length < 8) k.push(`pageerror: ${String(e).slice(0, 160)}`);
+  });
+  const fresh2 = async (route, pageName) => {
+    page.__page = pageName;
+    await page.goto(`${BASE}/${route}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    await page.evaluate((ws) => {
+      window.localStorage.setItem('xr.onboarding.complete', 'true');
+      window.localStorage.setItem('xr.workspaces.dev.v1', JSON.stringify([ws]));
+    }, DEMO_WS);
+    await page.goto(`${BASE}/${route}`, { waitUntil: 'networkidle2', timeout: 30_000 }).catch(() => {});
+    await wait(800);
+  };
+
+  console.log('\n■ Avatar (original artwork restored)');
+  await fresh2('#/chat', 'chat-welcome').catch(async () => {
+    console.log('  · chat nav glitch, retrying once');
+    await page.goto(`${BASE}/#/chat`, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
+  });
+  await wait(1000);
+  const av = await page.evaluate(() => {
+    const imgs = [...document.querySelectorAll('img')];
+    const hero = imgs.find((i) => (i.currentSrc || i.src).includes('xr-avatar'));
+    if (!hero) return { err: 'no xr-avatar img rendered' };
+    return { src: (hero.currentSrc || hero.src).split('/').slice(-2).join('/'), w: hero.naturalWidth, h: hero.naturalHeight, rendered: Math.round(hero.getBoundingClientRect().width) };
+  });
+  report.avatar = av;
+  if (av.err) fail(av.err);
+  else {
+    av.w > 0 && av.h > 0 ? ok(`avatar loaded ${av.w}x${av.h} (${av.src})`) : fail('avatar broken (naturalWidth 0)');
+    await shot(page, 'chat-welcome-avatar');
+  }
+
+  console.log('\n■ Engine provider contract + full catalog in Settings');
+  // The engine list is the source of truth: >= 26 presets + metadata fields.
+  const engineList = await page.evaluate(async () => {
+    const r = await fetch('/api/v1/providers');
+    const j = await r.json();
+    return { status: r.status, count: j.providers?.length ?? 0, sample: j.providers?.find((p) => p.id === 'groq') ?? null, ids: j.providers?.map((p) => p.id) ?? [] };
+  });
+  report.engineProviders = { status: engineList.status, count: engineList.count };
+  engineList.status === 200 ? ok(`engine /api/v1/providers: 200, ${engineList.count} providers`) : fail(`engine providers endpoint ${engineList.status}`);
+  engineList.count >= 26 ? ok(`engine exposes ${engineList.count} providers (26+ requirement)`) : fail(`engine exposes only ${engineList.count} providers`);
+  if (engineList.sample) {
+    const hasMeta = engineList.sample.description != null && engineList.sample.docsUrl != null && typeof engineList.sample.keyless === 'boolean';
+    hasMeta ? ok('preset metadata present (description/docsUrl/keyless)') : fail('preset metadata missing on groq row');
+  }
+  // Settings → Models → Add a provider: the dialog must derive from the engine.
+  await fresh2('#/settings#models', 'settings-models').catch(async () => {
+    console.log('  · settings nav glitch, retrying once');
+    await page.goto(`${BASE}/#/settings#models`, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
+  });
+  await wait(1200);
+  const addBtn = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Add provider'));
+  const btn = addBtn.asElement();
+  if (!btn) fail('Add provider button not found on Settings → Models');
+  else {
+    await btn.click();
+    await page.waitForSelector('[data-testid="provider-catalog"]', { timeout: 5000 }).catch(() => fail('provider catalog dialog did not open'));
+    await wait(400);
+    const cat = await page.evaluate(() => {
+      const entries = [...document.querySelectorAll('[data-testid^="provider-catalog-"]')];
+      const groups = [...document.querySelectorAll('[data-testid="provider-catalog"] > div > p')].map((g) => g.textContent);
+      return { count: entries.length, groups, ids: entries.map((e) => e.getAttribute('data-testid').replace('provider-catalog-', '')) };
+    });
+    report.providerCatalog = { count: cat.count, groups: cat.groups };
+    cat.count >= 26 ? ok(`catalog offers ${cat.count} providers (was 12)`) : fail(`catalog offers only ${cat.count} providers`);
+    const must = ['lmstudio', 'jan', 'vllm', 'llamacpp', 'gpt4all', 'koboldcpp', 'sglang', 'cerebras', 'fireworks', 'sambanova', 'huggingface', 'perplexity', 'bedrock', 'custom'];
+    const missing = must.filter((id) => !cat.ids.includes(id));
+    missing.length === 0 ? ok('all previously-missing providers now listed (incl. custom endpoint)') : fail(`catalog still missing: ${missing.join(', ')}`);
+    cat.groups.includes('Hosted APIs') && cat.groups.includes('Local runtimes') ? ok(`groups: ${cat.groups.join(' / ')}`) : fail(`unexpected groups: ${cat.groups.join(' / ')}`);
+    await shot(page, 'settings-models-provider-catalog');
+  }
+
+  console.log('\n■ Voice presets (Ahmad = boy)');
+  // The engine voice catalogue carries the four named presets; Ahmad must be
+  // the male kusal voice (the old default was the female lessac — rejected).
+  const voices = await page.evaluate(async () => {
+    const r = await fetch('/api/v1/voice/voices');
+    const j = await r.json();
+    return { status: r.status, voices: j.voices ?? [] };
+  });
+  report.voicePresets = voices.voices.map((v) => ({ id: v.id, label: v.label, gender: v.gender }));
+  voices.status === 200 ? ok(`engine /api/v1/voice/voices: 200, ${voices.voices.length} voices`) : fail(`voice voices endpoint ${voices.status}`);
+  const ahmad = voices.voices.find((v) => v.label === 'Ahmad');
+  if (!ahmad) fail('Ahmad preset missing from engine voice catalogue');
+  else if (ahmad.id !== 'piper-kusal' || ahmad.gender !== 'male') fail(`Ahmad is ${ahmad.id}/${ahmad.gender} — must be piper-kusal/male`);
+  else ok('Ahmad = piper-kusal (male · boy) — the female-voiced default is gone');
+  const oldIds = voices.voices.filter((v) => v.id === 'piper-lessac' || v.id === 'piper-jenny');
+  oldIds.length === 0 ? ok('rejected presets (lessac/jenny) removed') : fail(`rejected presets still present: ${oldIds.map((v) => v.id).join(', ')}`);
+
+  await page.close().catch(() => {});
+}
+
 report.failures = failures;
 writeFileSync(REPORT, JSON.stringify(report, null, 2));
 console.log(`\n${failures === 0 ? '✅ ALL CHECKS PASSED' : `⚠ ${failures} CHECK(S) FAILED`}`);

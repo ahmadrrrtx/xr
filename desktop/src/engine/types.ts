@@ -122,6 +122,13 @@ export interface EngineProvider {
   tier?: string;
   kind: 'local' | 'cloud' | 'hosted' | 'custom';
   locality?: 'local' | 'private' | 'hybrid' | 'cloud' | 'unknown';
+  /** 2026-11-01: preset metadata so the desktop can render the full engine catalog. */
+  description?: string | null;
+  docsUrl?: string | null;
+  baseUrl?: string | null;
+  authType?: 'none' | 'bearer' | 'apiKey' | 'aws' | 'google' | 'multi';
+  keyless?: boolean;
+  knownModels?: string[];
   hasKey: boolean;
   authOk?: boolean;
   healthy: boolean;
