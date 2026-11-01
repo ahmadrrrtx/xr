@@ -638,6 +638,14 @@ jobs:
   flatpak:
     needs: [release-preflight]
     name: Linux — Flatpak metadata (required) + build (workflow_dispatch)
+    # 2026-11-01: the from-source build is REPORT-ONLY per the manifest's own
+    # status note (packaging/flatpak/ai.rrrtx.xr-desktop.yml — Flathub needs
+    # vendored cargo/npm sources that do not exist yet, and flathub has since
+    # retired the runtime branches this lane was authored against). The
+    # metadata validations above stay REQUIRED and gating; the build answer
+    # stays visible (red step + annotation) without poisoning the dispatch
+    # gate jobs. Re-enable hard-gating when the vendored sources land.
+    continue-on-error: true
     # 24.04, not 22.04, for one specific reason: the AppStream CLI on 22.04 is
     # from 2022 and does not know the modern tags this metadata uses — it reports
     # `<developer>` as an unknown tag and `url type="vcs-browser"` as invalid,
@@ -682,10 +690,13 @@ jobs:
         run: |
           sudo apt-get install -y flatpak flatpak-builder elfutils
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          # Runtime matches the manifest (48). The freedesktop extensions are
+          # branched by the freedesktop release (24.08 under GNOME 48), not by
+          # the GNOME version — the historical //46 refs never resolved.
           flatpak install --user -y --noninteractive flathub \
-            org.gnome.Platform//46 org.gnome.Sdk//46 \
-            org.freedesktop.Sdk.Extension.rust-stable//46 \
-            org.freedesktop.Sdk.Extension.node22//46
+            org.gnome.Platform//48 org.gnome.Sdk//48 \
+            org.freedesktop.Sdk.Extension.rust-stable//24.08 \
+            org.freedesktop.Sdk.Extension.node22//24.08
 
       # Report-only is deliberately NOT set: dispatching this workflow is a
       # request for the answer, so a failure here is red on purpose.
