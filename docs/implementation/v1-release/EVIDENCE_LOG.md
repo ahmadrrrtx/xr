@@ -671,6 +671,17 @@ OWNER ACTION (§4.1): executor has no GitHub credentials (gh absent, push attemp
 Actions at 230ad998 (observed 2026-11-01): CI success, Cross-Platform success (once), Desktop App cancelled, Clean-Machine Journey cancelled — no lane claimed green on this evidence.
 ```
 
+**E-35 — `XR-P00` pushed; hosted CI evidence (2026-11-01; record in `phase-reports/XR-P00-report-r2-supplement-01.md`)** ✅ (Quality Gate) / ⚠️ (two native lanes)
+
+```
+owner authorized push+PR with a supplied credential (0600 /tmp file, never in repo; worktree scan 0 hits; hosted gitleaks success; owner to rotate)
+push: phase/P00-governance-substrate only; main verified unchanged 230ad998. PR #206 opened, NOT merged, no settings changed.
+attempt 1 (4be679e4): Truth gate SUCCESS (4 new steps green); Typecheck FAILURE TS2304 gate-enforcement.test.ts(276,71) 'token' — one missed rename, executor bug; fixed 761df3df (local typecheck EXIT=0 first, this time)
+attempt 2 (761df3df): CI SUCCESS (Quality Gate success, actionlint success); Cross-Platform SUCCESS (win/mac/linux parity incl. new test); Supply Chain/Channel/npm Pack/Audit SUCCESS.
+Journey + Desktop: CANCELLED (macos-14 legs cancelled; macos-15-intel journey failed at "Upload journey evidence") — same pattern on main@230ad998 pre-branch; untouched code; XR-P09 scope, not fixed.
+bun run ci local verdict unchanged FAIL (OOM monolith + changelog:check EXIT=1 D-020). AC1/AC2/AC4 remain BLOCKED-OWNER as in E-34.
+```
+
 ---
 
 ## §7 Actions deliberately **not** taken (and why)

@@ -30,7 +30,7 @@ It is updated **after** evidence review, never on an executor's self-report.
 
 | Phase | Title | Status | Depends on | Prompt rev | Impl. commit | Unresolved blockers | Next permitted action |
 |---|---|---|---|---|---|---|---|
-| `XR-P00` | Governance and evidence substrate | **IMPLEMENTATION_REPORTED** | — | `r2` (`6b9cb59`) | `518c9835` + `4e9ec9e8` (local branch `phase/P00-governance-substrate` from `230ad998`, **unpushed**) | **§4.1 BLOCKED — OWNER ACTION:** PATCH ruleset `19119579` (exact payload in `phase-reports/XR-P00-report-r2.md` §16; needs repo admin + D-001/D-022 approval). **D-020 BLOCKED — OWNER DECISION:** `changelog:check` still exits 1; generated entry preview rejected under the executor stop rule (432 lines since `v1.0.0`, see report §5/`E-34`). | Plan Owner: `REVIEW PHASE REPORT XR-P00` (executor may not mark accepted) |
+| `XR-P00` | Governance and evidence substrate | **IMPLEMENTATION_REPORTED** | — | `r2` (`6b9cb59`) | `518c9835` + `4e9ec9e8` + `761df3df` (branch `phase/P00-governance-substrate`, **PR #206**, Quality Gate **green** on hosted CI at `761df3df` — see supplement 01) | **§4.1 BLOCKED — OWNER ACTION:** PATCH ruleset `19119579` (exact payload in `phase-reports/XR-P00-report-r2.md` §16; needs repo admin + D-001/D-022 approval). **D-020 BLOCKED — OWNER DECISION:** `changelog:check` still exits 1; generated entry preview rejected under the executor stop rule (432 lines since `v1.0.0`, see report §5/`E-34`). | Plan Owner: `REVIEW PHASE REPORT XR-P00` (executor may not mark accepted) |
 | `XR-P01` | Engine contract, readiness, recovery truth | `PLANNED` | P00 | — | — | — | waits on P00 `ACCEPTED` |
 | `XR-P02` | Onboarding state machine + consent | `PLANNED` | P01 | — | — | **D-004** (owner-authored privacy/terms text); consent sub-task will be `BLOCKED` until supplied | waits on P01 |
 | `XR-P03` | Provider single source of truth | `PLANNED` | P01 | — | — | D-011, D-012 approved | waits on P01 |
@@ -41,7 +41,7 @@ It is updated **after** evidence review, never on an executor's self-report.
 | `XR-P08` | Documentation and claims integrity | `PLANNED` (parallel-eligible) | P00 | — | — | — | may be requested after P00 `ACCEPTED` with owner authorization |
 | `XR-P09` | Release evidence and platform gates | `PLANNED` | P01–P08 | — | — | Two red CI lanes with **unknown** cause (`E-14`/`E-15`); owner signing material absent (`D-003`, `D-019`) | final gate |
 
-**`XR-P00` r2 executed 2026-11-01; status `IMPLEMENTATION_REPORTED` only (unreviewed, unpushed). In-repo half done; §4.1 and D-020 blocked on owner as above. See `phase-reports/XR-P00-report-r2.md`.**
+**`XR-P00` r2 executed 2026-11-01; status `IMPLEMENTATION_REPORTED` only (unreviewed; PR #206 open, not merged). In-repo half done; §4.1 and D-020 blocked on owner as above. See `phase-reports/XR-P00-report-r2.md`.**
 
 ---
 
