@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe("runs store — production empty state (XR-LAUNCH-009)", () => {
   test("engine offline: no scripted history, an honest empty list", async () => {
-    useEngineStore.setState({ status: "down" } as never);
+    useEngineStore.setState({ status: "disconnected" });
     await useRunsStore.getState().load();
     const s = useRunsStore.getState();
     expect(s.loaded).toBe(true);
@@ -40,7 +40,7 @@ describe("runs store — production empty state (XR-LAUNCH-009)", () => {
   });
 
   test("engine starting: still empty (the seed is DEV-only, not an offline fallback)", async () => {
-    useEngineStore.setState({ status: "starting" } as never);
+    useEngineStore.setState({ status: "starting" });
     await useRunsStore.getState().load();
     expect(Object.keys(useRunsStore.getState().runs)).toEqual([]);
   });
@@ -53,7 +53,7 @@ describe("runs store — production empty state (XR-LAUNCH-009)", () => {
   });
 
   test("real engine runs from the brain store are listed, nothing else", async () => {
-    useEngineStore.setState({ status: "up" } as never);
+    useEngineStore.setState({ status: "ready" });
     const run = {
       id: "eng-run-1", source: "engine", title: "Fix the flaky test", status: "complete", agent: "Main",
       model: "fixture-model", startedAt: Date.now() - 5_000, endedAt: Date.now(), tokensIn: 10, tokensOut: 20, costUsd: 0,
