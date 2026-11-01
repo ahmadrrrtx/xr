@@ -24,9 +24,11 @@ export const MOBILE_CONTRACT: Record<string, ApiOperationMeta> = {
   // the real daemon against the same stores the desktop surface uses).
   // meta.version.get lives HERE, not in contract.ts, per that module's waiver
   // plan ("held at two lines per phase"): the probe exists for the companion.
+  // XR-P01 — this entry ALREADY registered the op (OpenAPI + typed client
+  // include it); P01 extends only the payload and this summary, no new entry.
   "meta.version.get": {
     summary:
-      "Companion identity probe: daemon version, host URL, LAN flag. Auth-gated (a 401 here is how the mobile app detects a revoked session).",
+      "Companion + desktop identity probe: daemon version, host URL, LAN flag, and the XR-P01 contract handshake (contract version, desktop floor, schema version, capabilities). Auth-gated (a 401 here is how the mobile app detects a revoked session).",
     tag: "system",
     stability: "stable",
   },

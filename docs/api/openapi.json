@@ -18091,7 +18091,7 @@
     "/api/v1/meta/version": {
       "get": {
         "operationId": "meta.version.get",
-        "summary": "Companion identity probe: daemon version, host URL, LAN flag. Auth-gated (a 401 here is how the mobile app detects a revoked session).",
+        "summary": "Companion + desktop identity probe: daemon version, host URL, LAN flag, and the XR-P01 contract handshake (contract version, desktop floor, schema version, capabilities). Auth-gated (a 401 here is how the mobile app detects a revoked session).",
         "tags": [
           "system"
         ],
