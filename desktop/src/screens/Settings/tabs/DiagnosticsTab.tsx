@@ -11,7 +11,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { SettingRow, SettingsSection } from '@/components/settings/primitives';
 import { isTauri } from '@/lib/tauri';
-import { engineVersion, useEngineStore } from '@/stores/engineStore';
+import { copyEngineDiagnostics } from '@/engine/diagnostics';
+import { engineVersion, isEngineUsable, useEngineStore } from '@/stores/engineStore';
 
 function fmtUptime(since: number | null, now: number): string {
   if (!since) return '—';
@@ -24,11 +25,11 @@ function fmtUptime(since: number | null, now: number): string {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  unknown: 'Not checked yet',
-  checking: 'Checking…',
-  up: 'Connected',
-  down: 'Not running',
-  unauthorized: 'Token rejected',
+  starting: 'Starting…',
+  ready: 'Connected',
+  degraded: 'Connected — contract unverified (legacy engine)',
+  disconnected: 'Not running',
+  failed: 'Failed',
 };
 
 export function DiagnosticsTab() {
@@ -40,6 +41,8 @@ export function DiagnosticsTab() {
   const upSince = useEngineStore((s) => s.upSince);
   const providers = useEngineStore((s) => s.providers);
   const restarting = useEngineStore((s) => s.restarting);
+  const failureReason = useEngineStore((s) => s.failureReason);
+  const handshake = useEngineStore((s) => s.handshake);
   const [now, setNow] = useState(() => Date.now());
   const [logs, setLogs] = useState<string[] | null>(null);
   const [logsError, setLogsError] = useState<string | null>(null);
@@ -69,6 +72,20 @@ export function DiagnosticsTab() {
     }
   };
 
+  const [bundleText, setBundleText] = useState<string | null>(null);
+  const copyDiagnostics = async (): Promise<void> => {
+    const r = await copyEngineDiagnostics();
+    if (r.ok) {
+      toast(r.message);
+      setBundleText(null);
+    } else {
+      // Honest fallback: show the bundle for manual copy instead of
+      // pretending the clipboard worked.
+      setBundleText(r.text);
+      toast.error(r.message);
+    }
+  };
+
   const restart = async (): Promise<void> => {
     const r = await useEngineStore.getState().startOrRestart();
     if (r.ok) toast(r.message);
@@ -92,19 +109,30 @@ export function DiagnosticsTab() {
           >
             <span
               aria-hidden="true"
-              className={`size-2 rounded-full ${status === 'up' ? 'bg-success' : status === 'checking' || status === 'unknown' ? 'bg-text-tertiary' : 'bg-danger'}`}
+              className={`size-2 rounded-full ${status === 'ready' ? 'bg-success' : status === 'degraded' ? 'bg-warning' : status === 'starting' ? 'bg-text-tertiary' : 'bg-danger'}`}
             />
-            {STATUS_LABEL[status] ?? status}
+            {status === 'failed'
+              ? `Failed (${failureReason ?? 'unreachable'})`
+              : (STATUS_LABEL[status] ?? status)}
           </span>
         </SettingRow>
-        <SettingRow label="Version" description="Reported by /api/v1/health.">
+        <SettingRow label="Version" description="From the session-gated contract handshake (GET /api/v1/meta/version); /health reports liveness only.">
           <span className="font-mono text-[12.5px]">{version ?? '—'}</span>
         </SettingRow>
+        <SettingRow label="Contract" description="The engine contract this desktop negotiated (XR-P01). A legacy engine reports none and runs degraded.">
+          <span className="font-mono text-[12.5px]" data-testid="diag-contract-version">
+            {handshake?.kind === 'ok'
+              ? `v${handshake.contractVersion}`
+              : handshake?.kind === 'legacy'
+                ? 'not reported (legacy)'
+                : '—'}
+          </span>
+        </SettingRow>
         <SettingRow label="Uptime" description="Since this window first reached the engine.">
-          <span className="font-mono text-[12.5px] tabular-nums">{status === 'up' ? fmtUptime(upSince, now) : '—'}</span>
+          <span className="font-mono text-[12.5px] tabular-nums">{isEngineUsable(status) ? fmtUptime(upSince, now) : '—'}</span>
         </SettingRow>
         <SettingRow label="Latency" description={lastChecked ? `Last health check ${Math.max(0, Math.round((now - lastChecked) / 1000))}s ago.` : 'No health check yet.'}>
-          <span className="font-mono text-[12.5px] tabular-nums">{latency != null && status === 'up' ? `${latency} ms` : '—'}</span>
+          <span className="font-mono text-[12.5px] tabular-nums">{latency != null && isEngineUsable(status) ? `${latency} ms` : '—'}</span>
         </SettingRow>
         <SettingRow
           label="Providers"
@@ -123,7 +151,7 @@ export function DiagnosticsTab() {
             {lastError ?? 'none'}
           </span>
         </SettingRow>
-        {isTauri() || status !== 'up' ? (
+        {isTauri() || !isEngineUsable(status) ? (
           <SettingRow
             label={isTauri() ? 'Restart engine' : 'Start engine'}
             description={
@@ -144,13 +172,21 @@ export function DiagnosticsTab() {
         )}
       </SettingsSection>
 
-      <SettingsSection title="Engine logs" description="The last lines the engine wrote to stderr (packaged app). Tokens are never included.">
+      <SettingsSection title="Engine logs" description="The last lines the engine wrote to stderr (packaged app). 'Copy diagnostics' bundles link state, versions and this tail — allow-listed fields only, redacted; the token is never included.">
         <div className="flex items-center gap-2 px-1 pb-2">
           <Button variant="outline" size="sm" onClick={() => void loadLogs()} data-testid="diag-logs-load">
             {logs ? 'Refresh' : 'Show last 40 lines'}
           </Button>
+          <Button variant="outline" size="sm" onClick={() => void copyDiagnostics()} data-testid="diag-copy-diagnostics">
+            Copy diagnostics
+          </Button>
           {logsError && <span className="text-text-tertiary text-[12.5px]">{logsError}</span>}
         </div>
+        {bundleText && (
+          <pre className="border-border-subtle bg-bg-ink text-text-secondary max-h-[280px] overflow-auto rounded-lg border p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap" data-testid="diag-bundle-text">
+            {bundleText}
+          </pre>
+        )}
         {logs && (
           <pre className="border-border-subtle bg-bg-ink text-text-secondary max-h-[280px] overflow-auto rounded-lg border p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap">
             {logs.length ? logs.join('\n') : '(no output yet)'}
