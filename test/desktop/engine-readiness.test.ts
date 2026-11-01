@@ -31,7 +31,33 @@ import {
   redactDiagnosticText,
 } from "../../desktop/src/engine/diagnostics.ts";
 
-const engineInitial = useEngineStore.getState();
+/**
+ * Explicit clean state — NOT a snapshot of `getState()` at module load:
+ * in a shared test process another file may already have driven this
+ * store (CI's coverage run does), and a captured snapshot would "reset"
+ * to that polluted state. Order-independence is part of the test.
+ */
+const engineInitial = {
+  ...useEngineStore.getState(),
+  status: "starting" as const,
+  failureReason: null,
+  endpoint: null,
+  health: null,
+  handshake: null,
+  stderrTail: [],
+  attemptStartedAt: null,
+  latencyMs: null,
+  lastChecked: null,
+  failures: 0,
+  lastError: null,
+  upSince: null,
+  providers: null,
+  models: null,
+  catalog: null,
+  catalogLoadedAt: null,
+  catalogError: null,
+  restarting: false,
+};
 
 type FetchScript = (url: string, init?: RequestInit) => Promise<Response>;
 let script: FetchScript = async () => new Response("{}", { status: 404 });

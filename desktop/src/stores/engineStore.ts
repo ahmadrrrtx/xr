@@ -216,13 +216,15 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   refresh: () => {
     if (inflight) return inflight;
     inflight = (async () => {
-      // Anchor the boot deadline at the first attempt of a link cycle.
-      if (get().attemptStartedAt === null && !isEngineUsable(get().status)) {
+      // Anchor the boot deadline at the first attempt of a link cycle: any
+      // refresh with no observed handshake and no anchor IS that attempt.
+      // (Never invent elapsed time — an unanchored attempt starts now.)
+      if (get().attemptStartedAt === null && get().handshake === null) {
         set({ attemptStartedAt: Date.now() });
       }
       const elapsed = (): number => {
         const t0 = get().attemptStartedAt;
-        return t0 === null ? ENGINE_BOOT_DEADLINE_MS : Date.now() - t0;
+        return t0 === null ? 0 : Date.now() - t0;
       };
       const started = performance.now();
       try {
