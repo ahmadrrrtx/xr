@@ -117,6 +117,27 @@ export const API_PREFIX = "/api";
 export const V1_PREFIX = "/api/v1";
 
 /**
+ * XR-P01 — the engine↔desktop contract version. This is NOT the package
+ * version: desktops must never infer compatibility from `PKG.version`
+ * (a display string on a rapid-cadence train). Bump ONLY when the
+ * handshake surface (`GET /api/v1/meta/version`) or a desktop-consumed
+ * operation changes in a way an older/newer desktop cannot tolerate;
+ * additive operations do not bump it (they appear in `capabilities`).
+ * Single authority: the daemon payload and every test read this constant.
+ */
+export const ENGINE_CONTRACT_VERSION = 1;
+
+/**
+ * XR-P01 — the oldest desktop app version this engine will serve a
+ * handshake to. The desktop version train is the Tauri app version
+ * (`desktop/src/lib/appMeta.ts` mirrors `src-tauri/tauri.conf.json`);
+ * `0.2.0` is the first desktop that speaks contract 1. Older desktops
+ * (which never call this endpoint) are unaffected — the floor only
+ * gates desktops new enough to ask.
+ */
+export const MIN_DESKTOP_VERSION = "0.2.0";
+
+/**
  * Deprecation policy for the legacy unversioned mount (docs/api/COMPATIBILITY.md):
  * legacy `/api/*` mounts are announced deprecated in 7.x and are removed no
  * earlier than XR 2.0.0 (Art. XXVII: announce → warn → migrate → remove).
@@ -787,6 +808,15 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   // ── Phase 8 · meta operations (registered by meta.routes.ts) ──────────────
   "meta.apiRoot.get": {
     summary: "API index: version, operation catalogue link, OpenAPI location.",
+    tag: "system",
+    stability: "stable",
+  },
+  "meta.version.get": {
+    // XR-P01 — registered (was runtime-only) so the desktop handshake
+    // surface is contract-checked like every other operation: OpenAPI and
+    // the typed client now include it, and `capabilities` in its payload
+    // is derived from this same registry (never a hand-kept list).
+    summary: "Engine identity + XR-P01 contract handshake (contract version, desktop floor, schema version, capabilities). Session-gated.",
     tag: "system",
     stability: "stable",
   },

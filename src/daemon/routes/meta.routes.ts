@@ -9,14 +9,28 @@
 
 import { route, type DaemonRoute } from "./router.ts";
 import { buildOpenApi, serializeOpenApi } from "../api/openapi.ts";
-import { LEGACY_SUNSET_ISO, V1_PREFIX } from "./contract.ts";
+import { ENGINE_CONTRACT_VERSION, LEGACY_SUNSET_ISO, MIN_DESKTOP_VERSION, V1_PREFIX } from "./contract.ts";
 import { apiRegistry, listBaseRoutes } from "./registry.ts";
 import { renderPrometheus } from "../../observability/metrics.ts";
 import { recentSpans } from "../../observability/tracer.ts";
 import { telemetry } from "../../observability/config.ts";
 import { versionInfo } from "../../core/version.ts";
+import { LATEST_SCHEMA_VERSION } from "../../state/migrations.ts";
 
 let cachedDoc: string | null = null;
+
+/**
+ * XR-P01 — served operation ids, derived ONCE from the same registry the
+ * OpenAPI document is built from (`fullApiOps()`), sorted and de-duplicated.
+ * Never a hand-kept list: registering/unregistering an operation changes
+ * this automatically. Cost is O(registry) once per process; the per-request
+ * handler only replays the cached array.
+ */
+let cachedCapabilities: string[] | null = null;
+function engineCapabilities(): string[] {
+  cachedCapabilities ??= [...new Set(fullApiOps().map((op) => op.id))].sort();
+  return cachedCapabilities;
+}
 
 /** The full operation list (base + these meta routes) — one composition site. */
 export function fullApiOps(): ReturnType<typeof apiRegistry> {
@@ -64,12 +78,21 @@ export function metaRoutes(): DaemonRoute[] {
       // like the rest of the API (anonymous → 401): the app uses a 401 here to
       // detect a revoked pairing, so it must NOT be public. `lan` mirrors the
       // LAN runtime (mobile plumbing present), not the bind address.
+      // XR-P01 — also the desktop's contract handshake. The four XR-P01
+      // fields are ADDITIVE; the legacy four keep their names/types. This
+      // identity lives behind the session wall on purpose: the open health
+      // probes stay exactly {ok, ts} (P2-21 — a loopback service must not be
+      // fingerprintable pre-auth).
       handle: ({ json, url, mobile }) =>
         json({
           version: versionInfo().version,
           host: `${url.protocol}//${url.host}`,
           lan: Boolean(mobile),
           deviceName: "XR desktop",
+          contractVersion: ENGINE_CONTRACT_VERSION,
+          minDesktopVersion: MIN_DESKTOP_VERSION,
+          schemaVersion: LATEST_SCHEMA_VERSION,
+          capabilities: engineCapabilities(),
         }),
     }),
     route({
