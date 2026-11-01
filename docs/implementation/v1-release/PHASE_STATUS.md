@@ -30,7 +30,7 @@ It is updated **after** evidence review, never on an executor's self-report.
 
 | Phase | Title | Status | Depends on | Prompt rev | Impl. commit | Unresolved blockers | Next permitted action |
 |---|---|---|---|---|---|---|---|
-| `XR-P00` | Governance and evidence substrate | **PROMPT_GENERATED** | — | `r2` (`6b9cb59`) | — | **D-001 / D-006 owner approval** (branch protection + required-check set) and **D-022** (required-check contexts). Gate wiring (D-021) is pre-approved; `changelog:check` sequencing needs **D-020**. GitHub **admin access** is required for the settings change. | Executor runs `phase-prompts/XR-P00-r1-6b9cb59.md`; Plan Owner reviews via `REVIEW PHASE REPORT XR-P00` |
+| `XR-P00` | Governance and evidence substrate | **IMPLEMENTATION_REPORTED** | — | `r2` (`6b9cb59`) | `518c9835` + `4e9ec9e8` (local branch `phase/P00-governance-substrate` from `230ad998`, **unpushed**) | **§4.1 BLOCKED — OWNER ACTION:** PATCH ruleset `19119579` (exact payload in `phase-reports/XR-P00-report-r2.md` §16; needs repo admin + D-001/D-022 approval). **D-020 BLOCKED — OWNER DECISION:** `changelog:check` still exits 1; generated entry preview rejected under the executor stop rule (432 lines since `v1.0.0`, see report §5/`E-34`). | Plan Owner: `REVIEW PHASE REPORT XR-P00` (executor may not mark accepted) |
 | `XR-P01` | Engine contract, readiness, recovery truth | `PLANNED` | P00 | — | — | — | waits on P00 `ACCEPTED` |
 | `XR-P02` | Onboarding state machine + consent | `PLANNED` | P01 | — | — | **D-004** (owner-authored privacy/terms text); consent sub-task will be `BLOCKED` until supplied | waits on P01 |
 | `XR-P03` | Provider single source of truth | `PLANNED` | P01 | — | — | D-011, D-012 approved | waits on P01 |
@@ -41,7 +41,7 @@ It is updated **after** evidence review, never on an executor's self-report.
 | `XR-P08` | Documentation and claims integrity | `PLANNED` (parallel-eligible) | P00 | — | — | — | may be requested after P00 `ACCEPTED` with owner authorization |
 | `XR-P09` | Release evidence and platform gates | `PLANNED` | P01–P08 | — | — | Two red CI lanes with **unknown** cause (`E-14`/`E-15`); owner signing material absent (`D-003`, `D-019`) | final gate |
 
-**`XR-P00` prompt generated (r1). No phase has been executed. Baseline is audit-only.**
+**`XR-P00` r2 executed 2026-11-01; status `IMPLEMENTATION_REPORTED` only (unreviewed, unpushed). In-repo half done; §4.1 and D-020 blocked on owner as above. See `phase-reports/XR-P00-report-r2.md`.**
 
 ---
 
@@ -57,6 +57,7 @@ reverts from `ACCEPTED` to `VERIFYING`.
 | Production bundle contains zero seed probes (`E-09`) | Audit baseline | `XR-P04`, `XR-P09` |
 | 26 providers served live (`E-06`) | Audit baseline | `XR-P03`, `XR-P09` |
 | `main` ruleset deepened: ≥1 approval + code-owner review + native aggregate gates required (`D-001`, `D-022`, `D-023`) | `XR-P00` | `XR-P09` (must still be in force at the tag) |
+| Add `Cross-Platform gate` + `Desktop gate` to ruleset `19119579` required checks **once green** — **Owner: `@ahmadrrrtx`** (repo admin); recorded **2026-11-01** by `XR-P00` executor; deliberately NOT required now (red at `6b9cb599` `E-14`; at `230ad998` Cross-Platform green once, Desktop/Journey cancelled — not green evidence) (`D-006`, `D-022`) | `XR-P00` (deferred, `E-34`) | `XR-P09` must add them before acceptance |
 | Two native CI lanes green at the candidate SHA (`E-14` currently red) | `XR-P09` | tag time |
 
 ---
@@ -75,8 +76,8 @@ reverts from `ACCEPTED` to `VERIFYING`.
 
 | Item | Why | What unblocks |
 |---|---|---|
-| `XR-P00` §4.1 | Requires GitHub **admin** to PATCH ruleset 19119579, and owner approval of D-001/D-022 | Owner approval + admin access (the pushing identity `ahmadrrrtx` has `admin: true`) |
-| `XR-P00` changelog step | `bun run ci` is red at HEAD on `changelog:check` (`E-27`); fixing it writes a changelog entry for an unpublished identity | D-020 decision |
+| `XR-P00` §4.1 | Requires GitHub **admin** to apply the ruleset change to 19119579, and owner approval of D-001/D-022. Executor had no GitHub credentials; exact copy-pasteable payload is in the phase report §16 (`E-34`) | Owner applies payload, then AC1/AC2 verification (rulesets read + rejected push + blocked merge, D-023) can be recorded |
+| `XR-P00` changelog step | `bun run ci` is red at HEAD on `changelog:check` (`E-27`); D-020a generated entry preview is 432 lines ranging `v1.0.0..HEAD` (247 commits already under `## 1.1.0`) because `previousTagFor("1.1.1-rc.1")` mis-ranges prereleases — executor stopped per prompt §4.2 (`E-34`) | Owner D-020 decision: fix/accept generated range then generate + wire + delete test exemption, **or** approve D-020b re-scope (incl. `AGENTS.md`) |
 | `XR-P02` consent sub-task | No privacy/terms document exists (`D-004`) | Owner supplies or approves the document |
 | `XR-P09` signing/provenance | No Apple/Windows certificates, no updater keys | Owner material |
 | Any platform claim for Windows/macOS | No native evidence at any commit | Native lane green at candidate SHA |
@@ -89,4 +90,4 @@ reverts from `ACCEPTED` to `VERIFYING`.
 | Phase | Rev | File | Baseline SHA | Plan rev | Generated | Status |
 |---|---|---|---|---|---|---|
 | `XR-P00` | r1 | `phase-prompts/XR-P00-r1-6b9cb59.md` | `6b9cb59` | R1 | 2026-11-01 | **SUPERSEDED by r2** (r1 assumed `main` was unprotected — wrong, see `E-32`) |
-| `XR-P00` | r2 | `phase-prompts/XR-P00-r2-6b9cb59.md` | `6b9cb59` | R1 | 2026-11-01 | **CURRENT** — issued, awaiting execution |
+| `XR-P00` | r2 | `phase-prompts/XR-P00-r2-6b9cb59.md` | `6b9cb59` | R1 | 2026-11-01 | **CURRENT** — executed 2026-11-01 from `230ad998`; `IMPLEMENTATION_REPORTED`, awaiting Plan Owner review |
