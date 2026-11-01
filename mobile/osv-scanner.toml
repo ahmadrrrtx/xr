@@ -25,3 +25,23 @@
 id = "GHSA-gcqx-w48m-w2h4"
 ignoreUntil = 2027-01-31
 reason = "deepmerge 4.3.1 (CVE-2026-93753) — mergeObject() prototype poisoning of the returned object, fixed only in the deepmerge 5 major (4.3.1 is the final, last_affected 4.x). Reached only through vite-plugin-pwa -> workbox-build -> @rollup/plugin-node-resolve (^4.2.2 required even at plugin 16.0.3, the latest), i.e. strictly build-time PWA precache generation: no reference in mobile/src and none in the built mobile/dist bundle, and the merged inputs are our own pinned plugin options, not attacker-controlled. Dev-tool exposure only; re-argue at expiry."
+
+# ── 2026-11-01 CI gate findings (advisories published after 2026-10-29) ──────
+# minimatch (GHSA-g3hv-75wg-m249) and glob (GHSA-3g3m-2fjr-6pw4) both ride the
+# SAME build-time chain the deepmerge entry above documents:
+#   vite-plugin-pwa -> workbox-build -> glob@11.1.0 -> minimatch@10.2.6
+#                     workbox-build -> filelist -> minimatch@5.1.9
+# Both fixes are majors (minimatch 11.0.1, glob 14.0.2) with no in-range path
+# from workbox-build's pins, and both are dev-tool exposures: the precache
+# manifest generator walking our own source tree, not app runtime code.
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-28
+reason = "minimatch (GHSA-g3hv-75wg-m249) — potential DoS via globparts amplification, fixed only in the 11.0.1 major (advisory range: every version below 11.0.1). This lockfile holds dev copies 10.2.6 (via workbox-build -> glob) and 5.1.9 (via workbox-build -> filelist), used only by the build-time workbox precache generation over our own source tree; none of it ships in mobile/dist. No in-range fix exists for workbox-build's pins. Re-argue at expiry."
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2027-02-28
+reason = "glob 11.1.0 (GHSA-3g3m-2fjr-6pw4) — AbortSignal cancellation bypass allows post-timeout filesystem traversal, fixed only in the 14.0.2 major. Pulled by workbox-build (devDependency, PWA precache generation) — a build tool walking our own pinned source tree at build time, with no runtime or bundled exposure in mobile/dist. workbox-build's pin has no in-range fixed version. Re-argue at expiry."
+

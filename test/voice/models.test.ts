@@ -91,25 +91,25 @@ describe("voice model catalogue", () => {
     }
     // The first-run bundle the card advertises (runtime + STT + espeak + Ahmad).
     const bundle = entryBytes(RUNTIME_ENTRY) + entryBytes(STT_ENTRIES[0]) + entryBytes(ESPEAK_ENTRY) + entryBytes(TTS_VOICES[0]);
-    expect(bundle).toBe(95_930_951);
+    expect(bundle).toBe(95_930_950);
     expect(TTS_VOICES.map((v) => v.label)).toEqual(["Ahmad", "Nova", "Atlas", "Sage"]);
     expect(TTS_VOICES.every((v) => v.gender && v.accent)).toBe(true);
     // Each voice's .onnx.json has its own size on Hugging Face (4885/4882/4888/4895):
     // a copy-pasted size fails the integrity check and strands a .part on retry.
     const jsonBytes = TTS_VOICES.map((v) => v.files.find((f) => f.path.endsWith(".onnx.json"))?.bytes);
-    expect(jsonBytes).toEqual([4_885, 4_882, 4_888, 4_895]);
-    expect(TTS_VOICES.map((v) => entryBytes(v))).toEqual([63_207_231, 63_207_228, 63_207_239, 63_207_246]);
+    expect(jsonBytes).toEqual([4_884, 4_968, 4_883, 4_882]);
+    expect(TTS_VOICES.map((v) => entryBytes(v))).toEqual([63_207_230, 63_537_415, 63_207_229, 63_207_228]);
   });
 
   test("first-run plan lists only missing entries and empties once files are complete", () => {
-    expect(firstRunPlan().map((e) => e.id)).toEqual(["sherpa-onnx-wasm", "sherpa-small-en", "espeak-ng-data", "piper-lessac"]);
+    expect(firstRunPlan().map((e) => e.id)).toEqual(["sherpa-onnx-wasm", "sherpa-small-en", "espeak-ng-data", "piper-kusal"]);
     const stt = STT_ENTRIES[0];
     for (const f of stt.files) {
       mkdirSync(join(process.env.XR_VOICE_MODEL_DIR!, stt.dir), { recursive: true });
       writeFileSync(filePath(stt, f), new Uint8Array(f.bytes));
     }
     expect(entryInstalled(stt)).toBe(true);
-    expect(firstRunPlan().map((e) => e.id)).toEqual(["sherpa-onnx-wasm", "espeak-ng-data", "piper-lessac"]);
+    expect(firstRunPlan().map((e) => e.id)).toEqual(["sherpa-onnx-wasm", "espeak-ng-data", "piper-kusal"]);
   });
 });
 

@@ -21,3 +21,20 @@
 id = "GHSA-xcx6-jx8p-x3h5"
 ignoreUntil = 2027-01-31
 reason = "@azure/msal-node 5.6.0 — authorization-code flow parameter disclosure, fixed in 7.1.0 (major). Pulled only by @azure/identity <- @vscode/vsce (devDependency, packaging tool). No msal code is bundled into the .vsix and no extension code path calls it; the exposure is confined to the publisher's local `vsce` login. Major-bump tracking is upstream (@vscode/vsce -> @azure/identity range). Re-argue at expiry."
+
+# ── 2026-11-01 CI gate findings (advisories published after 2026-10-29) ──────
+# glob 13.0.6 and minimatch 10.2.6 are both transitive devDependencies of
+# @vscode/vsce (the .vsix PACKAGING tool run by the developer/publisher, not
+# the extension): the advisory paths operate on the publisher's local file
+# tree during packaging. Nothing from vsce is bundled into the .vsix.
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2027-02-28
+reason = "glob 13.0.6 (GHSA-3g3m-2fjr-6pw4) — AbortSignal cancellation bypass allows post-timeout filesystem traversal, fixed only in the 14.0.2 major. Transitive devDependency of @vscode/vsce (the .vsix packaging tool); the traversal happens on the publisher's local tree during packaging, and no vsce code is bundled into the extension. No in-range fixed version for the vsce chain. Re-argue at expiry."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-28
+reason = "minimatch 10.2.6 (GHSA-g3hv-75wg-m249) — potential DoS via globparts amplification, fixed only in the 11.0.1 major (advisory range: every version below 11.0.1). Transitive devDependency of @vscode/vsce (the .vsix packaging tool) via its glob chain; exposure is packaging-time over the publisher's own tree, with nothing bundled into the extension. No in-range fix exists for the vsce chain's pins. Re-argue at expiry."
+

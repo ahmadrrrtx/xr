@@ -8,3 +8,18 @@
 # 2026-10-23, so osv-scanner no longer reports it and now fails the scan for an
 # unused ignore. Re-add an [[IgnoredVulns]] block only with a live advisory id,
 # an expiry date and the reason the finding is not reachable.
+
+# ── 2026-11-01 CI gate finding (advisory published after 2026-10-29) ─────────
+# minimatch DoS via globparts amplification (GHSA-g3hv-75wg-m249, fixed only in
+# the 11.0.1 major; advisory range: all versions below 11.0.1). The website
+# lockfile carries two dev copies: minimatch@10.2.5 (under
+# @typescript-eslint/typescript-estree) and minimatch@3.1.5 (top-level, the
+# legacy eslint pin). Both are lint-time-only over our own glob patterns; the
+# built site ships none of this toolchain, and the parents' ^10.2.x / ^3.1.x
+# pins have no in-range fixed version.
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-28
+reason = "minimatch (GHSA-g3hv-75wg-m249) — potential DoS via globparts amplification, fixed only in the 11.0.1 major (advisory range: every version below 11.0.1; this lockfile holds dev copies 10.2.5 under @typescript-eslint/typescript-estree and 3.1.5 top-level, both pulled by the eslint toolchain). Lint-time exposure over our own glob patterns only; none of the eslint toolchain is part of the built site. No in-range fix for the parents' ^10.2.x / ^3.1.x pins. Re-argue at expiry."
+

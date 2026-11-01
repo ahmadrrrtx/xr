@@ -879,7 +879,9 @@ jobs:
   desktop-gate:
     name: Desktop gate (bundles + latest.json + journey)
     if: always()
-    needs: [release-preflight, shell-check, shell-test-windows, bundle, journey, updater-manifest, flatpak, desktop-validation, draft-assets]
+    # flatpak is advisory (report-only lane, .github/required-checks.json) —
+    # it must stay OUT of the gate's needs per ci-policy.
+    needs: [release-preflight, shell-check, shell-test-windows, bundle, journey, updater-manifest, desktop-validation, draft-assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
