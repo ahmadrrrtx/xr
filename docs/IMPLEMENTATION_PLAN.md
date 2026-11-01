@@ -1,5 +1,14 @@
 # XR Agent Runtime — Launch Implementation Plan & Tracker
 
+> **Precedence notice (2026-11-01, decision D-005).** This document is a *historical
+> record* of an earlier planning regime. For questions of what to build next, in what
+> order, and with what evidence for the **XR v1 release effort**, the authoritative
+> documents are [`docs/implementation/v1-release/MASTER_PLAN.md`](implementation/v1-release/MASTER_PLAN.md)
+> and its companions. Nothing here has been deleted or invalidated as history;
+> phases numbered here are not the phases in force. `AGENTS.md` and
+> `docs/CONSTITUTION.md` continue to govern *how* work is done.
+
+
 **Scope:** XR **Agent Runtime** only. Not XR-OS. XR-OS continues as its own
 project; the 3-year roadmap material lives in the audit corpus and is out of
 scope here except where a launch gate requires a minimal honest slice.

@@ -1,5 +1,14 @@
 # XR V1 Release Stabilization Ledger — 2026-10-28
 
+> **Precedence notice (2026-11-01, decision D-005).** This document is a *historical
+> record* of an earlier planning regime. For questions of what to build next, in what
+> order, and with what evidence for the **XR v1 release effort**, the authoritative
+> documents are [`docs/implementation/v1-release/MASTER_PLAN.md`](../implementation/v1-release/MASTER_PLAN.md)
+> and its companions. Nothing here has been deleted or invalidated as history;
+> phases numbered here are not the phases in force. `AGENTS.md` and
+> `docs/CONSTITUTION.md` continue to govern *how* work is done.
+
+
 > **What this document is.** The single anti-drift control for the Version 1
 > release-readiness pass. Every phase, decision, defect and verification result
 > for this pass is recorded here (or in a file this ledger links). Work that is
