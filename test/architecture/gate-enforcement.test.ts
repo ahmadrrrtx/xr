@@ -273,7 +273,7 @@ describe("XR-P00 — gate-enforcement inventory (D-021)", () => {
             const scriptName = m[1]!;
             if (scriptName.includes("/") || /\.(ts|js|mjs|sh)$/.test(scriptName) || scriptName.startsWith("-") || scriptName.startsWith("$")) continue;
             if (!(scriptName in scripts)) {
-              violations.push(`${file}: job ${jobId} runs \`bun run ${token}\` but package.json has no root script "${scriptName}"`);
+              violations.push(`${file}: job ${jobId} runs \`bun run ${scriptName}\` but package.json has no root script "${scriptName}"`);
             }
           }
         }
