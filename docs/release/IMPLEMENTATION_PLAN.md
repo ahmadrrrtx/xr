@@ -1,5 +1,14 @@
 # Evidence-backed release-candidate implementation plan
 
+> **Precedence notice (2026-11-01, decision D-005).** This document is a *historical
+> record* of an earlier planning regime. For questions of what to build next, in what
+> order, and with what evidence for the **XR v1 release effort**, the authoritative
+> documents are [`docs/implementation/v1-release/MASTER_PLAN.md`](../implementation/v1-release/MASTER_PLAN.md)
+> and its companions. Nothing here has been deleted or invalidated as history;
+> phases numbered here are not the phases in force. `AGENTS.md` and
+> `docs/CONSTITUTION.md` continue to govern *how* work is done.
+
+
 Created after Phase 0 baseline on 2026-10-26, commit `e25afd362e80485340a322e60a97a04d41b6bd51`. Status starts OPEN; updates require executed acceptance tests, not just code. Findings are classified in SECURITY_AUDIT and RELEASE_AUDIT. Use existing architecture/tooling; one build/test lane at a time, Bun 1.4.2, ~2 GB RAM, CARGO_BUILD_JOBS=1. No model weights or competitor/container installs.
 
 ## Task register
