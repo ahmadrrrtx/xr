@@ -7,8 +7,13 @@
  *              /research?q=…&start=1    prefill + run (palette "?" prefix)
  *              /research?q=…&via=voice  follow the engine's voice run
  *              /research?session=r_…    open a stored session
+ *
+ * UI-redesign 2026-10-29: a stage rail + evidence matrix join the article,
+ * and a grounded chat dock (⌘J) answers from the run on screen. The article
+ * column is a <section> (AppShell already owns the single <main> landmark)
+ * and is a labelled, keyboard-focusable scroll region.
  */
-import { PanelRightOpen } from 'lucide-react';
+import { MessageCircle, PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -20,6 +25,7 @@ import '@/styles/research.css';
 
 import { MainColumn } from './components/MainColumn';
 import { QueryPanel } from './components/QueryPanel';
+import { ResearchChat } from './components/ResearchChat';
 import { SourcesPanel } from './components/SourcesPanel';
 
 const SOURCES_MIN = 200;
@@ -38,6 +44,7 @@ export default function ResearchScreen() {
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [sourcesW, setSourcesW] = useState(SOURCES_DEFAULT);
   const [bodyH, setBodyH] = useState(600);
+  const [chatOpen, setChatOpen] = useState(false);
   const phase = useResearchStore((s) => s.phase);
   const collapsed = useResearchStore((s) => s.sourcesCollapsed);
   const announce = useResearchStore((s) => s.announce);
@@ -99,6 +106,11 @@ export default function ResearchScreen() {
         st.toggleSources();
         return;
       }
+      if (mod && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setChatOpen((v) => !v);
+        return;
+      }
       if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
         if (st.report && !isRunningPhase(st.phase)) {
           e.preventDefault();
@@ -144,11 +156,11 @@ export default function ResearchScreen() {
   return (
     <div className="xr-root" data-testid="research-screen" data-phase={phase}>
       <QueryPanel textareaRef={textareaRef} />
-      <main className="xr-pane xr-main" aria-label="Research report" ref={bodyRef}>
+      <section className="xr-pane xr-main xr-main-scroll" aria-label="Research report" ref={bodyRef} tabIndex={0}>
         <div className="xr-main-inner">
           <MainColumn onPick={pick} />
         </div>
-      </main>
+      </section>
       {collapsed ? (
         <div className="xr-pane xr-right" style={{ width: 40, alignItems: 'center', paddingTop: 10 }}>
           <button type="button" className="xr-mini" aria-label={`Show sources panel (${sourceCount})`} title="Sources (⌘/)" onClick={() => useResearchStore.getState().toggleSources(false)} data-testid="sources-expand">
@@ -168,6 +180,21 @@ export default function ResearchScreen() {
           </div>
         </>
       )}
+      {/* Grounded chat dock (⌘J) — answers from the run on screen. */}
+      {chatOpen ? null : (
+        <button
+          type="button"
+          className="xr-chat-launch"
+          aria-label="Ask about this run (⌘J)"
+          title="Ask about this run (⌘J)"
+          data-testid="research-chat-launch"
+          onClick={() => setChatOpen(true)}
+        >
+          <MessageCircle size={15} strokeWidth={1.75} aria-hidden="true" />
+          Ask
+        </button>
+      )}
+      <ResearchChat open={chatOpen} onToggle={setChatOpen} />
       {/* Phase announcements + errors for assistive tech (brief §10). */}
       <div className="sr-only" aria-live="polite" aria-atomic="true" data-testid="research-live">
         {announce ? <span key={announce.n}>{announce.text}</span> : null}

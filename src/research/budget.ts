@@ -38,6 +38,21 @@ export function governedProviderRoute(store: Store, budget: Budget, pricing: Pri
   return { providerId, fallbackReason: null };
 }
 
+/**
+ * Operator-declared rate for one provider/model from the engine config's
+ * provider capabilities (`config.providerEngine.providerCapabilities`), or
+ * undefined. This is the same override agent-service passes to priceFor —
+ * without it the research governor ignores operator-declared rates and fails
+ * closed on any model the sourced registry cannot price (fail-safe, but it
+ * blocks models the operator has explicitly rated). priceFor validates the
+ * declaration itself; an invalid one is ignored, never invented into a price.
+ */
+export function operatorRateFor(config: { providerEngine?: unknown }, providerId: string, model: string): unknown {
+  const capabilities = (config.providerEngine as { providerCapabilities?: Record<string, { models?: Record<string, { cost?: unknown }> }> } | undefined)?.providerCapabilities;
+  const cost = capabilities?.[providerId]?.models?.[model]?.cost;
+  return cost && typeof cost === "object" ? cost : undefined;
+}
+
 export class GovernedResearchBudget implements ResearchBudgetGuard {
   private gov: CostGovernor;
   private lastReason = "";
@@ -69,8 +84,7 @@ export class GovernedResearchBudget implements ResearchBudgetGuard {
 }
 
 /** A no-op guard for local/free models (no $ spend to govern, only a soft step cap). */
-export class LocalResearchBudget implements ResearchBudgetGuard {
-  private steps = 0;
+export class LocalResearchBudget implements ResearchBudgetGuard {  private steps = 0;
   constructor(private maxSteps = 60) {}
   allow(): boolean {
     return this.steps++ < this.maxSteps;

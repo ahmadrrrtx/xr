@@ -90,6 +90,7 @@ export function ChatPane({ workspaceId }: { workspaceId: string }) {
       terminalTail: [...st.consoleLines.slice(-10).map((l) => l.text), ...st.terminalTail.slice(-20)],
       git: st.git ? { branch: st.git.branch, dirty: st.git.dirty, changed: Object.keys(st.git.files).slice(0, 40) } : null,
       devServer: st.devServer ? { state: st.devServer.state, url: st.devServer.url } : null,
+      previewUrl: st.previewVisible ? (st.previewUrlOverride ?? st.devServer?.url ?? null) : null,
     });
   }, [attachActive, workspace?.name, workspace?.path]);
 
@@ -179,7 +180,16 @@ export function ChatPane({ workspaceId }: { workspaceId: string }) {
         </DropdownMenu>
       </div>
 
-      <div ref={scrollRef} className="xb-chat-scroll" onScroll={onScroll} role="log" aria-live="polite" aria-relevant="additions">
+      <div
+        ref={scrollRef}
+        className="xb-chat-scroll"
+        onScroll={onScroll}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        tabIndex={0}
+        aria-label="Builder chat messages"
+      >
         {ready && messages.length === 0 && !streaming ? (
           <div className="xb-chat-empty">
             Ask for a change and XR answers with a diff you can review hunk by hunk.

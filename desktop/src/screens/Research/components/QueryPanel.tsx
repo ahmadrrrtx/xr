@@ -214,7 +214,14 @@ export function QueryPanel({ textareaRef }: { textareaRef: React.MutableRefObjec
             Live log ({st.log.length})
           </button>
           {st.logOpen ? (
-            <pre className="xr-log mt-1" data-testid="live-log" aria-live="off">
+            <pre className="xr-log mt-1" data-testid="live-log" aria-live="off" tabIndex={0} aria-label="Run log" onKeyDown={(e) => {
+              // Keyboard scrolling for a focusable log region (a11y).
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                const el = e.currentTarget;
+                el.scrollTop += e.key === 'ArrowDown' ? 40 : -40;
+                e.preventDefault();
+              }
+            }}>
               {st.log.slice(-120).join('\n')}
             </pre>
           ) : null}

@@ -148,6 +148,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/util/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/ux-status.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/ux/` | @ahmadrrrtx | explicit entry |
+| `test/voice-presets.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/voice.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/voice/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/website/` | @ahmadrrrtx | default (@ahmadrrrtx) |

@@ -130,6 +130,12 @@ export interface BuilderState {
   wrap: boolean;
   minimap: boolean;
 
+  /** UI-redesign 2026-10-29 (VS Code workbench): preview closed until opened;
+   *  the bottom panel keeps its active tab + height across sessions. */
+  previewVisible: boolean;
+  bottomTab: BottomTab;
+  bottomH: number;
+
   detected: DetectedDevServer | null;
   devServer: DevServerStatus | null;
   busy: BusyKind;
@@ -184,6 +190,10 @@ export interface BuilderState {
   clearConsole: () => void;
   setConsoleFilter: (f: ConsoleLevel | 'all') => void;
   setPreviewDevice: (d: PreviewDevice) => void;
+  togglePreview: (open?: boolean) => void;
+  setBottomTab: (tab: BottomTab) => void;
+  setBottomH: (px: number) => void;
+  resetLayout: () => void;
   setPreviewUrlOverride: (url: string | null) => void;
   reloadPreview: () => void;
   setPreviewError: (e: string | null) => void;
@@ -219,7 +229,23 @@ const KEYS = {
   minimap: 'xr.builder.editor.minimap',
   autoSave: 'xr.builder.editor.autosave',
   device: 'xr.builder.preview.device',
+  // UI-redesign 2026-10-29 (VS Code workbench): the preview is closed until
+  // the user opens it, and the bottom panel (terminal/problems/output/tests/
+  // ports) keeps its tab + height across sessions.
+  preview: 'xr.builder.preview.visible',
+  bottomTab: 'xr.builder.bottom.tab',
+  // Phase 5 hardening: the bottom panel's OPEN state persists too — the
+  // acceptance bar is toggle/collapse/resize/restore ALL with persistence.
+  bottomVisible: 'xr.builder.bottom.visible',
 } as const;
+
+/** The bottom panel's five tabs (VS Code's panel set). */
+const BOTTOM_TABS = ['terminal', 'problems', 'output', 'tests', 'ports'] as const;
+export type BottomTab = (typeof BOTTOM_TABS)[number];
+
+/** Panel geometry: header row + clamped body height. */
+export const MIN_BOTTOM_H = 120;
+export const DEFAULT_BOTTOM_H = 240;
 
 /**
  * A denial the human made in the modal needs no second message. A policy
@@ -359,6 +385,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => {
     pendingClose: null,
     treeVisible: true,
     terminalVisible: false,
+    previewVisible: false,
+    bottomTab: 'terminal',
+    bottomH: DEFAULT_BOTTOM_H,
     wrap: false,
     minimap: false,
     detected: null,
@@ -379,12 +408,15 @@ export const useBuilderStore = create<BuilderState>((set, get) => {
       if (st.workspaceId === ws.id && st.project) return;
       st.close();
       set({ workspaceId: ws.id, workspace: ws, projectLoading: true, projectError: null });
-      const [treeVisible, wrap, minimap, autoSave, device] = await Promise.all([
+      const [treeVisible, wrap, minimap, autoSave, device, previewVisible, bottomTab, bottomVisible] = await Promise.all([
         readSettingJSON<boolean>(KEYS.tree),
         readSettingJSON<boolean>(KEYS.wrap),
         readSettingJSON<boolean>(KEYS.minimap),
         readSettingJSON<boolean>(KEYS.autoSave),
         readSettingJSON<PreviewDevice>(KEYS.device),
+        readSettingJSON<boolean>(KEYS.preview),
+        readSettingJSON<BottomTab>(KEYS.bottomTab),
+        readSettingJSON<boolean>(KEYS.bottomVisible),
       ]);
       set({
         treeVisible: treeVisible ?? true,
@@ -392,6 +424,10 @@ export const useBuilderStore = create<BuilderState>((set, get) => {
         minimap: minimap ?? false,
         autoSave: autoSave ?? true,
         previewDevice: device ?? 'desktop',
+        previewVisible: previewVisible ?? false,
+        bottomTab: BOTTOM_TABS.includes(bottomTab as BottomTab) ? (bottomTab as BottomTab) : 'terminal',
+        terminalVisible: bottomVisible ?? false,
+        bottomH: DEFAULT_BOTTOM_H,
       });
       try {
         const project = await openProject(ws.path, ws.name);
@@ -788,7 +824,42 @@ export const useBuilderStore = create<BuilderState>((set, get) => {
       set({ treeVisible: v });
       writeSettingJSON(KEYS.tree, v);
     },
-    toggleTerminal: (open) => set((st) => ({ terminalVisible: open ?? !st.terminalVisible })),
+    toggleTerminal: (open) =>
+      set((st) => {
+        const terminalVisible = open ?? !st.terminalVisible;
+        // Opening the terminal from anywhere lands on the terminal tab of the
+        // bottom panel (VS Code's Ctrl+` behavior). The open state is written
+        // through so a reload restores it (Phase 5 hardening).
+        writeSettingJSON(KEYS.bottomVisible, terminalVisible);
+        return terminalVisible && st.bottomTab !== 'terminal' ? { terminalVisible, bottomTab: 'terminal' as const } : { terminalVisible };
+      }),
+    togglePreview: (open) => {
+      const next = open ?? !get().previewVisible;
+      writeSettingJSON(KEYS.preview, next);
+      set({ previewVisible: next });
+    },
+    setBottomTab: (tab) => {
+      writeSettingJSON(KEYS.bottomTab, tab);
+      set({ bottomTab: tab, terminalVisible: tab === 'terminal' ? true : get().terminalVisible });
+    },
+    setBottomH: (px) => {
+      set({ bottomH: Math.max(MIN_BOTTOM_H, Math.round(px)) });
+    },
+    resetLayout: () => {
+      // Default workbench: tree + chat visible, preview closed, bottom panel
+      // closed, terminal tab, default sizes. Written through so it sticks.
+      writeSettingJSON(KEYS.preview, false);
+      writeSettingJSON(KEYS.bottomTab, 'terminal');
+      writeSettingJSON(KEYS.bottomVisible, false);
+      writeSettingJSON('xr.builder.panes.bottom', DEFAULT_BOTTOM_H);
+      set({
+        previewVisible: false,
+        bottomTab: 'terminal',
+        bottomH: DEFAULT_BOTTOM_H,
+        treeVisible: true,
+        terminalVisible: false,
+      });
+    },
     toggleWrap: () => {
       const v = !get().wrap;
       set({ wrap: v });

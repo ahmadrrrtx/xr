@@ -81,11 +81,42 @@ export function isChatCompletionObject(x: unknown): boolean {
   return Array.isArray((x as any).choices);
 }
 
-/** Accept the actual registry schema, retaining required/additionalProperties/$defs.
- * Legacy property maps are wrapped ONCE, not nested under properties.type. */
+/**
+ * Accept the actual registry schema, retaining required/additionalProperties/$defs.
+ * Legacy property maps are wrapped ONCE, not nested under properties.type.
+ *
+ * UI-redesign 2026-10-29 (verified against ollama 0.40.13): legacy property
+ * maps carry their schema as a bare STRING — `"path": "string (relative
+ * path)"` — which is not valid JSON Schema. Lenient hosts (OpenAI, Groq, …)
+ * ignore property values they do not understand, but strict validators
+ * (ollama's OpenAI-compat endpoint) reject the whole request with HTTP 400,
+ * which surfaced as "provider ollama HTTP 400" for EVERY native-path chat.
+ * Every property value is therefore normalized to a real schema object; the
+ * prose part of the legacy string is preserved as `description` so no
+ * information is lost and the model still sees the hint.
+ */
 export function toolParameters(parameters: Record<string, unknown> | undefined): Record<string, unknown> {
   if (!parameters || Object.keys(parameters).length === 0) return { type: "object", properties: {} };
   if ("properties" in parameters || parameters.type === "object" || "$ref" in parameters) return { ...parameters };
   if (typeof parameters.type === "string") throw new Error("tool parameters must be an object schema");
-  return { type: "object", properties: parameters };
+  const properties: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(parameters)) {
+    properties[name] = typeof value === "string" ? legacyPropertySchema(value) : value;
+  }
+  return { type: "object", properties };
+}
+
+/**
+ * `"string (relative path)"` → `{ type: "string", description: "relative path" }`.
+ * `"string"` → `{ type: "string" }`. Anything unrecognized degrades to a
+ * string-typed property carrying the whole legacy text as its description —
+ * never an invalid bare string in the wire schema.
+ */
+function legacyPropertySchema(spec: string): Record<string, unknown> {
+  const m = /^(string|number|integer|boolean|array)\b\s*(?:\((.*)\))?\s*$/.exec(spec.trim()) ?? /^(string|number|integer|boolean|array)\s+(.*)$/.exec(spec.trim());
+  if (m) {
+    const [, type, description] = m;
+    return description && description.trim() ? { type, description: description.trim() } : { type };
+  }
+  return { type: "string", description: spec.trim() || undefined };
 }

@@ -1,6 +1,10 @@
 /*
  * Centre column states — idle hero, live source feed (+ skeleton report
  * after 3 s of running), error card, and the finished article.
+ *
+ * UI-redesign 2026-10-29: a StageRail tops the column whenever a run is
+ * live or finished, and the EvidenceMatrix closes the article — the
+ * one-glance map from every citation to its evidence.
  */
 import { useReducedMotion } from 'framer-motion';
 import { Search, ShieldAlert } from 'lucide-react';
@@ -10,8 +14,10 @@ import { useNavigate } from 'react-router-dom';
 import { QUICK_STARTS, isLocalSource, isRunningPhase, type UiSource } from '@/research/core';
 import { useResearchStore } from '@/stores/researchStore';
 
+import { EvidenceMatrix } from './EvidenceMatrix';
 import { ReportView } from './ReportView';
 import { Favicon } from './SourceCard';
+import { StageRail } from './StageRail';
 
 const SLIDE_CAP = 30;
 
@@ -118,7 +124,9 @@ function ErrorCard() {
   if (!error) return null;
   return (
     <div className="xr-error" role="alert" data-testid="research-error">
-      <h3>Research couldn't complete</h3>
+      {/* h2 — the error card is a top-level section under the screen h1; an
+          h3 here skips a level and trips axe heading-order. */}
+      <h2 className="xr-error-title">Research couldn't complete</h2>
       <p>{error.message}</p>
       {error.egressBlocked ? (
         <p data-testid="egress-copy">By default XR doesn't access the public internet. Enable web egress in Shield to research online sources, or drop PDFs/local files.</p>
@@ -171,7 +179,13 @@ export function MainColumn({ onPick }: { onPick: (q: string) => void }) {
       </>
     );
   }
-  if (isRunningPhase(phase)) return <LiveFeed />;
+  if (isRunningPhase(phase))
+    return (
+      <>
+        <StageRail />
+        <LiveFeed />
+      </>
+    );
   if (phase === 'error') return <ErrorCard />;
   if (!report) {
     return (
@@ -181,7 +195,9 @@ export function MainColumn({ onPick }: { onPick: (q: string) => void }) {
     );
   }
   return (
-    <ReportView
+    <>
+      <StageRail />
+      <ReportView
       topic={topic}
       report={report}
       index={citations}
@@ -192,8 +208,10 @@ export function MainColumn({ onPick }: { onPick: (q: string) => void }) {
       depth={depth}
       provider={provider}
       model={model}
-      partialReason={phase === 'cancelled' ? 'Cancelled — showing what was gathered before the stop' : partialReason}
-      partialNote={partialNote}
-    />
+        partialReason={phase === 'cancelled' ? 'Cancelled — showing what was gathered before the stop' : partialReason}
+        partialNote={partialNote}
+      />
+      <EvidenceMatrix />
+    </>
   );
 }

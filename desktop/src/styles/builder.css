@@ -671,18 +671,41 @@ html[data-theme='arctic'] {
   min-width: 0;
   min-height: 0;
 }
-.xb-tabs {
+.xb-tabs-row {
   display: flex;
   align-items: stretch;
   height: 32px;
   flex: none;
   border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-base, transparent);
+}
+.xb-tabs {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
 }
 .xb-tabs::-webkit-scrollbar {
   display: none;
+}
+.xb-tab-plus {
+  flex: none;
+  width: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+.xb-tab-plus:hover {
+  color: var(--text-primary);
+  background: var(--bg-raised, rgba(255, 255, 255, 0.04));
 }
 .xb-tab {
   position: relative;
@@ -763,20 +786,6 @@ html[data-theme='graphite'] .xb-tab.is-active::after {
 }
 .xb-tab-x:hover {
   background: var(--border-default);
-  color: var(--text-primary);
-}
-.xb-tab-plus {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  flex: none;
-  border: 0;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-}
-.xb-tab-plus:hover {
   color: var(--text-primary);
 }
 .xb-editor-host {
@@ -1336,4 +1345,189 @@ button.xb-status-item:hover,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── bottom panel (UI-redesign 2026-10-29 · VS Code workbench) ───────────
+ * One strip under the editor: Terminal · Problems · Output · Tests · Ports.
+ * The terminal keeps using .xb-term's internals (xterm host); the Output
+ * tab reuses .xb-console. Height + active tab live in builderStore. */
+.xb-bp {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-height: 0;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-base, var(--editor-bg));
+}
+.xb-bp-head {
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  flex: none;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 4px 0 8px;
+  gap: 2px;
+}
+.xb-bp-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  text-transform: uppercase;
+}
+.xb-bp-tabs::-webkit-scrollbar {
+  display: none;
+}
+.xb-bp-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.xb-bp-tab:hover {
+  color: var(--text-primary);
+}
+.xb-bp-tab.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+.xb-bp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--bg-raised, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.xb-bp-badge.is-error {
+  background: color-mix(in oklab, var(--danger) 22%, transparent);
+  color: var(--danger);
+}
+.xb-bp-spacer {
+  flex: 1 1 auto;
+}
+.xb-bp-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.xb-bp-loading {
+  flex: 1 1 auto;
+  background: var(--editor-bg);
+}
+.xb-bp-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 16px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  overflow-y: auto;
+}
+.xb-bp-empty-tall {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.xb-bp-empty .hint {
+  max-width: 460px;
+  line-height: 1.5;
+}
+.xb-bp-empty code {
+  background: var(--bg-raised, rgba(255, 255, 255, 0.06));
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+.xb-bp-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.xb-bp-problem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.xb-bp-problem:hover {
+  background: var(--bg-raised, rgba(255, 255, 255, 0.04));
+}
+.xb-bp-problem .msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.xb-bp-problem .path {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.xb-bp-problem.is-error {
+  color: var(--danger);
+}
+.xb-bp-problem.is-warning {
+  color: var(--warning);
+}
+.xb-bp-console {
+  flex: 1 1 auto;
+  height: auto;
+  border: 0;
+  border-top: 0;
+}
+.xb-bp-port {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.xb-bp-port .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--success);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--success) 60%, transparent);
+}
+
+/* Keyboard-scroll regions (a11y): the chat log, the editor scroller and the
+ * panel lists are focusable so keyboard users can scroll them; the focus
+ * ring must be visible but calm. */
+.xb-chat-scroll:focus-visible,
+.xb-bp-list:focus-visible,
+.xb-console-list:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+  outline-offset: -2px;
+  border-radius: 4px;
 }

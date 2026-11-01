@@ -70,3 +70,40 @@ test("offline inspection retains only measured fresh health for the same endpoin
   expect(providerGateway.inspectHealth(changed, "ollama")).toBeUndefined();
   expect(requests).toBe(0);
 });
+
+test("GET /api/providers carries the preset metadata the desktop catalog needs (2026-11-01)", async () => {
+  globalThis.fetch = (async () => {
+    throw new Error("unexpected network request");
+  }) as unknown as typeof fetch;
+  invalidateProviderHealthCache();
+  const config = ConfigSchema.parse({});
+  const handler = providersRoutes().find((route) => route.id === "providers.list")!;
+  const response = await handler.handle({
+    config,
+    json: (data) => Response.json(data),
+  } as DaemonRouteContext);
+  const body = (await response!.json()) as any;
+  // Every engine preset — 26 of them — must be listed with the fields the
+  // desktop's "Add a provider" catalog derives from. No silent subset.
+  const presets = providerGateway.list(config);
+  expect(body.providers.length).toBe(presets.length);
+  for (const p of presets) {
+    const row = body.providers.find((r: any) => r.id === p.id);
+    expect(row).toBeDefined();
+    expect(row.label).toBe(p.label);
+    expect(row.kind).toBe(p.kind);
+    expect(row.baseUrl ?? null).toBe(p.baseUrl ?? null);
+    expect(row.docsUrl ?? null).toBe(p.docsUrl ?? null);
+    expect(row.description ?? null).toBe(p.description ?? null);
+    expect(row.authType).toBe(p.authType ?? "bearer");
+    expect(row.keyless).toBe(p.authType === "none");
+    expect(Array.isArray(row.knownModels)).toBe(true);
+  }
+  // Spot checks: a hosted preset and a keyless local runtime.
+  const groq = body.providers.find((r: any) => r.id === "groq");
+  expect(groq.keyless).toBe(false);
+  expect(groq.docsUrl).toContain("groq");
+  const ollama = body.providers.find((r: any) => r.id === "ollama");
+  expect(ollama.keyless).toBe(true);
+  expect(ollama.baseUrl).toContain("11434");
+});

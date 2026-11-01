@@ -1,0 +1,22 @@
+# osv-scanner policy for desktop/bun.lock (renderer devDependencies).
+#
+# Same discipline as the shell's policy: every ignore names its evidence and
+# EXPIRES, so it is re-argued rather than forgotten. Re-add an [[IgnoredVulns]]
+# block only with a live advisory id, an expiry date and the reason the finding
+# is not reachable.
+
+# ── 2026-11-01 CI gate finding (advisory published after 2026-10-29) ─────────
+# minimatch DoS via globparts amplification (GHSA-g3hv-75wg-m249, fixed only in
+# the 11.0.1 major; the advisory's range is "introduced 0"). desktop/bun.lock
+# resolves minimatch@10.2.6 as a TRANSITIVE devDependency of the lint toolchain
+# (eslint 10.11.0 -> @eslint/config-array / @typescript-eslint/typescript-estree
+# declare ^10.2.x, ^3.1.x elsewhere). No runtime code imports it: the renderer
+# bundle (vite build) ships none of the eslint toolchain, and the advisory is a
+# pathological-pattern ReDoS-class amplification — inputs are our own lint
+# globs. No in-range fixed version exists for the ^10.2.x pins; re-argue at
+# expiry or when the eslint chain moves to minimatch 11.
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-02-28
+reason = "minimatch 10.2.6 (GHSA-g3hv-75wg-m249) — potential DoS via globparts amplification, fixed only in the 11.0.1 major (advisory range: all versions below 11.0.1). Transitive devDependency of the eslint 10.11.0 toolchain (@eslint/config-array and @typescript-eslint/typescript-estree pin ^10.2.x), used strictly at lint time over our own glob patterns; nothing from the eslint toolchain is bundled into the shipped renderer. No in-range fix exists for the parents' ^10.2.x pins. Re-argue at expiry."

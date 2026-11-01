@@ -117,20 +117,30 @@ function piperVoice(id: string, model: string, label: string, gender: "male" | "
 }
 
 /**
- * The four named voices. There is no Pakistani-English Piper voice; "Ahmad"
- * is the clearest neutral US-English voice available and is labelled so.
- * Byte counts are the Hugging Face Content-Length of each file (the
- * `.onnx.json` differs per voice — a wrong size here fails the download's
- * integrity check and strands a `.part`, so verify before editing).
+ * The four named voices (2026-11-01 revision). The previous set labelled the
+ * Piper `lessac` voice "Ahmad · male", but lessac is a FEMALE voice — the
+ * owner rightly rejected it. The replacements were chosen per label:
+ *
+ *   Ahmad  en_US-kusal   — the most youthful MALE Piper voice (a boy, not a
+ *                          man); the default. There is no Pakistani-English
+ *                          Piper voice.
+ *   Nova   en_US-kristin — bright, clear female.
+ *   Atlas  en_US-ryan    — the deep, measured male.
+ *   Sage   en_US-amy     — calm, considered female.
+ *
+ * Byte counts are the Hugging Face Content-Length of each file, re-verified
+ * on 2026-11-01 (the `.onnx.json` and `tokens.txt` differ per voice — a
+ * wrong size here fails the download's integrity check and strands a
+ * `.part`, so verify before editing).
  */
 export const TTS_VOICES: readonly VoiceModelEntry[] = [
-  piperVoice("piper-lessac", "en_US-lessac-medium", "Ahmad", "male", "US English", 63_201_425, 921, 4_885),
-  piperVoice("piper-amy", "en_US-amy-medium", "Nova", "female", "US English", 63_201_425, 921, 4_882),
-  piperVoice("piper-alan", "en_GB-alan-medium", "Atlas", "male", "British English", 63_201_430, 921, 4_888),
-  piperVoice("piper-jenny", "en_GB-jenny_dioco-medium", "Sage", "female", "British English", 63_201_430, 921, 4_895),
+  piperVoice("piper-kusal", "en_US-kusal-medium", "Ahmad", "male", "US English", 63_201_425, 921, 4_884),
+  piperVoice("piper-kristin", "en_US-kristin-medium", "Nova", "female", "US English", 63_531_507, 940, 4_968),
+  piperVoice("piper-ryan", "en_US-ryan-medium", "Atlas", "male", "US English", 63_201_425, 921, 4_883),
+  piperVoice("piper-amy", "en_US-amy-medium", "Sage", "female", "US English", 63_201_425, 921, 4_882),
 ];
 export const DEFAULT_STT_ID = "sherpa-small-en";
-export const DEFAULT_TTS_VOICE = "piper-lessac";
+export const DEFAULT_TTS_VOICE = "piper-kusal";
 
 export function entryBytes(e: VoiceModelEntry): number {
   return e.files.reduce((n, f) => n + f.bytes, 0);

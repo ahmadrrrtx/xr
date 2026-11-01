@@ -1,6 +1,6 @@
 /*
  * Global application shell: fixed 52px topbar (also the drag region), the
- * collapsible 72↔240px sidebar, one scrollable content region with route
+ * collapsible 56↔240px sidebar, one scrollable content region with route
  * transitions, and the global overlays (command palette + toasts).
  * Every one of the 14 screens renders inside this layout
  * (docs/SCREEN-BRIEFS.md · GLOBAL APPLICATION SHELL).

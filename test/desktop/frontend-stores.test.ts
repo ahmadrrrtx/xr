@@ -14,6 +14,7 @@
 import { storage, setTauri } from "./helpers/dom-shim.ts";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { useBuilderStore } from "../../desktop/src/stores/builderStore.ts";
 import { useRunsStore } from "../../desktop/src/stores/runsStore.ts";
 import { useEngineStore } from "../../desktop/src/stores/engineStore.ts";
 import { useBrainStore } from "../../desktop/src/stores/brainStore.ts";
@@ -226,5 +227,69 @@ describe("deep links — xr://oauth/callback listener (XR-LAUNCH-013)", () => {
       { kind: "success", code: "warm", state: "s10" },
     ]);
     launchUrls = null;
+  });
+});
+
+// UI-redesign 2026-10-29 · Phase 5 hardening — the Builder workbench layout
+// (preview pane, bottom panel tab/open state) persists through the durable
+// write-through layer, so a reload restores the exact workbench.
+describe("builder workbench persistence", () => {
+  const K = {
+    preview: "xr.builder.preview.visible",
+    bottomTab: "xr.builder.bottom.tab",
+    bottomVisible: "xr.builder.bottom.visible",
+  };
+
+  beforeEach(() => {
+    storage.clear();
+    useBuilderStore.setState({ previewVisible: false, terminalVisible: false, bottomTab: "terminal", bottomH: 240 });
+  });
+
+  test("togglePreview/toggleTerminal/setBottomTab write through to durable storage", () => {
+    const st = useBuilderStore.getState();
+    st.togglePreview(true);
+    st.toggleTerminal(true);
+    st.setBottomTab("tests");
+
+    expect(storage.getItem(K.preview)).toBe("true");
+    expect(storage.getItem(K.bottomVisible)).toBe("true");
+    expect(storage.getItem(K.bottomTab)).toBe('"tests"');
+
+    const s = useBuilderStore.getState();
+    expect(s.previewVisible).toBe(true);
+    expect(s.terminalVisible).toBe(true);
+    expect(s.bottomTab).toBe("tests");
+  });
+
+  test("toggleTerminal(true) lands on the terminal tab even when another tab was active", () => {
+    useBuilderStore.getState().setBottomTab("problems");
+    useBuilderStore.getState().toggleTerminal(true);
+    expect(useBuilderStore.getState().bottomTab).toBe("terminal");
+  });
+
+  test("resetLayout restores the default workbench and writes it through", () => {
+    const st = useBuilderStore.getState();
+    st.togglePreview(true);
+    st.toggleTerminal(true);
+    st.setBottomTab("tests");
+    st.setBottomH(400);
+
+    st.resetLayout();
+
+    expect(storage.getItem(K.preview)).toBe("false");
+    expect(storage.getItem(K.bottomTab)).toBe('"terminal"');
+    expect(storage.getItem(K.bottomVisible)).toBe("false");
+    expect(storage.getItem("xr.builder.panes.bottom")).toBe("240");
+
+    const s = useBuilderStore.getState();
+    expect(s.previewVisible).toBe(false);
+    expect(s.terminalVisible).toBe(false);
+    expect(s.bottomTab).toBe("terminal");
+    expect(s.bottomH).toBe(240);
+  });
+
+  test("setBottomH clamps below the minimum panel height", () => {
+    useBuilderStore.getState().setBottomH(40);
+    expect(useBuilderStore.getState().bottomH).toBe(120);
   });
 });

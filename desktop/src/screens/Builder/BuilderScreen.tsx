@@ -2,12 +2,17 @@
  * BuilderScreen (Phase 17) — the 3-pane AI IDE.
  *
  *   Chat (28%, 280–480) | Editor (+ 240px tree) | Preview (28%, 320–520)
- *                                                  └ Console (0–50%, starts 0)
+ *     └ BottomPanel (Terminal·Problems·Output·Tests·Ports)
+ *
+ * UI-redesign 2026-10-29 (VS Code workbench): the preview pane is CLOSED
+ * until opened (TopBar / ⌘⇧P → "Toggle preview") instead of always mounted;
+ * the terminal drawer and the preview console merged into one bottom panel
+ * whose tab, open state and height persist across sessions.
  *
  * Owns layout sizes, the screen-level hotkeys and the two cmdk dialogs.
  * Everything stateful lives in builderStore; the engine owns the files.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Resizer } from '@/components/Resizer';
@@ -20,6 +25,7 @@ import type { Workspace } from '@/workspaces/types';
 
 import '@/styles/builder.css';
 
+import { BottomPanel } from './components/BottomPanel';
 import { ChatPane } from './components/ChatPane';
 import { EditorPane } from './components/EditorPane';
 import { FileTree } from './components/FileTree';
@@ -27,9 +33,6 @@ import { PreviewPane } from './components/PreviewPane';
 import { BuilderPalette, QuickOpen, type BuilderCommand } from './components/QuickOpen';
 import { TopBar } from './components/TopBar';
 import { diffCardFocus } from './lib/diffFocus';
-
-// xterm is only paid for when a terminal opens.
-const TerminalPane = lazy(() => import('./components/TerminalPane').then((m) => ({ default: m.TerminalPane })));
 
 export default function BuilderScreen() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -50,6 +53,7 @@ export default function BuilderScreen() {
   const projectLoading = useBuilderStore((s) => s.projectLoading);
   const treeVisible = useBuilderStore((s) => s.treeVisible);
   const terminalVisible = useBuilderStore((s) => s.terminalVisible);
+  const previewVisible = useBuilderStore((s) => s.previewVisible);
   const [terminalCwd, setTerminalCwd] = useState('');
 
   useEffect(() => {
@@ -72,8 +76,6 @@ export default function BuilderScreen() {
   // Pane sizes.
   const [chatW, setChatW] = useState(() => defaultPaneWidth(window.innerWidth, 'chat'));
   const [previewW, setPreviewW] = useState(() => defaultPaneWidth(window.innerWidth, 'preview'));
-  const [consoleH, setConsoleH] = useState(0);
-  const [terminalH, setTerminalH] = useState(220);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [bodyH, setBodyH] = useState(600);
   useEffect(() => {
@@ -113,8 +115,9 @@ export default function BuilderScreen() {
       { id: 'close-tab', group: 'File', title: 'Close tab', shortcut: '⌘W', run: () => st().active && void st().closeTab(st().active ?? '') },
       { id: 'reveal', group: 'File', title: 'Reveal project in Finder', run: () => project && void workspaceDb.revealInFinder(project.root) },
       { id: 'tree', group: 'View', title: `${treeVisible ? 'Hide' : 'Show'} file tree`, shortcut: '⌘\\', run: () => st().toggleTree() },
-      { id: 'terminal', group: 'View', title: `${terminalVisible ? 'Hide' : 'Show'} terminal`, shortcut: '⌃`', run: () => (terminalVisible ? st().toggleTerminal(false) : openTerminal()) },
-      { id: 'console', group: 'View', title: `${consoleH > 0 ? 'Hide' : 'Show'} console`, run: () => setConsoleH(consoleH > 0 ? 0 : Math.round(bodyH * 0.3)) },
+      { id: 'terminal', group: 'View', title: `${terminalVisible ? 'Hide' : 'Show'} panel (terminal)`, shortcut: '⌃`', run: () => (terminalVisible ? st().toggleTerminal(false) : openTerminal()) },
+      { id: 'toggle-preview', group: 'View', title: `${previewVisible ? 'Hide' : 'Show'} preview`, run: () => st().togglePreview() },
+      { id: 'reset-layout', group: 'View', title: 'Reset workbench layout', run: () => st().resetLayout() },
       { id: 'wrap', group: 'View', title: `${st().wrap ? 'Disable' : 'Enable'} word wrap`, run: () => st().toggleWrap() },
       { id: 'minimap', group: 'View', title: `${st().minimap ? 'Hide' : 'Show'} minimap`, run: () => st().toggleMinimap() },
       { id: 'focus-chat', group: 'View', title: 'Focus chat', shortcut: '⌘1', run: () => focusPane('chat') },
@@ -129,7 +132,7 @@ export default function BuilderScreen() {
       { id: 'undo-apply', group: 'Chat', title: 'Undo last applied diff', run: () => void st().undoLast(), disabled: !st().lastUndo },
       { id: 'back', group: 'Navigate', title: 'Back to workspace', run: () => ws && navigate(`/workspaces/${ws.id}`) },
     ],
-    [st, newFile, project, treeVisible, terminalVisible, consoleH, bodyH, openTerminal, focusPane, ws, navigate],
+    [st, newFile, project, treeVisible, terminalVisible, previewVisible, openTerminal, focusPane, ws, navigate],
   );
 
   const hotkeys = useMemo<Hotkey[]>(
@@ -215,7 +218,9 @@ export default function BuilderScreen() {
           {workspaceId ? <ChatPane workspaceId={workspaceId} /> : null}
         </aside>
         <Resizer orientation="vertical" storageKey="xr.builder.panes.chat" value={chatW} onChange={setChatW} min={chatMin} max={chatMax} defaultValue={defaultPaneWidth(window.innerWidth, 'chat')} label="Resize chat" />
-        <main className="xb-pane xb-center" aria-label="Editor">
+        {/* A section, not a <main>: AppShell owns the screen's single main
+            landmark (axe: landmark-main-is-top-level / no-duplicate-main). */}
+        <section className="xb-pane xb-center" aria-label="Editor">
           {projectError ? (
             <div className="xb-center-msg" data-testid="builder-project-error">
               <h2>Couldn't open this project</h2>
@@ -237,20 +242,19 @@ export default function BuilderScreen() {
                 <EditorPane onQuickOpen={() => setQuickOpen(true)} onNewFile={newFile} onOpenTerminal={() => openTerminal()} onStartDev={() => void st().startDev()} />
               </div>
               {terminalVisible ? (
-                <>
-                  <Resizer orientation="horizontal" storageKey="xr.builder.panes.terminal" value={terminalH} onChange={setTerminalH} min={120} max={Math.max(120, Math.round(bodyH * 0.6))} defaultValue={220} invert label="Resize terminal" />
-                  <Suspense fallback={<div className="xb-term" style={{ height: terminalH }} aria-busy="true" />}>
-                    <TerminalPane projectId={project.id} cwd={terminalCwd ? `${project.root}/${terminalCwd}` : project.root} height={terminalH} onClose={() => st().toggleTerminal(false)} />
-                  </Suspense>
-                </>
+                <BottomPanel projectId={project.id} cwd={terminalCwd ? `${project.root}/${terminalCwd}` : project.root} bodyH={bodyH} />
               ) : null}
             </>
           )}
-        </main>
-        <Resizer orientation="vertical" storageKey="xr.builder.panes.preview" value={previewW} onChange={setPreviewW} min={previewMin} max={previewMax} defaultValue={defaultPaneWidth(window.innerWidth, 'preview')} invert label="Resize preview" />
-        <aside className="xb-pane" style={{ width: clampPane(previewW, previewMin, previewMax), flex: 'none' }} aria-label="Live preview">
-          <PreviewPane consoleHeight={consoleH} onConsoleHeight={setConsoleH} paneHeight={bodyH} />
-        </aside>
+        </section>
+        {previewVisible ? (
+          <>
+            <Resizer orientation="vertical" storageKey="xr.builder.panes.preview" value={previewW} onChange={setPreviewW} min={previewMin} max={previewMax} defaultValue={defaultPaneWidth(window.innerWidth, 'preview')} invert label="Resize preview" />
+            <aside className="xb-pane" style={{ width: clampPane(previewW, previewMin, previewMax), flex: 'none' }} aria-label="Live preview">
+              <PreviewPane />
+            </aside>
+          </>
+        ) : null}
       </div>
       <QuickOpen open={quickOpen} onOpenChange={setQuickOpen} />
       <BuilderPalette open={palette} onOpenChange={setPalette} commands={commands} />

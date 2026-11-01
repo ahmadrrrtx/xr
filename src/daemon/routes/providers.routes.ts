@@ -45,6 +45,15 @@ export function providersRoutes(): DaemonRoute[] {
             tier: p.tier,
             kind: p.kind,
             locality: catalog.providers.find(d => d.providerId === p.id)?.locality.locality ?? "unknown",
+            // 2026-11-01: preset metadata so clients can render the full
+            // provider catalog from the engine (single source of truth)
+            // instead of hardcoding a stale subset.
+            description: p.description ?? null,
+            docsUrl: p.docsUrl ?? null,
+            baseUrl: p.baseUrl ?? null,
+            authType: p.authType ?? "bearer",
+            keyless: p.authType === "none",
+            knownModels: p.knownModels ?? [],
             hasKey: cred.available,
             authOk: health?.authOk ?? false,
             healthy: health?.ok ?? false, // legacy pessimistic boolean; use healthState for unknown

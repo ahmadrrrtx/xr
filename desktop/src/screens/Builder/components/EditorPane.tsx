@@ -1,6 +1,11 @@
 /*
  * EditorPane (Phase 17) — tab bar + CodeMirror + status bar, plus the
  * welcome / empty / loading / binary states and the dirty-close dialog.
+ *
+ * UI-redesign 2026-10-29 (a11y): the tab strip is a REAL tablist — the
+ * quick-open (+) button lives outside it; the close affordance is an
+ * aria-hidden span (no nested interactive inside a tab); roving tabindex +
+ * arrow keys move between tabs; Delete/Backspace closes the focused tab.
  */
 import { FileCode2, FolderOpen, Play, Plus, Terminal, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -58,51 +63,80 @@ export function EditorPane({
 
   return (
     <div className="xb-editor-pane">
-      <div ref={tabsRef} className="xb-tabs" role="tablist" aria-label="Open files">
-        {tabs.map((t) => {
-          const title = titles.get(t.path);
-          const dirty = buffers[t.path]?.dirty ?? false;
-          const icon = fileIconFor(t.path);
-          const isActive = t.path === active;
-          return (
-            <button
-              key={t.path}
-              type="button"
-              role="tab"
-              data-path={t.path}
-              aria-selected={isActive}
-              className={cn('xb-tab', isActive && 'is-active', !t.pinned && 'is-preview')}
-              title={t.path}
-              onClick={() => useBuilderStore.getState().setActive(t.path)}
-              onDoubleClick={() => useBuilderStore.getState().pinTab(t.path)}
-              onAuxClick={(e) => {
-                if (e.button === 1) {
-                  e.preventDefault();
-                  close(t.path);
-                }
-              }}
-            >
-              <span className="xb-glyph" style={{ color: icon.color }} aria-hidden="true">
-                {icon.glyph}
-              </span>
-              <span className="xb-tab-title">{title?.title ?? basenameOf(t.path)}</span>
-              {title?.hint ? <span className="xb-tab-hint">{title.hint}</span> : null}
-              <span
-                role="button"
-                tabIndex={-1}
-                aria-label={dirty ? `Close ${basenameOf(t.path)} (unsaved changes)` : `Close ${basenameOf(t.path)}`}
-                className="xb-tab-x"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  close(t.path);
-                }}
-              >
-                {dirty ? <span className="dirty" aria-hidden="true" /> : null}
-                <X size={12} className="x" />
-              </span>
-            </button>
-          );
-        })}
+      <div className="xb-tabs-row">
+        {tabs.length ? (
+          <div
+            ref={tabsRef}
+            className="xb-tabs"
+            role="tablist"
+            aria-label="Open files"
+            onKeyDown={(e) => {
+              // Roving arrows: ←/→ move focus between tabs (wrapping).
+              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+              const items = tabsRef.current?.querySelectorAll<HTMLElement>('[role="tab"]');
+              if (!items || items.length < 2) return;
+              e.preventDefault();
+              const at = Array.prototype.indexOf.call(items, document.activeElement);
+              if (at < 0) return;
+              const next = e.key === 'ArrowRight' ? (at + 1) % items.length : (at - 1 + items.length) % items.length;
+              items[next].focus();
+            }}
+          >
+            {tabs.map((t) => {
+              const title = titles.get(t.path);
+              const dirty = buffers[t.path]?.dirty ?? false;
+              const icon = fileIconFor(t.path);
+              const isActive = t.path === active;
+              return (
+                <button
+                  key={t.path}
+                  type="button"
+                  role="tab"
+                  data-path={t.path}
+                  aria-selected={isActive}
+                  tabIndex={isActive ? 0 : -1}
+                  className={cn('xb-tab', isActive && 'is-active', !t.pinned && 'is-preview')}
+                  title={t.path}
+                  onClick={() => useBuilderStore.getState().setActive(t.path)}
+                  onDoubleClick={() => useBuilderStore.getState().pinTab(t.path)}
+                  onKeyDown={(e) => {
+                    // Delete/Backspace closes the focused tab (VS Code).
+                    if (e.key === 'Delete' || e.key === 'Backspace') {
+                      e.preventDefault();
+                      close(t.path);
+                    }
+                  }}
+                  onAuxClick={(e) => {
+                    if (e.button === 1) {
+                      e.preventDefault();
+                      close(t.path);
+                    }
+                  }}
+                >
+                  <span className="xb-glyph" style={{ color: icon.color }} aria-hidden="true">
+                    {icon.glyph}
+                  </span>
+                  <span className="xb-tab-title">{title?.title ?? basenameOf(t.path)}</span>
+                  {title?.hint ? <span className="xb-tab-hint">{title.hint}</span> : null}
+                  {/* Not a nested button — a tab is already interactive; the
+                      close affordance is aria-hidden and pointer-only, with
+                      Delete/Backspace as its keyboard path. */}
+                  <span
+                    aria-hidden="true"
+                    className="xb-tab-x"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      close(t.path);
+                    }}
+                  >
+                    {dirty ? <span className="dirty" /> : null}
+                    <X size={12} className="x" />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <button type="button" className="xb-tab-plus" aria-label="Quick open (⌘P)" title="Quick open · ⌘P" onClick={onQuickOpen}>
           <Plus size={14} />
         </button>

@@ -25,7 +25,7 @@ import { priceFor, isLocal } from "../cost/pricing.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import type { ResearchDepth, ResearchMode, ResearchSession } from "./types.ts";
 import { WebSearchCapability } from "./search.ts";
-import { GovernedResearchBudget, LocalResearchBudget, governedProviderRoute } from "./budget.ts";
+import { GovernedResearchBudget, LocalResearchBudget, governedProviderRoute, operatorRateFor } from "./budget.ts";
 import { runResearch, summarizeExisting, refreshResearch, type ResearchEngineDeps } from "./engine.ts";
 import { makePlan } from "./plan.ts";
 import { DEPTH_BUDGETS } from "./types.ts";
@@ -52,10 +52,13 @@ function buildEngine(
   // Budget-aware fallback to local (mirrors src/index.ts default-task
   // routing). Phase 2 · F-12 — the decision runs INSIDE the Governor via
   // governedProviderRoute (shared with the daemon's research run route).
+  // Operator-declared rates reach every priceFor here too (same contract as
+  // agent-service), so CLI and daemon runs govern identically.
+  const rate = (p: string, m: string) => priceFor(p, m, { override: operatorRateFor(config, p, m) });
   const { providerId, fallbackReason } = governedProviderRoute(
     store,
     { maxUsd: perTaskBudgetUsd ?? config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
-    priceFor(requested, model),
+    rate(requested, model),
     requested,
     isLocal(requested),
   );
@@ -83,7 +86,7 @@ function buildEngine(
     : new GovernedResearchBudget(
         store,
         { maxUsd: perTaskBudgetUsd ?? config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
-        priceFor(providerId, model),
+        rate(providerId, model),
       );
 
   const deps: ResearchEngineDeps = {

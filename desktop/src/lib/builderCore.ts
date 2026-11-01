@@ -561,6 +561,10 @@ export interface BuilderContextInput {
   terminalTail: readonly string[];
   git: { branch: string | null; dirty: boolean; changed: readonly string[] } | null;
   devServer: { state: string; url: string | null } | null;
+  /** UI-redesign (A7): the live preview URL the workbench is showing, when
+   *  the preview pane is open — the model can reason about what the user
+   *  is looking at ("the preview shows X" questions stop being blind). */
+  previewUrl?: string | null;
 }
 
 const CONTEXT_BUDGET = 12_000;
@@ -573,6 +577,7 @@ export function builderContextText(input: BuilderContextInput): string {
     parts.push(`Git: branch ${input.git.branch ?? '(none)'}, ${input.git.dirty ? `uncommitted changes${changed ? ` in ${changed}` : ''}` : 'clean'}.`);
   }
   if (input.devServer) parts.push(`Dev server: ${input.devServer.state}${input.devServer.url ? ` at ${input.devServer.url}` : ''}.`);
+  if (input.previewUrl) parts.push(`Live preview pane is open at ${input.previewUrl} — the user can see this page.`);
   if (input.openFiles.length) parts.push(`Open files: ${input.openFiles.map((p) => `${p} (${languageFor(p).label})`).join(', ')}.`);
   if (input.selection && input.selection.trim()) parts.push(`Selected text in ${input.activePath ?? 'the editor'}:\n\`\`\`\n${input.selection.slice(0, 3000)}\n\`\`\``);
   if (input.activePath && input.activeContent !== null) {

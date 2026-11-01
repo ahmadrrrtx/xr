@@ -7520,6 +7520,34 @@
                   "context": {
                     "description": "Extra system-prompt context (capped).",
                     "type": "string"
+                  },
+                  "stream": {
+                    "description": "SSE streaming (desktop always true).",
+                    "type": "boolean"
+                  },
+                  "budget": {
+                    "description": "Per-request cost cap (USD).",
+                    "type": "number"
+                  },
+                  "maxSteps": {
+                    "description": "Agent step ceiling.",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "toolsAllow": {
+                    "description": "Tool allowlist.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "toolsDeny": {
+                    "description": "Tool denylist.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [

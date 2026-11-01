@@ -87,6 +87,34 @@ test("native schema is retained once, including required/additionalProperties", 
     properties: { path: { type: "string" } },
   });
 });
+
+// UI-redesign 2026-10-29: legacy string property maps must become VALID JSON
+// Schema — strict validators (ollama 0.40.x OpenAI-compat) reject bare string
+// property values with HTTP 400, breaking every native-path chat on ollama.
+test("legacy string property maps normalize to real JSON Schema objects", () => {
+  expect(toolParameters({ path: "string (relative path)" })).toEqual({
+    type: "object",
+    properties: { path: { type: "string", description: "relative path" } },
+  });
+  expect(toolParameters({ name: "string" })).toEqual({
+    type: "object",
+    properties: { name: { type: "string" } },
+  });
+  expect(toolParameters({ count: "number (how many commits to show, default 10)" })).toEqual({
+    type: "object",
+    properties: { count: { type: "number", description: "how many commits to show, default 10" } },
+  });
+  // unparseable prose still degrades to a typed property, never a bare string
+  expect(toolParameters({ weird: "anything at all" })).toEqual({
+    type: "object",
+    properties: { weird: { type: "string", description: "anything at all" } },
+  });
+  // object property values pass through untouched
+  expect(toolParameters({ path: { type: "string", description: "kept" } })).toEqual({
+    type: "object",
+    properties: { path: { type: "string", description: "kept" } },
+  });
+});
 test("unknown/account-dependent pricing is unavailable, dated standard rates change explicitly", () => {
   const now = Date.parse("2026-10-26T00:00:00Z");
   expect(pricingAvailable(priceFor("unknown", "anything", { now }))).toBe(

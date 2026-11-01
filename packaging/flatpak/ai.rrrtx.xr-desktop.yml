@@ -16,7 +16,11 @@
 
 id: ai.rrrtx.xr-desktop
 runtime: org.gnome.Platform
-runtime-version: "46"
+# 2026-11-01: bumped 46 → 48. Flathub retired the GNOME 46 runtime's SDK
+# extensions (`Nothing matches org.freedesktop.Sdk.Extension.rust-stable
+# in remote flathub` in run 41292497162), so a 46-based install can no
+# longer resolve at all. 48 is current and still ships webkit2gtk-4.1.
+runtime-version: "48"
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable

@@ -11,7 +11,7 @@
  */
 import { AnimatePresence, motion } from 'framer-motion';
 import { PanelLeft } from 'lucide-react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { Logo } from '@/components/brand/Logo';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -27,7 +27,9 @@ import { selectBudgetState, useBudgetStore } from '@/stores/budgetStore';
 import { selectShieldState, useShieldStore } from '@/stores/shieldStore';
 import { useSidebarStore } from '@/stores/sidebar';
 
-const COLLAPSED_WIDTH = 72;
+// UI-redesign 2026-10-29: 56px rail (fits 40px touch targets + 8px gutters)
+// instead of 72 — a true VS Code-style slim rail.
+const COLLAPSED_WIDTH = 56;
 const EXPANDED_WIDTH = 240;
 
 /** Settings → Appearance icon size → Lucide pixels. */
@@ -105,6 +107,17 @@ function SidebarNavItem({
   const isBudget = item.id === 'budget';
   const isShield = item.id === 'shield';
 
+  // Active route, computed HERE as a plain string. The Radix Tooltip Trigger
+  // wraps this NavLink with asChild, and its Slot merges className by
+  // string-join — NavLink's className FUNCTION is stringified before it ever
+  // runs, and the quote-wrapped sizing classes never tokenize as classes.
+  // (Found by the 2026-10-29 sweep's icon-centering assertion: collapsed
+  // items were rendering 20px tall and left-aligned. Same matching semantics
+  // as NavLink's default — segment-boundary prefix match, non-root paths.)
+  const location = useLocation();
+  const isActive =
+    location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+
   const link = (
     <NavLink
       to={item.path}
@@ -116,49 +129,45 @@ function SidebarNavItem({
       // see. The Radix Tooltip below remains the primary surface in collapsed
       // mode (richer styling, consistent with the rest of the app).
       title={`${item.label} — ${item.description}`}
-      className={({ isActive }) =>
-        cn(
-          'group relative flex items-center rounded-md no-underline transition-colors duration-150 ease-out',
-          'focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none',
-          collapsed ? 'h-11 w-11 justify-center' : 'h-10 w-full gap-2.5 px-2',
-          isActive
-            ? 'bg-[color-mix(in_oklab,var(--accent)_10%,transparent)]'
-            : 'hover:bg-bg-raised'
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          {isActive && <ActiveBar tall={collapsed} />}
-          <span className="relative flex shrink-0 items-center">
-            <Icon
-              size={iconSize}
-              strokeWidth={isActive ? 2 : 1.5}
-              aria-hidden="true"
-              className={cn(
-                'transition-colors duration-150 ease-out',
-                isActive
-                  ? 'text-text-primary'
-                  : 'text-text-secondary group-hover:text-text-primary'
-              )}
-            />
-            {isBudget && <BudgetDot />}
-            {isShield && <ShieldDot />}
-          </span>
-          {!collapsed && (
-            <span
-              className={cn(
-                'text-[14px] whitespace-nowrap transition-colors duration-150 ease-out',
-                isActive
-                  ? 'text-text-primary font-medium'
-                  : 'text-text-secondary group-hover:text-text-primary'
-              )}
-            >
-              {item.label}
-            </span>
-          )}
-        </>
+      className={cn(
+        'group relative flex items-center rounded-md no-underline transition-colors duration-150 ease-out',
+        'focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none',
+        collapsed ? 'h-10 w-full justify-center' : 'h-10 w-full gap-2.5 px-2',
+        isActive
+          ? 'bg-[color-mix(in_oklab,var(--accent)_10%,transparent)]'
+          : 'hover:bg-bg-raised'
       )}
+    >
+      <>
+        {isActive && <ActiveBar tall={collapsed} />}
+        <span className="relative flex shrink-0 items-center">
+          <Icon
+            size={iconSize}
+            strokeWidth={isActive ? 2 : 1.5}
+            aria-hidden="true"
+            className={cn(
+              'transition-colors duration-150 ease-out',
+              isActive
+                ? 'text-text-primary'
+                : 'text-text-secondary group-hover:text-text-primary'
+            )}
+          />
+          {isBudget && <BudgetDot />}
+          {isShield && <ShieldDot />}
+        </span>
+        {!collapsed && (
+          <span
+            className={cn(
+              'text-[14px] whitespace-nowrap transition-colors duration-150 ease-out',
+              isActive
+                ? 'text-text-primary font-medium'
+                : 'text-text-secondary group-hover:text-text-primary'
+            )}
+          >
+            {item.label}
+          </span>
+        )}
+      </>
     </NavLink>
   );
 
@@ -196,7 +205,7 @@ function CollapseButton({ collapsed }: { collapsed: boolean }) {
       onClick={toggle}
       className={cn(
         'text-text-secondary hover:bg-bg-raised hover:text-text-primary focus-visible:ring-accent flex items-center rounded-md transition-colors duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none',
-        collapsed ? 'h-11 w-11 justify-center' : 'h-10 w-full justify-end px-2'
+        collapsed ? 'h-10 w-full justify-center' : 'h-10 w-full justify-end px-2'
       )}
     >
       <motion.span
@@ -265,7 +274,10 @@ export function Sidebar() {
       {/* Middle — the 14 fixed-order nav items (scrolls only when short) */}
       <nav
         aria-label="Screens"
-        className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-x-hidden overflow-y-auto px-2 pt-2"
+        className={cn(
+          'xr-rail-scroll flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto pt-2',
+          collapsed ? 'items-center px-0' : 'items-stretch px-2'
+        )}
       >
         {NAV_ITEMS.map((item) => (
           <SidebarNavItem
