@@ -385,3 +385,26 @@ engineering governance, release identity, or legal/compliance surfaces.
 | Affected | `XR-P00` preflight and acceptance (`P00-AC1`, `P00-AC2`), `EVIDENCE_LOG.md` method notes, this plan's own verification habits. |
 | Approval | **APPROVED** |
 | Revision | R1 2026-11-01. |
+
+---
+
+## D-024 — `XR-P00` acceptance ruling (repo half) and the boundary of what acceptance may unlock
+
+| Field | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Problem | `XR-P00` is `IMPLEMENTATION_REPORTED`. The Plan Owner must rule on it. The phase has two halves: an **in-repo** half (wired gates + a gate-enforcement test + no scope violation) and an **owner-actions** half (deepen ruleset `19119579`; resolve D-020). Ruling "accept" or "reject" wholesale is wrong in both directions: rejecting the repo half discards verified, correct work; accepting the owner half would mark a governance control as in force while `E-37` shows a PR merged with **zero reviews**. |
+| Options | (a) `ACCEPTED` outright. (b) `FAILED` (owner items unmet). (c) **Split ruling**: `VERIFIED — IN-REPO HALF`, owner actions carried as dated, named, tracked obligations, and a standing prohibition on using P00 as an authorization to act on governance. |
+| Decision | **(c)**. `P00-AC3/AC6…AC11` = **PASS**, independently re-verified 2026-11-02 (`E-36`). `P00-AC1/AC2/AC4` = **BLOCKED — OWNER ACTION**, exactly as the prompt's own verification column permits for AC1. `P00-AC5` = **FAIL, environmental** (monolithic `bun test` OOM-killed, EXIT 137; a segmented runner substitutes file coverage). No `§7` hard constraint was violated — checked individually, none applies. |
+| Reasoning | The prompt states *"violating any one \[hard constraint\] fails the phase"* and lists no constraint on §4.1/§4.2/§4.3 being externally applied. `MASTER_PLAN` §P01.4 requires only `XR-P00 ACCEPTED` as P01's gate. The audit's `XRD-013` — gate enforcement — **is** closed and is the phase's substance. Therefore the repo half is acceptable and does **not** authorize anything governance-related. The ruleset and D-020 are real debts with a real owner and are carried forward, not absorbed. |
+| Trade-offs | An "accepted" phase with open owner items can look like papering over. Mitigated by (i) recording the split explicitly here, (ii) keeping the obligations rows in `PHASE_STATUS.md`, and (iii) forbidding any phase to *rely* on a governance control until the obligation is discharged. A stricter reading would block P01 indefinitely on a setting only the repo admin can change — that stalls the critical path without improving safety. |
+| Affected | `PHASE_STATUS.md` (`XR-P00`, `XR-P01`), `EVIDENCE_LOG.md` (`E-44`), this entry. |
+| Approval | **APPROVED** by Plan Owner (Agent Mode, acting on the user's instruction of 2026-11-02). **Open point for the repository owner:** this ruling is recorded *in-repo*; the owner's countersignature on D-024 (and on D-001/D-022) is what makes the governance half binding. |
+| Revision | R1 2026-11-02. |
+
+### D-024.1 — Standing prohibitions carried by this acceptance
+
+1. **No phase may treat `/api/health`, ruleset state, or `bun run ci` as green on the strength of this acceptance.** `changelog:check` is still EXIT 1; `bun run ci` still cannot exit 0.
+2. **`XR-P01` may proceed on the in-repo half only.** Its §4 does not touch governance, settings, or release identity, so no owner action is required to start it. If P01 finds it needs any of those, it stops and escalates.
+3. **The P00 owner payload is not to be re-attempted by any executor.** It needs repo admin; executors do not have it and must not request it.
+4. **Acceptance is not a re-scope of D-020.** D-020 remains `OWNER-REQUIRED`; the `GATE_EXEMPTIONS` entry for `changelog:check` is a self-expiring marker, not a permanent waiver.
