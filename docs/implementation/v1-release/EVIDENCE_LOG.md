@@ -649,6 +649,39 @@ Method note: the push used `GIT_ASKPASS` with a `0600` helper script so the cred
 never written into the remote URL, `.git/config`, or any tracked file; a `grep` for the
 token fragment across the whole worktree returned **zero** matches before and after.
 
+**E-34 — `XR-P00` r2 execution (2026-11-01, executor evidence; full record in `phase-reports/XR-P00-report-r2.md`)** ⚠️ (in-repo half done; owner-gated half blocked)
+
+Start tree `230ad998` (product baseline `6b9cb599` + PR #205 plan documents and four
+banners only — the plan set was **committed**, not the dirty tree r2 §3.1 expects;
+owner directed the executor to the committed set). Local branch
+`phase/P00-governance-substrate`, commits `518c9835` (ci) + `4e9ec9e8` (test),
+**unpushed**. Bun `1.4.2` (pin-exact), Linux x86_64, 2 CPU / 1.9 GiB.
+
+```
+preflight: changelog:check EXIT=1 (as expected) · typecheck/arch-tests(71)/ci:policy/claim-lint/release:check EXIT=0
+rulesets: GET /rulesets -> 19119579 active; full params unchanged (approvals 0, code-owner false, Quality Gate x2)
+note: legacy GET /branches/main today says protected:true + protection.enabled:false (E-16 saw false) — not used, per D-023
+new test at baseline: EXIT=1, exactly placeholder-lint/desktop:sink-lint/ci-capability-gate/website:marketplace:check unwired
+after wiring (4 own-named truth-gate steps): gate test EXIT=0 (98 ms); unit-tier script 1382 ms / 5000 ms budget
+negative proofs: remove placeholder step -> EXIT=1 naming it; remove truth-gate from quality-gate needs -> EXIT=1 naming 6 gates; both restored (diff md5 identical)
+segmented suite: bash scripts/parity-suite-runner.sh linux EXIT=0, "executed 484 of 484 files" (485 - 1 quarantined), 0 "(fail)" lines
+bun run ci: EXIT=137 — monolithic bun test OOM-killed (dmesg: Killed process 3996 (bun), anon-rss 862168kB) at test/security/nodevm-wording.test.ts after 4183 pass / 0 fail; NOT a pass. Every other battery sub-gate run individually: all EXIT=0 except changelog:check EXIT=1
+D-020a preview (no write): 432 lines / 404 commits; previousTagFor("1.1.1-rc.1")=v1.0.0 (patch parses as NaN) so 247 commits already documented under ## 1.1.0 would be re-listed — STOPPED per prompt, recorded as a defect to report, not fixed
+OWNER ACTION (§4.1): executor has no GitHub credentials (gh absent, push attempt -> auth failure EXIT=128, NOT a GH013 behavioural proof). Exact ruleset payload + D-022 context discrepancy in report §16.
+Actions at 230ad998 (observed 2026-11-01): CI success, Cross-Platform success (once), Desktop App cancelled, Clean-Machine Journey cancelled — no lane claimed green on this evidence.
+```
+
+**E-35 — `XR-P00` pushed; hosted CI evidence (2026-11-01; record in `phase-reports/XR-P00-report-r2-supplement-01.md`)** ✅ (Quality Gate) / ⚠️ (two native lanes)
+
+```
+owner authorized push+PR with a supplied credential (0600 /tmp file, never in repo; worktree scan 0 hits; hosted gitleaks success; owner to rotate)
+push: phase/P00-governance-substrate only; main verified unchanged 230ad998. PR #206 opened, NOT merged, no settings changed.
+attempt 1 (4be679e4): Truth gate SUCCESS (4 new steps green); Typecheck FAILURE TS2304 gate-enforcement.test.ts(276,71) 'token' — one missed rename, executor bug; fixed 761df3df (local typecheck EXIT=0 first, this time)
+attempt 2 (761df3df): CI SUCCESS (Quality Gate success, actionlint success); Cross-Platform SUCCESS (win/mac/linux parity incl. new test); Supply Chain/Channel/npm Pack/Audit SUCCESS.
+Journey + Desktop: CANCELLED (macos-14 legs cancelled; macos-15-intel journey failed at "Upload journey evidence") — same pattern on main@230ad998 pre-branch; untouched code; XR-P09 scope, not fixed.
+bun run ci local verdict unchanged FAIL (OOM monolith + changelog:check EXIT=1 D-020). AC1/AC2/AC4 remain BLOCKED-OWNER as in E-34.
+```
+
 ---
 
 ## §7 Actions deliberately **not** taken (and why)

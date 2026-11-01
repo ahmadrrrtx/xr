@@ -147,6 +147,23 @@ jobs:
       - name: Verify no unsupported public claim
         run: bun run claim-lint
 
+      # XR-P00 (XRD-013, D-021): these four battery gates were invoked by
+      # no workflow at all, so the required Quality Gate could pass while
+      # they never ran. They live here (Bun + dependencies already set up;
+      # truth-gate is already in quality-gate's `needs:`) as individually
+      # named steps, so each gate stays observable in the run summary.
+      # `changelog:check` is deliberately NOT wired here: it exits 1 at
+      # the baseline and its sequencing is D-020 (owner decision; see the
+      # GATE_EXEMPTIONS entry in test/architecture/gate-enforcement.test.ts).
+      - name: Gate placeholder-lint (XR-P00)
+        run: bun run placeholder-lint
+      - name: Gate desktop:sink-lint (XR-P00)
+        run: bun run desktop:sink-lint
+      - name: Gate ci-capability-gate (XR-P00)
+        run: bun run ci-capability-gate
+      - name: Gate website:marketplace:check (XR-P00)
+        run: bun run website:marketplace:check
+
       # XR-LAUNCH-022: the support matrix is generated from journey evidence;
       # a hand edit or a stale block fails here.
       - name: Support matrix is generated from evidence (not hand-edited)
