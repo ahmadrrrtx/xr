@@ -408,3 +408,29 @@ engineering governance, release identity, or legal/compliance surfaces.
 2. **`XR-P01` may proceed on the in-repo half only.** Its §4 does not touch governance, settings, or release identity, so no owner action is required to start it. If P01 finds it needs any of those, it stops and escalates.
 3. **The P00 owner payload is not to be re-attempted by any executor.** It needs repo admin; executors do not have it and must not request it.
 4. **Acceptance is not a re-scope of D-020.** D-020 remains `OWNER-REQUIRED`; the `GATE_EXEMPTIONS` entry for `changelog:check` is a self-expiring marker, not a permanent waiver.
+
+---
+
+## D-025 — Which ruleset parameters were changed, and which were deliberately not
+
+| Field | Value |
+|---|---|
+| Date | 2026-11-02 |
+| Problem | D-001/D-022 call for `required_approving_review_count: 1` **and** `require_code_owner_review: true`. Applying either is, in this repository, catastrophic rather than merely strict: `E-46` shows exactly **one** collaborator (`ahmadrrrtx`, admin), `CODEOWNERS` routes `.github/**`, `src/**`, `test/**`, `docs/**` to a single owner, and GitHub forbids self-approval. Every PR would become permanently unmergeable — including the PR carrying the fix. |
+| Options | (a) Follow D-001 literally (approvals 1 + code-owner). (b) Change nothing. (c) **Apply the part that is provably safe now** (de-duplicate the required checks + require the aggregates that are actually green on `pull_request`), and hold the review parameters behind a named precondition. |
+| Decision | **(c)**. Applied 2026-11-02 (`E-45`): required checks `["Quality Gate" ×2]` → `["Quality Gate", "Cross-Platform gate", "Supply Chain gate", "npm Pack Smoke gate"]`; all four verified to fire on `pull_request` and green at `4adcec2`. `required_approving_review_count` stays `0` and `require_code_owner_review` stays `false` **until a second reviewer exists**. |
+| Reasoning | Requiring a context that does not run on PRs, or a review that cannot physically be given, does not add enforcement — it adds a permanent deadlock and trains everyone to bypass. The enforceable half was applied and proven behaviourally (rejected push, blocked merge); the unenforceable half is documented with its precondition instead of being silently dropped or blindly applied. |
+| Trade-offs | The "one actor self-merges" weakness persists until a second collaborator is added — this is a real, unresolved gap, recorded as an obligation, not a solved problem. `Cross-Platform gate` was green at `4adcec2` but is a heavy matrix; if it flakes, it is now merge-blocking. |
+| Precondition to finish D-001 | Add a second collaborator (or an org team) with `write`; then set `required_approving_review_count: 1` and `require_code_owner_review: true`. Both are one `PUT` away; the payload is in `E-45`. |
+| Affected | Ruleset `19119579`; `PHASE_STATUS.md` obligations; `P00-AC1`. |
+| Approval | **APPROVED** by Plan Owner (Agent Mode) on the user's explicit instruction of 2026-11-02 to act as decision-maker on the data. **Repository-owner countersignature still required** — this ruling is recorded in-repo; the setting already changed. |
+| Revision | R1 2026-11-02. |
+
+### D-025.1 — Why the two aggregates that are red were left out
+
+`Desktop gate (bundles + latest.json + journey)` and `Clean-Machine Journey gate` were
+**failure/cancelled at `4adcec2`**. Requiring them now would block every merge for a reason
+unrelated to the PR. They stay out, and `XR-P09` must add them once green — unchanged from
+the existing obligation. The remaining two declared-but-not-required aggregates
+(`Desktop gate`, `Clean-Machine Journey gate`) are therefore still unenforced, which is
+recorded rather than papered over.

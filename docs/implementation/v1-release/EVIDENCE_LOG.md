@@ -816,6 +816,44 @@ Ruling: VERIFIED — IN-REPO HALF. Owner actions carried as obligations (D-024.1
 Unlocks: XR-P01 in-repo half only. Does NOT unlock any governance/release-identity action.
 ```
 
+**E-45 — Ruleset `19119579` deepened (partially) and behaviourally proven (2026-11-02)** ✅ AC1-partial / ✅ AC2
+
+```
+BEFORE: required_status_checks = ["Quality Gate" x2]   (duplicate), approvals 0, code_owner false
+AFTER : required_status_checks = ["Quality Gate", "Cross-Platform gate", "Supply Chain gate", "npm Pack Smoke gate"]
+        (integration_id 15368 on each; strict=false; do_not_enforce_on_create=false; bypass_actors [])
+PUT /repos/ahmadrrrtx/xr/rulesets/19119579 → HTTP 200, updated_at 2026-11-02T00:26:01+05:00
+approvals 0 / code_owner false deliberately UNCHANGED — see D-025 (would brick all PRs)
+
+Preconditions checked before requiring each context: all four workflows fire on pull_request
+(ci.yml, cross-platform.yml, supply-chain.yml, npm-pack-smoke.yml) and all four are green
+check-runs at 4adcec2b. The two red lanes (Desktop gate, Clean-Machine Journey gate) were NOT added.
+
+D-023 behavioural proof (all three signals):
+1. settings read  → four distinct contexts, duplicate gone, bypass []          ✅
+2. rejected push  → git push 04122b76:refs/heads/main
+   "remote: error: GH013: Repository rule violations found for refs/heads/main
+    remote: - 4 of 4 required status checks are expected."            PUSH_EXIT=1  ✅
+3. blocked merge  → PUT /pulls/207/merge → HTTP 405 "Repository rule violations found
+                    2 of 4 required status checks are expected."                  ✅
+   PR #207 left OPEN, merged=false; main verified still 4adcec2b after both attempts.
+Aggregates observed registering on the PR head: Supply Chain gate completed/success,
+npm Pack Smoke gate queued — i.e. the newly-required contexts do run on pull_request.
+```
+
+**E-46 — `require_code_owner_review` would be fatal in this repository (data, not opinion)** 🚫
+
+```
+GET /repos/ahmadrrrtx/xr/collaborators → 1 entry: ahmadrrrtx (admin)
+CODEOWNERS routes .github/**, src/**, test/**, docs/** (and more) to a single owner
+GitHub forbids self-approval → with code_owner_review=true or approvals>=1,
+every PR touching those paths is permanently unmergeable by the only collaborator
+```
+
+This is why D-025 leaves both at their current values and records the precondition
+(add a second reviewer) that would make D-001 satisfiable. It is not a loosening of D-001;
+it is the observation that D-001's mechanism cannot function in a one-person repository.
+
 
 ---
 
