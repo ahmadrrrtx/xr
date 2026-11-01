@@ -490,14 +490,26 @@ jobs:
       # forensics without touching the installed app.
       - name: Assemble portable (no-install) zip for Windows
         if: matrix.runsOn == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
-          set -e
-          mkdir -p desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable/xr-portable
-          cp "desktop/src-tauri/target/release/xr-desktop.exe" desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable/xr-portable/
-          cp desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable/xr-portable/
-          (cd desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable && tar -a -c -f ../xr-portable-win.zip xr-portable)
-          ls -la desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip
+          # 2026-11-01: `tar -a -f out.zip` on the Windows runner writes a TAR
+          # despite the .zip name (bsdtar has no zip writer) — the artifact
+          # unzipped as "not a zip". Compress-Archive makes a real zip.
+          $ErrorActionPreference = 'Stop'
+          $dir = "desktop/src-tauri/${{ matrix.targetDir }}/bundle/portable/xr-portable"
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          Copy-Item "desktop/src-tauri/target/release/xr-desktop.exe" $dir
+          Copy-Item "desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe" $dir
+          $tmp = Join-Path $env:RUNNER_TEMP 'xr-portable-stage'
+          if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+          # Compress-Archive keeps the folder itself when given the parent,
+          # so stage the folder name by copying into a temp root.
+          New-Item -ItemType Directory -Path $tmp | Out-Null
+          Copy-Item $dir "$tmp/xr-portable" -Recurse
+          Compress-Archive -Path "$tmp/xr-portable" -DestinationPath "desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip" -Force
+          $sig = [IO.File]::ReadAllBytes("desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip")[0..1]
+          if ($sig[0] -ne 0x50 -or $sig[1] -ne 0x4B) { throw "portable zip is not a ZIP (bad signature)" }
+          Get-Item "desktop/src-tauri/${{ matrix.targetDir }}/bundle/xr-portable-win.zip" | Format-Table Name,Length
       - name: Upload portable artifact
         if: matrix.runsOn == 'windows-latest'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
