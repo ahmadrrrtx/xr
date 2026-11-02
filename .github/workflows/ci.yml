@@ -152,9 +152,10 @@ jobs:
       # they never ran. They live here (Bun + dependencies already set up;
       # truth-gate is already in quality-gate's `needs:`) as individually
       # named steps, so each gate stays observable in the run summary.
-      # `changelog:check` is deliberately NOT wired here: it exits 1 at
-      # the baseline and its sequencing is D-020 (owner decision; see the
-      # GATE_EXEMPTIONS entry in test/architecture/gate-enforcement.test.ts).
+      # `changelog:check` was excluded at XR-P00 because it exited 1 at the
+      # baseline (D-020). D-026 resolved that: the `previousTagFor` prerelease
+      # mis-range is fixed, a generated entry exists, and the gate is wired
+      # here with its GATE_EXEMPTIONS entry deleted (XR-P08).
       - name: Gate placeholder-lint (XR-P00)
         run: bun run placeholder-lint
       - name: Gate desktop:sink-lint (XR-P00)
@@ -163,6 +164,8 @@ jobs:
         run: bun run ci-capability-gate
       - name: Gate website:marketplace:check (XR-P00)
         run: bun run website:marketplace:check
+      - name: Gate changelog:check (XR-P08/D-026)
+        run: bun run changelog:check
 
       # XR-LAUNCH-022: the support matrix is generated from journey evidence;
       # a hand edit or a stale block fails here.
