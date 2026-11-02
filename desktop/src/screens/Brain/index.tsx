@@ -31,7 +31,7 @@ import { useListRef } from 'react-window';
 
 import { startDemoRun } from '@/brain/demo';
 import { modelInfo } from '@/budget/models';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { resolveDefaultModel } from '@/stores/sessionsStore';
 
 import { DetailPanel } from '@/brain/detail';
@@ -168,7 +168,7 @@ function BrainIndex() {
   const runs = useBrainStore((s) => s.runs);
   const reduced = useReducedMotion();
   // Phase 14: a real run needs the engine up with a provider that answers.
-  const engineUp = useEngineStore((s) => s.status === 'up');
+  const engineUp = useEngineStore((s) => isEngineUsable(s.status));
   const providers = useEngineStore((s) => s.providers);
   const providerReady =
     engineUp && !!providers?.providers.some((x) => x.healthy && (x.kind === 'local' || x.hasKey));

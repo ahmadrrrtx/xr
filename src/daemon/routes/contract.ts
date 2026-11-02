@@ -116,6 +116,8 @@ export const API_VERSION = "v1";
 export const API_PREFIX = "/api";
 export const V1_PREFIX = "/api/v1";
 
+export { ENGINE_CONTRACT_VERSION, MIN_DESKTOP_VERSION } from "./contract-engine.ts"; // XR-P01 (own module per SIZE-WAIVERS plan)
+
 /**
  * Deprecation policy for the legacy unversioned mount (docs/api/COMPATIBILITY.md):
  * legacy `/api/*` mounts are announced deprecated in 7.x and are removed no

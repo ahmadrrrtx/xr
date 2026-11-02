@@ -234,7 +234,7 @@ function currentUserTurns(sessionId: string): ChatTurn[] {
 /** The engine is known to be down (two misses) — don't pretend to send. */
 function engineKnownDown(): boolean {
   const e = useEngineStore.getState();
-  return (e.status === 'down' && e.failures >= 2) || e.status === 'unauthorized';
+  return (e.status === 'disconnected' && e.failures >= 2) || e.status === 'failed';
 }
 
 /** Run the engine and fold its events into store state. */

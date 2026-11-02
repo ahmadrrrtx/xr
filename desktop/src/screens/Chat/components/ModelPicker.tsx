@@ -27,6 +27,7 @@ import { openUrl } from '@/lib/settingsApi';
 import { useBudgetStore } from '@/stores/budgetStore';
 import {
   engineModelOptions,
+  isEngineUsable,
   useEngineStore,
   type EngineModelOption,
 } from '@/stores/engineStore';
@@ -287,7 +288,7 @@ export function ModelPicker({
         >
           <button
             className="text-accent"
-            disabled={previewBusy || engineStatus !== 'up'}
+            disabled={previewBusy || !isEngineUsable(engineStatus)}
             onClick={() => {
               setPreviewBusy(true);
               setPreviewError(null);
@@ -351,7 +352,7 @@ export function ModelPicker({
           )}
         </section>
         <button
-          disabled={engineStatus !== 'up'}
+          disabled={!isEngineUsable(engineStatus)}
           className="text-accent w-full px-2 py-1 text-left text-xs"
           onClick={() =>
             void useEngineStore
@@ -363,7 +364,7 @@ export function ModelPicker({
         </button>
         {empty ? (
           <div className="text-text-secondary px-2 py-3 text-[12.5px]">
-            {engineStatus === 'up'
+            {isEngineUsable(engineStatus)
               ? catalogError
                 ? `Could not load models: ${catalogError}`
                 : 'No models available. Install Ollama for local models, or add an API key.'
@@ -371,7 +372,7 @@ export function ModelPicker({
             <div className="text-text-tertiary mt-1 text-[11.5px]">
               Current: {label}
             </div>
-            {engineStatus === 'up' && !catalogError ? (
+            {isEngineUsable(engineStatus) && !catalogError ? (
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"

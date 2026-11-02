@@ -38,7 +38,7 @@ import {
 import { invokeShell, pushTrayState, screenshotDiscard } from '@/lib/shellApi';
 import { useApprovalStore } from '@/stores/approvalStore';
 import { useBudgetStore } from '@/stores/budgetStore';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { useShieldStore } from '@/stores/shieldStore';
 import { useThemeStore } from '@/stores/theme';
 import { useVoiceStore } from '@/voice/voiceStore';
@@ -72,7 +72,7 @@ export function ShellBridge({
   const voiceSupported = useVoiceStore((state) => state.status !== null);
   // The engine the shell spawned is the one the tray should report on: the
   // store's own status is the health of the whole link, not of one provider.
-  const engineUp = useEngineStore((state) => state.status === 'up');
+  const engineUp = useEngineStore((state) => isEngineUsable(state.status));
 
   const snapshot: TraySnapshot = useMemo(
     () => ({

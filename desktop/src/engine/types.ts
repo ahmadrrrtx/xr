@@ -213,14 +213,17 @@ export interface EngineModelsResponse {
   fallbackChain?: unknown;
 }
 
+/**
+ * The open liveness probe (`GET /api[/v1]/health`) is EXACTLY {ok, ts}
+ * (P2-21 anti-fingerprinting). It is not, and must never become, an
+ * identity source: pre-P01 this interface also declared name/version/
+ * host/binding/auth the engine never sent, which left `engineVersion()`
+ * structurally null (E-39). Identity comes from the session-gated
+ * handshake (`EngineMeta` in transport.ts).
+ */
 export interface EngineHealth {
   ok: boolean;
-  name?: string;
-  version?: { display?: string; [k: string]: unknown } | string;
-  host?: string;
-  binding?: string;
-  auth?: string;
-  ts?: number | string;
+  ts?: number;
 }
 
 export interface EngineBudget {

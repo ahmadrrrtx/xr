@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 
 import { fmtTokens, fmtUsd } from '@/budget/core';
 import { engineJson } from '@/engine/transport';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 
 import { BudgetCard } from './shared';
 
@@ -24,7 +24,7 @@ interface EngineBudgetResponse {
 }
 
 export function EngineLedgerCard() {
-  const up = useEngineStore((s) => s.status === 'up');
+  const up = useEngineStore((s) => isEngineUsable(s.status));
   const [data, setData] = useState<EngineBudgetResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

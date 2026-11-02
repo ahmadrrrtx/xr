@@ -1501,7 +1501,7 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1");
   }
 
-  /** Companion identity probe: daemon version, host URL, LAN flag. Auth-gated (a 401 here is how the mobile app detects a revoked session). */
+  /** Companion + desktop identity probe: daemon version, host URL, LAN flag, and the XR-P01 contract handshake (contract version, desktop floor, schema version, capabilities). Auth-gated (a 401 here is how the mobile app detects a revoked session). */
   async metaVersionGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/meta/version");
   }

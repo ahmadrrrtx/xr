@@ -7,7 +7,7 @@
  * the canned mock, labelled honestly as "Demo run (no model configured)".
  */
 import { useBrainStore } from '@/stores/brainStore';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { resolveDefaultModel } from '@/stores/sessionsStore';
 
 export const DEMO_PROMPT =
@@ -18,7 +18,7 @@ export const MOCK_DEMO_TITLE = 'Demo run (no model configured)';
 /** True when a real run can be started right now. */
 export function demoRunIsReal(): boolean {
   const s = useEngineStore.getState();
-  return s.status === 'up' && !!s.providers?.providers.some((p) => p.healthy && (p.kind === 'local' || p.hasKey));
+  return isEngineUsable(s.status) && !!s.providers?.providers.some((p) => p.healthy && (p.kind === 'local' || p.hasKey));
 }
 
 /** Start the demo run; returns the run id and whether it is real. */

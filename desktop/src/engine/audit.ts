@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react';
 import { engineJson } from '@/engine/transport';
 import type { ApprovalRisk } from '@/lib/approvalCore';
 import type { AuditDecision, AuditEntry } from '@/shield/types';
-import { useEngineStore } from '@/stores/engineStore';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 
 export interface EngineAuditEntry {
   id: number;
@@ -142,7 +142,7 @@ const POLL_MS = 30_000;
 
 /** Live engine audit rows while the engine link is up (polls every 30 s). */
 export function useEngineAudit(): { rows: AuditEntry[]; chainValid: boolean | null; error: string | null } {
-  const up = useEngineStore((s) => s.status === 'up');
+  const up = useEngineStore((s) => isEngineUsable(s.status));
   const [state, setState] = useState<{ rows: AuditEntry[]; chainValid: boolean | null; error: string | null }>({
     rows: [],
     chainValid: null,

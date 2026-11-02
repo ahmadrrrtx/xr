@@ -32,7 +32,12 @@ if (typeof g.document === "undefined") {
     },
     // sonner (toasts) injects its stylesheet at import time.
     head: { appendChild() {}, firstChild: null, insertBefore() {} },
-    createElement: () => ({ appendChild() {}, setAttribute() {}, styleSheet: undefined }),
+    // `style` must be an object: react-dom's vendor-prefix probe does
+    // `'x' in element.style` at import time when a document exists, and
+    // threw "style is not an Object" whenever a shim-importing test file
+    // happened to load before the first sonner/react-dom consumer
+    // (XR-P01: exposed by test order, latent since the shim was added).
+    createElement: () => ({ appendChild() {}, setAttribute() {}, style: {}, styleSheet: undefined }),
     createTextNode: (t: string) => ({ data: t }),
     getElementsByTagName: () => [],
     addEventListener() {},

@@ -71,7 +71,7 @@ export function Composer({
   const engineStatus = useEngineStore((s) => s.status);
   const engineFailures = useEngineStore((s) => s.failures);
   const engineDown =
-    (engineStatus === 'down' && engineFailures >= 2) || engineStatus === 'unauthorized';
+    (engineStatus === 'disconnected' && engineFailures >= 2) || engineStatus === 'failed';
   const sessionModel = useSessionsStore(
     (s) => s.sessions.find((x) => x.id === sessionId)?.model ?? null,
   );

@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo } from 'react';
 
-import { engineModelOptions, useEngineStore } from '@/stores/engineStore';
+import { engineModelOptions, isEngineUsable, useEngineStore } from '@/stores/engineStore';
 
 export function ModelSelect({
   value,
@@ -90,7 +90,7 @@ export function ModelSelect({
           ))}
         </optgroup>
       ) : null}
-      {status !== 'up' && !groups.local.length && !groups.cloud.length ? (
+      {!isEngineUsable(status) && !groups.local.length && !groups.cloud.length ? (
         <option disabled>Engine not reachable — no catalogue</option>
       ) : null}
     </select>

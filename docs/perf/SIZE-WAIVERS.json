@@ -145,9 +145,9 @@
     },
     {
       "path": "src/daemon/routes/contract.ts",
-      "lines": 816,
+      "lines": 818,
       "owner": "api-contract",
-      "reason": "Central operation registry, at the 800-line threshold before Phase 21. Phase 21 added one import and one spread (800->801); Phase 30 keeps the promise recorded in `plan` below and contributes the same two lines (801->803) plus the blank line separating the spread \u2014 measured 804. The file stays a list of per-phase spreads rather than logic. Phase 2.4 \u00b7 P1-1 (2026-10-18): +4 lines \u2014 MOBILE_CONTRACT import + spread, ApiOperationMeta public?: true flag with its doc (TOFU-fingerprint exception). RC-608 reviewed 2026-10-27: Authenticated provider-remove contract + explicit nullable budget schema metadata; registry remains the one contract authority. Measured 808\u2192816 lines.",
+      "reason": "Central operation registry, at the 800-line threshold before Phase 21. Phase 21 added one import and one spread (800->801); Phase 30 keeps the promise recorded in `plan` below and contributes the same two lines (801->803) plus the blank line separating the spread \u2014 measured 804. The file stays a list of per-phase spreads rather than logic. Phase 2.4 \u00b7 P1-1 (2026-10-18): +4 lines \u2014 MOBILE_CONTRACT import + spread, ApiOperationMeta public?: true flag with its doc (TOFU-fingerprint exception). RC-608 reviewed 2026-10-27: Authenticated provider-remove contract + explicit nullable budget schema metadata; registry remains the one contract authority. Measured 808\u2192816 lines. XR-P01 (2026-11-02): +2 lines exactly per this plan \u2014 one re-export of ENGINE_CONTRACT_VERSION/MIN_DESKTOP_VERSION from the new per-phase module contract-engine.ts plus its separating blank line. All XR-P01 contract content lives in contract-engine.ts / the existing meta.version.get entry in contract-mobile.ts. Measured 816\u2192818 lines.",
       "plan": "Held at two lines per phase: every later phase adds its entries to its own contract-<phase>.ts and registers them from this barrel. The only remaining step that would return this file under the threshold is inlining the barrel into a generated module, which is not planned.",
       "review": "2026-12-14"
     },
