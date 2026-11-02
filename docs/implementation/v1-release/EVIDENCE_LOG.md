@@ -854,6 +854,90 @@ This is why D-025 leaves both at their current values and records the preconditi
 (add a second reviewer) that would make D-001 satisfiable. It is not a loosening of D-001;
 it is the observation that D-001's mechanism cannot function in a one-person repository.
 
+**E-49 — `XR-P01` independently verified at `8a68f3d3` (Plan Owner, 2026-11-02)** ✅ ACCEPTED
+
+```
+git diff 4adcec2..8a68f3d3 -- src/daemon/routes/system.routes.ts src/daemon/server.ts \
+    test/daemon/origin-host-guard.test.ts          → EMPTY (AC2 holds)
+git diff 4adcec2..8a68f3d3 -- '*.rs'               → EMPTY (AC11 holds; no Rust change)
+bun test test/desktop/engine-readiness.test.ts test/daemon/meta-version-contract.test.ts → 24 pass / 0 fail
+bun test test/daemon/origin-host-guard.test.ts test/api/v1-versioning.test.ts          → 23 pass / 0 fail
+bun run typecheck → 0 · api:schema:check 0 · client:check 0 · api:compat 0 · boundaries 0 · size-gate 0
+live probe (fresh XR_HOME): /api/v1/health → {"ok":true,"ts":…} exactly;
+  /api/v1/meta/version anon → 401; paired → {version,host,lan,deviceName,
+  contractVersion:1, minDesktopVersion:"0.2.0", schemaVersion:12, capabilities:[…]}
+segmented parity → 5148 pass / 0 fail / 41 skip, executed 476/476 files
+  (executor reported 5146; the +2 is the two prerelease regression tests added in
+   this same review — the executor's figure was true at its head, E-50)
+meta.version.get IS in API_CONTRACT via contract-mobile.ts:27, spread at contract.ts:808
+  → E-38 wrong in that detail; E-47 upheld (D-029)
+```
+
+**E-50 — D-020/D-026 discharged: changelog gate green and wired (2026-11-02)** ✅
+
+```
+BEFORE: previousTagFor("1.1.1-rc.1") → target [1,1,NaN,1]; v1.1.0 never "older";
+        range fell back to v1.0.0 = 528 commits
+AFTER : semverCore() strips -pre/+build first → previousTagFor("1.1.1-rc.1") = "v1.1.0"
+        range v1.1.0..HEAD = 175 commits; generator wrote 198 lines (was 432)
+bun run changelog:check → EXIT 0   ("entry for 1.1.1-rc.1 present, 175 commits since v1.1.0")
+test/release/changelog.test.ts → 8 pass / 0 fail (2 new prerelease guards)
+GATE_EXEMPTIONS map → EMPTY; "changelog:check" wired as a named step in truth-gate
+test/architecture/gate-enforcement.test.ts → 3 pass / 0 fail
+  (it FAILED while the gate was wired but the exemption still existed — the guard works)
+all 18 `bun run ci` sub-gates → EXIT 0 individually
+regression guards for the normal path: 7.1.0→v7.0.0, 4.5.0→v4.3.0, 2.0.0 unchanged
+```
+
+## §6c XR-P02 preflight (2026-11-02, baseline `8a68f3d3`)
+
+**E-51 — The consent gate exists but is ephemeral, unversioned and untimed** ❌ (XRD-004/AUD-004)
+
+```
+desktop/src/screens/Onboarding/index.tsx:58  const [understood, setUnderstood] = useState(false);
+desktop/src/screens/Onboarding/index.tsx:63  if (step === 2) return understood; // checkbox gates the promise step
+→ a React useState. Nothing is persisted, no document version, no acceptedAt, no scope.
+  A reload resets it; a completion flag (`xr.onboarding.complete`) is stored separately
+  and records neither what was agreed to nor when.
+```
+
+**E-52 — No privacy/consent document exists** ❌ (XRD-012)
+
+```
+docs/privacy/ → MEMORY.md ONLY. No terms, privacy notice or data-flow document anywhere.
+D-004 requires OWNER text; the phase may implement display/versioning/persistence only.
+```
+
+**E-53 — There is no resumability; state is a single terminal boolean** ❌ (XRD-005)
+
+```
+desktop/src/stores/onboarding.ts:20  ONBOARDING_KEY = 'xr.onboarding.complete'
+desktop/src/stores/onboarding.ts:96  readSettingJSON<boolean>(ONBOARDING_KEY)
+`step` (1..10) lives in the zustand store in memory only. A crash at step 7 relaunches
+at step 1 with every choice lost.
+```
+
+**E-54 — No per-step error boundary, and three `null` render paths** ❌ (AUD-001 cause c)
+
+```
+grep -rn "ErrorBoundary" desktop/src/screens/Onboarding/  → none
+grep -rn "return null" desktop/src/screens/Onboarding/*.tsx → 3
+  OnboardingScreen.tsx:26,48  (while status === 'checking')
+  StepDownload.tsx:182
+→ a throwing step or a slow probe renders a blank window: the audit's named failure mode.
+```
+
+**E-55 — Voice preview substitutes a different engine than it persists; the honest path exists** ❌/✅
+
+```
+StepVoice.tsx: 9 hits for `piper-*` (the ids that get persisted to xr.voice)
+StepVoice.tsx:38,42 speechSynthesis (Web Speech) is what the user actually hears
+→ confirmed substitution (XRD-011 / E-21).
+BUT the honest path is available: POST /api/voice/say (voice.routes.ts:641) and
+  /api/voice/test-tts (:749) exist, so D-010 option (a) is reachable — the
+  "approximation" label is the fallback, not the target.
+```
+
 
 ---
 

@@ -47,15 +47,11 @@ const ROOT = resolve(import.meta.dir, "../..");
  * as the gate is wired.
  */
 const GATE_EXEMPTIONS: Record<string, string> = {
-  "changelog:check":
-    "XR-P00 (2026-11-01), D-020 BLOCKED — OWNER DECISION: the gate exits 1 " +
-    "at the baseline (no entry for the in-development identity), so wiring it " +
-    "as-is would turn main permanently red; D-020a's generated entry was " +
-    "previewed and rejected by the executor's stop rule (432 lines / 404 " +
-    "commits since v1.0.0, 247 of them already documented under 1.1.0, " +
-    "because previousTagFor mis-ranges prerelease versions); D-020b's " +
-    "re-scope requires an owner-approved AGENTS.md change the executor may " +
-    "not make. Delete this exemption in the same change that resolves D-020.",
+  // Empty by design. `changelog:check` was the sole entry (XR-P00, D-020) and
+  // was removed in the same change that resolved it (D-026 / XR-P08): the
+  // `previousTagFor` prerelease mis-range is fixed, a real generated entry
+  // exists, and the gate is wired in `truth-gate`. The stale-exemption
+  // assertion below keeps this map from quietly growing back.
 };
 
 /** Battery floor at XR-P00: shrinking `scripts.ci` below this is a weakening. */

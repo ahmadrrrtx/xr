@@ -66,4 +66,21 @@ describe("Phase 9 · changelog generator", () => {
     expect(previousTagFor("4.5.0", tags)).toBe("v4.3.0");
     expect(previousTagFor("2.0.0", tags)).toBeUndefined();
   });
+
+  // XR-P08 / D-026 regression guard. Before this fix, `"1.1.1-rc.1".split(".").map(Number)`
+  // produced [1,1,NaN,1], the patch comparison was always false, and the range silently
+  // fell back to the oldest tag — regenerating hundreds of already-published commits.
+  test("previousTagFor: a prerelease target keeps the patch line (not NaN)", () => {
+    const tags = ["v1.0.0", "v1.1.0", "v3.0.0"];
+    expect(previousTagFor("1.1.1-rc.1", tags)).toBe("v1.1.0");
+    expect(previousTagFor("1.1.1", tags)).toBe("v1.1.0");
+    expect(previousTagFor("1.2.0-beta.2", tags)).toBe("v1.1.0");
+  });
+
+  test("previousTagFor: prerelease/build tags are ordered by their core, and ignored when not semver", () => {
+    const tags = ["v1.0.0", "v1.1.0-beta.1", "v1.2.0", "nightly", "v2.0.0-rc.1"];
+    expect(previousTagFor("1.1.1", tags)).toBe("v1.1.0-beta.1");
+    expect(previousTagFor("2.0.0", tags)).toBe("v1.2.0");
+    expect(previousTagFor("1.0.0", tags)).toBeUndefined();
+  });
 });

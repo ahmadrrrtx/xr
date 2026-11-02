@@ -92,12 +92,19 @@ export function listCommits(from: string | undefined, to: string): ParsedCommit[
 }
 
 /** Semver tags sorted oldest → newest (excludes legacy non-semver tags). */
+/** Version core of `x.y.z[-pre][+build]` — prerelease/build metadata never
+ *  participates in ordering (`1.1.1-rc.1` is *after* `1.1.0`, not `NaN`). */
+function semverCore(v: string): string {
+  return v.split("-")[0]!.split("+")[0]!;
+}
+
 export function previousTagFor(version: string, tags: string[]): string | undefined {
   const semver = tags
-    .filter((t) => /^v\d+\.\d+\.\d+$/.test(t))
-    .map((t) => ({ tag: t, parts: t.slice(1).split(".").map(Number) }))
+    .filter((t) => /^v\d+\.\d+\.\d+/.test(t))
+    .map((t) => ({ tag: t, parts: semverCore(t.slice(1)).split(".").map(Number) }))
+    .filter((t) => t.parts.length === 3 && t.parts.every(Number.isFinite))
     .sort((a, b) => a.parts[0]! - b.parts[0]! || a.parts[1]! - b.parts[1]! || a.parts[2]! - b.parts[2]!);
-  const target = version.split(".").map(Number);
+  const target = semverCore(version).split(".").map(Number);
   const older = semver.filter(
     (t) =>
       t.parts[0]! < target[0]! ||
