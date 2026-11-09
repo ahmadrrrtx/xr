@@ -37,7 +37,7 @@ A BLOCKED or NOT RUN item is never reported as PASS. Dates are the container's U
 | # | Gate | Result | Evidence |
 |---|---|---|---|
 | 1 | `npx tsc --noEmit` (root) + desktop typecheck | **PASS** | exit 0 both |
-| 2 | Tests, per directory | **PASS** — `5279 pass, 41 skip, 1 fail`, the fail being my own ownership drift (fixed) | `/home/user/logs/baseline142/summary.tsv` |
+| 2 | Tests, per directory | **PASS** — `5282 pass, 41 skip, 0 fail`, re-run after every commit on the branch | `/home/user/logs/baseline-final/summary.tsv` |
 | 3 | `bun run security:check` | **PASS** (7/7) | pinned-bun 1.4.2, unshare=true bwrap=false, deps audit clean |
 | 4 | `claim-lint`, `placeholder-lint`, `release:check`, `changelog:check` | **PASS** (all exit 0) | `v1.1.1-rc.1`, 10 surfaces in sync, 20 evidenced claims |
 | 5 | `api:schema:check`, `client:check` | **PASS** | 292 operations; typed client in sync |
@@ -147,6 +147,66 @@ evidence path) — which is the behaviour we want.
 - T12 / WS3 first smoke scripts (`scripts/release-smoke/`), mock providers.
 - T22 spend-cap adversarial tests, T23 security-plane tamper test.
 - Then T03 (dead UI) and T05 (Windows sandbox-only refusal).
+
+---
+
+## Day 1 (continued) — credentials landed: token check + first real-provider run
+
+The owner supplied a GitHub token and a Groq key. Both were placed in a `chmod 600` file
+**outside the repository**, in a path excluded from workspace snapshots, and verified absent from
+the working tree, every commit on this branch, `git config` and the remote URL. Neither value was
+printed at any point.
+
+### Token scope — PASS
+
+Read from the `X-OAuth-Scopes` response header only, never from the token:
+
+```
+x-oauth-scopes: delete:packages, gist, read:audit_log, read:project, repo, workflow, write:discussion, write:packages
+login=ahmadrrrtx   permissions: admin=true push=true pull=true
+```
+
+`repo` + `workflow` are exactly what G1 and G3 need. **Nothing was pushed and no workflow was
+dispatched** — G1 still requires the owner's `APPROVE G1`.
+
+### Real provider — PASS (first real call in the project's history)
+
+```
+$ XR_SECRETS_ENV_COMPAT=1 … xr "Reply with exactly the token SMOKE-OK and nothing else." \
+    --provider groq --model openai/gpt-oss-20b --budget 0.05
+SMOKE-OK
+✓ … 2.0k tok ≈ $0.0002 / $0.05 estimated admission threshold      exit=0
+```
+
+Total spend on live calls: **$0.0002**. Full evidence:
+`docs/release/preview1/evidence/T07-real-provider-groq.md`.
+
+### Two new defects found and fixed because of it
+
+| ID | Priority | What | Status |
+|---|---|---|---|
+| **T21.a** | P1 | Groq preset defaulted to `llama-3.3-70b-versatile` and listed 3 more ids Groq **no longer serves** (verified against the live `/openai/v1/models` on 2026-11-10). Selecting Groq failed on the first request. Preset replaced with the verified catalogue. | **done** |
+| **T22.a** | P1 | The budget governor refuses an unpriced model *before sending* (correct — unpriced is never free), but the CLI replaced that reason with `budget limit reached (raise it in the desktop app …)`. Raising the cap can never clear it. The real reason is now carried into the result and passed through, naming the operator-rate path that does work. | **done** |
+| **T21.b** | P2 | Price facts exist for only 3 of 26 presets (openai 4, anthropic 3, google 2 models). The rest need sourced prices per model. Preview 1 ships the proven operator-declared-rate path instead of a hastily-filled registry. | todo (after Preview) |
+
+### New finding (FACT) — BYOK does not work the way the claim reads
+
+`release.manifest.json` claim `byok`: *"Bring your own API key — provider credentials stay in your
+environment."* In practice XR's secret broker **ignores ambient `process.env` by default**
+(`XR_SECRETS_ENV_COMPAT` off in v1.x), so `export GROQ_API_KEY=…` followed by `xr doctor` reports
+`API key GROQ_API_KEY not set`. The documented path is `xr onboarding` (imports into the sealed
+store); the compat flag is the scripted path. `KNOWN_LIMITATIONS.md` #4 discusses the flag but
+frames it as keys *remaining* in `process.env`, which is the opposite direction. **WS6 must fix the
+wording, not the control** — refusing ambient env is the safer default.
+
+### Gate re-run after all changes — all PASS
+
+```
+claim-lint ✓   placeholder-lint ✓   release:check ✓ (10 surfaces, 1.1.1-rc.1)
+changelog:check ✓   channel:check ✓   api:schema:check ✓   client:check ✓
+size-gate ✓   desktop:sink-lint ✓   tsc --noEmit exit 0
+test/providers + test/cli: 382 pass, 0 fail
+```
 
 ---
 
