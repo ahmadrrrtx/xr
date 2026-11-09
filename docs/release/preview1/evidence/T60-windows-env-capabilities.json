@@ -1,0 +1,77 @@
+{
+  "os": "windows",
+  "generatedAt": 1794261500512,
+  "entries": [
+    {
+      "environment": "browser",
+      "support": "supported",
+      "working": [
+        "chromium automation (playwright)",
+        "isolated session contexts",
+        "sandboxed launch (default)"
+      ],
+      "missing": [
+        "system chromium (playwright-managed browser will be used if downloaded)"
+      ]
+    },
+    {
+      "environment": "desktop",
+      "support": "partial",
+      "working": [
+        "keyboard input",
+        "mouse input",
+        "window focus",
+        "screen capture"
+      ],
+      "missing": [
+        "scroll injection (no backend on this platform — reported honestly as unsupported)"
+      ]
+    },
+    {
+      "environment": "application",
+      "support": "supported",
+      "working": [
+        "launch",
+        "open target",
+        "close (signal)"
+      ],
+      "missing": []
+    },
+    {
+      "environment": "filesystem",
+      "support": "supported",
+      "working": [
+        "read",
+        "list",
+        "write (approval+files_write)",
+        "mkdir",
+        "move",
+        "delete (approval+files_write, irreversible)"
+      ],
+      "missing": []
+    },
+    {
+      "environment": "voice",
+      "support": "partial",
+      "working": [
+        "playback (powershell)",
+        "local TTS (powershell)"
+      ],
+      "missing": [
+        "microphone capture tool (arecord/afrecord/sox)",
+        "local STT (whisper CLI / whisper.cpp) — or configure a local HTTP STT endpoint"
+      ],
+      "remediation": "install the missing tools or run 'xr voice setup' to configure local HTTP endpoints; cloud stays opt-in"
+    },
+    {
+      "environment": "vision",
+      "support": "partial",
+      "working": [
+        "screen capture (powershell)"
+      ],
+      "missing": [
+        "tesseract (local OCR) — cloud vision stays consent-gated"
+      ]
+    }
+  ]
+}
