@@ -139,10 +139,26 @@ export function exitCodeFor(result: AgentResult, autoDenied: number): number {
   return EXIT.ERROR;
 }
 
+const GENERIC_BUDGET_STOP = "budget limit reached (raise it in the desktop app or `xr run --budget`)";
+
+/**
+ * A `budget` stop is not always a spent ceiling. The governor also refuses a
+ * request BEFORE it is sent when it cannot price the model ("unpriced is never
+ * free"), and no amount of extra budget fixes that. The engine puts the real
+ * cause in `finalMessage`; the generic "raise your budget" text is only correct
+ * when there is no more specific cause, so pass the engine's reason through and
+ * point at the one thing that does fix a missing tariff.
+ */
 export function describeStop(result: AgentResult): string {
   switch (result.stopped) {
-    case "budget":
-      return "budget limit reached (raise it in the desktop app or `xr run --budget`)";
+    case "budget": {
+      const reason = (result.finalMessage ?? "").trim();
+      if (!reason || reason === GENERIC_BUDGET_STOP) return GENERIC_BUDGET_STOP;
+      if (/price unavailable|tariff|unpriced/i.test(reason)) {
+        return `${reason} — raising the budget will not help. XR refuses to run a model it cannot price: declare the rate under providerEngine.providerCapabilities.<provider>.models.<model>.cost (known, inPerMTok, outPerMTok, source), or pick a known-priced or local model.`;
+      }
+      return `${reason} Raise it in the desktop app or with \`xr run --budget\`.`;
+    }
     case "max_steps":
       return "step limit reached before the task finished";
     case "approval":

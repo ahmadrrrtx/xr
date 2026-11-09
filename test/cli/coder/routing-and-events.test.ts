@@ -102,6 +102,27 @@ describe("exit codes", () => {
     expect(describeStop(result({ stopped: "budget" }))).toContain("budget");
     expect(describeStop(result({ stopped: "max_steps" }))).toContain("step limit");
   });
+
+  test("a budget stop caused by an unpriced model says so, and does not advise raising the budget", () => {
+    // GET /provider admission refuses BEFORE sending when the tariff is
+    // unknown; "raise your budget" would be a dead end there.
+    const msg = describeStop(
+      result({
+        stopped: "budget",
+        finalMessage:
+          "Token tariff unavailable; declare sourced/operator rates before a governed request, even with USD thresholds disabled",
+      }),
+    );
+    expect(msg).toContain("Token tariff unavailable");
+    expect(msg).toContain("raising the budget will not help");
+    expect(msg).toContain("providerCapabilities");
+    expect(msg).not.toMatch(/raise it in the desktop app/);
+  });
+
+  test("a genuine spent-ceiling stop still gives the raise advice", () => {
+    const msg = describeStop(result({ stopped: "budget", finalMessage: "" }));
+    expect(msg).toContain("raise it in the desktop app");
+  });
 });
 
 describe("JSONL events", () => {
