@@ -278,6 +278,33 @@ was wrong, not the software.
 runner has executed them yet. T60 stays `doing` until a real `windows-latest` run is green; Linux
 results are never promoted to Windows evidence and Wine is never evidence.
 
+## Day 2 · environment loss and recovery (FACT)
+
+The sandbox that holds this workspace was restored from a snapshot between sessions. Content
+survived; three things did not, and the loss is recorded here because it shaped the day:
+
+- **`.git/` was absent** from the working copy — no commits, no branch, no remote config. Recovered
+  by cloning `github.com/ahmadrrrtx/xr` fresh, checking out `release/preview-1` at the pushed tip
+  `b75969a2`, and layering the surviving working tree over it. The three commits made after that
+  point were re-made locally against the real tip, so history is linear and correct.
+- **`/home/user/.cache/xr-release/` (token, Groq key, helper scripts) was absent** — that directory
+  is deliberately outside the repo and snapshot-excluded. It was **not** recoverable, and nothing
+  else on disk (or in the environment) contained a copy. Pushing and any GitHub API call therefore
+  stop until the owner re-supplies the token. Nothing was written to the repo in the meantime, and
+  no secret was ever printed, echoed or committed.
+- **`node_modules/` and the Bun install were absent** (installed tooling is not snapshotted).
+  Reinstalled Bun at the repo pin (`1.4.2`) and `bun install --frozen-lockfile`.
+
+One real defect was found *by* the recovery: three `scripts/*.sh` files came back with mode `644`
+instead of `755` (executable bit dropped). Reset from the object store — worth knowing because a
+lost exec bit on an installer script is the kind of thing that only fails on someone else's machine.
+
+Verification after recovery: `ci:policy`, `release:check`, `channel:check`, `claim-lint`,
+`changelog:check`, `api:schema:check` all PASS, and `test/{daemon,whatsapp,workflow,release,update,phase0}`
+green (308/35/58/288/38/217 pass, 0 fail) — including `test/daemon` (308 pass), which had been the
+only red directory before the loss and is green now that the codename half of the DOM pin is
+normalized.
+
 ---
 
 ## Ledger hash history
