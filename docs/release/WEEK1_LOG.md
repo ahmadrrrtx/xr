@@ -262,6 +262,22 @@ today; a paragraph above it states plainly that Preview 1 is not installable fro
 points at the release-scoped limitations document. `known-limitations.md` for `1.2.0-preview.1`
 carries the same statement plus the "why not 0.1.0" note.
 
+## Day 2 · T60.a — the Windows runner found three real defects in the T60 workflow
+
+The first `windows-preview-test.yml` run (`42703322271`) failed, and it failed usefully. Nothing
+here is a product defect; all three were defects in the new workflow file, i.e. the evidence lane
+was wrong, not the software.
+
+| Defect | Symptom on the runner | Fix |
+|---|---|---|
+| Unpinned actions | CI `Quality Gate` + `Truth gate` red on `ci-policy` (run `42703345499`): the file used `checkout@v5`, `upload-artifact@v4`, `dtolnay/rust-toolchain@stable` | Every action pinned to the repo's own commit SHAs with `# vN.N.N` comments |
+| Hand-rolled bundle | `Windows CLI (x64)` died: `Could not resolve: "chromium-bidi/lib/cjs/bidiMapper/BidiMapper"` — `bun build --compile` without `--external playwright --external playwright-core` | Build through `scripts/compile-sidecar.ts`, the repo's ONE computation source, then copy the sidecar to `out/xr.exe` |
+| Missing sidecar precondition | `shell-test-windows` `cargo test` died at `tauri-build`: `resource path binaries\xr-engine-x86_64-pc-windows-msvc.exe doesn't exist` — `build.rs` validates `bundle.externalBin` before compiling anything | Install Bun, `bun install --ignore-scripts`, compile the sidecar, *then* `cargo test --locked --jobs 1 --lib` (mirrors `desktop-app.yml`) |
+
+**Windows is still NOT RUN as evidence.** The workflow is fixed but the fixes are uncommitted, so no
+runner has executed them yet. T60 stays `doing` until a real `windows-latest` run is green; Linux
+results are never promoted to Windows evidence and Wine is never evidence.
+
 ---
 
 ## Ledger hash history

@@ -42,28 +42,31 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Bun (repo pin)
-        shell: bash
-        run: |
-          set -euo pipefail
-          PIN="$(tr -d '[:space:]' < .bun-version)"
-          echo "repo pin: $PIN"
-          curl -fsSL https://bun.sh/install | bash -s "bun-v$PIN"
-          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Setup Bun (repo pin)
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
 
       - name: Install dependencies
         shell: bash
         run: bun install --frozen-lockfile
 
-      # 1. Build the Windows CLI exe the way the sidecar compiler does.
-      - name: Build xr.exe
+      # 1. Build the Windows CLI exe with the repo's ONE computation source
+      #    (scripts/compile-sidecar.ts), which is also what desktop-app.yml ships.
+      #    T60.a: the hand-rolled `bun build --compile` here lacked
+      #    --external playwright --external playwright-core and failed on
+      #    chromium-bidi on a real Windows runner (run 42703322271).
+      - name: Build xr.exe (scripts/compile-sidecar.ts)
         shell: bash
+        env:
+          SIDECAR_TRIPLE: x86_64-pc-windows-msvc
         run: |
           set -euo pipefail
           mkdir -p out
-          bun build --compile --target=bun-windows-x64 src/index.ts --outfile out/xr.exe
+          bun run scripts/compile-sidecar.ts
+          cp desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe out/xr.exe
           ls -l out/xr.exe
 
       # 2. CLI truth.
@@ -152,7 +155,7 @@ jobs:
 
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-cli-logs
           path: |
@@ -168,16 +171,35 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+      - name: Setup Bun (repo pin)
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install engine dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      # T60.a: build.rs calls tauri_build::try_build, which VALIDATES that
+      # bundle.externalBin exists. A from-scratch `cargo test` therefore failed
+      # with "resource path binaries\xr-engine-x86_64-pc-windows-msvc.exe
+      # doesn't exist" until the sidecar is compiled — exactly what
+      # desktop-app.yml's shell-test-windows job already does.
+      - name: Compile engine sidecar (x86_64-pc-windows-msvc)
+        env:
+          SIDECAR_TRIPLE: x86_64-pc-windows-msvc
+        run: bun run scripts/compile-sidecar.ts
       - name: cargo test (desktop shell)
         working-directory: desktop/src-tauri
         timeout-minutes: 45
-        run: cargo test --locked 2>&1 | Tee-Object -FilePath cargo-test.log
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo test --locked --jobs 1 --lib -- --nocapture 2>&1 | Tee-Object -FilePath cargo-test.log
         shell: pwsh
       - name: Upload cargo log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-cargo-test-log
           path: desktop/src-tauri/cargo-test.log
@@ -190,7 +212,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Look for desktop-app.yml Windows artifacts
         id: find
