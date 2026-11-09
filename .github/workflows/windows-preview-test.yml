@@ -81,77 +81,65 @@ jobs:
           ./out/xr.exe env capabilities --json > env-capabilities.json || echo "EXIT_CAPS=$?"
           head -c 2000 env-capabilities.json || true
 
-      # 3. Path-escape denials. A workspace-scoped tool must refuse these.
-      - name: Workspace path escapes are denied
+      # 3. THE SMOKE LANE (T12) — the same script that runs on Linux, against the
+      #    compiled Windows exe. Real provider path via a loopback mock (keyless
+      #    ollama preset), real approval gate, real isolation report for THIS host.
+      - name: Release smoke (scripts/release-smoke/run-all.sh, XR_BIN=out/xr.exe)
         shell: bash
         run: |
           set -uo pipefail
-          export XR_HOME="$RUNNER_TEMP/xrhome"
-          mkdir -p "$XR_HOME" ws
-          failures=0
-          check() {
-            local label="$1"; shift
-            if "$@" > escape-"$label".log 2>&1; then
-              echo "::error::ESCAPE ALLOWED: $label (must be denied)"
-              failures=$((failures+1))
-            else
-              echo "denied as expected: $label"
-            fi
-          }
-          # .. traversal, UNC path, drive letter, and a junction all leave the workspace.
-          check dotdot ./out/xr.exe "read the file ..\\..\\Windows\\win.ini"
-          check unc    ./out/xr.exe "read the file \\\\localhost\\c$\\Windows\\win.ini"
-          check drive  ./out/xr.exe "read the file C:\\Windows\\win.ini"
-          cmd //c "mklink /J junction %CD%\\..\\ .." >/dev/null 2>&1 || true
-          check junction ./out/xr.exe "read the file junction\\Windows\\win.ini" || true
-          echo "escape_failures=$failures" | tee escape-summary.txt
-          cat escape-*.log || true
-          test "$failures" -eq 0
+          export XR_BIN="$PWD/out/xr.exe"
+          export TMPDIR="$RUNNER_TEMP"
+          bash scripts/release-smoke/run-all.sh 2>&1 | tee smoke.log
+          # tee hides the real status; re-derive it from the summary line so a
+          # FAIL can never be swallowed by the pipe.
+          grep -q "RESULT: PASS" smoke.log || { echo "::error::release smoke did not pass"; exit 1; }
 
-      # 4. Sandbox tiers — recorded honestly, not asserted.
-      - name: Sandbox tiers (D5 sandbox-only policy)
+      # 4. PATH-ESCAPE POLICY — run the repository's own escape tests ON WINDOWS.
+      #    An earlier version of this workflow "tested" escapes by running
+      #    `xr "read the file ..\..\Windows\win.ini"` and treating ANY non-zero
+      #    exit as a denial. It was a false pass: with no provider configured the
+      #    CLI died at provider preflight, so all four "denials" proved nothing
+      #    (run 42705917814, escape-summary's four logs all read
+      #    "No coding CLI provider ... was detected"). The policy itself is unit-tested
+      #    here instead, natively, where it actually runs.
+      - name: Workspace path-escape policy (native Windows unit tests)
+        shell: bash
+        run: |
+          set -uo pipefail
+          bun test test/security/filesystem-authority.test.ts \
+                   test/security/filesystem-implicit.test.ts \
+                   test/security/filesystem-index-context.test.ts \
+                   test/security/canonical-bypass.test.ts 2>&1 | tee escape-tests.log
+          grep -qE "^ *[0-9]+ fail$| 0 fail" escape-tests.log || { echo "::error::escape tests did not report a result"; exit 1; }
+          grep -qE " 0 fail" escape-tests.log || { echo "::error::escape policy tests failed on Windows"; exit 1; }
+
+      # 5. Sandbox tiers — recorded honestly, not asserted.
+      - name: Sandbox tiers (recorded, not claimed)
         shell: bash
         run: |
           set -uo pipefail
           {
-            echo "## Windows sandbox availability"
+            echo "## Windows sandbox availability (recorded)"
             echo
             echo '```'
             docker version 2>&1 | head -20 || echo "docker: NOT PRESENT"
             echo '```'
-            echo
-            echo '```'
-            docker info --format '{{.OSType}} / {{.ServerVersion}}' 2>&1 || echo "docker daemon: not running"
-            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           echo "--- docker info ---"; docker info 2>&1 | head -30 || true
 
-      - name: Experimental AppContainer sandbox (XR_OS_SANDBOX=experimental)
+      # 6. The experimental AppContainer path: capability report only. Whether it
+      #    is a boundary is decided by the guarantee matrix in the smoke lane above,
+      #    which reads "fail closed" on a host that cannot provide one.
+      - name: Experimental AppContainer sandbox (capabilities only)
         shell: bash
         run: |
           set -uo pipefail
           export XR_HOME="$RUNNER_TEMP/xrhome"
           mkdir -p "$XR_HOME"
           export XR_OS_SANDBOX=experimental
-          echo "--- capabilities under the experimental sandbox ---"
           ./out/xr.exe env capabilities --json > appcontainer.json || echo "EXIT=$?"
-          head -c 2000 appcontainer.json || true
-
-      - name: Refusal is explicit when no sandbox is available
-        shell: bash
-        run: |
-          set -uo pipefail
-          export XR_HOME="$RUNNER_TEMP/xrhome"
-          mkdir -p "$XR_HOME"
-          # Force the "no sandbox" path and require a refusal that names a next step.
-          unset XR_OS_SANDBOX
-          XR_FORCE_NO_SANDBOX=1 ./out/xr.exe "run the shell command whoami" > refuse.log 2>&1
-          rc=$?
-          echo "exit=$rc"
-          cat refuse.log || true
-          if [ "$rc" -eq 0 ]; then
-            echo "::warning::tool call succeeded without a sandbox — inspect refuse.log; Preview 1 policy is refuse-with-a-link"
-          fi
+          head -c 1200 appcontainer.json || true
 
       - name: Upload logs
         if: always()
@@ -161,7 +149,6 @@ jobs:
           path: |
             *.log
             *.json
-            escape-summary.txt
           if-no-files-found: warn
           retention-days: 14
 
