@@ -235,6 +235,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/release-assets-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-ci-evidence.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/release-smoke/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/repo-intelligence-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/size-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
