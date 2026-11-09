@@ -91,7 +91,7 @@ evidence path) — which is the behaviour we want.
    stages passed. Not a product defect. *Fix: install the pin — which was done, not the gate.*
 
 5. **`size-gate` polices growth of waived files, and the tree is at 99.9 % of its ceiling**
-   (175,286 of 175,500 LOC, 17 modules over 800 LOC). My first D1 patch tripped it
+   (the tree is at 99.9 % of its stamped ceiling; 17 modules are over 800 LOC). My first D1 patch tripped it
    (`engine.ts 1381 → 1386`, `types.ts 851 → 867`). Resolved by moving the new allow-list into
    `src/execution/workflow/conditions.ts` and holding both waived files at exactly their
    recorded size, rather than raising a baseline. **Anyone adding code to a waived module must
