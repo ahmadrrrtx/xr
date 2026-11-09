@@ -73,7 +73,7 @@ export function defaultConfig(kind: CanvasNodeKind): Record<string, unknown> {
     case 'tool':
       return { tool: '', args: {}, requiresApproval: false, maxRetries: 0, backoffMs: 1000, riskTier: 'medium' };
     case 'branch':
-      return { conditionType: 'field_compare', field: '', operator: 'eq', value: '', expression: '', nodeId: '' };
+      return { conditionType: 'field_compare', field: '', operator: 'eq', value: '', nodeId: '' };
     case 'join':
       return { strategy: 'all', n: 1, timeoutMs: 0, onTimeout: 'fail' };
     case 'human_approval':
@@ -347,7 +347,7 @@ export function quickLint(nodes: XrFlowNode[], edges: XrFlowEdge[]): WorkflowPro
     if (k === 'subagent' && !String(c.agentId ?? '').trim()) out.push({ severity: 'error', code: 'subagent_agent', message: `Sub-agent “${n.data.label}” has no agent picked.`, nodeId: n.id });
     if (k === 'tool' && !String(c.tool ?? '').trim()) out.push({ severity: 'error', code: 'tool_name', message: `Tool “${n.data.label}” has no tool picked.`, nodeId: n.id });
     if ((k === 'human_approval' || k === 'human_review') && !String(c.summary ?? '').trim()) out.push({ severity: 'warning', code: 'human_summary', message: `“${n.data.label}” has no summary; you will be asked to decide without context.`, nodeId: n.id });
-    if (k === 'branch' && String(c.conditionType ?? '') !== 'expression' && !String(c.field ?? '').trim()) out.push({ severity: 'error', code: 'branch_field', message: `Branch “${n.data.label}” compares an empty field.`, nodeId: n.id });
+    if (k === 'branch' && !String(c.field ?? '').trim()) out.push({ severity: 'error', code: 'branch_field', message: `Branch “${n.data.label}” compares an empty field.`, nodeId: n.id });
     if (k !== 'input' && !incoming.has(n.id) && nodes.length > 1) out.push({ severity: 'warning', code: 'no_incoming', message: `“${n.data.label}” has nothing flowing into it.`, nodeId: n.id });
     if (k !== 'output' && k !== 'artifact' && k !== 'notification' && !outgoing.has(n.id) && nodes.length > 1) out.push({ severity: 'warning', code: 'no_outgoing', message: `“${n.data.label}” leads nowhere.`, nodeId: n.id });
   }

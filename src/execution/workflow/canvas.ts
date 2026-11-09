@@ -136,7 +136,7 @@ export function defaultConfig(kind: CanvasNodeKind): Record<string, unknown> {
     case "tool":
       return { tool: "", args: {}, requiresApproval: false, maxRetries: 0, backoffMs: 1000, riskTier: "medium" };
     case "branch":
-      return { conditionType: "field_compare", field: "", operator: "eq", value: "", expression: "", nodeId: "" };
+      return { conditionType: "field_compare", field: "", operator: "eq", value: "", nodeId: "" };
     case "join":
       return { strategy: "all", n: 1, timeoutMs: 0, onTimeout: "fail" };
     case "human_approval":
@@ -374,8 +374,6 @@ function branchCondition(config: Record<string, unknown>): BranchCondition {
       return { type, field };
     case "field_is_empty":
       return { type, field };
-    case "expression":
-      return { type, expression: str(config.expression), description: str(config.description) || "expression" };
     case "approval_granted":
     case "approval_denied":
     case "review_approved":
@@ -474,7 +472,6 @@ function deriveConfig(node: WorkflowNode): Record<string, unknown> {
         conditionType: c.type,
         ...("field" in c ? { field: c.field } : {}),
         ...(c.type === "field_compare" ? { operator: c.operator, value: c.value } : {}),
-        ...(c.type === "expression" ? { expression: c.expression } : {}),
         ...("nodeId" in c ? { nodeId: c.nodeId } : {}),
       };
     }

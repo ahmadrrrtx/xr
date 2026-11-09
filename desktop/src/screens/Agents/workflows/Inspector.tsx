@@ -4,8 +4,9 @@
  * (src/execution/workflow/canvas.ts); nothing here invents semantics.
  * Branch conditions are offered exactly as the engine evaluates them:
  * fields are upstream node ids, approval/review conditions name a human
- * node. There is no expression editor (out of scope) — the raw expression
- * box is labelled as such.
+ * node. Raw expressions are not offered at all: the engine no longer
+ * evaluates author-supplied source (Preview 1 removed the `expression`
+ * condition type), so the inspector must not be able to author one.
  */
 import { X } from 'lucide-react';
 import { useMemo } from 'react';
@@ -485,7 +486,6 @@ export function Inspector() {
                 <option value="review_changes_requested">
                   Review asked for changes
                 </option>
-                <option value="expression">Raw expression</option>
               </select>
             </Field>
             {['field_compare', 'field_exists', 'field_is_empty'].includes(
@@ -570,21 +570,6 @@ export function Inspector() {
                     </option>
                   ))}
                 </select>
-              </Field>
-            )}
-            {str('conditionType') === 'expression' && (
-              <Field
-                id="b-expr"
-                label="Expression"
-                help="Evaluated by the engine against ctx[nodeId]. No editor help here; prefer the typed conditions above."
-              >
-                <input
-                  id="b-expr"
-                  className="xa-input"
-                  style={{ fontFamily: 'var(--font-mono)' }}
-                  value={str('expression')}
-                  onChange={(e) => patch({ expression: e.target.value })}
-                />
               </Field>
             )}
             <span className="xa-help">
