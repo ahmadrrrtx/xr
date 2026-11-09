@@ -5,57 +5,154 @@ Branch: `release/preview-1` · Base commit: `1834fd16cecc18997d94764603fdceb16fc
 Release identity target: XR Preview 1 — `0.1.0-preview.1`, tag `v0.1.0-preview.1`.
 
 Status vocabulary: **PASS / FAIL / BLOCKED / NOT RUN** (evidence = exact command + output excerpt).
-A BLOCKED or NOT RUN item is never reported as PASS.
+A BLOCKED or NOT RUN item is never reported as PASS. Dates are the container's UTC clock.
 
 ---
 
-## Day 1 — 2026-11-10 (Phase 0)
+## Day 1 — 2026-11-09/10 (Phase 0 + first P0)
 
 ### Drift-check: OK
 
-- Plan sections 1, 3, 10 re-read. Scope = sections 3, 4, 5, 6, 10 only.
-- `bun run scripts/release-smoke/ledger-check.ts` → `LEDGER OK - 52 tasks (todo=49, needs_owner=3)`.
-- Ledger v1 frozen at sha256 `7621a128995b51fa0ec63c95fc6b4c9293ffccf96d09c90c55562e02e3b5fcdd` (53 lines, 1 header + 52 tasks).
+- Plan sections 1, 3, 10 re-read at session start and before this entry.
+- `bun run scripts/release-smoke/ledger-check.ts` → `LEDGER OK - 52 tasks (done=3, doing=1, todo=45, needs_owner=3), 5 commit(s) since 1834fd16`.
+- Ledger v1 frozen at 52 tasks + header. The checker was itself tested against 5 kinds of
+  drift (§ below) before any code was written.
 
 ### Done
 
-| # | Item | Evidence |
-|---|---|---|
-| 1 | Environment brought up: Bun `1.4.4`, Node `v20.20.2`, 4 GB swap added, `NODE_OPTIONS=--max-old-space-size=1400` | `bun --version`; `free -h` shows `Swap: 4.0Gi` |
-| 2 | Clone + dependency install | `git clone` OK; `bun install --frozen-lockfile` → `82 packages installed [786.00ms]` |
-| 3 | Base commit recorded | `BASE_SHA=1834fd16cecc18997d94764603fdceb16fcea89b`, branch `main`, tip `2026-11-09 22:33:15 +0500` |
-| 4 | Ledger v1 + ledger check written | 52 tasks seeded from sections 3,4,5,6,13 (T01–T09 defects, T10–T17 workstreams, T20–T33 features, T40–T50 OWASP, T60–T66 Windows, T70–T72 owner items) |
-| 5 | Root typecheck baseline | `npx tsc --noEmit` → `EXIT=0` (clean, matches the plan's claim) |
-| 6 | D1 reproduced | `src/execution/workflow/engine.ts:1099` — `new Function("ctx", ...)` confirmed present, host realm, input = `c.expression` |
+| # | Item | Commit | Evidence |
+|---|---|---|---|
+| 1 | Environment: Bun **1.4.2** (the repo's pin, `.bun-version`), Node v20.20.2, 4 GB swap, `NODE_OPTIONS=--max-old-space-size=1400` | — | `bun --version` → `1.4.2`; `free -h` → `Swap: 4.0Gi` |
+| 2 | Clone + `bun install --frozen-lockfile` (82 pkgs) + `desktop/bun install` (457 pkgs) | — | both exit 0 |
+| 3 | Base commit recorded, branch `release/preview-1` created | — | `git rev-parse HEAD` → `1834fd16cecc…` |
+| 4 | Ledger v1 (52 tasks: T01–T09 defects, T10–T17 workstreams, T20–T33 features, T40–T50 OWASP, T60–T66 Windows, T70–T72 owner) | `4615ff68` | `docs/release/preview1/ledger.jsonl` |
+| 5 | `ledger-check.ts` written **and proven to fail** on 5 drift classes | `4615ff68` | §"Checker self-test" |
+| 6 | **T01 / D1 (P0): `new Function()` RCE removed** from workflow branch conditions, end to end | `b5a72c88`, `d3493f23` | `docs/release/preview1/evidence/T01-d1-workflow-expression-rce.md` |
+| 7 | T02 / D2 investigated — **not reproducible**; test left untouched | `8a2fd59a` | `…/evidence/T02-d2-voice-not-reproduced.md` |
+| 8 | Ownership map regenerated (my new dir caused the drift, not a pre-existing defect) | `863b1e9e` | `bun run ownership:check` → in sync |
+| 9 | `security:check` → **PASS** (7/7 stages) once the pinned Bun was installed | — | §"Release Gate Lite snapshot" |
 
-### Verified claims vs. reality (section 2 cross-check)
+### Release Gate Lite snapshot (local items only; items 9 needs G1)
 
-- **Confirmed:** repo size/scale, `bun install --frozen-lockfile` works, root `tsc --noEmit` clean, `release.manifest.json` says `1.1.1-rc.1` + `publicVersion 1.0.0` + `withdrawnTags: [v1.1.0]`, D1 code is exactly where the plan says.
-- **Correction to the plan (FACT → GitHub API, 2026-11-10):** the plan says tag `v1.1.0` "was withdrawn after its CI gate failed". The manifest agrees (never published to channels), **but the GitHub release `v1.1.0` exists and is marked `prerelease=false`** — i.e. published as a normal release with 5 desktop assets. This is a live false signal to users today and belongs to T04/D4 (fix at G3, per D4: mark it `prerelease` with a Legacy note; no tag deletion).
-- **Additional finding:** tags `v3.0.0`, `v4.3.0`, `v4.5.0`, `v7.0.0` exist with **no** GitHub release, while `docs/release/` carries `3.1.6`, `4.0`, `7.0.1` records. Release identity is more tangled than section 2 states. Feeds T04.
-- **npm: NOT RUN** — `npm view @rrrtx/xr versions dist-tags` is a D4 precondition and is not yet executed.
+| # | Gate | Result | Evidence |
+|---|---|---|---|
+| 1 | `npx tsc --noEmit` (root) + desktop typecheck | **PASS** | exit 0 both |
+| 2 | Tests, per directory | **PASS** — `5279 pass, 41 skip, 1 fail`, the fail being my own ownership drift (fixed) | `/home/user/logs/baseline142/summary.tsv` |
+| 3 | `bun run security:check` | **PASS** (7/7) | pinned-bun 1.4.2, unshare=true bwrap=false, deps audit clean |
+| 4 | `claim-lint`, `placeholder-lint`, `release:check`, `changelog:check` | **PASS** (all exit 0) | `v1.1.1-rc.1`, 10 surfaces in sync, 20 evidenced claims |
+| 5 | `api:schema:check`, `client:check` | **PASS** | 292 operations; typed client in sync |
+| 6 | `desktop:sink-lint` | **PASS** | no raw HTML/eval sinks |
+| 7 | `smoke-sidecar.sh` | NOT RUN | needs a compiled sidecar (WS5) |
+| 8 | `consumer-smoke`, `journey:cli` | NOT RUN | next |
+| 9 | `desktop-app.yml` Linux+Windows legs | **BLOCKED** | needs G1 (no `GITHUB_TOKEN`) |
+| 10 | WS3 smoke scripts | NOT RUN | T12 |
+
+### Checker self-test (Phase 0 requirement: a gate that cannot fail is not a gate)
+
+Each case was made in a throwaway clone, run against the checker, and reverted.
+
+| Injected drift | Result |
+|---|---|
+| commit subject without `[Txx]` | `LEDGER FAIL — subject has no [Txx] id` |
+| `[T99]` not in ledger | `LEDGER FAIL — id T99 is not in the ledger` |
+| commit touching `README.md` under a task whose paths exclude it | `LEDGER FAIL — "README.md" is outside the task's paths` |
+| task marked `done` with no evidence | `LEDGER FAIL — status done but no evidence file` |
+| invalid JSON line | `LEDGER FAIL — line 54: invalid JSON` |
+| append-only update with a later ts | passes (correct) |
+
+It then caught two real drifts of mine during the day (`docs/OWNERSHIP.md` under T01, the T02
+evidence path) — which is the behaviour we want.
+
+### Findings that contradict the plan (FACT, verified here)
+
+1. **`test/desktop` was not broken — the environment was.** 6 failures in the first baseline
+   were `Cannot find module 'react/jsx-dev-runtime'`. Root `package.json` has no `workspaces`,
+   so `desktop/` needs its own `bun install` (457 packages). After installing: `491 pass, 0 fail`.
+   *Consequence for WS4 and for `README` quick-start: the desktop build has a second install step
+   that is easy to miss.*
+
+2. **The full suite fails for environmental reasons on a small box.** First full run: `322 fail`.
+   Cause found: `df -h /tmp` → `tmpfs 992M`, and the log holds 75 × `ENOSPC: no space left on
+   device` — the suite's temp root overflows a RAM-backed `/tmp`, then every later suite fails
+   for unrelated reasons. With `TMPDIR` on the real disk: `5193 pass, 41 skip, 7 fail` (and 7 was
+   1 real + 6 desktop-deps). *Anyone reproducing the plan's "1 failing" claim on a small machine
+   must set `TMPDIR`.*
+
+3. **The suite is not order-independent.** On the pinned Bun 1.4.2 a single-process
+   `bun test` gives `5174 pass, 106 fail`; the same 106 tests pass when their directory is run
+   alone (`bun test test/api/` → `115 pass, 0 fail`). The failures are cross-file interference
+   over shared daemon/server state (e.g. an auth test expecting `401` receives `200` because
+   another file's server config is still in effect). This is **why Gate Lite item 2 says "per
+   directory"** — it is not a formality. Recorded as a quality risk; root single-process
+   `bun test` should not be advertised as the way to test XR.
+
+4. **`security:check` fails on the wrong Bun.** It pins `.bun-version` = `1.4.2`; the box had
+   1.4.4, so the gate reported `FAIL: actual 1.4.4; expected 1.4.2` while all six behavioural
+   stages passed. Not a product defect. *Fix: install the pin — which was done, not the gate.*
+
+5. **`size-gate` polices growth of waived files, and the tree is at 99.9 % of its ceiling**
+   (175,286 of 175,500 LOC, 17 modules over 800 LOC). My first D1 patch tripped it
+   (`engine.ts 1381 → 1386`, `types.ts 851 → 867`). Resolved by moving the new allow-list into
+   `src/execution/workflow/conditions.ts` and holding both waived files at exactly their
+   recorded size, rather than raising a baseline. **Anyone adding code to a waived module must
+   keep it at or below its recorded size — there is only ~214 LOC of headroom in the whole tree.**
+
+6. **D2 (the plan's one failing test) does not reproduce** — see T02 evidence. Five
+   configurations tried, including the two the plan nominated as suspects.
+
+7. **Release identity is more tangled than section 2 says.** GitHub API, today: releases
+   `v1.1.0` (**`prerelease=false`**, 5 assets) and `v1.0.0` (21 assets), `v1.0.0-beta.1`
+   (prerelease). Tags with **no** release: `v3.0.0`, `v4.3.0`, `v4.5.0`, `v7.0.0`. Meanwhile
+   `release.manifest.json` lists `v1.1.0` under `withdrawnTags` for a failed release gate. So
+   the GitHub releases page currently advertises as *stable* a release the manifest says was
+   never published. **This is a live false signal to users** and is D4 work (fix at G3, per D4:
+   mark `prerelease` + Legacy note, delete no tags).
+
+8. **`xr env capabilities --json` is honest and works.** On this box: `desktop` →`unsupported`
+   (missing `xdotool`, `wmctrl`), `browser` → supported, `application` → supported, and the
+   secret backend warns that no OS keychain exists and falls back to an encrypted file.
+   Consistent with D5's "refuse clearly, keep the rest working" policy.
 
 ### In progress
 
-- T10 (Phase 0 close-out: ledger negative tests + first commit).
+- T08 (claims): README has **zero** Firecracker/Kata/gVisor mentions; `KNOWN_LIMITATIONS.md`
+  row 2 states microVMs are detection-only and fail closed; no `firecracker` string in
+  `src/commands/`. Remaining: UI strings and CLI help sweep.
 
 ### Blocked
 
 | Item | Why | Who can unblock |
 |---|---|---|
-| `GITHUB_TOKEN` (T70) | **Not present in the environment.** Anonymous clone/read works (repo is public, HTTP 200), so all Stage-1 local work proceeds. G1 (push + workflow dispatch) and section 13 Windows evidence **cannot** run without it. | Owner: export `GITHUB_TOKEN` with `repo` + `workflow` scope |
-| Real-provider tests (T07, T21, T72) | No provider key in env (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, … all unset) | Owner: one capped key |
-| Windows evidence (T60–T66) | Needs GitHub-hosted Windows runners → needs G1 → needs the token | Owner |
-| macOS / code-signing / microphone / real-GPU | No such hardware here | Owner |
+| **G1** (push + CI + Windows workflows) | **`GITHUB_TOKEN` is not set** in this environment. Anonymous clone/read works because the repo is public, so all Stage-1 local work proceeds normally. Every CI-dependent task (T06, T60–T66, Gate item 9) stays BLOCKED. | **Owner: export `GITHUB_TOKEN`** (`repo` + `workflow` scope) |
+| T07, T21 real-provider runs | No provider key in env | Owner: one capped key |
+| T60–T66 Windows evidence | Needs GitHub-hosted Windows runners → G1 | Owner |
+| macOS, code signing, microphone, GUI | No such hardware here | Owner (checklist at Day 6) |
 
 ### Risks
 
-1. **Token absent at Day 1** — the G1 gate (scheduled end of Day 3) cannot be executed unless it arrives. Local work continues; CI-dependent scope (T06, T60–T66, Windows/macOS claims) stays BLOCKED until then.
-2. **2 GB RAM** — root `tsc` peaks near 1 GB. Full `bun test` must run per directory, one at a time. Baseline test run is the next heavy step.
-3. **D4 identity churn (T04)** is capped at half a day. The extra tags found above may lengthen it; fallback is `1.2.0-preview.1` per section 3/D4.
+1. **Token absent** — Day 3 ends at G1. If it has not arrived, the Windows/CI half of the plan
+   (Days 4–5) cannot start, and the readiness report will say so plainly rather than claim PASS.
+2. **Suite order-dependence** (finding 3) — CI must keep running per directory; a future
+   "simplify CI to one `bun test`" would produce a red build for reasons that look like product
+   bugs and are not.
+3. **0.1 % size headroom** (finding 5) — every remaining task will fight `size-gate`. D9's
+   "do not refactor" now has a sharper edge.
+4. **D4 could exceed its half-day cap** (finding 7: 4 extra tags) — fallback is `1.2.0-preview.1`
+   per section 3/D4.
 
-### Next
+### Next (Day 2)
 
-- Finish T10 (negative tests for the checker, commit `[T10]`).
-- WS1 baseline: per-directory `bun test` with logs → record passes/failures/skips.
-- T01 (D1, P0): replace `new Function` with a restricted parser + hostile-payload tests.
+- T04 / D4 release identity to `0.1.0-preview.1` (half-day cap), starting with
+  `npm view @rrrtx/xr versions dist-tags` — the precondition nobody has run yet.
+- T12 / WS3 first smoke scripts (`scripts/release-smoke/`), mock providers.
+- T22 spend-cap adversarial tests, T23 security-plane tamper test.
+- Then T03 (dead UI) and T05 (Windows sandbox-only refusal).
+
+---
+
+## Ledger hash history
+
+| When | sha256 | Note |
+|---|---|---|
+| v1 (frozen) | `7621a128995b51fa0ec63c95fc6b4c9293ffccf96d09c90c55562e02e3b5fcdd` | 53 lines, 1 header + 52 tasks |
+| after Day 1 | see `sha256sum docs/release/preview1/ledger.jsonl` | append-only; ts normalised once because the v1 header was anchored at `2026-11-10T00:00:00Z` (owner-local date) while the container clock is still `2026-11-09` UTC, which made every append look like it preceded the header |
