@@ -69,3 +69,19 @@ Recorded as NOT RUN rather than assumed:
 - Any performance or quality comparison against another agent on the same task and model.
 
 The readiness report states, per item, what was verified, with which command, and what was not.
+
+## Code health (recorded, deliberately not changed this week)
+
+- **`src/state/workspace-store.ts` is 2,550 lines** — the largest module in the tree, and it owns
+  the audit chain, the workspace database and the migration path. `src/clients/daemon-client.generated.ts`
+  is 1,529 lines but generated. Plan section 3/D9 says record these and do **not** refactor them
+  before the preview: a rewrite of the module everything else depends on, in the same week as the
+  first public release, is a risk with no user-visible benefit. It is a maintenance note, not a
+  defect, and it is written down here so nobody discovers it by surprise.
+
+## Chat history
+
+- **No archived-chats list.** Archiving a conversation would hide it with no way back — both
+  session queries filter `archived = 0`, and an archived list needs a Rust query change — so the
+  Archive action and its "coming soon" button are both withdrawn in Preview 1. Deleting a session
+  remains available and asks first.
