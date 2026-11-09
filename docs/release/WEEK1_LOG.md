@@ -210,6 +210,60 @@ test/providers + test/cli: 382 pass, 0 fail
 
 ---
 
+## Day 2 · D4 — release identity, including the documented fallback
+
+**Decision (owner-approved plan §3/D4):** the release identity is **`1.2.0-preview.1`**, codename
+**Preview 1**. The plan's primary target was `0.1.0-preview.1`; §3 names `1.2.0-preview.1` as the
+fallback and it is the one that survived contact with the repository's own contracts.
+
+**Why the primary target failed (FACT, reproduced locally):**
+
+1. `identity.stability` is an enum with no `preview` member — a `0.x` preview cannot be described in
+   the manifest's own vocabulary (it had to claim `public-beta`).
+2. `scripts/release-manifest.ts#validateChannels` rejects a pre-release `publicVersion` unless
+   `channels.claimed == ["github-releases"]`. Preview 1 wants the npm/Homebrew/WinGet/Scoop/Docker
+   rows to stay claimed for the **1.0.0 public line**, so a `0.x` public version is refused.
+3. 16 tests across `test/release`, `test/update` and `test/phase0` encode "1.0.0 stays public"
+   as the shipped truth — including the README channel gate, the six-channel live check, the `.deb`
+   round-trip and the installer pin. Re-baselining that suite is a bigger change than D4's half-day
+   cap, and loosening it would have weakened a gate to make a version number fit.
+
+**Fallback applied instead:** only `identity.version` and `identity.codename` moved
+(`1.1.1-rc.1`/Graphite → `1.2.0-preview.1`/Preview 1), `stability = public-beta`,
+`channels.publicVersion` stays **1.0.0** and `channels.claimed` is untouched. The product is called
+**XR Preview 1** in every user-facing string; semver is an implementation detail.
+
+**Deviation recorded (T04.a):** the primary identity `0.1.0-preview.1` was attempted and abandoned.
+The attempt was reverted in full (`git checkout --` across every stamped surface,
+`docs/release/0.1.0-preview.1/` and the `0.x` WinGet manifest removed) before the fallback was
+applied, so no `0.x` string survives in the tree.
+
+**Two derived artifacts had to be regenerated, and one test pin was wrong:**
+
+- `docs/api/openapi.json` — the version string is embedded; `api:schema:check` fails on stale and CI
+  would have gone red. Regenerated (`api:schema:generate`); the diff is only the version.
+- `CHANGELOG.md` — regenerated from git (`changelog:generate`, 189 commits since v1.1.0).
+- `test/daemon/dashboard-split.test.ts` — **a real defect in the pin, not in the dashboard.** The
+  pinned post-hardening document hash normalized the generated *version* but not the generated
+  *codename*, and the rendered identity is `"<version> (<codename>)"`. Any codename change therefore
+  broke the pin (D4 changed Graphite → Preview 1). Normalizing both halves restores the pin
+  **byte-for-byte** at the pin-time values (`1.1.0` / `Graphite`) while keeping the DOM/CSP guard
+  exact — verified: the normalized hash equals the committed constant.
+
+**Gates after the fallback (all PASS):** `release:check` (10 surfaces @ 1.2.0-preview.1),
+`channel:check` (5 configs @ public 1.0.0), `claim-lint` (20 evidenced claims),
+`changelog:check`, `api:schema:check`, `ci:policy`.
+
+**Tests after the fallback:** full per-directory sweep re-run — 4,864 pass / 0 fail across 54
+directories (`test/fixtures` and `test/helpers` hold no test files, which is their documented state).
+
+**README:** the install table still describes the **1.0.0 public line** the six channels serve
+today; a paragraph above it states plainly that Preview 1 is not installable from those channels and
+points at the release-scoped limitations document. `known-limitations.md` for `1.2.0-preview.1`
+carries the same statement plus the "why not 0.1.0" note.
+
+---
+
 ## Ledger hash history
 
 | When | sha256 | Note |

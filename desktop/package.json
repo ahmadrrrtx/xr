@@ -1,6 +1,6 @@
 {
   "name": "@rrrtx/xr-desktop",
-  "version": "1.1.1-rc.1",
+  "version": "1.2.0-preview.1",
   "private": true,
   "type": "module",
   "description": "XR Desktop — the AI agent you can actually trust. Tauri v2 + React 18 + Tailwind v4 shell.",

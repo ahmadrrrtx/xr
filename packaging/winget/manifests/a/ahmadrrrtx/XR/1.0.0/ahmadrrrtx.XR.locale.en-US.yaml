@@ -7,7 +7,7 @@ PackageName: XR
 PackageUrl: https://github.com/ahmadrrrtx/xr
 License: MIT
 LicenseUrl: https://github.com/ahmadrrrtx/xr/blob/main/LICENSE
-ShortDescription: XR — a local-first, provider-neutral AI agent runtime.
+ShortDescription: XR Preview 1 (1.
 Tags:
   - ai
   - cli
