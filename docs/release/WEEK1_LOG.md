@@ -305,6 +305,34 @@ green (308/35/58/288/38/217 pass, 0 fail) — including `test/daemon` (308 pass)
 only red directory before the loss and is green now that the codename half of the DOM pin is
 normalized.
 
+## Day 2 · Windows evidence arrives, and it is evidence (FACT)
+
+`Windows Preview Test` run **42707408342** on `9d67a41f` — **all three jobs green**, from a
+GitHub-hosted `windows-latest` runner and nothing else:
+
+| Job | Result | What it actually proved |
+|---|---|---|
+| Windows CLI (x64) | success | the release smoke lane against the compiled `xr.exe`: **9 passed · 0 failed · RESULT: PASS** on `MINGW64_NT-10.0-26100` |
+| Rust Windows tests | success | `cargo test --locked --jobs 1 --lib` compiles and passes once the sidecar exists (the T60.a fix) |
+| Installers (msi/nsis) | success | inspection path ran; no bundles were present and it said so rather than claiming a build |
+
+Two results from that run are worth more than a green tick:
+
+1. **D5 is real on Windows, not asserted.** The isolation smoke reads the live guarantee
+   matrix on the host it runs on: `win32/x64`, hardened mode on, `shell / arbitrary code` →
+   tier2_isolated, placement **`BLOCKED (fail-closed)`**, kernel boundary ✗, fail-closed ✓,
+   remediation naming Docker Desktop/Podman or the experimental AppContainer. Refuse, never
+   run in-process — exactly the contract.
+2. **Path-escape policy runs natively there.** 122 assertions pass on Windows across
+   `filesystem-authority`, `filesystem-implicit`, `filesystem-index-context` and
+   `canonical-bypass` — replacing the four fake "denials" the first version of this workflow
+   produced (see the false-pass note below).
+
+Artifacts committed under `docs/release/preview1/evidence/`: `T60-windows-smoke.log`,
+`T60-windows-escape-tests.log`, `T60-windows-env-capabilities.json`.
+
+macOS: **NOT RUN**, best-effort in this plan, claimed nowhere.
+
 ---
 
 ## Ledger hash history
