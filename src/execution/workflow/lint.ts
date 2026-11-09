@@ -12,7 +12,7 @@
  *   - `warning` → publishable; shown so the author can decide.
  */
 import type { WorkflowNode } from "./types.ts";
-import { BRANCH_CONDITION_TYPES } from "./types.ts";
+import { isSupportedCondition } from "./conditions.ts";
 import { downstreamNodes, entryNodes, validateGraph } from "./nodes.ts";
 
 export type WorkflowProblemSeverity = "error" | "warning";
@@ -95,9 +95,8 @@ export function lintDefinition(nodes: WorkflowNode[], entryNodeIds?: string[]): 
         for (const id of [...n.trueNodes, ...n.falseNodes]) if (!ids.has(id)) push("error", "branch_bad_target", `"${n.label}" routes to a node that does not exist (${id}).`, n.id);
         const c = n.condition;
         // A stored workflow may carry a condition kind this engine no longer
-        // evaluates (raw `expression` was removed in Preview 1). Reject it at
-        // lint time rather than letting the run discover it at execution time.
-        if (!(BRANCH_CONDITION_TYPES as readonly string[]).includes(c.type)) {
+        // evaluates (raw `expression` was removed). Reject it at lint time.
+        if (!isSupportedCondition(c.type)) {
           push("error", "branch_unsupported_condition", `"${n.label}" uses an unsupported condition type (${c.type}) — rebuild it with a typed condition.`, n.id);
           break;
         }

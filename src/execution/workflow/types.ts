@@ -340,23 +340,6 @@ export type BranchCondition =
   | { type: "approval_granted"; nodeId: string }
   | { type: "approval_denied"; nodeId: string };
 
-/**
- * Condition types the engine can evaluate. `expression` (a raw JavaScript
- * string compiled with `new Function`) was removed in Preview 1: it evaluated
- * author-supplied source in the engine's own realm, which is remote code
- * execution wherever a workflow comes from an untrusted place. Typed
- * conditions above cover the same decisions without executing anything.
- */
-export const BRANCH_CONDITION_TYPES = [
-  "field_compare",
-  "field_exists",
-  "field_is_empty",
-  "review_approved",
-  "review_changes_requested",
-  "approval_granted",
-  "approval_denied",
-] as const satisfies readonly BranchCondition["type"][];
-
 /** Join node: waits for all specified dependencies, then emits. */
 export interface JoinNode extends WorkflowNodeBase {
   kind: "join";

@@ -27,6 +27,7 @@ import { createDraft, publishDraft } from "../../src/execution/workflow/versioni
 import { lintDefinition } from "../../src/execution/workflow/lint.ts";
 import { decompileDefinition } from "../../src/execution/workflow/canvas.ts";
 import type { BranchCondition, WorkflowDefinition } from "../../src/execution/workflow/types.ts";
+import { BRANCH_CONDITION_TYPES } from "../../src/execution/workflow/conditions.ts";
 
 const WF_SRC = join(import.meta.dir, "..", "..", "src", "execution", "workflow");
 
@@ -175,7 +176,7 @@ describe("D1 — branch conditions never execute author-supplied source", () => 
     // Compile-time proof plus a runtime assertion on the exported allow-list.
     const types = readFileSync(join(WF_SRC, "types.ts"), "utf8");
     expect(types).not.toMatch(/type:\s*"expression"/);
-    const allowed: string[] = [...(require("../../src/execution/workflow/types.ts").BRANCH_CONDITION_TYPES as string[])];
+    const allowed: string[] = [...BRANCH_CONDITION_TYPES];
     expect(allowed).not.toContain("expression");
     const typed: BranchCondition = { type: "field_compare", field: "a", operator: "eq", value: 1 };
     expect(typed.type).toBe("field_compare");

@@ -33,7 +33,7 @@ import type {
   WorkflowRunSummary,
   WorkflowInspection,
 } from "./types.ts";
-import { BRANCH_CONDITION_TYPES } from "./types.ts";
+import { isSupportedCondition } from "./conditions.ts";
 import { applyRunEvent, applyNodeEvent, canAdvanceNodes, canAcceptHumanInput, canPause, canCancel } from "./state-machine.ts";
 import { verifyIntegrity } from "./versioning.ts";
 import type { RunEvent } from "./state-machine.ts";
@@ -1079,16 +1079,10 @@ export class WorkflowEngine {
 
     let conditionResult = false;
     const c = node.condition;
-    // Defense in depth: a workflow can reach the engine as stored JSON that
-    // predates (or bypasses) the type checker. An unrecognised condition type
-    // — including the removed `expression` kind — is a hard error, never a
-    // silent `false` that would route a run down the wrong branch unnoticed.
-    // Nothing here evaluates author-supplied source.
-    if (!(BRANCH_CONDITION_TYPES as readonly string[]).includes(c.type)) {
-      throw new Error(
-        `branch node "${node.id}" has unsupported condition type "${c.type}" — ` +
-          `raw expressions are not evaluated; use a typed condition`,
-      );
+    // Defense in depth: stored JSON may carry a kind this engine no longer
+    // evaluates (the removed `expression`). Fail loudly, never silently.
+    if (!isSupportedCondition(c.type)) {
+      throw new Error(`branch node "${node.id}": unsupported condition type "${c.type}"`);
     }
     try {
       if (c.type === "field_exists") {
