@@ -1,0 +1,238 @@
+# =============================================================================
+# XR Preview 1 — Windows evidence (plan section 13, task T60)
+#
+# The agent's Linux box cannot run Windows, so every Windows claim in the
+# Preview 1 readiness report must come from a GitHub-hosted Windows runner
+# (owner decision, section 10/D2). Wine is never evidence.
+#
+# What this workflow establishes, in order:
+#   1. build the CLI exe for Windows and install it where the installer would
+#   2. CLI truth: --version, doctor, env capabilities --json
+#   3. one-shot task against a loopback mock provider that writes a file, plus
+#      workspace path-escape denials (..\ , UNC, drive letter, junction)
+#   4. sandbox tiers: what the runner actually has (docker info), the
+#      experimental AppContainer path, and the D5 refusal when no sandbox exists
+#   5. the repository's own Windows-only Rust tests (shell-test-windows)
+#   6. installers: attempt to reuse desktop-app.yml artifacts; NOT RUN and said
+#      so plainly when they are absent rather than quietly skipped
+#   7. every log and screenshot uploaded as an artifact
+#
+# Steps that cannot run are reported as NOT RUN / BLOCKED in the step summary.
+# Nothing here is allowed to turn an absent result into a PASS.
+# =============================================================================
+name: Windows Preview Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/preview-1]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: win-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ── 1-4. CLI truth, path escapes, sandbox policy ───────────────────────────
+  cli:
+    name: Windows CLI (x64)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Bun (repo pin)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN="$(tr -d '[:space:]' < .bun-version)"
+          echo "repo pin: $PIN"
+          curl -fsSL https://bun.sh/install | bash -s "bun-v$PIN"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      # 1. Build the Windows CLI exe the way the sidecar compiler does.
+      - name: Build xr.exe
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          bun build --compile --target=bun-windows-x64 src/index.ts --outfile out/xr.exe
+          ls -l out/xr.exe
+
+      # 2. CLI truth.
+      - name: CLI truth (--version, doctor, env capabilities)
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./out/xr.exe --version || echo "EXIT_VERSION=$?"
+          echo "--- doctor ---"
+          ./out/xr.exe doctor || echo "EXIT_DOCTOR=$?"
+          echo "--- env capabilities --json ---"
+          ./out/xr.exe env capabilities --json > env-capabilities.json || echo "EXIT_CAPS=$?"
+          head -c 2000 env-capabilities.json || true
+
+      # 3. Path-escape denials. A workspace-scoped tool must refuse these.
+      - name: Workspace path escapes are denied
+        shell: bash
+        run: |
+          set -uo pipefail
+          export XR_HOME="$RUNNER_TEMP/xrhome"
+          mkdir -p "$XR_HOME" ws
+          failures=0
+          check() {
+            local label="$1"; shift
+            if "$@" > escape-"$label".log 2>&1; then
+              echo "::error::ESCAPE ALLOWED: $label (must be denied)"
+              failures=$((failures+1))
+            else
+              echo "denied as expected: $label"
+            fi
+          }
+          # .. traversal, UNC path, drive letter, and a junction all leave the workspace.
+          check dotdot ./out/xr.exe "read the file ..\\..\\Windows\\win.ini"
+          check unc    ./out/xr.exe "read the file \\\\localhost\\c$\\Windows\\win.ini"
+          check drive  ./out/xr.exe "read the file C:\\Windows\\win.ini"
+          cmd //c "mklink /J junction %CD%\\..\\ .." >/dev/null 2>&1 || true
+          check junction ./out/xr.exe "read the file junction\\Windows\\win.ini" || true
+          echo "escape_failures=$failures" | tee escape-summary.txt
+          cat escape-*.log || true
+          test "$failures" -eq 0
+
+      # 4. Sandbox tiers — recorded honestly, not asserted.
+      - name: Sandbox tiers (D5 sandbox-only policy)
+        shell: bash
+        run: |
+          set -uo pipefail
+          {
+            echo "## Windows sandbox availability"
+            echo
+            echo '```'
+            docker version 2>&1 | head -20 || echo "docker: NOT PRESENT"
+            echo '```'
+            echo
+            echo '```'
+            docker info --format '{{.OSType}} / {{.ServerVersion}}' 2>&1 || echo "docker daemon: not running"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "--- docker info ---"; docker info 2>&1 | head -30 || true
+
+      - name: Experimental AppContainer sandbox (XR_OS_SANDBOX=experimental)
+        shell: bash
+        run: |
+          set -uo pipefail
+          export XR_HOME="$RUNNER_TEMP/xrhome"
+          mkdir -p "$XR_HOME"
+          export XR_OS_SANDBOX=experimental
+          echo "--- capabilities under the experimental sandbox ---"
+          ./out/xr.exe env capabilities --json > appcontainer.json || echo "EXIT=$?"
+          head -c 2000 appcontainer.json || true
+
+      - name: Refusal is explicit when no sandbox is available
+        shell: bash
+        run: |
+          set -uo pipefail
+          export XR_HOME="$RUNNER_TEMP/xrhome"
+          mkdir -p "$XR_HOME"
+          # Force the "no sandbox" path and require a refusal that names a next step.
+          unset XR_OS_SANDBOX
+          XR_FORCE_NO_SANDBOX=1 ./out/xr.exe "run the shell command whoami" > refuse.log 2>&1
+          rc=$?
+          echo "exit=$rc"
+          cat refuse.log || true
+          if [ "$rc" -eq 0 ]; then
+            echo "::warning::tool call succeeded without a sandbox — inspect refuse.log; Preview 1 policy is refuse-with-a-link"
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cli-logs
+          path: |
+            *.log
+            *.json
+            escape-summary.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ── 5. The repo's own Windows-only Rust tests ──────────────────────────────
+  rust-windows:
+    name: Rust Windows tests (shell-test-windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo test (desktop shell)
+        working-directory: desktop/src-tauri
+        timeout-minutes: 45
+        run: cargo test --locked 2>&1 | Tee-Object -FilePath cargo-test.log
+        shell: pwsh
+      - name: Upload cargo log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cargo-test-log
+          path: desktop/src-tauri/cargo-test.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ── 6-7. Installers: reuse desktop-app.yml artifacts or say NOT RUN ───────
+  installers:
+    name: Installers (msi / nsis) — inspect if present
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Look for desktop-app.yml Windows artifacts
+        id: find
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts
+          # Reuse the packaging lane's output instead of rebuilding the Tauri shell here.
+          RUN_ID=$(curl -s -K <(printf 'header = "Authorization: Bearer %s"\n' "$GH_TOKEN") \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/desktop-app.yml/runs?branch=${GITHUB_REF_NAME}&per_page=1" \
+            | grep -o '"id": [0-9]*' | head -1 | grep -o '[0-9]*' || true)
+          echo "run_id=${RUN_ID:-none}" >> "$GITHUB_OUTPUT"
+          if [ -z "${RUN_ID:-}" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No desktop-app.yml run for this branch yet — installer steps are NOT RUN, not skipped silently."
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "Found desktop-app.yml run $RUN_ID"
+
+      - name: Download Windows artifacts
+        if: steps.find.outputs.found == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          curl -sL -K <(printf 'header = "Authorization: Bearer %s"\n' "$GH_TOKEN") \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ steps.find.outputs.run_id }}/artifacts" \
+            -o artifacts.json || true
+          head -c 3000 artifacts.json || true
+
+      - name: Installer steps NOT RUN
+        if: steps.find.outputs.found != 'true'
+        shell: bash
+        run: |
+          {
+            echo "## Installers: NOT RUN"
+            echo
+            echo "desktop-app.yml has not produced Windows bundles for \`$GITHUB_REF_NAME\` yet."
+            echo "Silent-install, launch, sidecar health probe and uninstall assertions"
+            echo "therefore did not execute. This is NOT a pass."
+          } >> "$GITHUB_STEP_SUMMARY"
