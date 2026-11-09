@@ -3,7 +3,7 @@
  *
  * Hero (64px icon · name · path · stack chips) + quick-action grid:
  *   Chat (live → /chat?workspace=:id) · Settings (live) · Reveal (live)
- *   Builder / Research / Files / Memory (grayed — their phases) · Delete
+ *   Builder / Research / Memory · Reveal · Settings · Delete
  * (confirm + "also move files to trash", unchecked by default).
  * Recent-runs strip ships empty on purpose — runs attach in Phase 14.
  */
@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Brain,
-  Files,
+
   FlaskConical,
   FolderOpen,
   Loader2,
@@ -240,13 +240,22 @@ export default function WorkspaceLanding() {
             >
               <Wrench className="size-4.5" strokeWidth={1.5} />
             </QuickAction>
-            <QuickAction label="Research" hint="Coming soon" disabled iconMuted>
+            {/* D3: Research and Memory are real screens (/research, /memory) — the
+                buttons were disabled placeholders sitting next to working ones, so
+                they now go where they say. Files has no screen in this release and
+                is REMOVED rather than left as a control that cannot do anything. */}
+            <QuickAction
+              label="Research"
+              hint="Deep research runs"
+              onClick={() => navigate('/research')}
+            >
               <FlaskConical className="size-4.5" strokeWidth={1.5} />
             </QuickAction>
-            <QuickAction label="Files" hint="Coming soon" disabled iconMuted>
-              <Files className="size-4.5" strokeWidth={1.5} />
-            </QuickAction>
-            <QuickAction label="Memory" hint="Coming soon" disabled iconMuted>
+            <QuickAction
+              label="Memory"
+              hint="What XR remembers"
+              onClick={() => navigate('/memory')}
+            >
               <Brain className="size-4.5" strokeWidth={1.5} />
             </QuickAction>
             <QuickAction
