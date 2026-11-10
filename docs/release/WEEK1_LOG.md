@@ -550,3 +550,7 @@ Ledger correction: T70's earlier missing-token/G1 blocker was stale. The owner s
 and authenticated branch pushes and workflow dispatches succeeded; T70 is now marked done.
 No credential values are recorded. Tier decisions, final verification and conditional G3 remain
 separate and are not implied by this correction.
+
+Drift correction: the first T70 done entry omitted its resolving commit and did not map this
+log file, so ledger check correctly failed. An appended T70 correction records commit e416b1f4
+and the actual log path; no history was rewritten. Re-run checker before checkpoint.
