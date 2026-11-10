@@ -18,6 +18,8 @@
 
 **Latest Flatpak dispatch:** `42908959944` completed the offline pinned-Rust release compile, then failed on a nonexistent 256px icon source. The manifest now uses the existing 256px `128x128@2x.png` and has an image-dimension regression; a full rerun is required. On `1f01c829` Windows native CLI/refusal tests passed, but CI security failed an outdated Windows AppContainer remediation expectation; its correction also awaits native CI.
 
+**Native runner update:** GitHub retired `macos-14` on 2026-11-02. The cancelled 640ffe59 macOS 14 CLI legs had no runner or steps. T06.a moves CLI and desktop arm64 journeys to `macos-26`, retaining macOS 15 arm64 and Intel. New native results remain pending; this is not evidence that macOS 14 was tested.
+
 **LLM02 remains partial:** T41.a fixes synthetic credential leaks in selected newly written audit rows, structured logs, spans and Markdown reports. Historical records are not rewritten, redaction is heuristic, and complete transcript, crash and renderer-path scans remain unverified. OTLP telemetry exists as opt-in and is disabled by default.
 
 All three week-1 blockers are now closed or explained:

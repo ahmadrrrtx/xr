@@ -779,3 +779,17 @@ end-to-end installer testing remains NOT RUN; no security assertions were
 relaxed. Current PR checks and Flatpak build are still pending.
 
 Pre-checkpoint re-read §§1, 3, 10; ledger: **drift-check OK**.
+
+## T06.a — retired macOS runner, not a product-test pass
+
+GitHub officially retired `macos-14` on 2026-11-02:
+https://github.blog/changelog/2026-10-01-github-actions-macos-14-runner-image-retirement/.
+Both macOS 14 CLI jobs in 42915406499 and 42917263860 were cancelled without a
+runner or steps; this is consistent with retirement, but the job API did not
+provide an explicit cause. Replaced the retired arm64 runner with `macos-26`
+in both CLI and desktop journeys, retaining `macos-15` arm64 and
+`macos-15-intel`, all job/channel coverage and gate requirements. No macOS 14
+runtime verification is implied. Local journey/workflow controls 25 pass, 0
+fail; CI policy and ledger checks pass. New native journeys remain pending.
+
+Before checkpoint re-read §§1, 3, 10; ledger: **drift-check OK**.

@@ -565,7 +565,7 @@ jobs:
           - { slug: windows-x64, runsOn: windows-latest, webdriver: true }
           # No arm64 msedgedriver from msedgedriver-tool: launch + sidecar only.
           - { slug: windows-arm64, runsOn: windows-11-arm, webdriver: false }
-          - { slug: darwin-arm64, runsOn: macos-14, webdriver: false }
+          - { slug: darwin-arm64, runsOn: macos-26, webdriver: false }
           - { slug: darwin-arm64, runsOn: macos-15, webdriver: false }
           # The cross-built Intel bundle, run natively on Intel hardware.
           - { slug: darwin-x64, runsOn: macos-15-intel, webdriver: false }
