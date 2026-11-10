@@ -471,3 +471,8 @@ in progress; its Flatpak source-build job failed. The newer branch tip needs its
 The existing README and CODING_CONTRACTS describe other unresolved boundary limitations
 (filesystem authority, estimated spend and desktop pause); these require targeted code/test
 review, not a blanket claim that all P1 work is closed.
+
+**Native follow-up:** desktop dispatch 42903107866 on 43267857 reached the Linux Rust
+lane; Clippy failed with `unnecessary_map_or` at `desktop/src-tauri/src/crash.rs:206` after
+the declared MSRV rose to 1.89. Changed the expression to Clippy's equivalent `is_none_or`
+(which is available under that MSRV). This is a candidate until the native CI rerun passes.

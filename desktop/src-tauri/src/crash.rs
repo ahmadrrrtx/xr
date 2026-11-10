@@ -203,7 +203,7 @@ pub fn log_files(home: &Path) -> Vec<PathBuf> {
         // The shell's own log is reported separately, so it must not be
         // counted twice here.
         // (map_or, not is_none_or: MSRV is 1.77)
-        .filter(|p| p.file_name().map_or(true, |n| n != "shell.log"))
+        .filter(|p| p.file_name().is_none_or(|n| n != "shell.log"))
         .collect();
     files.sort();
     files.reverse();
