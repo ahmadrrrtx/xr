@@ -262,6 +262,7 @@ pub fn run() {
             commands::window::minimize_window,
             commands::window::toggle_maximize,
             commands::window::close_window,
+            commands::window::quit_app,
             commands::window::get_platform,
             commands::system::detect_system,
             commands::system::detect_ollama,

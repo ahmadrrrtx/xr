@@ -15,7 +15,8 @@
  *                  tauri-driver on PATH) a WebDriver session additionally
  *                  proves the webview rendered (title "XR", #root populated).
  *                  macOS has no WKWebView driver: launch + sidecar health only.
- *                  Closing the app must take the sidecar down with it.
+ *                  An explicit application quit must take the sidecar down.
+ *                  Closing only the main window intentionally hides it.
  *   agent          the INSTALLED engine (the sidecar the app ships) performs a
  *                  real task against the deterministic fixture provider
  *   update         actual same-version reinstall/data retention; cross-version
@@ -131,7 +132,16 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
       const port = await waitForEngineHealth(60_000);
       const acl = await ipcAclSmoke(wd, sid);
-      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${acl}`;
+      // Session deletion closes a window, but XR intentionally hides it and keeps
+      // the engine alive. Request the same explicit quit as the user menu, then
+      // keep the session alive until containment is actually verified.
+      const scheduled = await wd("POST", `/session/${sid}/execute/sync`, {
+        script: "setTimeout(() => { void window.__TAURI_INTERNALS__.invoke('quit_app'); }, 250); return 'quit scheduled';",
+        args: [],
+      });
+      if (scheduled !== "quit scheduled") throw new Error("could not schedule explicit app quit");
+      if (!(await engineGone(15_000))) throw new Error("engine sidecar still listening 15 s after explicit application quit (containment)");
+      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${acl}; explicit quit requested and sidecar stopped`;
     } finally {
       await wd("DELETE", `/session/${sid}`).catch(() => undefined);
     }
@@ -277,8 +287,8 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       need(v.status === 0 && v.out.includes(N), `installed engine --version: ${tail(v.out, 200)}`);
       if (opts.webdriver) {
         const detail = await webdriverSmoke(ctx.app, env);
-        need(await engineGone(15_000), "engine sidecar still listening 15 s after the app closed (containment)");
-        return `${detail}; sidecar exited with the app`;
+        need(await engineGone(15_000), "engine sidecar still listening after explicit application quit (containment)");
+        return detail;
       }
       const app: ChildProcess = spawn(ctx.app, [], { env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
       const explain = captureOutput(app);

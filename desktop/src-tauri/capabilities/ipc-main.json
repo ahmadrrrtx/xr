@@ -87,6 +87,7 @@
     "allow-pick-folder",
     "allow-ptt-set-shortcut",
     "allow-ptt-shortcut-info",
+    "allow-quit-app",
     "allow-reset-app",
     "allow-restart-app",
     "allow-restore-workspace",

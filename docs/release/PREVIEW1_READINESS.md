@@ -54,6 +54,15 @@ still listening 15 seconds after app closure. This is **unresolved**, not yet di
 bug versus test interference. Its Flatpak build also failed with `DNSResolveFailed`. No claim of
 a fully green desktop gate is justified.
 
+### Desktop user-menu follow-up
+
+Source inspection found that the user-menu Quit only hid the main window, workspace switching
+was a placeholder, and the updater entry claimed a fixed old version was current without a check.
+A candidate fix now navigates to the real screens and uses a main-only explicit quit command;
+the desktop journey requests explicit quit before testing sidecar containment. Local renderer,
+ACL and build checks pass; actual native quit/journey and manual installation remain **NOT RUN**.
+The earlier journey failure's exact cause is unproven.
+
 ## 2. Release identity (D4)
 
 `identity.version = 1.2.0-preview.1`, codename `Preview 1`, `stability = public-beta`.

@@ -588,3 +588,21 @@ approved in this scenario. The two new poisoned and two benign cases passed; com
 the file tests, 9/0; full security suite 386/0; root Node tsc exit 0. This is not a live-model
 or live external MCP-server test and does not establish that every possible injection or
 unapproved tool call is prevented. OWASP remains in progress.
+
+## T03.a — user-menu actions and explicit quit candidate
+
+Source inspection reproduced three user-menu defects: the Quit item called `closeWindow`,
+which the main-window handler intentionally turns into hide; Switch workspace only produced
+a coming-soon toast despite a route; Check for updates produced a hard-coded, unverified
+latest-version success and wrong version. Replaced the latter two with navigation to the
+actual workspace and Updates screens. Quit now calls a new `quit_app` IPC command which uses
+the same `app.exit(0)` shutdown path as tray Quit. Regenerated IPC grants: command is granted
+only to main, not workspace, HUD, orb or theater; ordinary close-to-tray remains unchanged.
+The WebDriver journey now requests explicit quit before testing sidecar containment, rather
+than assuming a closed window means exit. That is a candidate fix: the prior runner failure's
+precise cause remains unproven, and a native journey must pass before claiming containment.
+
+Desktop tests 496/0 (including main-only ACL and menu structural regressions), journey helpers
+12/0, desktop build/typecheck exit 0, lint 0 errors/2 existing warnings, IPC ACL and sink lint
+pass. No local Rust/GUI build, real user click, or native journey was run. Those remain CI and
+owner checks; the three menu fixes and the lifecycle test are not yet native-verified.
