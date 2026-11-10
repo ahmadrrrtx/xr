@@ -493,3 +493,15 @@ but the job was subsequently cancelled during cache cleanup; the Linux job faile
 step. The Clippy correction was committed as dfefcf3c. A fresh desktop dispatch 42904607032
 on ddd97858 was queued. GitHub CI outcomes are commit-specific; do not promote partial job
 steps or previous artifacts into a completed current-tip gate.
+
+## Session continuation — drift-check OK; T20.a
+
+Re-read plan §§1, 3 and 10. At 756c7703, the ledger checker passed with eight documented
+legacy mappings. PR #210 already exists; no duplicate PR was opened. G3 approval is conditional
+on verified readiness, so no releases or old release metadata were changed.
+
+Core CI run 42904836734 failed one launcher test after the default 5-second timeout while
+spawning Node; subsequent launcher tests found Node. The exact resource cause is not proven.
+T20.a increases only that spawn-heavy test's budget to 20 seconds and includes the underlying
+spawn error in diagnostics; assertions and no-retry policy are unchanged. Local targeted
+launcher tests: 19 pass / 0 fail; full `test/cli/`: 262 pass / 0 fail. CI rerun pending.

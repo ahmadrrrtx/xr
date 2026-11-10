@@ -18,7 +18,9 @@ afterAll(() => { for (const dir of dirs) rmSync(dir, { recursive: true, force: t
 
 function nodePath(): string {
   const p = spawnSync("node", ["-p", "process.execPath"], { encoding: "utf8" });
-  if (p.status !== 0 || !p.stdout.trim()) throw new Error("Node is required to test the npm launcher");
+  if (p.status !== 0 || !p.stdout.trim()) {
+    throw new Error(`Node is required to test the npm launcher: ${p.error?.message ?? `exit ${p.status}, signal ${p.signal ?? "none"}`}`);
+  }
   return p.stdout.trim();
 }
 
@@ -112,7 +114,7 @@ describe("npm runtime dependency and launcher", () => {
     expect(p.stderr).toContain("optional");
     expect(p.stderr).toContain("--omit=optional");
     expect(p.stderr).not.toContain("curl -fsSL");
-  });
+  }, 20_000); // Spawns Node; shared CI runners can exceed Bun's 5 s default.
 
   test.skipIf(process.platform === "win32" || !selectedPackage())("a matching bundled runtime wins even when Bun is absent from PATH", () => {
     const f = fixture();
