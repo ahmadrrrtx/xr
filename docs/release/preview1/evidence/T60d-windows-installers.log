@@ -22,3 +22,12 @@ Root TypeScript, CI policy, ownership, claim lint, and ledger checks passed.
 None of this is native Windows installation evidence. The exact current-SHA
 artifact must build, then this candidate must execute and its uploaded evidence
 be inspected before any lifecycle task can be marked done.
+
+Native Windows run 42914372905 on a62b54b0 correctly reported BLOCKED because
+no exact-SHA Windows artifact existed, uploaded evidence artifact 13807699134,
+and did not execute installers. Core CI run 42914382252 on the same SHA later
+failed the first synthetic PowerShell input test: the log explicitly reports
+Bun's 5-second test timeout; the evidence file did not yet exist. The other
+three controls passed. Increased just these process-heavy test timeouts to 25s,
+retaining the 15s child timeout, all assertions and a new explicit diagnostic
+for child timeout/signal; no retry. Local controls 8 pass, 0 fail. CI rerun needed.

@@ -727,3 +727,14 @@ secret shapes can escape, and full transcript/crash/renderer scans are not yet
 proved. The README's absolute no-telemetry statements were wrong: OTLP telemetry
 is optional and defaults disabled. OWASP labels now reflect the remaining gaps,
 the AppContainer limitation and actual CSP (inline styles allowed).
+
+## T60.d — native prerequisite block and CI timeout correction
+
+Windows run 42914372905 on a62b54b0 reported and uploaded the correct BLOCKED
+result (artifact 13807699134): the same-commit Windows bundle did not yet
+exist, and no installer ran. Separately, core CI 42914382252 failed the first
+PowerShell negative-control test at Bun's default 5-second test timeout; the
+next three controls passed. Raised only these subprocess-heavy test budgets to
+25 seconds (the subprocess still has a 15-second bound), added diagnostics for
+child timeout/signal, and kept every assertion without retries. Local installer
+controls 8/0. The corrected tests and installer lifecycle need native reruns.

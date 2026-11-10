@@ -18,13 +18,14 @@ for (const names of [[], ["only.msi"], ["first.msi", "second.msi", "one-setup.ex
         encoding: "utf8", env: { ...process.env, RUNNER_OS: "Windows", CI: "true", GITHUB_ACTIONS: "true", RUNNER_TEMP: tmp },
         timeout: 15_000,
       });
+      if (result.error || result.signal) throw new Error(`PowerShell control did not finish: ${result.error?.message ?? result.signal}; stdout=${result.stdout}; stderr=${result.stderr}`);
       expect(result.status).not.toBe(0);
       const raw = JSON.parse(readFileSync(join(evidence, "windows-installer-events.json"), "utf8"));
       const events = Array.isArray(raw) ? raw : [raw];
       expect(events.some((e: { state: string; detail: string }) => e.state === "FAIL" && e.detail.includes("exactly one MSI and one NSIS"))).toBe(true);
       expect(events.some((e: { state: string }) => e.state === "PASS")).toBe(false);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
-  });
+  }, 25_000);
 }
 
 test.skipIf(!pwsh)("app-owned sidecar auth orchestration rejects four fake fault cases", () => {
@@ -33,4 +34,4 @@ test.skipIf(!pwsh)("app-owned sidecar auth orchestration rejects four fake fault
   });
   expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
   expect(result.stdout).toContain("5 PASS");
-});
+}, 25_000);
