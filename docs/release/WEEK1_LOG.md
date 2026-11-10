@@ -402,3 +402,21 @@ The cause of the latter is not yet known; no unsupported flake diagnosis. PR run
 e551b234 has successful x64 bundle jobs but its overall journey gate has not completed.
 Windows Preview Test 42897499989 completed successfully, but its installer job inspected only
 artifacts actually present; that does not by itself establish the full §13 install/uninstall.
+
+## Owner-authorized ledger reconciliation (2026-11-10)
+
+Owner approved targeted repair and G1. The pre-repair ledger SHA-256 was
+`88977fe9819a0d22758c64267db02dd661b41fa1433ac6e72110e02ef93e1324`; that
+version remains in Git. Six specific historical lines missing `commits` were corrected by adding
+an empty array; no other original fields were changed. All subsequent corrections use appended
+records. Eight already-pushed nonconforming subjects map to exact full commit SHAs in the checker,
+including the T33/T11.b collision. Every mapped commit still undergoes task-scope checking.
+No Git history was rewritten. Evidence descriptions were preserved in notes and evidence file
+paths point to retained excerpts or pre-existing logs. T05, T11, T11.a, T12, T13 and T14 were
+reopened because the plan's actual acceptance remains incomplete.
+
+Drift-check after reconciliation: `bun run scripts/release-smoke/ledger-check.ts` → exit 0,
+63 tasks, 8 explicit legacy mappings. This is a reconciled pass, **not** a claim that all
+historical subjects originally conformed. `bun test test/release/ledger-check.test.ts` → 6 pass,
+0 fail, including negative tests for malformed entries, out-of-scope files, missing IDs, new
+multi-ID subjects and absent evidence. These checks do not prove that each feature is complete.

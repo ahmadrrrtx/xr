@@ -23,6 +23,22 @@ const STATUSES = new Set(["todo", "doing", "done", "blocked", "dropped", "needs_
 const PRIORITIES = new Set(["P0", "P1", "P2"]);
 const SUBJECT = /^\[(T\d{2}(?:\.[a-z0-9]+)?)\]\s+\S/;
 
+// Owner-authorized reconciliation of eight already-pushed historical commits.
+// This is an exact immutable SHA → IDs map, NOT a looser subject pattern. New
+// commits must use the original single [Txx] subject; no force-push required.
+// 0588721c accidentally reused T33, the installers task: its security finding
+// is T11.b and its gitleaks work is T34. Every mapped file is still scope-checked.
+const LEGACY_COMMITS: Record<string, string[]> = {
+  "9d67a41fa3413fe8cc2662b294f8be63abdb6081": ["T12", "T60.b"],
+  "69bd3b65803334d5c88cc7036b7837597ecdd8e6": ["T60", "T05"],
+  "c744869ac2eef785b0096ae1e5ad6b2e4048ffc1": ["T12", "T14", "T09"],
+  "3ba1be191800e275d399ea4ee12e4fc75bcc7131": ["T09", "T11"],
+  "328c409058db3841c2686027d1e057c4f337caab": ["T13", "T15"],
+  "63926dfd7870eac01c088eff6bfc879593fa232a": ["T24", "T25", "T26", "T27", "T28", "T29", "T30", "T31", "T32"],
+  "0588721c099f15eb846d14413d94a7fb8e6dc485": ["T11.b", "T34"],
+  "e551b234d61528f70835128d64b7be939ab9641c": ["T17.b"],
+};
+
 const problems: string[] = [];
 const fail = (m: string) => problems.push(m);
 const git = (...args: string[]): string =>
@@ -96,23 +112,27 @@ try {
 }
 
 const commitTasks = new Map<string, string[]>();
+let legacyCount = 0;
 for (const { sha, subject } of commits) {
+  const legacyIds = LEGACY_COMMITS[sha];
   const m = SUBJECT.exec(subject);
-  if (!m) {
+  const taskIds = legacyIds ?? (m ? [m[1]] : []);
+  if (legacyIds) legacyCount++;
+  if (taskIds.length === 0) {
     fail(`${sha.slice(0, 8)}: subject has no [Txx] id: "${subject}"`);
     continue;
   }
-  const id = m[1];
-  if (!ids.has(id)) {
-    fail(`${sha.slice(0, 8)}: id ${id} is not in the ledger`);
-    continue;
+  for (const id of taskIds) {
+    if (!ids.has(id)) {
+      fail(`${sha.slice(0, 8)}: id ${id} is not in the ledger`);
+      continue;
+    }
+    commitTasks.set(id, [...(commitTasks.get(id) ?? []), sha]);
   }
-  commitTasks.set(id, [...(commitTasks.get(id) ?? []), sha]);
-  const task = latest.get(id)!;
-  const globs = [...task.paths, "docs/release/preview1/ledger.jsonl"].map(globToRe);
+  const globs = ["docs/release/preview1/ledger.jsonl", ...taskIds.flatMap((id) => latest.get(id)?.paths ?? [])].map(globToRe);
   const files = git("show", "--name-only", "--pretty=format:", sha).split("\n").filter(Boolean);
   for (const f of files) {
-    if (!globs.some((re) => re.test(f))) fail(`${sha.slice(0, 8)} (${id}): "${f}" is outside the task's paths`);
+    if (!globs.some((re) => re.test(f))) fail(`${sha.slice(0, 8)} (${taskIds.join(",")}): "${f}" is outside the mapped tasks' paths`);
   }
 }
 
@@ -143,5 +163,5 @@ if (problems.length) {
 }
 console.log(
   `LEDGER OK - ${latest.size} tasks (${Object.entries(counted).map(([k, v]) => `${k}=${v}`).join(", ")}), ` +
-    `${commits.length} commit(s) since ${base.slice(0, 8)}, all subjects carry a known [Txx] id.`,
+    `${commits.length} commit(s) since ${base.slice(0, 8)}; ${legacyCount} exact-SHA legacy mappings, all other subjects carry a known [Txx] id.`,
 );

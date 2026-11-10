@@ -12,7 +12,7 @@
 
 ## 1. Recommendation
 
-**NO-GO / HOLD.** The desktop packaging gate is pending, the required Supply Chain gate is red on an open SQLite advisory, and the ledger drift check fails. A green packaging run alone is not a release approval.
+**NO-GO / HOLD.** The desktop packaging gate is pending, the required Supply Chain gate is red on an open SQLite advisory, and desktop journey evidence remains incomplete. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
 
 All three week-1 blockers are now closed or explained:
 
@@ -87,7 +87,7 @@ api:schema:check     292 operations, matches registry      PASS
 | 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` has green x64 bundle jobs but is still in progress. Artifacts are listed in Actions but have not been inspected for this gate |
 | 10 | New WS3 smoke scripts pass | **PASS** | `bash scripts/release-smoke/run-all.sh` → 9 passed / 0 failed on Linux **and** 9 passed / 0 failed on the Windows runner |
 
-**Gate Lite snapshot:** item 9 is pending; items 1–8 and 10 have the stated earlier evidence. Independently, the current Supply Chain CI gate is failing and ledger drift check fails; these must not be hidden by the 9/10 count. Packaging success would not prove a human installation or launch.
+**Gate Lite snapshot:** item 9 is pending; items 1–8 and 10 have the stated earlier evidence. Independently, the current Supply Chain CI gate is failing and a desktop journey failed; these must not be hidden by the 9/10 count. Packaging success would not prove a human installation or launch.
 
 ---
 
@@ -198,9 +198,9 @@ not hands-on tests; unknowns remain unknown. No competitor was installed.
    decide on any proposed exception; no exception or risk acceptance is assumed.
 2. **Desktop** — inspect Linux and Windows x64 artifacts and verify a complete packaging run; test
    installation and launch on a real Windows machine. CI bundle success is not manual evidence.
-3. **Ledger drift** — the append-only history has malformed records and already-pushed commits
-   with subjects the checker rejects. Resolve with the owner without silently weakening checks or
-   rewriting published history.
+3. **Ledger reconciliation** — six malformed historical entries were repaired with owner approval;
+   eight exact-SHA legacy subject mappings are explicit in the checker. Published Git history was
+   not rewritten; new entries and commits remain subject to strict validation.
 4. **Signing** — the existing desktop tag preflight requires Windows Authenticode and macOS Developer ID plus notarization, even for preview tags; it also requires the updater key if its public key is provisioned. PR builds are development artifacts and do not prove signing. Whether the owner has configured tag-environment credentials is **unknown**. An unsigned tag would require a separately approved policy change, not a bypass.
 5. **G3** — explicit `APPROVE G3` is required before publishing the GitHub pre-release or archiving
    old releases. Do not publish Preview 1 to npm/WinGet/Homebrew/Scoop.
