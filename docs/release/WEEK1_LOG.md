@@ -436,3 +436,14 @@ native desktop builds/tests and the required Supply Chain gate must pass on the 
 Flatpak correction: its manifest explicitly states build-time sources are not vendored and
 Flatpak builders have no network. DNS failure in the source build may reflect that structural
 condition; do not label it merely transient without an offline-source fix and a passing build.
+
+## LLM01 test correction
+
+The original scripted provider always requested a shell command on turn two, regardless of
+whether it had seen the poisoned file. That was not adequate evidence that the injection was
+actually presented to the mock. The mock now checks for the injected instruction in its
+conversation before simulating the request; a benign-file negative control proves it does not
+request the command without the payload. `bun test test/security/llm01-injection-e2e.test.ts`
+→ 5 pass / 0 fail; `bun test test/security/` → 382 pass / 0 fail. This is a scripted simulated
+model, not evidence that a real model obeyed or resisted an injection. Web-page and MCP cases
+and the remaining OWASP acceptance checks are still open.

@@ -26,7 +26,7 @@ Week 2 additions, all in this repo:
 
 | Document | What it establishes |
 |---|---|
-| `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 is proven **end to end** — injected file content → shell request → denied at the approval gate, and again at isolation once approval is granted. |
+| `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 is proven **end to end** — injected file content → simulated shell request → denied at the approval gate, and again at isolation once approval is granted. |
 | `preview1/FEATURE-TIERS.md` | Every advertised feature assigned a tier from the evidence: what ships ON, what is Experimental with a working path, what is not in this release. Local models, voice and computer control are **not** claimed as verified. |
 | `preview1/COMPETITOR-STATUS.md` | Where XR sits next to Hermes Desktop, Claude Code and OpenHands, including the three things it is behind on. |
 

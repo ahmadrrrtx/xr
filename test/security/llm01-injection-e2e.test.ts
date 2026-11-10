@@ -9,8 +9,8 @@
  * independently blocked shell".
  *
  * So these tests drive the whole loop with a scripted provider whose behaviour depends on
- * what it was shown: it reads a poisoned file, then — acting as a model that obeyed the
- * injected instruction — asks for a shell call. The assertion is not "the text was
+ * what it was shown: it reads a poisoned file, then — simulating a model that obeyed the
+ * injected instruction — asks for a shell call only if the payload was shown. The assertion is not "the text was
  * labelled"; it is "the command did not run unless a human approved it".
  *
  * Channels covered: a file on disk (the audit's own reproduction). Fetched pages and MCP
@@ -51,13 +51,18 @@ function obeyingProvider(marker: { commandRequested: boolean }): Provider {
   return {
     id: "mock",
     label: "Mock",
-    async chat() {
+    async chat(messages) {
       turn++;
       if (turn === 1) {
         const calls: ToolCall[] = [{ id: "c1", tool: "read_file", args: { path: "notes.txt" } }];
         return { message: "", toolCalls: calls, done: false, usage: { inTokens: 10, outTokens: 5 } };
       }
       if (turn === 2) {
+        // Do not claim the mock "obeyed" a payload it was never shown. Only
+        // simulate compliance after the actual tool result contains it.
+        if (!JSON.stringify(messages).includes("IGNORE ALL PREVIOUS INSTRUCTIONS")) {
+          return { message: "no malicious instruction", toolCalls: [], done: true, usage: { inTokens: 5, outTokens: 5 } };
+        }
         marker.commandRequested = true;
         const calls: ToolCall[] = [
           { id: "c2", tool: "shell", args: { cmd: "touch PWNED-BY-INJECTION" } },
@@ -72,8 +77,8 @@ function obeyingProvider(marker: { commandRequested: boolean }): Provider {
   };
 }
 
-async function drive(approve: boolean) {
-  writeFileSync(join(tmp, "notes.txt"), POISON);
+async function drive(approve: boolean, contents = POISON) {
+  writeFileSync(join(tmp, "notes.txt"), contents);
   const marker = { commandRequested: false };
   const log: string[] = [];
   const result = await runAgent("summarise my notes", "agent", {
@@ -92,7 +97,7 @@ async function drive(approve: boolean) {
 
 test("LLM01: a shell call requested because of injected file content is DENIED at the approval gate", async () => {
   const { marker, output } = await drive(false);
-  // The scenario is real — the model did obey the injection and ask for the command.
+  // The scripted mock saw the payload and simulated requesting a command; this is not a live model.
   expect(marker.commandRequested).toBe(true);
   // The control that stopped it is the approval gate, named in the transcript.
   expect(output.toLowerCase()).toContain("denied");
@@ -160,4 +165,12 @@ test("LLM01: the poisoned file content reaches the model framed as untrusted dat
   expect(transcript.toLowerCase()).toContain("untrusted tool output"); // provenance label
   // The injection signature is surfaced to the model as a warning, not silently passed.
   expect(transcript.toLowerCase()).toMatch(/injection|do not follow/);
+});
+
+// Negative control: a scripted provider must not simulate compliance when the
+// payload is absent; otherwise a denied shell call would be a false-positive proof.
+test("LLM01: the mock requests no injected command for a benign file", async () => {
+  const { marker } = await drive(false, "Quarterly notes: all is well.");
+  expect(marker.commandRequested).toBe(false);
+  expect(existsSync(join(tmp, "PWNED-BY-INJECTION"))).toBe(false);
 });
