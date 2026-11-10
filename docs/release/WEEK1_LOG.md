@@ -554,3 +554,18 @@ separate and are not implied by this correction.
 Drift correction: the first T70 done entry omitted its resolving commit and did not map this
 log file, so ledger check correctly failed. An appended T70 correction records commit e416b1f4
 and the actual log path; no history was rewritten. Re-run checker before checkpoint.
+
+## Continuation checkpoint — 2026-11-10
+
+Re-read plan §§1, 3 and 10; ledger check passed at 38adc71b (66 tasks; eight documented
+exact-SHA legacy mappings). Environment restore overlaid three stale, byte-for-byte historical
+Git blobs onto a clean previous checkout. Preserved the overlay and diff in
+`/home/user/tmp/stale-overlay/`, confirmed their exact historical blob hashes, and restored
+those three files to the already-pushed tip so prior evidence and tests are not silently lost.
+
+Desktop dispatch 42907521960 on 38adc71b successfully staged real `cargo vendor`, installed
+Bun dependencies offline and built the frontend, but failed when the Flatpak's GNOME 48
+rust-stable extension supplied rustc 1.89: locked Tauri 2.12 packages require 1.90. This is
+a toolchain mismatch, not proof of successful Flatpak packaging. The Cargo.toml floor is
+corrected to 1.90; this is not a verified minimum-version build. `bun test test/supply-chain/`
+passed 18/0. Full source build and native installer journeys remain open.

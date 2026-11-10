@@ -5,7 +5,7 @@ description = "XR Desktop — Tauri v2 shell for the XR agent (the AI agent you 
 authors = ["Muhammad Ahmad (@ahmadrrrtx)"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.89"
+rust-version = "1.90"
 
 [lib]
 name = "xr_desktop_lib"

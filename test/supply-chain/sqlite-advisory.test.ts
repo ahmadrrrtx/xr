@@ -23,3 +23,9 @@ test("desktop bundled SQLite remains outside RUSTSEC-2026-0459's vulnerable rang
   expect(atLeast(lockedVersion("libsqlite3-sys"), [0, 39, 0])).toBe(true);
   expect(atLeast(lockedVersion("rusqlite"), [0, 41, 0])).toBe(true);
 });
+
+// The locked Tauri 2.12 dependency set reports Rust 1.90 as its minimum.
+// This pins the declared floor, not a claim that the whole crate was built on 1.90.
+test("desktop manifest does not claim the unsupported Rust 1.89 toolchain", () => {
+  expect(manifest).toMatch(/^rust-version = "1\.90"$/m);
+});
