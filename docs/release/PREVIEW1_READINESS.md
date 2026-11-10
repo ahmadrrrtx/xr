@@ -16,6 +16,8 @@
 
 **Additional blockers (T05.a/T60.c):** direct host computer-control on Windows/macOS was not wired to a sandbox; the refusal fix is a local candidate and needs native validation. Windows Preview installer job success in run `42907522824` was metadata-only, not an install. The corrected workflow deliberately fails its unimplemented installer lane. Current-SHA NSIS/MSI install, authenticated installed sidecar health, data retention and uninstall remain NOT RUN.
 
+**Latest Flatpak dispatch:** `42908959944` completed the offline pinned-Rust release compile, then failed on a nonexistent 256px icon source. The manifest now uses the existing 256px `128x128@2x.png` and has an image-dimension regression; a full rerun is required. On `1f01c829` Windows native CLI/refusal tests passed, but CI security failed an outdated Windows AppContainer remediation expectation; its correction also awaits native CI.
+
 All three week-1 blockers are now closed or explained:
 
 | # | Blocker | Where it stands now |

@@ -639,3 +639,25 @@ job BLOCKED/NOT RUN and fails it, even if metadata exists. The cargo pipeline no
 explicitly propagates its native exit code. Full current-SHA NSIS/MSI install,
 installed-app authenticated sidecar health, user-data retention and uninstall
 are still to be implemented and executed; a historical green job is not proof.
+
+## T33.a / T05.a — CI failures after initial candidates
+
+Flatpak dispatch 42908959944 on 0c64d09c passed offline dependency staging and
+completed the release Rust compile in the sandbox; it then failed when the
+manifest tried to install a nonexistent `icons/256x256.png`. The repo already
+contains the correctly sized `128x128@2x.png`, now used in the manifest.
+A regression checks that every installed PNG exists and its real dimensions
+match its hicolor destination. The completed release compile does not make the
+failed Flatpak run green: a new full dispatch remains mandatory.
+
+Windows Preview run 42911178973 on 1f01c829 passed its CLI job and 8 targeted
+native refusal tests. The positive namespace case was not exercised on Windows.
+The unimplemented installer job correctly failed BLOCKED, not a release pass.
+Core CI Truth/security and cross-platform Linux/macOS jobs failed because the
+old remediation unit test still expected the experimental opt-in for Windows,
+contradicting the policy-disabled AppContainer. Updated it to assert disabled
+status and the per-run SID/ACL reason while keeping the macOS opt-in assertion.
+Local trust/security/Flatpak tests: 582 pass, 18 skips, 0 failures; root
+TypeScript, CI policy, claim lint and ownership checks pass. Native reruns
+remain necessary. Fixed missing task path mappings for commit 1f01c829 in an
+append-only ledger row; historical commits were not rewritten.

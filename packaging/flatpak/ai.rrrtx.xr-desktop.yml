@@ -113,7 +113,7 @@ modules:
       - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.desktop /app/share/applications/ai.rrrtx.xr-desktop.desktop
       - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml /app/share/metainfo/ai.rrrtx.xr-desktop.metainfo.xml
       - install -Dm644 desktop/src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/ai.rrrtx.xr-desktop.png
-      - install -Dm644 desktop/src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/ai.rrrtx.xr-desktop.png
+      - install -Dm644 desktop/src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/ai.rrrtx.xr-desktop.png
       - install -Dm644 desktop/src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/ai.rrrtx.xr-desktop.png
     sources:
       # The upstream official Rust distributions are checksum-verified before

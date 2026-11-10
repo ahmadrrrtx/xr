@@ -185,6 +185,18 @@ describe("Phase 27 · flatpak manifest", () => {
     expect(flatpakJob).not.toMatch(/^    continue-on-error:\s*true/m);
   });
 
+  test("all installed Flatpak icons exist and have the advertised pixel dimensions", () => {
+    const installs = [...text.matchAll(/install -Dm644 (desktop\/src-tauri\/icons\/\S+\.png) \/app\/share\/icons\/hicolor\/(\d+)x(\d+)\/apps\/[^\s]+\.png/g)];
+    expect(installs.length).toBe(3);
+    for (const [, source, width, height] of installs) {
+      // PNG IHDR width and height are the big-endian words at bytes 16/20.
+      const png = readFileSync(resolve(repoRoot, source));
+      expect(png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))).toBe(true);
+      expect(png.readUInt32BE(16)).toBe(Number(width));
+      expect(png.readUInt32BE(20)).toBe(Number(height));
+    }
+  });
+
   test("the engine sidecar is installed next to the shell under /app/bin", () => {
     expect(text).toContain("/app/bin/xr-desktop");
     // The Rust side resolves `xr-engine-<target-triple>` beside its own exe, so

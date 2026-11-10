@@ -18,3 +18,12 @@ paths; it is not proof all OS subprocesses or plugins are sandboxed.
 Final combined rerun after adding service-spy and workflow tests:
   bun test test/security test/control test/trust/canonical-shell-isolation.test.ts test/release/windows-preview-workflow.test.ts
     500 pass, 1 native-only skip, 0 fail; root tsc --noEmit exit 0.
+
+2026-11-10: Windows Preview CLI job 130164103772 in run 42911178973 on
+1f01c829 ran direct control refusal and canonical-shell tests: 8 pass, 0 fail.
+The namespace-success test returns early on Windows and is not sandbox proof.
+The non-hardened shell refusal case did execute natively. The separate CI
+security/Truth and non-gating native sandbox workflows failed because an old
+unit test expected Windows remediation to offer experimental AppContainer,
+which is policy-disabled. Updated the test to require the honest disabled
+message and preserve the macOS opt-in assertion. Rerun on CI is required.
