@@ -487,3 +487,9 @@ and NSIS installers; static `file` inspection identifies their installer formats
 install, execution, payload architecture, or signature was verified here. RPM and AppImage
 were listed but not unpacked. Checksums and details: `preview1/evidence/T14-earlier-artifact-inspection.log`.
 These artifacts predate the SQLite fix and cannot close the current candidate's gate.
+
+**Latest CI follow-up:** on 43267857, Windows `cargo test` and sidecar smoke steps passed,
+but the job was subsequently cancelled during cache cleanup; the Linux job failed its Clippy
+step. The Clippy correction was committed as dfefcf3c. A fresh desktop dispatch 42904607032
+on ddd97858 was queued. GitHub CI outcomes are commit-specific; do not promote partial job
+steps or previous artifacts into a completed current-tip gate.
