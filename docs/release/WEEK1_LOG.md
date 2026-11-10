@@ -692,3 +692,15 @@ exact-current-SHA artifact; if unavailable, the workflow fails BLOCKED.
 CI on f8a0ce71: Quality Gate and its security/Truth jobs passed; the non-gating
 OS-sandbox workflow passed. The desktop PR Flatpak leg was metadata-only, not
 the dispatch build, and native packaging/journey remains in progress.
+
+## T05.a — macOS parity regressions after enforcing D5
+
+The f8a0ce71 cross-platform macOS job failed two older shell-tool assertions
+that expected host fallback and one host-subprocess cancellation test that now
+cannot reach the forbidden path. Updated those assertions to require refusal
+and no `shell.run` audit on Windows/macOS; Linux still proves real compatibility
+fallback and real process cancellation. Added an all-platform isolated-runner
+signal-forwarding/cancellation control. Local trust/execution tests 317 pass,
+17 skips, 0 fail; root typecheck and ledger checker pass. A native macOS rerun is
+required. The fake isolated runner does not prove actual OS containment or
+native subprocess cancellation.

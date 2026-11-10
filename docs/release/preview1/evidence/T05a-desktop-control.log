@@ -27,3 +27,13 @@ security/Truth and non-gating native sandbox workflows failed because an old
 unit test expected Windows remediation to offer experimental AppContainer,
 which is policy-disabled. Updated the test to require the honest disabled
 message and preserve the macOS opt-in assertion. Rerun on CI is required.
+
+2026-11-10: Cross-Platform macOS job 130167571401 on f8a0ce71 failed three
+old tests: two shell-tool expectations still required host fallback/old wording,
+and a cancellation test attempted that now-blocked host fallback. Updated the
+tests to assert refusal and audit on sandbox-only hosts while keeping real
+Linux host-fallback and subprocess-cancellation assertions. Added a separate
+cross-platform fake-isolated-runner test that verifies the identical signal is
+forwarded and cancellation is surfaced. Local trust+execution: 317 pass, 17
+skips, 0 fail. The actual macOS isolated-runner cancellation and these revised
+assertions require a native rerun; the fake is not kernel-containment evidence.
