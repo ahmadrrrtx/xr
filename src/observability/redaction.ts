@@ -117,24 +117,38 @@ export function redactString(value: string): string {
   return redactStringWith(value);
 }
 
-/** Any attribute value: strings redacted; numbers/booleans pass through. */
-export function redactValue(value: unknown): unknown {
-  if (typeof value === "string") return redactStringWith(value);
-  return value;
-}
+/** Known credential-bearing field names. Avoid masking token counts/metrics. */
+const SECRET_FIELD = /^(?:api[_-]?key|apikey|authorization|password|passwd|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|token|credential|credentials|private[_-]?key)$/i;
 
 /**
- * Redact every string value in an attribute map (one level deep; arrays of
- * strings are redacted element-wise). Numbers/booleans are untouched.
+ * Redact JSON-like values recursively. For unfamiliar objects, refuse to
+ * serialize internals rather than accidentally emitting an opaque credential.
+ * Cycles are replaced rather than allowing JSON.stringify to throw.
  */
+function redactNested(value: unknown, key: string | undefined, ancestors: Set<object>, depth = 0): unknown {
+  if (key && SECRET_FIELD.test(key) && value !== undefined && value !== null && value !== "" && (typeof value === "string" || typeof value === "object")) return REDACTED;
+  if (typeof value === "string") return redactStringWith(value);
+  if (!value || typeof value !== "object") return value;
+  if (depth >= 64) return "⟨redacted:depth-limit⟩";
+  if (ancestors.has(value)) return "⟨redacted:circular⟩";
+  if (value instanceof Date) return Number.isNaN(value.valueOf()) ? null : value.toISOString();
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return "⟨redacted:object⟩";
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) return value.map(item => redactNested(item, undefined, ancestors, depth + 1));
+    const out: Record<string, unknown> = Object.create(null);
+    for (const [childKey, child] of Object.entries(value)) out[childKey] = redactNested(child, childKey, ancestors, depth + 1);
+    return out;
+  } finally { ancestors.delete(value); }
+}
+
+export function redactValue(value: unknown): unknown {
+  return redactNested(value, undefined, new Set());
+}
+
+/** Redact credential-named fields and nested JSON-like values. */
 export function redactAttributes(attrs: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(attrs)) {
-    if (typeof v === "string") out[k] = redactStringWith(v);
-    else if (Array.isArray(v)) out[k] = v.map((x) => (typeof x === "string" ? redactStringWith(x) : x));
-    else out[k] = v;
-  }
-  return out;
+  return redactNested(attrs, undefined, new Set()) as Record<string, unknown>;
 }
 
 /** Truncation bound for any free-form string ever recorded (bytes-safe chars). */

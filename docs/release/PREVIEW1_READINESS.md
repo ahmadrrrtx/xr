@@ -18,6 +18,8 @@
 
 **Latest Flatpak dispatch:** `42908959944` completed the offline pinned-Rust release compile, then failed on a nonexistent 256px icon source. The manifest now uses the existing 256px `128x128@2x.png` and has an image-dimension regression; a full rerun is required. On `1f01c829` Windows native CLI/refusal tests passed, but CI security failed an outdated Windows AppContainer remediation expectation; its correction also awaits native CI.
 
+**LLM02 remains partial:** T41.a fixes synthetic credential leaks in selected newly written audit rows, structured logs, spans and Markdown reports. Historical records are not rewritten, redaction is heuristic, and complete transcript, crash and renderer-path scans remain unverified. OTLP telemetry exists as opt-in and is disabled by default.
+
 All three week-1 blockers are now closed or explained:
 
 | # | Blocker | Where it stands now |

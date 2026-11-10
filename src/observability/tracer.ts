@@ -12,7 +12,7 @@
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { newSpanId, newTraceId } from "./ids.ts";
-import { redactValue, truncateValue, MAX_ATTRIBUTE_VALUE_LENGTH } from "./redaction.ts";
+import { redactAttributes, redactString, truncateValue, MAX_ATTRIBUTE_VALUE_LENGTH } from "./redaction.ts";
 import type { SpanKind } from "./semconv.ts";
 import { telemetry } from "./config.ts";
 
@@ -56,7 +56,7 @@ export class Span {
   private ended = false;
 
   constructor(init: { name: string; kind: SpanKind; traceId: string; spanId: string; parentSpanId?: string; startMs: number }) {
-    this.name = init.name;
+    this.name = redactString(init.name);
     this.kind = init.kind;
     this.traceId = init.traceId;
     this.spanId = init.spanId;
@@ -68,7 +68,7 @@ export class Span {
   set(key: string, value: unknown): this {
     if (value === undefined || value === null) return this;
     if (this.ended) return this;
-    const redacted = redactValue(value);
+    const redacted = redactAttributes({ [key]: value })[key];
     this.attrs[key] = typeof redacted === "string" ? truncateValue(redacted) : redacted;
     return this;
   }
@@ -76,18 +76,17 @@ export class Span {
   addEvent(name: string, attributes?: Record<string, unknown>): this {
     if (this.ended) return this;
     const safe: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(attributes ?? {})) {
-      const redacted = redactValue(v);
+    for (const [k, redacted] of Object.entries(redactAttributes(attributes ?? {}))) {
       safe[k] = typeof redacted === "string" ? truncateValue(redacted) : redacted;
     }
-    this.evts.push({ name, at: Date.now(), attributes: Object.keys(safe).length ? safe : undefined });
+    this.evts.push({ name: redactString(name), at: Date.now(), attributes: Object.keys(safe).length ? safe : undefined });
     return this;
   }
 
   setStatus(status: SpanStatus, errorType?: string): this {
     if (this.ended) return this;
     this.statusValue = status;
-    if (errorType) this.errorTypeValue = truncateValue(String(errorType), 120);
+    if (errorType) this.errorTypeValue = truncateValue(redactString(String(errorType)), 120);
     return this;
   }
 

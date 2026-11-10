@@ -709,3 +709,21 @@ Ledger drift check after 48698be6: FAIL, because I omitted the newly changed
 `test/trust/shell-tool.test.ts` from T05.a's allowed paths. The next append-only
 T05.a row adds that exact path; the same checker then reports OK. No history or
 checking rule was changed. Future commits still require a single task ID.
+
+## T41.a — bounded audit/log redaction and telemetry truth
+
+Synthetic LLM02 tests reproduced three leaks: a new audit event/nested detail,
+a structured-log event/nested value, and report project/event could carry
+credential-shaped test values. The old audit regex could also remove only the
+prefix of a hyphenated key. Redaction now walks JSON-like values with bounded
+cycles/depth and sensitive field names, masks recognized patterns in event
+names, and does so before new audit hashes; the report redacts before its digest.
+Tests retain positive controls for chain/report verification and normal numeric
+token metrics. Local security/state/observability/daemon 824 pass, one native
+skip, zero fail; security:check passes, as do typecheck, dependency boundaries
+(0 errors, one existing warning), policy, ownership, claim and ledger checks.
+This is a bounded heuristic fix: old persisted rows are not rewritten, arbitrary
+secret shapes can escape, and full transcript/crash/renderer scans are not yet
+proved. The README's absolute no-telemetry statements were wrong: OTLP telemetry
+is optional and defaults disabled. OWASP labels now reflect the remaining gaps,
+the AppContainer limitation and actual CSP (inline styles allowed).

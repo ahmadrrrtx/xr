@@ -27,6 +27,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
 import { existsSync, mkdirSync, copyFileSync, readFileSync, rmSync } from "node:fs";
 import { XR_HOME } from "../config/config.ts";
+import { redactAttributes, redactString } from "../observability/redaction.ts";
 // XR 4.5 — context schema. `context/repository.ts` imports only `context/types.ts`
 // (dependency-free), so this static import introduces no cycle.
 import { ContextRepository, adaptStoreForContext } from "../context/repository.ts";
@@ -1395,11 +1396,13 @@ export class WorkspaceStore {
 
   /** Redact obvious secrets before persisting. */
   private redact(detail: Record<string, unknown>): Record<string, unknown> {
-    const json = JSON.stringify(detail).replace(
-      /(sk-[A-Za-z0-9]{8,}|Bearer\s+[A-Za-z0-9._-]{8,})/g,
-      "«redacted»",
-    );
-    return JSON.parse(json);
+    // Keep JSON's established serialization semantics before descending into
+    // nested values. Redact the WHOLE known credential, not an sk- prefix;
+    // replacing a prefix first could leave the remainder of a key exposed.
+    const normalized = JSON.parse(JSON.stringify(detail));
+    const safe = redactAttributes(normalized);
+    // Preserve the audit log's historical generic marker spelling.
+    return JSON.parse(JSON.stringify(safe).replace(/⟨redacted:[^⟩]+⟩/g, "«redacted»"));
   }
 
   /**
@@ -1421,6 +1424,8 @@ export class WorkspaceStore {
       throw new AuditChainCorruptedError(this.chainBrokenAt);
     }
     const safe = this.redact(detail);
+    // Event text is part of the persisted, hashed payload too.
+    event = redactString(event);
     let hash = "";
     this.write(() => {
       const prev = this.lastHashInTxn();

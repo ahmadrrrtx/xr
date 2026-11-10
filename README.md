@@ -90,7 +90,7 @@ The difference is **what surrounds that loop**:
 | 🛑 **It asks before it acts** | Consequential actions stop and wait for your approval. Denial is enforced in the execution path, not suggested in a prompt. |
 | 💸 **It tracks spending and checks task limits** | USD/token limits are checked during the loop. USD costs are estimates: a response can exceed the requested limit, and unknown pricing cannot enforce a USD cap. |
 | 🔗 **It writes down what it did** | Every event is SHA-256-linked into a local chain you can verify offline with one command. |
-| 💻 **It runs on your machine** | One SQLite database, no telemetry, no mandatory network. Ten local model runtimes are first-class. |
+| 💻 **It runs on your machine** | One SQLite database, opt-in telemetry off by default, no mandatory network. Ten local model runtimes are first-class. |
 | 🆓 **Every local feature is free** | Voice, memory, themes, CLI, bots, the editor surface, research, agents, skills and MCP are on the free tier permanently — [no paywall, by test](#pricing). |
 
 ```bash
@@ -564,7 +564,7 @@ See [`docs/business-os-extension.md`](docs/business-os-extension.md) and the
 | 🛰 **Always alive** | Tray keeps the engine, shortcuts and approvals badge working when the window closes; menu shows today's spend and pending approvals in the platform's own idiom. |
 | ⌨️ **Global, honestly** | HUD, push-to-talk and screenshot-a-region-and-ask work while unfocused; chords fall back when the OS owns them, and the Settings screen shows what the machine actually holds. |
 | 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart; no release key → refuses to update rather than updating unverified. **Not provisioned yet:** current desktop builds have no update feed ([signing runbook](docs/release/DESKTOP_SIGNING.md)). |
-| 🧯 **Truthful crash recovery** | Marker-file detection; cut-off runs are marked `killed`, never "completed"; optional redacted report you choose to send. No telemetry anywhere. |
+| 🧯 **Truthful crash recovery** | Marker-file detection; cut-off runs are marked `killed`, never "completed"; optional redacted report you choose to send. Crash reporting is not automatic; separate telemetry is opt-in. |
 | 🪟 **Native where it counts** | macOS HIG application menu, Windows MSIX with deep links + toast activation, Linux Flathub-ready Flatpak. |
 
 ```bash
@@ -738,7 +738,7 @@ Found an inaccurate claim in this README or the docs? That is a bug with its own
 **XR Personal is free, forever, with every feature in this repository included.** Voice, local
 memory, themes, the CLI, bots, the VS Code surface, the mobile PWA, research, agents, skills and
 MCP are free, unlimited, and identical whether you are signed in or not. There is no seat
-count, no time limit, no watermark, no nag screen, no telemetry, and no feature that a licence can
+count, no time limit, no watermark, no nag screen, no mandatory telemetry, and no feature that a licence can
 turn off — because the entire list of what a licence gates is eight *hosted* services
 (`BUSINESS_FEATURES` in [`src/cloud/license.ts`](src/cloud/license.ts)) and not one of them runs on
 your machine.

@@ -9,7 +9,7 @@
  */
 
 import { currentSpan } from "./tracer.ts";
-import { redactValue, truncateValue } from "./redaction.ts";
+import { redactAttributes, redactString, redactValue, truncateValue } from "./redaction.ts";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -55,13 +55,13 @@ export function structuredLog(level: LogLevel, event: string, fields: Record<str
   const record: LogRecord = {
     ts: new Date().toISOString(),
     level,
-    event: truncateValue(event, 120),
+    event: truncateValue(redactString(event), 120),
   };
   if (span) {
     record.trace_id = span.traceId;
     record.span_id = span.spanId;
   }
-  for (const [k, v] of Object.entries(fields)) {
+  for (const [k, v] of Object.entries(redactAttributes(fields))) {
     if (k === "trace_id" || k === "span_id" || k === "ts" || k === "level" || k === "event") continue;
     const redacted = redactValue(v);
     record[k] = typeof redacted === "string" ? truncateValue(redacted, TRUNC) : redacted;

@@ -5,6 +5,7 @@
  * Outputs Markdown (printable to PDF) + a SHA-256 signature over the content.
  */
 import { createHash } from "node:crypto";
+import { redactString } from "../observability/redaction.ts";
 
 export interface AuditEntry {
   event: string;
@@ -28,7 +29,7 @@ export interface SignedExport {
 
 export function buildAuditReport(input: ExportInput): SignedExport {
   const lines: string[] = [];
-  lines.push(`# XR Audit Report — ${input.project}`);
+  lines.push(`# XR Audit Report — ${redactString(input.project)}`);
   lines.push(`Generated: ${new Date().toISOString()}`);
   lines.push("");
   lines.push(`- Hash chain: ${input.chainValid ? "✅ INTACT (tamper-evident)" : "❌ BROKEN"}`);
@@ -43,7 +44,7 @@ export function buildAuditReport(input: ExportInput): SignedExport {
   lines.push("|---|---|---|");
   for (const e of input.entries) {
     const t = new Date(e.created_at).toISOString().replace("T", " ").slice(0, 19);
-    lines.push(`| ${t} | ${e.event} | \`${e.hash.slice(0, 16)}…\` |`);
+    lines.push(`| ${t} | ${redactString(e.event)} | \`${e.hash.slice(0, 16)}…\` |`);
   }
   lines.push("");
   lines.push("---");
