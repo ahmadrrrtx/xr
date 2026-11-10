@@ -12,14 +12,14 @@
 
 ## 1. Recommendation
 
-**HOLD ONE STEP SHORT OF GO — conditional GO once gate item 9 returns green.**
+**NO-GO / HOLD.** The desktop packaging gate is pending, the required Supply Chain gate is red on an open SQLite advisory, and the ledger drift check fails. A green packaging run alone is not a release approval.
 
 All three week-1 blockers are now closed or explained:
 
 | # | Blocker | Where it stands now |
 |---|---|---|
 | B1 | `consumer-smoke` failed (gate item 8) | **CLOSED.** The root cause was a product defect, not a broken test: the provider-URL guard refuses loopback **custom** providers (an SSRF control), so the smoke's stub was never registered and the CLI printed `Unknown provider "consumer-stub"` — the message a real user gets after pointing a custom provider at a model on their own machine. In week 2 the gateway names the guard and the supported alternative, the guard is **unchanged**, and the smoke moved to the built-in local preset path. `consumer-smoke` → `{"ok":true,"doctorExit":0,"taskExit":0}`. |
-| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **Still open — the only open gate.** The run dispatched on `c1518351` came back **cancelled**; the packaging run before it built Windows, macOS x64/arm64 and Linux successfully (Flatpak died on a runner `DNSResolveFailed`). Re-dispatched on the current tip. A green packaging run is still not proof a human can install and launch it — that is an owner action. |
+| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **OPEN.** Dispatch run `42895932985` on `895fd306` has green Linux and Windows x64 bundle jobs, but its Flatpak source build failed and the workflow is still running; the PR run `42897513049` on `e551b234` is also in progress. Artifact inspection is outstanding. A build is not proof a human can install and launch it. |
 | B3 | Competitor comparison (T16) | **CLOSED.** `COMPETITOR-STATUS.md`: every competitor cell is from-docs with a version and date, every XR cell is verified-by-run, and anything a source did not establish is **Unknown**. No competitor was installed, and the document says so. |
 
 Week 2 additions, all in this repo:
@@ -69,11 +69,10 @@ api:schema:check     292 operations, matches registry      PASS
 | 6 | `desktop:sink-lint`, desktop `build`, `lint` | **PASS** | sink-lint 0; build exit 0 (2.18s); lint exit 0 (0 errors, 2 pre-existing warnings) |
 | 7 | `bash scripts/smoke-sidecar.sh` (Linux) | **PASS** | `--version v1.2.0-preview.1 (Preview 1)`; serve booted on an isolated `XR_HOME`; health OK with the token handshake banner |
 | 8 | `bun run consumer-smoke` **and** `bun run journey:cli` | **PASS** | journey:cli end to end (build → package → `install.sh` → launch → agent task → update → uninstall, shell profiles byte-identical). consumer-smoke now `{"ok":true,"doctorExit":0,"taskExit":0}` — the week-1 failure was T17.a, and its root cause was a product defect, not a test: the provider-URL guard refuses loopback *custom* providers (an SSRF control), so the smoke's own stub was never registered and the CLI said `Unknown provider`. In week 2 the gateway now names the guard and the supported alternative, the guard is unchanged, and the smoke uses the built-in local preset path |
-| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | the run dispatched on `c1518351` came back **cancelled**, and the packaging run before it succeeded for Windows, macOS x64/arm64 and Linux (Flatpak failed on a runner `DNSResolveFailed`, a flake not a defect). Re-dispatched on the current tip. This is the only open gate |
+| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build failed; workflow not complete. PR run `42897513049` on `e551b234` is in progress. Artifacts are listed in Actions but have not been inspected for this gate |
 | 10 | New WS3 smoke scripts pass | **PASS** | `bash scripts/release-smoke/run-all.sh` → 9 passed / 0 failed on Linux **and** 9 passed / 0 failed on the Windows runner |
 
-**Verdict on Gate Lite: 9 of 10 items green; item 9 (desktop packaging) is the only one open**, and a green
-packaging run still does not prove a human can install and launch the app. Recorded as such rather than rounded up.
+**Gate Lite snapshot:** item 9 is pending; items 1–8 and 10 have the stated earlier evidence. Independently, the current Supply Chain CI gate is failing and ledger drift check fails; these must not be hidden by the 9/10 count. Packaging success would not prove a human installation or launch.
 
 ---
 
@@ -89,10 +88,10 @@ both were investigated rather than re-run until green.
 | Advisory | SQLite before 3.54.0 can return uninitialized page-cache memory when a process opens a database together with a sibling `-wal` whose page size differs |
 | Score | CVSS v4 6.8 — `AV:L/AC:L/PR:N/UI:P`, confidentiality-only |
 | How it reaches XR | `rusqlite 0.37` (bundled SQLite) → `libsqlite3-sys 0.35.0`. Bundled means the vulnerable SQLite is compiled into the desktop app |
-| Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). Requires **Rust 1.89**; the crate currently declares `rust-version = "1.77"`, so this is a toolchain bump plus a dependency bump |
-| Real exposure | Local-only: an attacker must already be able to write a crafted database **and** its `-wal` where the app will open them (i.e. the user's own data directory), and the user must open them. XR does not open foreign database files as a feature. Low practical risk, **not zero**, and not something to filter away silently |
+| Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). Requires **Rust 1.89**; the crate currently declares `rust-version = "1.77"`. The desktop workflow already pins Rust 1.99.1; update the declared minimum as appropriate and verify the dependency bump on that CI toolchain |
+| Exposure | The advisory requires the process to open a crafted database plus sibling WAL. **Correction:** `desktop/src-tauri/src/data_safety.rs:stage_into` extracts user-selected archives, skips `.db-shm` but not `.db-wal`, then opens each `.db` and runs `PRAGMA integrity_check`; imported data is therefore a possible path, not just a pre-existing database in the data directory. Actual exploitability and impact through this path have not been tested. Treat the finding as open, not low-risk by assumption. |
 | Why it is not fixed in this commit | `cargo` is not installed in this environment. Hand-editing a `Cargo.lock` for a major bump I cannot build or checksum-verify would break the desktop build — the failure this release exists to avoid |
-| Owner action | In the desktop-rust lane: raise the toolchain to 1.89, `cargo update -p rusqlite` (or bump `rusqlite = "0.41"` in `desktop/src-tauri/Cargo.toml`), rebuild, and confirm `osv-scanner -r` reports zero unfiltered. **Until then this is an accepted-with-reason Medium, and it should be the first item on the post-preview list** |
+| Next action | In a Rust-capable desktop CI environment, change the `rusqlite` manifest constraint to 0.41, update the lockfile, address Rust 1.89 compatibility, build and test, and rerun recursive OSV. A lockfile update alone cannot override the existing 0.37 constraint. No risk acceptance has been granted; do not ship around the red gate. |
 
 ### gitleaks — 5 `generic-api-key` hits, all false positives (FIXED in this branch)
 
@@ -171,23 +170,23 @@ works.
 
 ---
 
-## 7. Competitor comparison (T16) — deliberately not written yet
+## 7. Competitor comparison (T16)
 
-The protocol requires every cell to be *Verified-by-run*, *From-docs* (with a link) or *Unknown*,
-and any performance or quality claim to come from a run on the same task with the same model. A
-table filled in from memory would violate the release's own rules, so it stays empty until it can
-be produced properly. **This is a blocker for the final readiness report, not for the branch.**
+See `preview1/COMPETITOR-STATUS.md`: competitor statements are attributed to documentation,
+not hands-on tests; unknowns remain unknown. No competitor was installed.
 
 ---
 
 ## 8. Owner actions needed
 
-1. **B1** — decide whether `consumer-smoke` blocks the preview or can ship as a known self-check
-   defect (my recommendation: fix it in week 2; the shipped binary is unaffected, but a gate that
-   fails is a gate that will be ignored).
-2. **Signing** — no certificate is part of this release; Windows SmartScreen and macOS Gatekeeper
-   will warn. Needed only if you want signed preview builds.
-3. **G3** (publish pre-release + archive old releases as Legacy) — not requested yet, and Preview 1
-   must not be published to npm/WinGet/Homebrew/Scoop.
-4. **Rotate the two credentials you pasted in chat** once this engagement ends; they were used
-   from a mode-600 file outside the repo and never committed (verified: 0 files, 0 commits).
+1. **Supply chain** — remediate RUSTSEC-2026-0459 and verify the recursive scan, or explicitly
+   decide on any proposed exception; no exception or risk acceptance is assumed.
+2. **Desktop** — inspect Linux and Windows x64 artifacts and verify a complete packaging run; test
+   installation and launch on a real Windows machine. CI bundle success is not manual evidence.
+3. **Ledger drift** — the append-only history has malformed records and already-pushed commits
+   with subjects the checker rejects. Resolve with the owner without silently weakening checks or
+   rewriting published history.
+4. **Signing** — the existing desktop tag preflight requires Windows Authenticode and macOS Developer ID plus notarization, even for preview tags; it also requires the updater key if its public key is provisioned. PR builds are development artifacts and do not prove signing. Whether the owner has configured tag-environment credentials is **unknown**. An unsigned tag would require a separately approved policy change, not a bypass.
+5. **G3** — explicit `APPROVE G3` is required before publishing the GitHub pre-release or archiving
+   old releases. Do not publish Preview 1 to npm/WinGet/Homebrew/Scoop.
+6. **Credentials** — rotate the credentials supplied during the engagement.

@@ -341,3 +341,44 @@ macOS: **NOT RUN**, best-effort in this plan, claimed nowhere.
 |---|---|---|
 | v1 (frozen) | `7621a128995b51fa0ec63c95fc6b4c9293ffccf96d09c90c55562e02e3b5fcdd` | 53 lines, 1 header + 52 tasks |
 | after Day 1 | see `sha256sum docs/release/preview1/ledger.jsonl` | append-only; ts normalised once because the v1 header was anchored at `2026-11-10T00:00:00Z` (owner-local date) while the container clock is still `2026-11-09` UTC, which made every append look like it preceded the header |
+
+## Day 2 continuation — release hold and drift check (2026-11-10)
+
+**Drift-check: FAIL.** Re-read plan §§1, 3 and 10 and ran
+`bun run scripts/release-smoke/ledger-check.ts` at `e551b234`: exit 1, 71 problems.
+The append-only ledger contains six historical entries without `commits`; several `done`
+entries have prose where the checker requires an evidence-file path or lack commit attribution;
+and already-pushed commits have multi-ID/range or missing-ID subjects rejected by the checker.
+Some file scopes also disagree. Appending corrections does not repair invalid historical lines or
+commit subjects. Do not silently weaken the checker or rewrite published history: owner decision
+is needed on a transparent reconciliation. The drift existed before this checkpoint; it is not OK.
+
+**Done:** `e551b234` CI and Cross-Platform CI succeeded; `42897512989` gitleaks succeeded.
+The ownership map and journey default were committed in `e551b234`. T17.b is now recorded.
+
+**Open / risk:** Supply Chain `42897512989` failed on OSV finding RUSTSEC-2026-0459
+(`libsqlite3-sys` 0.35.0). The previous report understated the exposure: the desktop archive
+import path extracts `.db-wal` and opens imported `.db` files. Exploitability is untested;
+no owner risk acceptance has been obtained. Desktop dispatch `42895932985` on `895fd306` has
+successful Linux and Windows x64 bundle jobs but failed Flatpak source build and is still in
+progress. PR packaging run `42897513049` on `e551b234` is also in progress: its Flatpak metadata
+checks passed, but the Flatpak source build was **skipped**, not passed. No current artifacts
+have been inspected. The Clean-Machine Journey PR run `42897513138` was cancelled.
+
+**Next:** resolve the SQLite advisory with a tested Rust dependency/toolchain update; inspect
+Linux/Windows artifacts and complete packaging; reconcile ledger drift transparently. No GO until
+release blockers are resolved and owner gates are respected.
+
+**B1 recheck:** `bun run consumer-smoke` at the current local tip returned exit 0,
+`ok:true`, `doctorExit:0`, `taskExit:0`. This is the source-mode stub path, not a live model.
+
+**Signing clarification:** `.github/workflows/desktop-app.yml` uses owner-controlled secrets and
+`scripts/desktop-signing-plan.ts` requires Windows Authenticode and macOS signing/notarization
+for *all tag candidates*, including previews. The plan permits unsigned preview builds but the
+existing repository policy blocks unsigned tags. With presence flags unset locally, the tag
+preflight exits 1 listing those prerequisites; this does **not** establish whether GitHub
+environments have them. No release policy or signing controls were bypassed.
+
+**Rust toolchain correction:** the desktop workflow already pins Rust 1.99.1. The crate declares
+1.77, while rusqlite 0.41 requires 1.89. The CI toolchain itself may already meet that requirement;
+the manifest/lock update and actual builds remain unverified.
