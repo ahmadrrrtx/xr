@@ -226,6 +226,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/phase26-mockups.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/placeholder-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/platform-parity.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/prepare-flatpak-sources.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/provider-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

@@ -638,14 +638,8 @@ jobs:
   flatpak:
     needs: [release-preflight]
     name: Linux — Flatpak metadata (required) + build (workflow_dispatch)
-    # 2026-11-01: the from-source build is REPORT-ONLY per the manifest's own
-    # status note (packaging/flatpak/ai.rrrtx.xr-desktop.yml — Flathub needs
-    # vendored cargo/npm sources that do not exist yet, and flathub has since
-    # retired the runtime branches this lane was authored against). The
-    # metadata validations above stay REQUIRED and gating; the build answer
-    # stays visible (red step + annotation) without poisoning the dispatch
-    # gate jobs. Re-enable hard-gating when the vendored sources land.
-    continue-on-error: true
+    # Metadata is required on all runs; dispatch additionally requires the
+    # offline-source Flatpak build. A failed step must not become a green job.
     # 24.04, not 22.04, for one specific reason: the AppStream CLI on 22.04 is
     # from 2022 and does not know the modern tags this metadata uses — it reports
     # `<developer>` as an unknown tag and `url type="vcs-browser"` as invalid,
@@ -698,14 +692,26 @@ jobs:
             org.freedesktop.Sdk.Extension.rust-stable//24.08 \
             org.freedesktop.Sdk.Extension.node22//24.08
 
-      # Report-only is deliberately NOT set: dispatching this workflow is a
-      # request for the answer, so a failure here is red on purpose.
+      # Fetch pinned lockfile dependencies on the runner, then give the build
+      # sandbox only the staged offline sources. No build-network permission.
+      - name: Rust toolchain for locked Flatpak vendoring
+        if: github.event_name == 'workflow_dispatch'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+
+      - name: Stage locked sources for offline Flatpak build
+        if: github.event_name == 'workflow_dispatch'
+        run: bash scripts/prepare-flatpak-sources.sh "$RUNNER_TEMP/xr-flatpak-source"
+
+      # A dispatch requests a real offline build; a failure remains a failure.
       - name: Build the Flatpak from source
         if: github.event_name == 'workflow_dispatch'
         run: |
-          flatpak-builder --user --force-clean --repo=flatpak-repo \
-            flatpak-build packaging/flatpak/ai.rrrtx.xr-desktop.yml
-          flatpak --user remote-add --if-not-exists xr-local flatpak-repo --no-gpg-verify
+          cd "$RUNNER_TEMP/xr-flatpak-source"
+          flatpak-builder --user --force-clean --repo="$GITHUB_WORKSPACE/flatpak-repo" \
+            "$RUNNER_TEMP/flatpak-build" packaging/flatpak/ai.rrrtx.xr-desktop.yml
+          flatpak --user remote-add --if-not-exists xr-local "$GITHUB_WORKSPACE/flatpak-repo" --no-gpg-verify
           flatpak --user install -y xr-local ai.rrrtx.xr-desktop
           flatpak run --command=sh ai.rrrtx.xr-desktop -c 'test -x /app/bin/xr-desktop'
 

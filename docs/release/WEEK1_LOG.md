@@ -505,3 +505,22 @@ spawning Node; subsequent launcher tests found Node. The exact resource cause is
 T20.a increases only that spawn-heavy test's budget to 20 seconds and includes the underlying
 spawn error in diagnostics; assertions and no-retry policy are unchanged. Local targeted
 launcher tests: 19 pass / 0 fail; full `test/cli/`: 262 pass / 0 fail. CI rerun pending.
+
+## T33.a — Flatpak offline build candidate
+
+Repeated dispatch failures showed the Flatpak build sandbox could not resolve package hosts;
+the manifest had no vendored dependency sources. Added a staging script that makes a clean Git
+archive, populates Bun caches from frozen lockfiles without lifecycle scripts, and asks Cargo
+to vendor locked crates outside the sandbox. The manifest installs from those caches and builds
+Cargo offline. No build-sandbox network permission was added. The pre-existing job-level
+`continue-on-error` could hide failures, so it was removed; the job is now honestly gating.
+
+Local evidence: frozen root and desktop Bun installs were reproduced from the staged cache
+with `--offline` (82 and 457 packages); the staging guard rejects an existing directory; full
+staging was rehearsed with **mocked Cargo**, not real Rust; Flatpak metadata tests 14/0,
+desktop tests 492/0, ownership:check and ci:policy pass. Actual Cargo vendoring and Flatpak
+build/install remain pending on GitHub Actions. This is not a Flathub source-manifest submission.
+
+Desktop dispatch 42904607032 on ddd97858 now has both Linux Rust check/Clippy and Windows
+Rust tests green on the SQLite upgrade; its earlier Flatpak build failed and bundle legs remain
+in progress. Native job results do not replace a completed full desktop gate.

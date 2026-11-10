@@ -163,8 +163,10 @@ code changes to the app:
    a release-asset URL does not exist until its tag is cut. Replace them with
    on-device captures before submitting.
 
-Until (1) and (2) exist, a `flatpak-builder` run works only on a machine with
-network access — which is what the `workflow_dispatch` CI job provides.
+The preview CI dispatch stages locked Bun caches and Cargo-vendored sources on the runner,
+then builds without network access inside the Flatpak sandbox. This staged CI approach is not
+a Flathub source manifest and must not be described as one. The new CI path remains unverified
+until its full build succeeds.
 
 ## Verifying a Linux package
 

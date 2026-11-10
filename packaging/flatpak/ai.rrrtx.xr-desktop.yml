@@ -6,13 +6,11 @@
 # org.freedesktop.Platform. The two SDK extensions below are the freedesktop ones
 # Prism/Flathub Tauri apps use, and they are compatible with the GNOME SDK.
 #
-# Status, stated plainly: this manifest is authored and its metadata is validated
-# in CI (appstream + desktop entry). A full `flatpak-builder` run is NOT proven —
-# there is no flatpak-builder in the sandbox this was written in, and Flathub
-# additionally requires vendored sources (cargo-sources.json + a node/bun source
-# manifest) because its builders have no network. The CI build step is therefore
-# report-only until those are generated; see docs/linux/PACKAGING.md §"Before a
-# Flathub submission" for the exact remaining steps.
+# Status: metadata is validated in CI. Dispatch builds stage frozen Bun caches
+# and Cargo-vendored sources before entering the network-isolated builder; the
+# new staging path is not considered verified until a full CI build succeeds.
+# This CI staging is not a Flathub submission: Flathub needs its own explicit,
+# reviewable source manifests; see docs/linux/PACKAGING.md.
 
 id: ai.rrrtx.xr-desktop
 runtime: org.gnome.Platform
@@ -81,6 +79,7 @@ modules:
       env:
         # Cargo must write somewhere; the build dir is the only writable place.
         CARGO_HOME: /run/build/xr-desktop/cargo
+        CARGO_NET_OFFLINE: "true"
         NODE_ENV: production
     build-commands:
       # 1. Dependencies. The repo locks with bun (`.bun-version` = 1.4.2,
@@ -88,18 +87,20 @@ modules:
       #    `npm ci` does not and cannot work here. Bun comes in as a checksummed
       #    source below rather than being downloaded mid-build: flatpak-builder
       #    verifies sources, so the toolchain is pinned like everything else.
-      - ./.flatpak-tools/bun install --frozen-lockfile
+      #    CI stages frozen Bun caches and vendored Cargo sources before entering
+      #    the network-isolated build sandbox; never download dependencies here.
+      - ./.flatpak-tools/bun install --frozen-lockfile --ignore-scripts --offline --cache-dir=.flatpak-cache/bun
       # 2. Engine deps + sidecar. The sidecar binary is what makes XR an agent;
       #    failing loudly here beats shipping a shell with no engine.
       - ./.flatpak-tools/bun run scripts/compile-sidecar.ts
       # 3. The shell. tauri.conf.json's beforeBuildCommand is `bun run build`
       #    (tsc --noEmit && vite build), so bun has to be on PATH for the Rust
       #    step that follows.
-      - cd desktop && ../.flatpak-tools/bun install --frozen-lockfile
+      - cd desktop && ../.flatpak-tools/bun install --frozen-lockfile --ignore-scripts --offline --cache-dir=../.flatpak-cache/bun
       - cd desktop && ../.flatpak-tools/bun run build
       # `cargo build` rather than `tauri build --no-bundle`: no bundler output is
       # wanted inside /app, and the frontend is already built above.
-      - cd desktop/src-tauri && cargo build --release --locked
+      - cd desktop/src-tauri && cargo build --release --locked --offline
       - install -Dm755 desktop/src-tauri/target/release/xr-desktop /app/bin/xr-desktop
       # The shell and the engine ship together and must stay side by side: the
       # Rust side resolves `xr-engine-<target-triple>` next to its own executable.

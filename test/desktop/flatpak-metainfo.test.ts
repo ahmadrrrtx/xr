@@ -157,6 +157,22 @@ describe("Phase 27 · flatpak manifest", () => {
     expect(commands).toContain("--frozen-lockfile");
   });
 
+  test("build dependencies are staged and consumed offline without build-network permission", () => {
+    const workflow = read(".github/workflows/desktop-app.yml");
+    const prepare = read("scripts/prepare-flatpak-sources.sh");
+    const module = text.split("modules:")[1] ?? "";
+    expect(module).toContain('CARGO_NET_OFFLINE: "true"');
+    expect(module).toContain("--frozen-lockfile --ignore-scripts --offline");
+    expect(module).toContain("cargo build --release --locked --offline");
+    expect(module).not.toMatch(/build-args:[^\n]*--share=network/);
+    expect(prepare).toContain("git archive HEAD");
+    expect(prepare).toContain("cargo vendor --locked --versioned-dirs");
+    expect(prepare).toContain("--frozen-lockfile --ignore-scripts");
+    expect(workflow).toContain('scripts/prepare-flatpak-sources.sh "$RUNNER_TEMP/xr-flatpak-source"');
+    const flatpakJob = workflow.split("  flatpak:")[1]?.split("\n  # ── Phase 5")[0] ?? "";
+    expect(flatpakJob).not.toMatch(/^    continue-on-error:\s*true/m);
+  });
+
   test("the engine sidecar is installed next to the shell under /app/bin", () => {
     expect(text).toContain("/app/bin/xr-desktop");
     // The Rust side resolves `xr-engine-<target-triple>` beside its own exe, so
