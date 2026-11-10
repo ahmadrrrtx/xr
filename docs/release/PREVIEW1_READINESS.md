@@ -26,7 +26,7 @@ Week 2 additions, all in this repo:
 
 | Document | What it establishes |
 |---|---|
-| `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 has a scripted file-injection scenario: a payload-dependent mock requests a shell command, which is denied at the approval gate and, separately, at isolation when approval is granted. This is not a live-model test; web/MCP red-team coverage remains incomplete. |
+| `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 has a scripted file-injection scenario: a payload-dependent mock requests a shell command, which is denied at the approval gate and, separately, at isolation when approval is granted. Companion tests cover a loopback fetched web page and the production MCP wrapper with a fake client, each with poisoned and benign controls. These are not live-model or live external MCP server tests. |
 | `preview1/FEATURE-TIERS.md` | Proposed feature tiers with the evidence and gaps; owner decisions, consistent labels and working paths are not all verified. Local models, voice and computer control are **not** claimed as verified. |
 | `preview1/COMPETITOR-STATUS.md` | Where XR sits next to Hermes Desktop, Claude Code and OpenHands, including the three things it is behind on. |
 

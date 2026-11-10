@@ -579,3 +579,12 @@ archive checksum was verified and its component list/installer options inspected
 no Rust toolchain was installed here. aarch64 checksum was retrieved, not independently
 downloaded. Flatpak metadata tests 15/0, desktop tests 493/0, YAML parse, installer shell
 syntax, ci:policy and ownership:check passed. The full corrected build is NOT RUN yet.
+
+LLM01 follow-up: added poisoned and benign scenarios for a real loopback `fetch_url` and
+for the production MCP tool wrapper using a fake MCP client. A payload-dependent scripted
+provider sees framed output and asks for `shell` only for poisoned results; the tests verify
+that request is denied and no marker file is created. The MCP action itself is explicitly
+approved in this scenario. The two new poisoned and two benign cases passed; combined with
+the file tests, 9/0; full security suite 386/0; root Node tsc exit 0. This is not a live-model
+or live external MCP-server test and does not establish that every possible injection or
+unapproved tool call is prevented. OWASP remains in progress.

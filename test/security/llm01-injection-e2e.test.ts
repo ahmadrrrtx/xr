@@ -13,10 +13,9 @@
  * injected instruction — asks for a shell call only if the payload was shown. The assertion is not "the text was
  * labelled"; it is "the command did not run unless a human approved it".
  *
- * Channels covered: a file on disk (the audit's own reproduction). Fetched pages and MCP
- * results reach the loop through the same tool-result path (agent.ts frames every
- * `result.output`), so the same gate is under test; research has its own framing tests in
- * test/research/security.test.ts.
+ * This file covers a poisoned file. Companion llm01-web-mcp-e2e.test.ts exercises a real
+ * loopback web fetch and the production MCP wrapper with a fake client; neither uses a
+ * live model or a live external MCP server. Research has separate framing tests.
  */
 import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
