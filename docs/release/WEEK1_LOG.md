@@ -476,3 +476,14 @@ review, not a blanket claim that all P1 work is closed.
 lane; Clippy failed with `unnecessary_map_or` at `desktop/src-tauri/src/crash.rs:206` after
 the declared MSRV rose to 1.89. Changed the expression to Clippy's equivalent `is_none_or`
 (which is available under that MSRV). This is a candidate until the native CI rerun passes.
+
+## T14 — earlier x64 artifacts inspected (not current-tip proof)
+
+Downloaded Linux and Windows x64 artifacts from run 42897513049 on e551b234. The Linux
+archive contains deb/rpm/AppImage; the deb metadata says version 1.2.0-preview.1, amd64, and
+contains an x86-64 shell and engine. The extracted engine reported the expected version and
+passed `scripts/smoke-sidecar.sh` with health and handshake. The Windows archive contains MSI
+and NSIS installers; static `file` inspection identifies their installer formats. No Windows
+install, execution, payload architecture, or signature was verified here. RPM and AppImage
+were listed but not unpacked. Checksums and details: `preview1/evidence/T14-earlier-artifact-inspection.log`.
+These artifacts predate the SQLite fix and cannot close the current candidate's gate.
