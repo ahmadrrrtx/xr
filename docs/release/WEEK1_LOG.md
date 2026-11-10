@@ -524,3 +524,24 @@ build/install remain pending on GitHub Actions. This is not a Flathub source-man
 Desktop dispatch 42904607032 on ddd97858 now has both Linux Rust check/Clippy and Windows
 Rust tests green on the SQLite upgrade; its earlier Flatpak build failed and bundle legs remain
 in progress. Native job results do not replace a completed full desktop gate.
+
+## Continuation checkpoint — drift-check OK (2026-11-10)
+
+Re-read plan §§1, 3 and 10 and ran the ledger check: 66 tasks, eight exact-SHA
+legacy mappings; all other commit subjects carry a known task ID. `f783d63f` pushed to
+release/preview-1 under G1 and PR #210 remains open and unmerged. The original G3 approval
+is conditional on all fixes and verification; neither publishing nor archiving was performed.
+
+Dispatch 42904607032 passed Linux Rust check/Clippy and Windows Rust tests but its Flatpak
+build failed and the bundle legs were cancelled. New dispatch 42907089739 on f783d63f is
+pending; no real Cargo vendor or Flatpak build has yet validated the candidate. The prior
+Ubuntu journey's 15-second containment failure remains unresolved. Source inspection shows
+main-window close is intentionally intercepted and hides the app, whereas the WebDriver journey
+uses session deletion then expects the engine to exit. This discrepancy is a possible cause,
+not proof of the runner failure or proof that genuine app quit stops the engine. A proper quit
+journey and its native result are still required; do not weaken the containment assertion.
+
+Still open: current-tip CI and installer inspection; actual native desktop journeys and owner
+Windows/manual checks; uncompleted Week 1/2 tasks, including Windows sandbox coverage and
+OWASP web/MCP red-team cases; owner tier decisions; a capped live-provider key; and signing
+preflight. Recommendation remains NO-GO.

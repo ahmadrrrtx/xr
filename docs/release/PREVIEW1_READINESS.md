@@ -12,21 +12,21 @@
 
 ## 1. Recommendation
 
-**NO-GO / HOLD.** The desktop packaging gate is pending and desktop journey evidence remains incomplete. The SQLite fix passes the GitHub Supply Chain gate on `43267857`; a Linux Clippy follow-on was fixed, and final native validation is pending. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
+**NO-GO / HOLD.** The desktop packaging gate is pending and desktop journey evidence remains incomplete. The SQLite fix passed the GitHub Supply Chain gate on `43267857`; Linux Rust check/Clippy and Windows Rust tests passed in dispatch `42904607032` on `ddd97858`, but the full desktop run did not pass. Final current-tip native validation is pending. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
 
 All three week-1 blockers are now closed or explained:
 
 | # | Blocker | Where it stands now |
 |---|---|---|
 | B1 | `consumer-smoke` failed (gate item 8) | **CLOSED.** The root cause was a product defect, not a broken test: the provider-URL guard refuses loopback **custom** providers (an SSRF control), so the smoke's stub was never registered and the CLI printed `Unknown provider "consumer-stub"` — the message a real user gets after pointing a custom provider at a model on their own machine. In week 2 the gateway names the guard and the supported alternative, the guard is **unchanged**, and the smoke moved to the built-in local preset path. `consumer-smoke` → `{"ok":true,"doctorExit":0,"taskExit":0}`. |
-| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **OPEN.** Dispatch `42903107866` on `43267857` had a failed Flatpak source build and a Linux Clippy failure; the Clippy correction is in `dfefcf3c`. New dispatch `42904607032` on `ddd97858` is queued. Older x64 artifacts were partly inspected, but they predate the SQLite fix. A build is not proof a human can install and launch it. |
+| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **OPEN.** Dispatch `42903107866` on `43267857` had a failed Flatpak source build and a Linux Clippy failure; the Clippy correction is in `dfefcf3c`. Dispatch `42904607032` on `ddd97858` passed Linux Rust check/Clippy and Windows Rust tests, but Flatpak failed and bundle legs were cancelled. Offline Flatpak staging was committed in `f783d63f`; real Cargo vendoring and sandboxed build remain unverified, with dispatch `42907089739` pending. Older x64 artifacts were partly inspected, but they predate the SQLite fix. A build is not proof a human can install and launch it. |
 | B3 | Competitor comparison (T16) | **CLOSED.** `COMPETITOR-STATUS.md`: every competitor cell is from-docs with a version and date, every XR cell is verified-by-run, and anything a source did not establish is **Unknown**. No competitor was installed, and the document says so. |
 
 Week 2 additions, all in this repo:
 
 | Document | What it establishes |
 |---|---|
-| `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 is proven **end to end** — injected file content → simulated shell request → denied at the approval gate, and again at isolation once approval is granted. |
+| `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 has a scripted file-injection scenario: a payload-dependent mock requests a shell command, which is denied at the approval gate and, separately, at isolation when approval is granted. This is not a live-model test; web/MCP red-team coverage remains incomplete. |
 | `preview1/FEATURE-TIERS.md` | Proposed feature tiers with the evidence and gaps; owner decisions, consistent labels and working paths are not all verified. Local models, voice and computer control are **not** claimed as verified. |
 | `preview1/COMPETITOR-STATUS.md` | Where XR sits next to Hermes Desktop, Claude Code and OpenHands, including the three things it is behind on. |
 
@@ -87,7 +87,7 @@ api:schema:check     292 operations, matches registry      PASS
 | 6 | `desktop:sink-lint`, desktop `build`, `lint` | **PASS** | sink-lint 0; build exit 0 (2.18s); lint exit 0 (0 errors, 2 pre-existing warnings) |
 | 7 | `bash scripts/smoke-sidecar.sh` (Linux) | **PASS** | `--version v1.2.0-preview.1 (Preview 1)`; serve booted on an isolated `XR_HOME`; health OK with the token handshake banner |
 | 8 | `bun run consumer-smoke` **and** `bun run journey:cli` | **PASS** | journey:cli end to end (build → package → `install.sh` → launch → agent task → update → uninstall, shell profiles byte-identical). consumer-smoke now `{"ok":true,"doctorExit":0,"taskExit":0}` — the week-1 failure was T17.a, and its root cause was a product defect, not a test: the provider-URL guard refuses loopback *custom* providers (an SSRF control), so the smoke's own stub was never registered and the CLI said `Unknown provider`. In week 2 the gateway now names the guard and the supported alternative, the guard is unchanged, and the smoke uses the built-in local preset path |
-| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` was cancelled; dispatch `42903107866` on `43267857` failed Flatpak and Linux Clippy; Clippy correction committed in `dfefcf3c`, new dispatch `42904607032` is queued. Earlier `e551b234` artifacts were partly inspected, not valid for this candidate |
+| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` was cancelled; dispatch `42903107866` on `43267857` failed Flatpak and Linux Clippy; Clippy correction committed in `dfefcf3c`; dispatch `42904607032` passed Linux Rust check/Clippy and Windows Rust tests, but Flatpak failed and bundle legs were cancelled. Offline staging candidate `f783d63f` awaits dispatch `42907089739`. Earlier `e551b234` artifacts were partly inspected, not valid for this candidate |
 | 10 | New WS3 smoke scripts pass | **PENDING** | Corrected the aggregate to fail on child crashes (T12.a); Linux: 9 passed / 0 failed. Earlier Windows individual checks passed; a Windows rerun of the corrected aggregate is pending. Per-feature smoke coverage is also incomplete. |
 
 **Gate Lite snapshot:** items 9 and 10 are pending; items 1–8 have the stated earlier evidence and should be rerun at final freeze. Supply Chain passed on `43267857`; a desktop journey failed. Packaging success would not prove a human installation or launch.
@@ -205,6 +205,5 @@ not hands-on tests; unknowns remain unknown. No competitor was installed.
    eight exact-SHA legacy subject mappings are explicit in the checker. Published Git history was
    not rewritten; new entries and commits remain subject to strict validation.
 4. **Signing** — the existing desktop tag preflight requires Windows Authenticode and macOS Developer ID plus notarization, even for preview tags; it also requires the updater key if its public key is provisioned. PR builds are development artifacts and do not prove signing. Whether the owner has configured tag-environment credentials is **unknown**. An unsigned tag would require a separately approved policy change, not a bypass.
-5. **G3** — explicit `APPROVE G3` is required before publishing the GitHub pre-release or archiving
-   old releases. Do not publish Preview 1 to npm/WinGet/Homebrew/Scoop.
+5. **G3** — the owner provided `APPROVE G3` conditional on all fixes and verification. That condition is not met: do not publish the pre-release or archive old releases while the recommendation is NO-GO. Do not publish Preview 1 to npm/WinGet/Homebrew/Scoop.
 6. **Credentials** — rotate the credentials supplied during the engagement.
