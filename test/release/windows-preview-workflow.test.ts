@@ -2,6 +2,7 @@ import { describe, test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const workflow = readFileSync(".github/workflows/windows-preview-test.yml", "utf8");
+const waiter = readFileSync("scripts/journey/wait-windows-artifact.sh", "utf8");
 const lifecycle = readFileSync("scripts/journey/windows-installers.ps1", "utf8");
 describe("Windows Preview evidence is fail closed", () => {
   test("cargo exit code survives the PowerShell tee pipeline", () => {
@@ -9,11 +10,13 @@ describe("Windows Preview evidence is fail closed", () => {
   });
   test("no stale or absent artifact can count as an installer pass", () => {
     const job = workflow.slice(workflow.indexOf("  installers:"));
-    expect(job).toContain("head_sha=$GITHUB_SHA");
-    expect(job).toContain('select(.head_sha ==');
+    expect(workflow).toContain("needs: [installer-artifact]");
+    expect(waiter).toContain("head_sha=$GITHUB_SHA");
+    expect(waiter).toContain('select(.head_sha ==');
+    expect(waiter).toContain('.event == "workflow_dispatch" or .event == "push"');
     expect(job).toContain('xr-desktop-windows-x64');
-    expect(job).toContain('no unexpired xr-desktop-windows-x64 artifact from exact head');
-    expect(job).toContain('Installer lifecycle NOT RUN');
+    expect(waiter).toContain('no unexpired xr-desktop-windows-x64 artifact from exact head');
+    expect(waiter).toContain('Installer lifecycle NOT RUN');
     expect(job).toContain('exit 1');
     expect(job).toContain('if: always()');
     expect(job).toContain('windows-installer-lifecycle-evidence');

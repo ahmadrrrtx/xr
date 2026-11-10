@@ -31,3 +31,18 @@ Bun's 5-second test timeout; the evidence file did not yet exist. The other
 three controls passed. Increased just these process-heavy test timeouts to 25s,
 retaining the 15s child timeout, all assertions and a new explicit diagnostic
 for child timeout/signal; no retry. Local controls 8 pass, 0 fail. CI rerun needed.
+
+2026-11-10: push-triggered 42915394386 installer job 130179973797 failed
+BLOCKED before any same-commit artifact had been uploaded. The prior lookup
+also accepted pull-request desktop runs: GitHub may check out a synthetic merge
+commit even when the run's head_sha names the PR head. The new prerequisite
+waits at most one hour on an Ubuntu runner for an unexpired x64 artifact from
+a desktop workflow_dispatch or push run with the exact head SHA. It refuses PR
+runs, missing or duplicate artifacts, API failure, invalid SHA and timeout;
+only then does the Windows lifecycle job start. A manual desktop dispatch on
+the exact head is still necessary for this branch. No installer assertions
+were weakened and artifact existence does not imply overall desktop CI success.
+Local fake-gh cases ready/delayed/PR-only/other-SHA/missing/duplicate/API error
+and invalid SHA pass; fake PowerShell controls pass. Combined targeted tests
+12/0; full release suite 323/0 before the final PR-only mock strengthening;
+root typecheck, CI policy and ownership pass. Native end-to-end test pending.

@@ -763,3 +763,19 @@ T41.a correction: focused architecture, audit, state and observability tests
 normalization and generic marker were preserved and tested, including cyclic
 input failure. Re-read §§1, 3 and 10 and reran strict ledger immediately before
 checkpoint: **drift-check OK**. Current-tip CI is still required.
+
+### T60.d artifact scheduling and provenance
+
+The Windows push job was racing the desktop build. A bounded Ubuntu prerequisite
+now waits for an exact-head desktop x64 artifact, then starts the real Windows
+lifecycle; missing, duplicated, timed-out and API-error cases fail BLOCKED.
+Only dispatch/push desktop runs are eligible: PR runs can build a synthetic
+merge commit even when the run metadata contains the source head SHA. Artifact
+availability does not imply the desktop workflow passed. A full desktop
+workflow dispatch on the new head is required. Local targeted fake-gh and
+PowerShell controls 12 pass/0 fail; release tests 323 pass/0 fail before the
+last PR-only mock strengthening; root tsc, CI policy, ownership passed. Native
+end-to-end installer testing remains NOT RUN; no security assertions were
+relaxed. Current PR checks and Flatpak build are still pending.
+
+Pre-checkpoint re-read §§1, 3, 10; ledger: **drift-check OK**.
