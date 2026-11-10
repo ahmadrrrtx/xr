@@ -606,3 +606,15 @@ Desktop tests 496/0 (including main-only ACL and menu structural regressions), j
 12/0, desktop build/typecheck exit 0, lint 0 errors/2 existing warnings, IPC ACL and sink lint
 pass. No local Rust/GUI build, real user click, or native journey was run. Those remain CI and
 owner checks; the three menu fixes and the lifecycle test are not yet native-verified.
+
+## T14.a — authenticate the sidecar handshake
+
+The previous `smoke-sidecar.sh` only checked the intentionally public health endpoint and
+that a startup line said `Token:`; it did not authenticate, so the prior "handshake" wording
+was too strong. The script now checks the protected version endpoint returns 401 for anonymous
+and invalid bearer, then 200 with the daemon's generated owner-only token, passed to curl via
+stdin, never in arguments or output. It uses an isolated home and bounded child cleanup.
+On a locally compiled Linux sidecar at 7f489a2d: version 1.2.0-preview.1 and all three auth
+checks passed. Four fake-daemon tests catch anonymous or incorrect-token acceptance and rejection
+of the correct token. Desktop suite 500/0, daemon suite 308/0. This is not Windows or installed
+artifact evidence, and the previous public-health-only runs cannot be upgraded retroactively.

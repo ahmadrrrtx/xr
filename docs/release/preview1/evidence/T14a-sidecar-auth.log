@@ -1,0 +1,5 @@
+Compiled Linux sidecar authentication smoke, 2026-11-10
+bun run scripts/compile-sidecar.ts: built x86_64-unknown-linux-gnu sidecar from candidate source 7f489a2d.
+bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu: version 1.2.0-preview.1 (Preview 1); public health OK; protected /api/v1/meta/version returned 401 for anonymous and an invalid bearer and 200 for the generated daemon token. Token was passed to curl on stdin and not printed.
+Four fake-daemon regressions: correct auth passes; anonymous-allowed, invalid-bearer-allowed and real-token-denied variants each fail, as expected. 4/0.
+Desktop suite 500/0; daemon suite 308/0. This is Linux evidence on a locally compiled candidate, not a downloaded CI installer or Windows proof.
