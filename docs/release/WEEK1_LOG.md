@@ -704,3 +704,8 @@ signal-forwarding/cancellation control. Local trust/execution tests 317 pass,
 17 skips, 0 fail; root typecheck and ledger checker pass. A native macOS rerun is
 required. The fake isolated runner does not prove actual OS containment or
 native subprocess cancellation.
+
+Ledger drift check after 48698be6: FAIL, because I omitted the newly changed
+`test/trust/shell-tool.test.ts` from T05.a's allowed paths. The next append-only
+T05.a row adds that exact path; the same checker then reports OK. No history or
+checking rule was changed. Future commits still require a single task ID.
