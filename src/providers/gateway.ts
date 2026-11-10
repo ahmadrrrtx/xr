@@ -181,10 +181,19 @@ export class ProviderGateway {
 
     const preset = this.getPreset(selectedProviderId);
     if (!preset) {
+      // T17.a — distinguish "you typed a typo" from "a security control removed it".
+      // A custom provider whose baseUrl the SSRF guard refused is never registered,
+      // so it reached this branch presenting as an unknown id and hid the reason.
+      const configuredCustom = (config.providerEngine?.customProviders ?? []).some(
+        (c) => c.id === selectedProviderId,
+      );
+      const reason = configuredCustom
+        ? `Provider "${selectedProviderId}" is configured but was BLOCKED by the provider-URL guard (a custom provider may not point at a loopback or private destination). For a model on this machine use a built-in local preset such as ollama, lmstudio, llamacpp or vllm.`
+        : `Unknown provider "${selectedProviderId}"`;
       throw new ProviderError(
         "unknown_provider_failure",
         selectedProviderId,
-        `Unknown provider "${selectedProviderId}"`,
+        reason,
         { modelId: selectedModelId, details: { providerCode: "unknown_provider" } },
       );
     }
