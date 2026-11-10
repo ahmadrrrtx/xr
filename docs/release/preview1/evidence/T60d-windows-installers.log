@@ -1,0 +1,24 @@
+T60.d — Windows installer lifecycle candidate, 2026-11-10
+The workflow selects only an unexpired xr-desktop-windows-x64 artifact belonging
+to desktop-app.yml with the exact triggering SHA, records run ID and SHA, and
+blocks/fails when none exists. On a Windows GitHub Actions runner, the candidate
+script requires one MSI and one NSIS, rejects existing XR registration, installs
+them separately, verifies app and sidecar, and launches the installed app.
+It identifies its actual child sidecar by parent PID + installed path and its
+loopback listening port; health must be 200, anonymous and bad bearer must be
+401, the generated token must get 200 and the manifest version. Token is not
+logged. It optionally screenshots, checks sidecar termination, uninstalls and
+requires binary and registry removal plus a preserved isolated desktop-home
+sentinel. This is not a live-provider, GUI manual, SmartScreen or cross-version
+upgrade test. The first missing artifact or failed assertion prevents a pass.
+Local PowerShell 7.5.4 was downloaded and SHA256-verified against its GitHub
+release asset digest; parser OK. Negative test inputs missing/duplicated MSI or
+NSIS fail before installer execution. PowerShell fakes test valid auth plus
+four fault cases: anonymous accepted, invalid token accepted, valid token
+rejected, wrong version. An early local control caught a collision with the
+read-only PowerShell HOME variable; fixed by renaming the variable.
+Local release + journey suites with PowerShell available: 331 pass, 0 fail.
+Root TypeScript, CI policy, ownership, claim lint, and ledger checks passed.
+None of this is native Windows installation evidence. The exact current-SHA
+artifact must build, then this candidate must execute and its uploaded evidence
+be inspected before any lifecycle task can be marked done.

@@ -25,6 +25,14 @@ expiry dates and evidence links is
 - **No automatic upgrade from 1.0.0.** The updater never moves anyone down a version, and Preview 1
   is a pre-release, so installing it is a deliberate choice. Back up `~/.xr` first.
 
+## Desktop uninstall data
+
+Preview 1 is intended to remove the installed desktop binaries and registration on uninstall
+while preserving the desktop engine home (`~/.xr-desktop`, or `XR_DESKTOP_HOME` when set).
+The Windows installer workflow tests this with an isolated sentinel; this does not assert that
+OS-managed settings or keychain credentials are deleted or preserved. Current installer
+lifecycle evidence remains pending until a matching build runs successfully.
+
 ## Agent command execution
 
 - **Windows and macOS: sandbox only for agent shell.** The canonical shell requires a wired isolated

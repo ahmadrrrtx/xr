@@ -13,8 +13,8 @@
 #   4. sandbox tiers: what the runner actually has (docker info), the
 #      experimental AppContainer path, and the D5 refusal when no sandbox exists
 #   5. the repository's own Windows-only Rust tests (shell-test-windows)
-#   6. installers: attempt to reuse desktop-app.yml artifacts; NOT RUN and said
-#      so plainly when they are absent rather than quietly skipped
+#   6. installers: download same-head desktop artifacts; install, launch and
+#      authenticate, uninstall and check data retention on the Windows runner
 #   7. every log and screenshot uploaded as an artifact
 #
 # Steps that cannot run are reported as NOT RUN / BLOCKED in the step summary.
@@ -87,7 +87,7 @@ jobs:
       - name: Release smoke (scripts/release-smoke/run-all.sh, XR_BIN=out/xr.exe)
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           export XR_BIN="$PWD/out/xr.exe"
           export TMPDIR="$RUNNER_TEMP"
           bash scripts/release-smoke/run-all.sh 2>&1 | tee smoke.log
@@ -106,13 +106,19 @@ jobs:
       - name: Workspace path-escape policy (native Windows unit tests)
         shell: bash
         run: |
-          set -uo pipefail
+          set -euo pipefail
           bun test test/security/filesystem-authority.test.ts \
                    test/security/filesystem-implicit.test.ts \
                    test/security/filesystem-index-context.test.ts \
                    test/security/canonical-bypass.test.ts 2>&1 | tee escape-tests.log
           grep -qE "^ *[0-9]+ fail$| 0 fail" escape-tests.log || { echo "::error::escape tests did not report a result"; exit 1; }
           grep -qE " 0 fail" escape-tests.log || { echo "::error::escape policy tests failed on Windows"; exit 1; }
+
+      - name: Installer evidence negative controls (native PowerShell)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun test test/release/windows-preview-workflow.test.ts test/release/windows-installers-negative.test.ts 2>&1 | tee installer-negative-controls.log
 
       - name: Direct host automation refusal (native Windows)
         shell: bash
@@ -202,57 +208,59 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # ── 6-7. Installers: reuse desktop-app.yml artifacts or say NOT RUN ───────
+  # ── 6-7. Actual installer lifecycle, exact-head artifact only ──────────────
   installers:
-    name: Installers (msi / nsis) — inspect if present
+    name: Windows MSI and NSIS installer lifecycle
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Look for desktop-app.yml Windows artifacts
-        id: find
+      - name: Download same-commit Windows installer artifact
+        id: artifact
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -uo pipefail
-          mkdir -p artifacts
-          # Reuse the packaging lane's output instead of rebuilding the Tauri shell here.
-          RUN_ID=$(curl -s -K <(printf 'header = "Authorization: Bearer %s"\n' "$GH_TOKEN") \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/desktop-app.yml/runs?branch=${GITHUB_REF_NAME}&per_page=1" \
-            | grep -o '"id": [0-9]*' | head -1 | grep -o '[0-9]*' || true)
-          echo "run_id=${RUN_ID:-none}" >> "$GITHUB_OUTPUT"
-          if [ -z "${RUN_ID:-}" ]; then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No desktop-app.yml run for this branch yet — installer steps are NOT RUN, not skipped silently."
-            exit 0
+          set -euo pipefail
+          mkdir -p evidence bundles
+          # Runs for other commits are never eligible, regardless of recency or
+          # green status. Artifacts may appear while a desktop run is in progress.
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/desktop-app.yml/runs?head_sha=$GITHUB_SHA&per_page=100" \
+            --jq '.workflow_runs[] | select(.head_sha == "'"$GITHUB_SHA"'") | .id')
+          found=""
+          for run in $runs; do
+            count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts?per_page=100" \
+              --jq '[.artifacts[] | select(.name == "xr-desktop-windows-x64" and .expired == false)] | length')
+            if [ "$count" = 1 ]; then found="$run"; break; fi
+          done
+          if [ -z "$found" ]; then
+            echo "BLOCKED: no unexpired xr-desktop-windows-x64 artifact from exact head $GITHUB_SHA" | tee evidence/artifact-status.txt
+            echo "::error::Installer lifecycle NOT RUN; dispatch after the matching desktop bundle finishes."
+            exit 1
           fi
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "Found desktop-app.yml run $RUN_ID"
-
-      - name: Download Windows artifacts
-        if: steps.find.outputs.found == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -uo pipefail
-          curl -sL -K <(printf 'header = "Authorization: Bearer %s"\n' "$GH_TOKEN") \
-            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ steps.find.outputs.run_id }}/artifacts" \
-            -o artifacts.json || true
-          head -c 3000 artifacts.json || true
-
-      - name: Installer steps BLOCKED (installation not implemented)
+          gh run download "$found" --repo "$GITHUB_REPOSITORY" --name xr-desktop-windows-x64 --dir bundles
+          printf 'head_sha=%s\ndesktop_run_id=%s\nartifact=xr-desktop-windows-x64\n' "$GITHUB_SHA" "$found" | tee evidence/artifact-status.txt
+      - name: Install, launch, authenticate sidecar, uninstall (MSI and NSIS)
+        id: lifecycle
+        shell: pwsh
+        run: ./scripts/journey/windows-installers.ps1 -Bundles bundles -EvidenceDir evidence
+      - name: Installer status summary
         if: always()
         shell: bash
+        env:
+          ARTIFACT_RESULT: ${{ steps.artifact.outcome }}
+          LIFECYCLE_RESULT: ${{ steps.lifecycle.outcome }}
         run: |
           {
-            echo "## Installers: NOT RUN"
-            echo
-            echo "An artifact metadata lookup, whether successful or not, is not an installation test."
-            echo "Silent install, installed-app launch and authenticated sidecar health, data retention,"
-            echo "and uninstall assertions have NOT RUN. A real current-SHA installer test is required."
+            echo '## Windows installers'
+            echo "Exact-head artifact lookup: $ARTIFACT_RESULT; lifecycle execution: $LIFECYCLE_RESULT."
+            echo 'A missing or failed step is NOT RUN or FAIL, never PASS. See the evidence artifact for per-phase outcomes.'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error::Windows installer lifecycle verification BLOCKED — no install was executed"
-          exit 1
+      - name: Upload installer evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-installer-lifecycle-evidence
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14

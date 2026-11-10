@@ -671,3 +671,24 @@ checker still scope-checks every changed path and rejects new missing or
 multi-ID subjects. No history was rewritten and no broad syntax exception was
 added. The ledger passed with 9 exact-SHA mappings; its fixture suite passed
 6/0 including the unrecognized multi-ID and out-of-scope controls.
+
+## T60.d — candidate actual Windows MSI/NSIS lifecycle evidence
+
+Replaced the metadata-only installer lane with a same-head-SHA artifact lookup
+and a real Windows-only lifecycle script. It refuses stale/missing artifacts,
+ambiguous installer inputs and pre-existing XR registrations; exercises NSIS and
+MSI separately; matches the launched app's child sidecar by PID and executable
+path; checks public health and anonymous/invalid/valid bearer behavior; checks
+child shutdown, installed binary/registration removal and preservation of an
+isolated desktop-home sentinel. The screenshot is optional. Secrets never enter
+logs. Added explicit Windows negative-control tests and fail-closed pipeline exit
+handling. On Linux, PowerShell 7.5.4 parsed the script; negative installer cases
+and fake HTTP fault controls passed. A first test caught use of read-only HOME,
+which was fixed. Release/journey tests 331/0; root typecheck, policy, ownership,
+claim lint and strict ledger check pass. This is implementation and simulation,
+NOT Windows install proof. Both formats must run on a Windows runner using an
+exact-current-SHA artifact; if unavailable, the workflow fails BLOCKED.
+
+CI on f8a0ce71: Quality Gate and its security/Truth jobs passed; the non-gating
+OS-sandbox workflow passed. The desktop PR Flatpak leg was metadata-only, not
+the dispatch build, and native packaging/journey remains in progress.
