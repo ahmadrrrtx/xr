@@ -447,3 +447,12 @@ request the command without the payload. `bun test test/security/llm01-injection
 → 5 pass / 0 fail; `bun test test/security/` → 382 pass / 0 fail. This is a scripted simulated
 model, not evidence that a real model obeyed or resisted an injection. Web-page and MCP cases
 and the remaining OWASP acceptance checks are still open.
+
+## T12.a — smoke aggregate fail-open corrected
+
+The parent runner ignored child exit status and treated missing counters as zero. A child that
+crashed before its summary could therefore be masked by other successful suites. The runner now
+fails on nonzero child exit or a missing/incomplete summary, while still reporting blocked checks.
+`bun test test/release/smoke-runner.test.ts` → 6 pass / 0 fail (including exit-42 negative
+controls); `bash scripts/release-smoke/run-all.sh` → 9 pass / 0 fail on Linux. A rerun on
+Windows is still needed. This fix does not fill the separately missing per-feature WS3 coverage.

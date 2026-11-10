@@ -14,7 +14,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
-total_pass=0; total_fail=0; total_blocked=0; total_notrun=0
+total_pass=0; total_fail=0; total_blocked=0; total_notrun=0; suite_errors=0
 suites=()
 
 run_suite() {
@@ -31,11 +31,20 @@ run_suite() {
   f="$(printf '%s' "$out" | sed -n 's/.* \([0-9]*\) failed.*/\1/p' | tail -1)"
   b="$(printf '%s' "$out" | sed -n 's/.*· \([0-9]*\) blocked.*/\1/p' | tail -1)"
   n="$(printf '%s' "$out" | sed -n 's/.* \([0-9]*\) not run.*/\1/p' | tail -1)"
-  total_pass=$((total_pass + ${p:-0}))
+  if [ -z "$p" ] || [ -z "$f" ] || [ -z "$b" ] || [ -z "$n" ]; then
+    echo "FAIL     $name did not emit a complete smoke summary (exit $rc)"
+    suite_errors=$((suite_errors + 1))
+    return 1
+  fi
+  if [ "$rc" -ne 0 ]; then
+    echo "FAIL     $name exited non-zero ($rc)"
+    suite_errors=$((suite_errors + 1))
+  fi
+  total_pass=$((total_pass + p))
   total_fail=$((total_fail + ${f:-0}))
   total_blocked=$((total_blocked + ${b:-0}))
   total_notrun=$((total_notrun + ${n:-0}))
-  return $rc
+  return 0
 }
 
 run_suite "cli"        bash scripts/release-smoke/smoke-cli.sh
@@ -46,7 +55,7 @@ echo
 echo "════ summary"
 echo "  host: $(uname -s)/$(uname -m)"
 echo "  ${total_pass} passed · ${total_fail} failed · ${total_blocked} blocked · ${total_notrun} not run"
-if [ "$total_fail" -ne 0 ]; then
+if [ "$total_fail" -ne 0 ] || [ "$suite_errors" -ne 0 ]; then
   echo "  RESULT: FAIL"
   exit 1
 fi
@@ -54,4 +63,8 @@ if [ "$total_pass" -eq 0 ]; then
   echo "  RESULT: NOT RUN (nothing executed)"
   exit 1
 fi
-echo "  RESULT: PASS${total_blocked:+ (with ${total_blocked} blocked)}"
+if [ "$total_blocked" -ne 0 ]; then
+  echo "  RESULT: PASS (with ${total_blocked} blocked)"
+else
+  echo "  RESULT: PASS"
+fi
