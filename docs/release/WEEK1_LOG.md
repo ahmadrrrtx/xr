@@ -382,3 +382,23 @@ environments have them. No release policy or signing controls were bypassed.
 **Rust toolchain correction:** the desktop workflow already pins Rust 1.99.1. The crate declares
 1.77, while rusqlite 0.41 requires 1.89. The CI toolchain itself may already meet that requirement;
 the manifest/lock update and actual builds remain unverified.
+
+## Follow-up audit (2026-11-10) — drift-check FAIL
+
+Re-read plan §§1, 3 and 10; at `c133a393`, `bun run
+scripts/release-smoke/ledger-check.ts` exited 1 with 68 problems. **FAIL**, not OK. A full audit
+of current ledger status shows 22 todo, 3 doing and 5 owner-dependent entries before the
+corrections below. The week-1/week-2 work is not all implemented or fully verified.
+
+Corrected an ID collision: T33 was already the installers/channels feature, but had been reused
+for the new SQLite advisory. Restored the original task by appending it and moved the advisory to
+T11.b. Historical T33 advisory entries remain as a transparent record; they are not deleted.
+Corrected LLM03's earlier stale "Verified" label while the recursive supply-chain scan is red.
+
+Desktop dispatch 42895932985 on 895fd306: Linux/Windows x64 bundle jobs succeeded, but Flatpak
+source build failed with `DNSResolveFailed`, Ubuntu 24.04 installed journey failed because the
+engine still listened 15 seconds after app closure, and the overall run concluded cancelled.
+The cause of the latter is not yet known; no unsupported flake diagnosis. PR run 42897513049 on
+e551b234 has successful x64 bundle jobs but its overall journey gate has not completed.
+Windows Preview Test 42897499989 completed successfully, but its installer job inspected only
+artifacts actually present; that does not by itself establish the full §13 install/uninstall.

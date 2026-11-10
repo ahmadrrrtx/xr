@@ -36,6 +36,21 @@ journey-tested (it was not).
 
 ---
 
+## 1b. Week 1 and week 2 implementation audit (2026-11-10)
+
+**NOT fully implemented or verified.** The ledger currently includes open feature tasks T20, T21,
+T31 and T33; T06 (native evidence); T40–T50 (OWASP and desktop/daemon controls); T61–T66
+(Windows environment); and owner-dependent tasks including voice and computer control. Some
+subtasks have test evidence or a review document, but those do not automatically satisfy every
+acceptance criterion. The T11.a OWASP table is a review, not proof that every required red-team
+case or test was added. The previous T33 security entry accidentally reused the installers task ID;
+the original task is restored by append and the advisory is tracked as T11.b.
+
+CI run `42895932985` failed Ubuntu 24.04 desktop journey: its launch step reported the engine
+still listening 15 seconds after app closure. This is **unresolved**, not yet diagnosed as product
+bug versus test interference. Its Flatpak build also failed with `DNSResolveFailed`. No claim of
+a fully green desktop gate is justified.
+
 ## 2. Release identity (D4)
 
 `identity.version = 1.2.0-preview.1`, codename `Preview 1`, `stability = public-beta`.
@@ -69,7 +84,7 @@ api:schema:check     292 operations, matches registry      PASS
 | 6 | `desktop:sink-lint`, desktop `build`, `lint` | **PASS** | sink-lint 0; build exit 0 (2.18s); lint exit 0 (0 errors, 2 pre-existing warnings) |
 | 7 | `bash scripts/smoke-sidecar.sh` (Linux) | **PASS** | `--version v1.2.0-preview.1 (Preview 1)`; serve booted on an isolated `XR_HOME`; health OK with the token handshake banner |
 | 8 | `bun run consumer-smoke` **and** `bun run journey:cli` | **PASS** | journey:cli end to end (build → package → `install.sh` → launch → agent task → update → uninstall, shell profiles byte-identical). consumer-smoke now `{"ok":true,"doctorExit":0,"taskExit":0}` — the week-1 failure was T17.a, and its root cause was a product defect, not a test: the provider-URL guard refuses loopback *custom* providers (an SSRF control), so the smoke's own stub was never registered and the CLI said `Unknown provider`. In week 2 the gateway now names the guard and the supported alternative, the guard is unchanged, and the smoke uses the built-in local preset path |
-| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build failed; workflow not complete. PR run `42897513049` on `e551b234` is in progress. Artifacts are listed in Actions but have not been inspected for this gate |
+| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` has green x64 bundle jobs but is still in progress. Artifacts are listed in Actions but have not been inspected for this gate |
 | 10 | New WS3 smoke scripts pass | **PASS** | `bash scripts/release-smoke/run-all.sh` → 9 passed / 0 failed on Linux **and** 9 passed / 0 failed on the Windows runner |
 
 **Gate Lite snapshot:** item 9 is pending; items 1–8 and 10 have the stated earlier evidence. Independently, the current Supply Chain CI gate is failing and ledger drift check fails; these must not be hidden by the 9/10 count. Packaging success would not prove a human installation or launch.
@@ -91,7 +106,7 @@ both were investigated rather than re-run until green.
 | Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). Requires **Rust 1.89**; the crate currently declares `rust-version = "1.77"`. The desktop workflow already pins Rust 1.99.1; update the declared minimum as appropriate and verify the dependency bump on that CI toolchain |
 | Exposure | The advisory requires the process to open a crafted database plus sibling WAL. **Correction:** `desktop/src-tauri/src/data_safety.rs:stage_into` extracts user-selected archives, skips `.db-shm` but not `.db-wal`, then opens each `.db` and runs `PRAGMA integrity_check`; imported data is therefore a possible path, not just a pre-existing database in the data directory. Actual exploitability and impact through this path have not been tested. Treat the finding as open, not low-risk by assumption. |
 | Why it is not fixed in this commit | `cargo` is not installed in this environment. Hand-editing a `Cargo.lock` for a major bump I cannot build or checksum-verify would break the desktop build — the failure this release exists to avoid |
-| Next action | In a Rust-capable desktop CI environment, change the `rusqlite` manifest constraint to 0.41, update the lockfile, address Rust 1.89 compatibility, build and test, and rerun recursive OSV. A lockfile update alone cannot override the existing 0.37 constraint. No risk acceptance has been granted; do not ship around the red gate. |
+| Next action | Tracked as T11.b (earlier T33 designation collided with the installers task). In a Rust-capable desktop CI environment, change the `rusqlite` manifest constraint to 0.41, update the lockfile, address Rust 1.89 compatibility, build and test, and rerun recursive OSV. A lockfile update alone cannot override the existing 0.37 constraint. No risk acceptance has been granted; do not ship around the red gate. |
 
 ### gitleaks — 5 `generic-api-key` hits, all false positives (FIXED in this branch)
 
