@@ -569,3 +569,13 @@ rust-stable extension supplied rustc 1.89: locked Tauri 2.12 packages require 1.
 a toolchain mismatch, not proof of successful Flatpak packaging. The Cargo.toml floor is
 corrected to 1.90; this is not a verified minimum-version build. `bun test test/supply-chain/`
 passed 18/0. Full source build and native installer journeys remain open.
+
+T33.a follow-up: the offline staging path got past the former DNS failure on the real
+GitHub runner; Flatpak then failed because its 24.08 Rust extension is 1.89 while the lock
+requires at least 1.90. The proposed correction replaces that extension with official,
+architecture-specific, checksum-pinned Rust 1.99.1 archives, installed only into the
+network-isolated build directory. Source downloads happen outside the sandbox. The x86_64
+archive checksum was verified and its component list/installer options inspected locally;
+no Rust toolchain was installed here. aarch64 checksum was retrieved, not independently
+downloaded. Flatpak metadata tests 15/0, desktop tests 493/0, YAML parse, installer shell
+syntax, ci:policy and ownership:check passed. The full corrected build is NOT RUN yet.

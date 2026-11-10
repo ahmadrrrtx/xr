@@ -689,7 +689,6 @@ jobs:
           # the GNOME version — the historical //46 refs never resolved.
           flatpak install --user -y --noninteractive flathub \
             org.gnome.Platform//48 org.gnome.Sdk//48 \
-            org.freedesktop.Sdk.Extension.rust-stable//24.08 \
             org.freedesktop.Sdk.Extension.node22//24.08
 
       # Fetch pinned lockfile dependencies on the runner, then give the build

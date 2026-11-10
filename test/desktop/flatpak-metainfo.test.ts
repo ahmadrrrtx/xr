@@ -126,7 +126,7 @@ describe("Phase 27 · flatpak manifest", () => {
     expect(text).toContain("runtime: org.gnome.Platform");
     expect(text).toContain("sdk: org.gnome.Sdk");
     expect(text).not.toContain("runtime: org.freedesktop.Platform");
-    expect(text).toContain("org.freedesktop.Sdk.Extension.rust-stable");
+    expect(text).not.toMatch(/^\s*- org\.freedesktop\.Sdk\.Extension\.rust-stable/m);
     expect(text).toContain("org.freedesktop.Sdk.Extension.node22");
   });
 
@@ -144,6 +144,18 @@ describe("Phase 27 · flatpak manifest", () => {
     expect(text).toContain(`bun-v${pinned}/bun-linux-aarch64.zip`);
     for (const match of text.matchAll(/sha256: ([0-9a-f]+)/g)) expect(match[1]).toHaveLength(64);
     expect(text).not.toContain("sha256: PLACEHOLDER");
+  });
+
+  test("Rust is pinned to the CI toolchain with checksums for both architectures", () => {
+    const workflow = read(".github/workflows/desktop-app.yml");
+    expect(workflow).toContain("toolchain: 1.99.1");
+    expect(text).toContain("rust-1.99.1-x86_64-unknown-linux-gnu.tar.xz");
+    expect(text).toContain("231fcae47ee950621374725b5fc3b5441d2fbda2955ac45dd7dc816d8876cfe7");
+    expect(text).toContain("rust-1.99.1-aarch64-unknown-linux-gnu.tar.xz");
+    expect(text).toContain("a48fb1e853be56ce9b8e2751f5464dbd5e16440cd81e237920f3a5e7e806333e");
+    expect(text).toContain("prepend-path: /run/build/xr-desktop/.flatpak-tools/rust/bin");
+    expect(text).toContain("--disable-ldconfig");
+    expect(text).not.toMatch(/build-args:[^\n]*--share=network/);
   });
 
   test("the manifest never reintroduces npm ci (there is no package-lock.json)", () => {

@@ -3,8 +3,8 @@
 # Reviewed against Tauri v2's own Flatpak guide: a Tauri app needs webkit2gtk-4.1
 # at build AND run time, and the GNOME runtime is the one that ships it with the
 # right versions (the freedesktop runtime does not). So: org.gnome.Platform, not
-# org.freedesktop.Platform. The two SDK extensions below are the freedesktop ones
-# Prism/Flathub Tauri apps use, and they are compatible with the GNOME SDK.
+# org.freedesktop.Platform. Rust is a checksum-pinned source because the 24.08
+# SDK extension ships rustc 1.89, older than the locked Tauri dependencies.
 #
 # Status: metadata is validated in CI. Dispatch builds stage frozen Bun caches
 # and Cargo-vendored sources before entering the network-isolated builder; the
@@ -21,7 +21,6 @@ runtime: org.gnome.Platform
 runtime-version: "48"
 sdk: org.gnome.Sdk
 sdk-extensions:
-  - org.freedesktop.Sdk.Extension.rust-stable
   - org.freedesktop.Sdk.Extension.node22
 command: xr-desktop
 
@@ -75,13 +74,18 @@ modules:
   - name: xr-desktop
     buildsystem: simple
     build-options:
-      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin:/usr/lib/sdk/node20/bin
+      prepend-path: /run/build/xr-desktop/.flatpak-tools/rust/bin
+      append-path: /usr/lib/sdk/node22/bin
       env:
         # Cargo must write somewhere; the build dir is the only writable place.
         CARGO_HOME: /run/build/xr-desktop/cargo
         CARGO_NET_OFFLINE: "true"
         NODE_ENV: production
     build-commands:
+      # Install only the compiler, standard library and Cargo from the verified
+      # Rust distribution, into this build directory (never into the runtime).
+      - arch=$(uname -m) && case "$arch" in x86_64|aarch64) ;; *) exit 1 ;; esac && ./.flatpak-tools/rust-dist/install.sh --prefix=/run/build/xr-desktop/.flatpak-tools/rust --components="rustc,cargo,rust-std-${arch}-unknown-linux-gnu" --disable-ldconfig
+      - rustc --version && cargo --version
       # 1. Dependencies. The repo locks with bun (`.bun-version` = 1.4.2,
       #    `packageManager` in package.json) — there is no package-lock.json, so
       #    `npm ci` does not and cannot work here. Bun comes in as a checksummed
@@ -112,6 +116,18 @@ modules:
       - install -Dm644 desktop/src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/ai.rrrtx.xr-desktop.png
       - install -Dm644 desktop/src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/ai.rrrtx.xr-desktop.png
     sources:
+      # The upstream official Rust distributions are checksum-verified before
+      # entering the network-isolated build. Use the same compiler as CI.
+      - type: archive
+        url: https://static.rust-lang.org/dist/rust-1.99.1-x86_64-unknown-linux-gnu.tar.xz
+        sha256: 231fcae47ee950621374725b5fc3b5441d2fbda2955ac45dd7dc816d8876cfe7
+        only-arches: [x86_64]
+        dest: .flatpak-tools/rust-dist
+      - type: archive
+        url: https://static.rust-lang.org/dist/rust-1.99.1-aarch64-unknown-linux-gnu.tar.xz
+        sha256: a48fb1e853be56ce9b8e2751f5464dbd5e16440cd81e237920f3a5e7e806333e
+        only-arches: [aarch64]
+        dest: .flatpak-tools/rust-dist
       # Pinned toolchain (bun 1.4.2, the repo's canonical pin). Verified by
       # checksum at fetch time — this is how flathub handles build tools, and it
       # keeps the version from drifting with whatever CI happens to have.
