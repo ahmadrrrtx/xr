@@ -81,3 +81,16 @@ efa5b218068e40d9afe08fc681d688f69d025668:test/daemon/session-auth.test.ts:generi
 # cell, not a credential. The row was reworded at the source; this pins the one
 # already-pushed commit whose text still trips the generic-api-key entropy rule.
 7f89e59888bd28c4611d30a2385b39d761c25c02:docs/release/IMPLEMENTATION_PLAN.md:generic-api-key:19
+
+# 2026-11-10 — five generic-api-key false positives found by the full-history scan in run
+# 42806855868 (main @1834fd16). Verified individually against the SARIF and the raw lines: none
+# is a credential. Four are audit-table rows whose prose contains a package name next to a
+# commit SHA (high-entropy hex, flagged by the generic rule); the fifth is release.manifest.json
+# evidence prose that quoted an env-var assignment. The manifest wording was rewritten so the
+# pattern stops recurring; these fingerprints cover the historical commits, which must not be
+# rewritten. If a real secret is ever found, it does NOT go here — it gets rotated.
+eed11ea08cda99632fa79a8ac2f889503df50509:release.manifest.json:generic-api-key:104
+6a351dd4a8effaf3b8652085a0be09bc7cf02533:docs/audits/XR_FIX_TRACKER.md:generic-api-key:32
+6a351dd4a8effaf3b8652085a0be09bc7cf02533:docs/audits/XR_FIX_TRACKER.md:generic-api-key:125
+d76aa752b6dbfde7c70a9c50e317f4e1ccaf3f0a:XR_FIX_TRACKER.md:generic-api-key:32
+d76aa752b6dbfde7c70a9c50e317f4e1ccaf3f0a:XR_FIX_TRACKER.md:generic-api-key:125

@@ -77,6 +77,40 @@ packaging run still does not prove a human can install and launch the app. Recor
 
 ---
 
+## 3b. Supply-chain findings opened while verifying the release (week 2)
+
+Main went red after Dependabot merge `1834fd16` (owner's, 2026-11-10). Two required jobs failed, and
+both were investigated rather than re-run until green.
+
+### RUSTSEC-2026-0459 — `libsqlite3-sys 0.35.0` in `desktop/src-tauri/Cargo.lock` (OPEN, fix identified)
+
+| | |
+|---|---|
+| Advisory | SQLite before 3.54.0 can return uninitialized page-cache memory when a process opens a database together with a sibling `-wal` whose page size differs |
+| Score | CVSS v4 6.8 — `AV:L/AC:L/PR:N/UI:P`, confidentiality-only |
+| How it reaches XR | `rusqlite 0.37` (bundled SQLite) → `libsqlite3-sys 0.35.0`. Bundled means the vulnerable SQLite is compiled into the desktop app |
+| Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). Requires **Rust 1.89**; the crate currently declares `rust-version = "1.77"`, so this is a toolchain bump plus a dependency bump |
+| Real exposure | Local-only: an attacker must already be able to write a crafted database **and** its `-wal` where the app will open them (i.e. the user's own data directory), and the user must open them. XR does not open foreign database files as a feature. Low practical risk, **not zero**, and not something to filter away silently |
+| Why it is not fixed in this commit | `cargo` is not installed in this environment. Hand-editing a `Cargo.lock` for a major bump I cannot build or checksum-verify would break the desktop build — the failure this release exists to avoid |
+| Owner action | In the desktop-rust lane: raise the toolchain to 1.89, `cargo update -p rusqlite` (or bump `rusqlite = "0.41"` in `desktop/src-tauri/Cargo.toml`), rebuild, and confirm `osv-scanner -r` reports zero unfiltered. **Until then this is an accepted-with-reason Medium, and it should be the first item on the post-preview list** |
+
+### gitleaks — 5 `generic-api-key` hits, all false positives (FIXED in this branch)
+
+The full-history scan on `1834fd16` reported 5 leaks. Each was opened in the SARIF and checked
+against the raw line: four are audit-table rows whose prose puts a commit SHA next to a package name
+(high-entropy hex trips the generic rule), and one is `release.manifest.json` evidence text that
+quoted an env-var assignment — **my own commit `eed11ea0`**. No credential is involved.
+
+Handled in two halves, which is the honest split: the manifest wording was rewritten so the pattern
+stops recurring, and the five historical fingerprints went into `.gitleaksignore` with a comment
+recording the verification — because rewriting those commits is not an option and deleting a finding
+without reading it is how a real leak gets missed. A real secret would be rotated, never ignored,
+and the comment says so.
+
+> Also note: `bun audit` on the shipped root is clean (89 packages, 0 vulnerabilities). The OSV
+> finding above comes from the recursive scan of the desktop's Cargo tree, which `bun audit` does
+> not look at — so "audit passes" was never evidence about the Rust side.
+
 ## 4. Platform evidence
 
 | Platform | Evidence | Source |

@@ -100,8 +100,8 @@
     },
     {
       "id": "byok",
-      "text": "Bring your own API key \u2014 XR ships none. The key is imported into XR's sealed secret broker (or, for scripted use, opted into ambient environment variables with XR_SECRETS_ENV_COMPAT=1) and travels only to the provider you selected.",
-      "evidence": "Ambient hydration is opt-in and default-OFF: src/security/env-compat.ts isOffValue() (only 1/true/on/yes enable it) consumed by src/security/secret-broker.ts and src/secrets.ts. Verified 2026-11-09: with XR_SECRETS_ENV_COMPAT unset, `GROQ_API_KEY=... xr doctor` reports \"API key GROQ_API_KEY not set\"; with the flag set it reaches the provider (HTTP 401 on a fake key). Redaction: src/baseline/status.ts:redactValue.",
+      "text": "Bring your own API key \u2014 XR ships none. The key is imported into XR's sealed secret broker (or, for scripted use, opted into ambient environment variables with XR_SECRETS_ENV_COMPAT enabled) and travels only to the provider you selected.",
+      "evidence": "Ambient hydration is opt-in and default-OFF: src/security/env-compat.ts isOffValue() (only 1/true/on/yes enable it) consumed by src/security/secret-broker.ts and src/secrets.ts. Verified 2026-11-09: with XR_SECRETS_ENV_COMPAT unset, `xr doctor` with a GROQ_API_KEY exported reports \"API key GROQ_API_KEY not set\"; with the flag enabled it reaches the provider (HTTP 401 on a fake key). Redaction: src/baseline/status.ts:redactValue.",
       "expires": "2027-07-31"
     },
     {
