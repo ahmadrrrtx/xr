@@ -12,19 +12,27 @@
 
 ## 1. Recommendation
 
-**NO-GO for publishing today. GO to continue into week 2 on this branch.**
+**HOLD ONE STEP SHORT OF GO — conditional GO once gate item 9 returns green.**
 
-Three items block a public pre-release right now, and none of them is marketing copy:
+All three week-1 blockers are now closed or explained:
 
-| # | Blocker | Where it stands |
+| # | Blocker | Where it stands now |
 |---|---|---|
-| B1 | `bun run consumer-smoke` fails (Release Gate Lite item 8, second half) | Gate item 8 is **half green**: `bun run journey:cli` passes end to end, `consumer-smoke` still reports `Unknown provider "consumer-stub"`. Root cause narrowed (see §5), not fixed. |
-| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 legs green *and artifacts inspected* (item 9) | A fresh run is in flight on the current tip. The previous run built **Windows, macOS x64/arm64 and Linux bundles successfully** but its Flatpak leg died on a runner `DNSResolveFailed` — infrastructure, not the product — and the darwin journey was cancelled with it. |
-| B3 | Competitor comparison (T16) not written | Deliberately deferred: every cell must be *Verified-by-run*, *From-docs with a link*, or *Unknown*, and inventing cells is worse than an empty table. |
+| B1 | `consumer-smoke` failed (gate item 8) | **CLOSED.** The root cause was a product defect, not a broken test: the provider-URL guard refuses loopback **custom** providers (an SSRF control), so the smoke's stub was never registered and the CLI printed `Unknown provider "consumer-stub"` — the message a real user gets after pointing a custom provider at a model on their own machine. In week 2 the gateway names the guard and the supported alternative, the guard is **unchanged**, and the smoke moved to the built-in local preset path. `consumer-smoke` → `{"ok":true,"doctorExit":0,"taskExit":0}`. |
+| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **Still open — the only open gate.** The run dispatched on `c1518351` came back **cancelled**; the packaging run before it built Windows, macOS x64/arm64 and Linux successfully (Flatpak died on a runner `DNSResolveFailed`). Re-dispatched on the current tip. A green packaging run is still not proof a human can install and launch it — that is an owner action. |
+| B3 | Competitor comparison (T16) | **CLOSED.** `COMPETITOR-STATUS.md`: every competitor cell is from-docs with a version and date, every XR cell is verified-by-run, and anything a source did not establish is **Unknown**. No competitor was installed, and the document says so. |
 
-What is genuinely done is in §2–§4, and it is more than a status list: the release identity is
-coherent, the claims linter is green, the security plane's tamper detection is mutation-proven,
-and Windows behaviour — including the fail-closed refusal — is evidenced from Windows.
+Week 2 additions, all in this repo:
+
+| Document | What it establishes |
+|---|---|
+| `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 is proven **end to end** — injected file content → shell request → denied at the approval gate, and again at isolation once approval is granted. |
+| `preview1/FEATURE-TIERS.md` | Every advertised feature assigned a tier from the evidence: what ships ON, what is Experimental with a working path, what is not in this release. Local models, voice and computer control are **not** claimed as verified. |
+| `preview1/COMPETITOR-STATUS.md` | Where XR sits next to Hermes Desktop, Claude Code and OpenHands, including the three things it is behind on. |
+
+**What still must not be said in public:** that the desktop app works (built, never launched by a
+human), that local models are usable on a small machine (no model was run here), or that macOS was
+journey-tested (it was not).
 
 ---
 
@@ -60,12 +68,12 @@ api:schema:check     292 operations, matches registry      PASS
 | 5 | `api:schema:check`, `client:check` | **PASS** | both exit 0 |
 | 6 | `desktop:sink-lint`, desktop `build`, `lint` | **PASS** | sink-lint 0; build exit 0 (2.18s); lint exit 0 (0 errors, 2 pre-existing warnings) |
 | 7 | `bash scripts/smoke-sidecar.sh` (Linux) | **PASS** | `--version v1.2.0-preview.1 (Preview 1)`; serve booted on an isolated `XR_HOME`; health OK with the token handshake banner |
-| 8 | `bun run consumer-smoke` **and** `bun run journey:cli` | **FAIL (partial)** | journey:cli **PASS** — build → package → `install.sh` → launch → agent task (`write_file` applied after 2 provider turns) → update → uninstall, shell profiles byte-identical. consumer-smoke **FAIL** — see B1 |
-| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | fresh run dispatched on the current tip; previous run: Windows, macOS x64/arm64, Linux bundles all success |
+| 8 | `bun run consumer-smoke` **and** `bun run journey:cli` | **PASS** | journey:cli end to end (build → package → `install.sh` → launch → agent task → update → uninstall, shell profiles byte-identical). consumer-smoke now `{"ok":true,"doctorExit":0,"taskExit":0}` — the week-1 failure was T17.a, and its root cause was a product defect, not a test: the provider-URL guard refuses loopback *custom* providers (an SSRF control), so the smoke's own stub was never registered and the CLI said `Unknown provider`. In week 2 the gateway now names the guard and the supported alternative, the guard is unchanged, and the smoke uses the built-in local preset path |
+| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | the run dispatched on `c1518351` came back **cancelled**, and the packaging run before it succeeded for Windows, macOS x64/arm64 and Linux (Flatpak failed on a runner `DNSResolveFailed`, a flake not a defect). Re-dispatched on the current tip. This is the only open gate |
 | 10 | New WS3 smoke scripts pass | **PASS** | `bash scripts/release-smoke/run-all.sh` → 9 passed / 0 failed on Linux **and** 9 passed / 0 failed on the Windows runner |
 
-**Verdict on Gate Lite: 8 of 10 items green, 1 partial (B1), 1 pending (B2).** Not a pass, and it is
-recorded as such rather than rounded up.
+**Verdict on Gate Lite: 9 of 10 items green; item 9 (desktop packaging) is the only one open**, and a green
+packaging run still does not prove a human can install and launch the app. Recorded as such rather than rounded up.
 
 ---
 
