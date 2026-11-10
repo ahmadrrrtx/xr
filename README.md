@@ -35,8 +35,8 @@ gate, your approval, estimated-spend admission checks, and a hash-chained log yo
 > and the [known-limitations register](docs/release/1.2.0-preview.1/known-limitations.md) before relying on it
 > for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on `PATH`;
 > the installer binaries do not. Desktop app builds are not code-signed yet. On macOS and Windows the
-> agent's shell commands need Docker/Podman (or the experimental `XR_OS_SANDBOX=experimental` sandbox)
-> and are refused otherwise; never approve commands in a repository you do not trust. Feedback goes
+> agent's shell commands require a wired isolated backend and are refused otherwise. Windows AppContainer
+> is disabled pending security verification; direct computer control on Windows/macOS is unavailable; never approve commands in a repository you do not trust. Feedback goes
 > through the [beta loop](docs/release/BETA.md).
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —

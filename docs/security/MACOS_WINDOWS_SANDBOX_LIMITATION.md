@@ -1,6 +1,12 @@
 # XR — macOS / Windows Sandbox Limitation (review item #3)
 
-**Status:** Formal limitation doc — closes the documentation gap for KNOWN_LIMITATIONS #1.
+**Status: historical discussion below contains outdated claims.** For Preview 1, the
+[known limitations](../release/1.2.0-preview.1/known-limitations.md#agent-command-execution)
+are authoritative: Windows AppContainer is policy-disabled pending per-execution SID/ACL
+lifecycle verification, including when experimental opt-in is set. Direct host computer
+control is blocked on Windows/macOS; it is not wired to a sandbox. The detailed backend
+inventory and override advice below have not been updated and must not be treated as current
+installation guidance or evidence of confinement.
 
 > **Update (launch audit XR-LAUNCH-003, decision D3):** experimental Tier-2 mechanisms now exist —
 > macOS Seatbelt (`src/runtime/trust/environment/seatbelt.ts`) and Windows AppContainer + Job object

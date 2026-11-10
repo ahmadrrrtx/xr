@@ -1,0 +1,13 @@
+T60.c — Windows Preview evidence workflow review, 2026-11-10
+The installer job of run 42907522824 reported success but performed only
+metadata discovery, not NSIS or MSI install, desktop launch, authenticated
+sidecar probe, data-retention assertion or uninstall. That success is not
+installer evidence. The prior PowerShell cargo | Tee-Object pipeline did not
+explicitly propagate the native process status.
+Candidate workflow now explicitly propagates $LASTEXITCODE, runs native
+control-refusal tests, and marks the installer job BLOCKED/NOT RUN with a
+nonzero exit even if metadata discovery succeeds. Structural regressions:
+  bun test test/release/windows-preview-workflow.test.ts — 3 pass, 0 fail.
+No current-SHA installer lifecycle workflow has been implemented or run.
+No conclusion about the cargo result on previous runs is inferred merely from
+this defect; the raw native logs must be inspected individually.

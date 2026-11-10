@@ -14,6 +14,8 @@
 
 **NO-GO / HOLD.** The desktop packaging gate is pending and desktop journey evidence remains incomplete. The SQLite fix passed the GitHub Supply Chain gate on `43267857`; Linux Rust check/Clippy and Windows Rust tests passed in dispatch `42904607032` on `ddd97858`, but the full desktop run did not pass. Final current-tip native validation is pending. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
 
+**Additional blockers (T05.a/T60.c):** direct host computer-control on Windows/macOS was not wired to a sandbox; the refusal fix is a local candidate and needs native validation. Windows Preview installer job success in run `42907522824` was metadata-only, not an install. The corrected workflow deliberately fails its unimplemented installer lane. Current-SHA NSIS/MSI install, authenticated installed sidecar health, data retention and uninstall remain NOT RUN.
+
 All three week-1 blockers are now closed or explained:
 
 | # | Blocker | Where it stands now |

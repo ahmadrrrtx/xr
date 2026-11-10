@@ -221,8 +221,9 @@ describe("Phase 4 · T1/T3 — canonical-path shell isolation", () => {
         toolRegistry: makeRegistry(),
       };
       await runAgentLoop("write a marker", "agent", deps);
-      // Legacy path still works but is explicitly opted out of the boundary.
-      expect(existsSync(marker)).toBe(true);
+      // Preview 1 prohibits this compatibility fallback on Windows/macOS.
+      // Other platforms retain the explicit opt-out behavior.
+      expect(existsSync(marker)).toBe(process.platform !== "win32" && process.platform !== "darwin");
     },
   );
 });

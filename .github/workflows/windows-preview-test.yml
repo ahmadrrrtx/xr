@@ -114,6 +114,12 @@ jobs:
           grep -qE "^ *[0-9]+ fail$| 0 fail" escape-tests.log || { echo "::error::escape tests did not report a result"; exit 1; }
           grep -qE " 0 fail" escape-tests.log || { echo "::error::escape policy tests failed on Windows"; exit 1; }
 
+      - name: Direct host automation refusal (native Windows)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun test test/security/desktop-control-policy.test.ts test/trust/canonical-shell-isolation.test.ts 2>&1 | tee desktop-control-refusal.log
+
       # 5. Sandbox tiers — recorded honestly, not asserted.
       - name: Sandbox tiers (recorded, not claimed)
         shell: bash
@@ -182,8 +188,11 @@ jobs:
         timeout-minutes: 45
         env:
           RUSTFLAGS: -D warnings
-        run: cargo test --locked --jobs 1 --lib -- --nocapture 2>&1 | Tee-Object -FilePath cargo-test.log
         shell: pwsh
+        run: |
+          cargo test --locked --jobs 1 --lib -- --nocapture 2>&1 | Tee-Object -FilePath cargo-test.log
+          $cargoExit = $LASTEXITCODE
+          if ($cargoExit -ne 0) { exit $cargoExit }
       - name: Upload cargo log
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -234,14 +243,16 @@ jobs:
             -o artifacts.json || true
           head -c 3000 artifacts.json || true
 
-      - name: Installer steps NOT RUN
-        if: steps.find.outputs.found != 'true'
+      - name: Installer steps BLOCKED (installation not implemented)
+        if: always()
         shell: bash
         run: |
           {
             echo "## Installers: NOT RUN"
             echo
-            echo "desktop-app.yml has not produced Windows bundles for \`$GITHUB_REF_NAME\` yet."
-            echo "Silent-install, launch, sidecar health probe and uninstall assertions"
-            echo "therefore did not execute. This is NOT a pass."
+            echo "An artifact metadata lookup, whether successful or not, is not an installation test."
+            echo "Silent install, installed-app launch and authenticated sidecar health, data retention,"
+            echo "and uninstall assertions have NOT RUN. A real current-SHA installer test is required."
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Windows installer lifecycle verification BLOCKED — no install was executed"
+          exit 1

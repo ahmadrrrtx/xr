@@ -27,10 +27,14 @@ expiry dates and evidence links is
 
 ## Agent command execution
 
-- **Windows and macOS: sandbox only.** Agent shell and computer-control actions run only inside
-  Docker/Podman or the experimental `XR_OS_SANDBOX=experimental` sandbox. There is no unsandboxed
-  host mode in Preview 1. With no sandbox available those actions refuse with a setup pointer and
-  the rest of the app keeps working.
+- **Windows and macOS: sandbox only for agent shell.** The canonical shell requires a wired isolated
+  execution backend; the compatibility host fallback is blocked even if hardened mode is off. Docker/
+  Podman availability is not by itself proof that a particular command is isolated. macOS Seatbelt is
+  experimental; Windows AppContainer is disabled pending per-execution SID/ACL lifecycle verification.
+- **Computer control is unavailable on Windows and macOS in Preview 1.** Direct OS automation,
+  screenshot capture and system-control tools are not wired to an isolated backend and refuse rather
+  than execute with host authority. Linux behavior is unchanged; this is not a claim that every other
+  possible subprocess is sandboxed.
 - **Windows command execution is Experimental** unless the Windows-runner evidence in the readiness
   report says otherwise.
 - **Linux** uses the kernel namespace sandbox (`unshare`). Where `bwrap` is absent, the

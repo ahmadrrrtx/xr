@@ -3,6 +3,7 @@
  * All OS automation (osascript, xdotool, PowerShell, cliclick) uses non-blocking spawn.
  */
 import { detectOS } from "./adapter.ts";
+import { desktopControlBlock } from "../security/desktop-control-policy.ts";
 import type { Action, ActionResult } from "./types.ts";
 import * as files from "./files.ts";
 import * as vision from "./vision.ts";
@@ -143,6 +144,8 @@ async function execKey(keys: string[]): Promise<ActionResult> {
 }
 
 export async function execute(action: Action): Promise<ActionResult> {
+  const blocked = desktopControlBlock();
+  if (blocked) return { ok: false, message: blocked };
   return controlIoLimit.run(async () => {
     try {
       switch (action.type) {

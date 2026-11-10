@@ -618,3 +618,24 @@ On a locally compiled Linux sidecar at 7f489a2d: version 1.2.0-preview.1 and all
 checks passed. Four fake-daemon tests catch anonymous or incorrect-token acceptance and rejection
 of the correct token. Desktop suite 500/0, daemon suite 308/0. This is not Windows or installed
 artifact evidence, and the previous public-health-only runs cannot be upgraded retroactively.
+
+## T05.a / T60.c — sandbox-path and evidence-workflow audit
+
+A D5 source audit found that direct computer-control, system-control and capture
+paths invoked host subprocesses without a sandbox handoff, even when a sandbox
+was available. The non-hardened legacy shell fallback also allowed host execution
+on Windows/macOS. The candidate refuses those direct paths on Windows/macOS;
+Trust-wired shell continues through its isolation decision. Linux behavior is
+unchanged. AppContainer is policy-disabled pending per-run SID/ACL verification,
+so the Windows remediation and limitations now say that rather than promising
+experimental opt-in works. Linux tests: security/control/canonical shell 496
+pass, 1 skip, 0 fail; additional service-spy regression passed. Platform branches
+were simulated; Windows/macOS native tests and GUI evidence are still pending.
+The refusal does not prove confinement of every subprocess or plugin.
+
+The Windows Preview installer job of run 42907522824 was green but did not run
+an installer; it only looked up artifact metadata. The workflow now marks this
+job BLOCKED/NOT RUN and fails it, even if metadata exists. The cargo pipeline now
+explicitly propagates its native exit code. Full current-SHA NSIS/MSI install,
+installed-app authenticated sidecar health, user-data retention and uninstall
+are still to be implemented and executed; a historical green job is not proof.

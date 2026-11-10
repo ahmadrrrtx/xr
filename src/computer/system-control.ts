@@ -27,6 +27,7 @@
  * failure. It exists so this defect class cannot silently return.
  */
 import type { Tool, ToolResult } from "../core/types.ts";
+import { desktopControlBlock } from "../security/desktop-control-policy.ts";
 import { runCommand } from "../util/process.ts";
 
 /**
@@ -72,7 +73,14 @@ export function assertNoNoOpSuccess(result: ToolResult, toolName: string): ToolR
  * `ok:true` path to these tools without the guard catching it.
  */
 function tool(name: string, description: string, requiresApproval: boolean, run: Tool["run"]): Tool {
-  const guarded: Tool["run"] = async (args, ctx) => assertNoNoOpSuccess(await run(args, ctx), name);
+  const guarded: Tool["run"] = async (args, ctx) => {
+    const blocked = desktopControlBlock();
+    if (blocked) {
+      ctx.audit("system.control_isolation_blocked", { tool: name, reason: blocked });
+      return { ok: false, output: blocked, reason: "blocked:isolation-unavailable" };
+    }
+    return assertNoNoOpSuccess(await run(args, ctx), name);
+  };
   return { name, description, parameters: {}, requiresApproval, run: guarded };
 }
 
