@@ -420,3 +420,19 @@ Drift-check after reconciliation: `bun run scripts/release-smoke/ledger-check.ts
 historical subjects originally conformed. `bun test test/release/ledger-check.test.ts` → 6 pass,
 0 fail, including negative tests for malformed entries, out-of-scope files, missing IDs, new
 multi-ID subjects and absent evidence. These checks do not prove that each feature is complete.
+
+## T11.b — SQLite dependency fix candidate (2026-11-10)
+
+Read-only GitHub runner 42902810943 generated the lock with Cargo 1.99.1; artifact
+13804585049 contains the candidate. It changes `rusqlite` 0.37.0 → 0.41.1,
+`libsqlite3-sys` 0.35.0 → 0.39.1 and declared minimum Rust 1.77 → 1.89. Five added
+crate-version checksums match the crates.io API. The generated lockfile uses format 4.
+Local `osv-scanner -r --format table .` → exit 0 / No issues found, with 23 pre-existing
+policy-filtered findings; `bun audit` → 0 root findings; `bun test test/supply-chain/` →
+17 pass / 0 fail; `release:check`, `ci:policy` and `ownership:check` → exit 0. The temporary
+read-only workflow is removed after retrieving the artifact. The fix is **not yet proven**:
+native desktop builds/tests and the required Supply Chain gate must pass on the new commit.
+
+Flatpak correction: its manifest explicitly states build-time sources are not vendored and
+Flatpak builders have no network. DNS failure in the source build may reflect that structural
+condition; do not label it merely transient without an offline-source fix and a passing build.

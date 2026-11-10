@@ -12,7 +12,7 @@
 
 ## 1. Recommendation
 
-**NO-GO / HOLD.** The desktop packaging gate is pending, the required Supply Chain gate is red on an open SQLite advisory, and desktop journey evidence remains incomplete. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
+**NO-GO / HOLD.** The desktop packaging gate is pending, the last completed Supply Chain gate was red on a SQLite advisory; a fix candidate now passes local recursive OSV but awaits CI, and desktop journey evidence remains incomplete. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
 
 All three week-1 blockers are now closed or explained:
 
@@ -96,17 +96,17 @@ api:schema:check     292 operations, matches registry      PASS
 Main went red after Dependabot merge `1834fd16` (owner's, 2026-11-10). Two required jobs failed, and
 both were investigated rather than re-run until green.
 
-### RUSTSEC-2026-0459 — `libsqlite3-sys 0.35.0` in `desktop/src-tauri/Cargo.lock` (OPEN, fix identified)
+### RUSTSEC-2026-0459 — bundled SQLite (fix candidate, native CI pending)
 
 | | |
 |---|---|
 | Advisory | SQLite before 3.54.0 can return uninitialized page-cache memory when a process opens a database together with a sibling `-wal` whose page size differs |
 | Score | CVSS v4 6.8 — `AV:L/AC:L/PR:N/UI:P`, confidentiality-only |
-| How it reaches XR | `rusqlite 0.37` (bundled SQLite) → `libsqlite3-sys 0.35.0`. Bundled means the vulnerable SQLite is compiled into the desktop app |
+| How it reached XR | Previously `rusqlite 0.37` (bundled SQLite) → `libsqlite3-sys 0.35.0`. Bundled means the vulnerable SQLite was compiled into the desktop app |
 | Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). Requires **Rust 1.89**; the crate currently declares `rust-version = "1.77"`. The desktop workflow already pins Rust 1.99.1; update the declared minimum as appropriate and verify the dependency bump on that CI toolchain |
 | Exposure | The advisory requires the process to open a crafted database plus sibling WAL. **Correction:** `desktop/src-tauri/src/data_safety.rs:stage_into` extracts user-selected archives, skips `.db-shm` but not `.db-wal`, then opens each `.db` and runs `PRAGMA integrity_check`; imported data is therefore a possible path, not just a pre-existing database in the data directory. Actual exploitability and impact through this path have not been tested. Treat the finding as open, not low-risk by assumption. |
-| Why it is not fixed in this commit | `cargo` is not installed in this environment. Hand-editing a `Cargo.lock` for a major bump I cannot build or checksum-verify would break the desktop build — the failure this release exists to avoid |
-| Next action | Tracked as T11.b (earlier T33 designation collided with the installers task). In a Rust-capable desktop CI environment, change the `rusqlite` manifest constraint to 0.41, update the lockfile, address Rust 1.89 compatibility, build and test, and rerun recursive OSV. A lockfile update alone cannot override the existing 0.37 constraint. No risk acceptance has been granted; do not ship around the red gate. |
+| Candidate evidence | A read-only GitHub runner generated the 0.41.1 / 0.39.1 manifest and lockfile (run 42902810943, artifact 13804585049); all five newly locked crate checksums match crates.io. Local recursive OSV exits 0 with 23 pre-existing policy-filtered findings; 17 supply-chain tests pass. Native Rust builds, tests, and the GitHub Supply Chain gate on the candidate are still required. |
+| Next action | T11.b (earlier T33 collided with the installers task): verify desktop native builds and tests on the candidate and rerun the required CI Supply Chain and desktop gates. No risk acceptance was granted; do not treat local OSV alone as release readiness. |
 
 ### gitleaks — 5 `generic-api-key` hits, all false positives (FIXED in this branch)
 
@@ -194,8 +194,8 @@ not hands-on tests; unknowns remain unknown. No competitor was installed.
 
 ## 8. Owner actions needed
 
-1. **Supply chain** — remediate RUSTSEC-2026-0459 and verify the recursive scan, or explicitly
-   decide on any proposed exception; no exception or risk acceptance is assumed.
+1. **Supply chain** — validate the RUSTSEC-2026-0459 dependency fix on native desktop CI and the
+   required Supply Chain gate; local OSV passed with 23 existing filtered advisories.
 2. **Desktop** — inspect Linux and Windows x64 artifacts and verify a complete packaging run; test
    installation and launch on a real Windows machine. CI bundle success is not manual evidence.
 3. **Ledger reconciliation** — six malformed historical entries were repaired with owner approval;

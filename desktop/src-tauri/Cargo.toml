@@ -5,7 +5,7 @@ description = "XR Desktop — Tauri v2 shell for the XR agent (the AI agent you 
 authors = ["Muhammad Ahmad (@ahmadrrrtx)"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.89"
 
 [lib]
 name = "xr_desktop_lib"
@@ -58,7 +58,7 @@ sysinfo = "0.33"
 ureq = { version = "3", features = ["json"] }
 
 # Phase 4 — chat persistence (SQLite, WAL; bundled build so no system sqlite needed).
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 
 # Phase 10 — workspace row ids (v4; already transitive via tauri).
 uuid = { version = "1", features = ["v4"] }
