@@ -80,6 +80,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/control.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/control/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/core/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/cost-adversarial.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/cost.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon/` | @ahmadrrrtx | default (@ahmadrrrtx) |
