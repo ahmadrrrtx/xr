@@ -61,3 +61,12 @@ test("span names, event names and nested credential fields are redacted", async 
   const data = JSON.stringify(span.end());
   for (const secret of [fixtureKey, fixtureBearer, fixtureOpaque, "ABCDEF0123456789"]) expect(data).not.toContain(secret);
 });
+
+
+test("audit detail keeps JSON serialization semantics and legacy marker", async () => {
+  const { redactAuditDetail } = await import("../../src/observability/redaction.ts");
+  const safe = redactAuditDetail({ when: new Date("2026-01-02T03:04:05Z"), skip: undefined, nested: { apiKey: fixtureOpaque }, ordinary: 12 });
+  expect(safe).toEqual({ when: "2026-01-02T03:04:05.000Z", nested: { apiKey: "«redacted»" }, ordinary: 12 });
+  const cycle: Record<string, unknown> = {}; cycle.self = cycle;
+  expect(() => redactAuditDetail(cycle)).toThrow();
+});

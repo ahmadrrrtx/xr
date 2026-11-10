@@ -151,6 +151,13 @@ export function redactAttributes(attrs: Record<string, unknown>): Record<string,
   return redactNested(attrs, undefined, new Set()) as Record<string, unknown>;
 }
 
+/** Preserve JSON audit serialization and the legacy generic audit marker. */
+export function redactAuditDetail(detail: Record<string, unknown>): Record<string, unknown> {
+  const normalized = JSON.parse(JSON.stringify(detail));
+  const safe = redactAttributes(normalized);
+  return JSON.parse(JSON.stringify(safe).replace(/⟨redacted:[^⟩]+⟩/g, "«redacted»"));
+}
+
 /** Truncation bound for any free-form string ever recorded (bytes-safe chars). */
 export const MAX_ATTRIBUTE_VALUE_LENGTH = 256;
 

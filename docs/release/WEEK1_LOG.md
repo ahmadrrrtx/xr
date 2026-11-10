@@ -738,3 +738,28 @@ next three controls passed. Raised only these subprocess-heavy test budgets to
 25 seconds (the subprocess still has a 15-second bound), added diagnostics for
 child timeout/signal, and kept every assertion without retries. Local installer
 controls 8/0. The corrected tests and installer lifecycle need native reruns.
+
+## Session drift check and CI triage — 2026-11-10
+
+Re-read the owner plan, especially §§1, 3–7, 10, 12 and 13. Start HEAD
+`640ffe59`; `bun run scripts/release-smoke/ledger-check.ts`: **drift-check OK**
+(73 tasks, 61 scoped commits, nine exact-SHA historical mappings). Prior report
+is a checkpoint, not a final release approval. D9 rules out a large-file
+refactor, not a minimal extraction of the new redaction helper that regressed
+an existing size gate.
+
+CI 42915406242 size gate observed workspace-store 2550 → 2555 lines; its unit
+assertion caused Architecture, DX, core, and Linux/macOS parity failures. Do not
+raise the cap. Move the new audit-redaction helper to its existing redaction
+module, preserving JSON normalization and the audit marker; retest chain and
+serialization. Clean-machine gate reported cancelled macOS 14 legs (not pass).
+Windows installer job 130179973797 correctly reported BLOCKED: same-SHA bundle
+not yet uploaded. Full desktop and corrected Flatpak dispatch 42915471871 are
+running; once the exact SHA Windows artifact is available rerun lifecycle.
+
+T41.a correction: focused architecture, audit, state and observability tests
+131 pass/0 fail; size gate passes without changing limits; unit tier 271 pass,
+0 fail, 2119ms against its existing 5000ms budget; root tsc exit 0. The JSON
+normalization and generic marker were preserved and tested, including cyclic
+input failure. Re-read §§1, 3 and 10 and reran strict ledger immediately before
+checkpoint: **drift-check OK**. Current-tip CI is still required.

@@ -20,3 +20,12 @@ This is not proof all arbitrary secrets are recognizable; previous audit rows,
 other logs, transcripts, crash exports and every renderer/broker path remain
 unverified. Optional OTLP telemetry exists and defaults disabled. No telemetry
 is not a correct product claim. Current-tip native CI remains pending.
+
+CI size-gate correction 2026-11-10: 640ffe59 CI 42915406242 failed
+workspace-store 2550 -> 2555 lines; unit architecture assertion propagated
+into core, DX and Linux/macOS parity. Extracted only the just-added audit
+helper into the existing observability redaction module, preserving prior
+JSON normalization, failure semantics and legacy marker; no size allowance
+changed. Local size-gate passes, tree 175391/175500; focused architecture,
+audit, observability and store 131/0; unit tier 271/0 in 2119ms (<5000ms);
+root tsc exit 0. Native current-head runs are still needed.
