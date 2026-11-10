@@ -545,3 +545,8 @@ Still open: current-tip CI and installer inspection; actual native desktop journ
 Windows/manual checks; uncompleted Week 1/2 tasks, including Windows sandbox coverage and
 OWASP web/MCP red-team cases; owner tier decisions; a capped live-provider key; and signing
 preflight. Recommendation remains NO-GO.
+
+Ledger correction: T70's earlier missing-token/G1 blocker was stale. The owner supplied G1
+and authenticated branch pushes and workflow dispatches succeeded; T70 is now marked done.
+No credential values are recorded. Tier decisions, final verification and conditional G3 remain
+separate and are not implied by this correction.
