@@ -3,8 +3,9 @@
 Plan section 5. The rule: **a feature moves down a tier rather than ship broken.** Tier 1 ships ON.
 Tier 2 ships behind an Experimental label with a working path. Tier 3 is hidden or deferred.
 
-Every row below was produced on this machine or on a GitHub-hosted runner during week 1–2. A row
-that could not be exercised says so and says why — "not exercised" is never written as "works".
+These are **proposed tiers**, not an assertion that every advertised capability or in-app label has
+been verified. Listed evidence is limited to the specific tests or runs cited; a row that could
+not be exercised says so. Owner decisions on the affected Tier 2 / Tier 3 features remain open.
 
 | Feature | Tier | Evidence | Notes / what a user should expect |
 |---|---|---|---|
@@ -28,12 +29,12 @@ that could not be exercised says so and says why — "not exercised" is never wr
 
 ## What a user should read into this
 
-- **Tier 1 means "we exercised it and it held"** — not "it is perfect". The gaps are in
+- **Tier 1 is a proposed shipping classification**, not proof that every listed path works. The gaps are in
   `1.2.0-preview.1/known-limitations.md` and in the OWASP pass.
-- **Tier 2 means "there is a working path, and you are early".** Voice and computer control are
-  labelled Experimental in the product and need hardware this environment does not have.
+- **Tier 2 requires a working path and an Experimental label.** Voice and computer control have
+  limited fixture/policy evidence; real-device paths and consistent in-app labels are not yet verified.
 - **Tier 3 means "not in this release"**, and for cloud that is deliberate: XR is local-first and
   nothing in Preview 1 requires an account.
-- **Three owner checks remain**, and no amount of green CI replaces them: install and launch the
+- **Owner checks include**, and no amount of green CI replaces them: install and launch the
   desktop app on a real Windows PC and a real Linux desktop; a real microphone test; a
   real-provider run with a capped key (already done once on Groq in week 1).

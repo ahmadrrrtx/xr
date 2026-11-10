@@ -12,14 +12,14 @@
 
 ## 1. Recommendation
 
-**NO-GO / HOLD.** The desktop packaging gate is pending, the last completed Supply Chain gate was red on a SQLite advisory; a fix candidate now passes local recursive OSV but awaits CI, and desktop journey evidence remains incomplete. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
+**NO-GO / HOLD.** The desktop packaging gate is pending and desktop journey evidence remains incomplete. The SQLite fix passes the GitHub Supply Chain gate on `43267857`; native Rust validation is still running. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
 
 All three week-1 blockers are now closed or explained:
 
 | # | Blocker | Where it stands now |
 |---|---|---|
 | B1 | `consumer-smoke` failed (gate item 8) | **CLOSED.** The root cause was a product defect, not a broken test: the provider-URL guard refuses loopback **custom** providers (an SSRF control), so the smoke's stub was never registered and the CLI printed `Unknown provider "consumer-stub"` — the message a real user gets after pointing a custom provider at a model on their own machine. In week 2 the gateway names the guard and the supported alternative, the guard is **unchanged**, and the smoke moved to the built-in local preset path. `consumer-smoke` → `{"ok":true,"doctorExit":0,"taskExit":0}`. |
-| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **OPEN.** Dispatch run `42895932985` on `895fd306` has green Linux and Windows x64 bundle jobs, but its Flatpak source build failed and the workflow is still running; the PR run `42897513049` on `e551b234` is also in progress. Artifact inspection is outstanding. A build is not proof a human can install and launch it. |
+| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **OPEN.** Dispatch `42903107866` on SQLite-fix commit `43267857` has a failed Flatpak source build and native Rust jobs still running. Earlier x64 bundles succeeded, but their artifacts have not been inspected for this gate. A build is not proof a human can install and launch it. |
 | B3 | Competitor comparison (T16) | **CLOSED.** `COMPETITOR-STATUS.md`: every competitor cell is from-docs with a version and date, every XR cell is verified-by-run, and anything a source did not establish is **Unknown**. No competitor was installed, and the document says so. |
 
 Week 2 additions, all in this repo:
@@ -27,12 +27,11 @@ Week 2 additions, all in this repo:
 | Document | What it establishes |
 |---|---|
 | `preview1/OWASP-LLM-2025.md` | The LLM Top-10 pass: control, evidence and a stated gap per class. LLM01 is proven **end to end** — injected file content → simulated shell request → denied at the approval gate, and again at isolation once approval is granted. |
-| `preview1/FEATURE-TIERS.md` | Every advertised feature assigned a tier from the evidence: what ships ON, what is Experimental with a working path, what is not in this release. Local models, voice and computer control are **not** claimed as verified. |
+| `preview1/FEATURE-TIERS.md` | Proposed feature tiers with the evidence and gaps; owner decisions, consistent labels and working paths are not all verified. Local models, voice and computer control are **not** claimed as verified. |
 | `preview1/COMPETITOR-STATUS.md` | Where XR sits next to Hermes Desktop, Claude Code and OpenHands, including the three things it is behind on. |
 
 **What still must not be said in public:** that the desktop app works (built, never launched by a
-human), that local models are usable on a small machine (no model was run here), or that macOS was
-journey-tested (it was not).
+human), that local models are usable on a small machine (no model was run here), or that macOS was manually tested by a human. Earlier macOS CI journey jobs passed on `895fd306`; they do not validate the latest candidate.
 
 ---
 
@@ -45,6 +44,10 @@ subtasks have test evidence or a review document, but those do not automatically
 acceptance criterion. The T11.a OWASP table is a review, not proof that every required red-team
 case or test was added. The previous T33 security entry accidentally reused the installers task ID;
 the original task is restored by append and the advisory is tracked as T11.b.
+
+The existing README and `docs/cli/CODING_CONTRACTS.md` also describe filesystem authority,
+estimated-spend limits, and desktop pause/cancellation as incomplete. Their present code and tests
+need a targeted review before release; this report does not declare those claims resolved.
 
 CI run `42895932985` failed Ubuntu 24.04 desktop journey: its launch step reported the engine
 still listening 15 seconds after app closure. This is **unresolved**, not yet diagnosed as product
@@ -84,10 +87,10 @@ api:schema:check     292 operations, matches registry      PASS
 | 6 | `desktop:sink-lint`, desktop `build`, `lint` | **PASS** | sink-lint 0; build exit 0 (2.18s); lint exit 0 (0 errors, 2 pre-existing warnings) |
 | 7 | `bash scripts/smoke-sidecar.sh` (Linux) | **PASS** | `--version v1.2.0-preview.1 (Preview 1)`; serve booted on an isolated `XR_HOME`; health OK with the token handshake banner |
 | 8 | `bun run consumer-smoke` **and** `bun run journey:cli` | **PASS** | journey:cli end to end (build → package → `install.sh` → launch → agent task → update → uninstall, shell profiles byte-identical). consumer-smoke now `{"ok":true,"doctorExit":0,"taskExit":0}` — the week-1 failure was T17.a, and its root cause was a product defect, not a test: the provider-URL guard refuses loopback *custom* providers (an SSRF control), so the smoke's own stub was never registered and the CLI said `Unknown provider`. In week 2 the gateway now names the guard and the supported alternative, the guard is unchanged, and the smoke uses the built-in local preset path |
-| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` has green x64 bundle jobs but is still in progress. Artifacts are listed in Actions but have not been inspected for this gate |
-| 10 | New WS3 smoke scripts pass | **PASS** | `bash scripts/release-smoke/run-all.sh` → 9 passed / 0 failed on Linux **and** 9 passed / 0 failed on the Windows runner |
+| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` was cancelled; dispatch `42903107866` on `43267857` has a failed Flatpak build and native Rust jobs in progress. Artifacts are listed in Actions but have not been inspected for this gate |
+| 10 | New WS3 smoke scripts pass | **PENDING** | Corrected the aggregate to fail on child crashes (T12.a); Linux: 9 passed / 0 failed. Earlier Windows individual checks passed; a Windows rerun of the corrected aggregate is pending. Per-feature smoke coverage is also incomplete. |
 
-**Gate Lite snapshot:** item 9 is pending; items 1–8 and 10 have the stated earlier evidence. Independently, the current Supply Chain CI gate is failing and a desktop journey failed; these must not be hidden by the 9/10 count. Packaging success would not prove a human installation or launch.
+**Gate Lite snapshot:** items 9 and 10 are pending; items 1–8 have the stated earlier evidence and should be rerun at final freeze. Supply Chain passed on `43267857`; a desktop journey failed. Packaging success would not prove a human installation or launch.
 
 ---
 
@@ -103,9 +106,9 @@ both were investigated rather than re-run until green.
 | Advisory | SQLite before 3.54.0 can return uninitialized page-cache memory when a process opens a database together with a sibling `-wal` whose page size differs |
 | Score | CVSS v4 6.8 — `AV:L/AC:L/PR:N/UI:P`, confidentiality-only |
 | How it reached XR | Previously `rusqlite 0.37` (bundled SQLite) → `libsqlite3-sys 0.35.0`. Bundled means the vulnerable SQLite was compiled into the desktop app |
-| Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). Requires **Rust 1.89**; the crate currently declares `rust-version = "1.77"`. The desktop workflow already pins Rust 1.99.1; update the declared minimum as appropriate and verify the dependency bump on that CI toolchain |
+| Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). Requires **Rust 1.89**; the crate now declares `rust-version = "1.89"`. The desktop workflow already pins Rust 1.99.1; native verification on that CI toolchain remains pending |
 | Exposure | The advisory requires the process to open a crafted database plus sibling WAL. **Correction:** `desktop/src-tauri/src/data_safety.rs:stage_into` extracts user-selected archives, skips `.db-shm` but not `.db-wal`, then opens each `.db` and runs `PRAGMA integrity_check`; imported data is therefore a possible path, not just a pre-existing database in the data directory. Actual exploitability and impact through this path have not been tested. Treat the finding as open, not low-risk by assumption. |
-| Candidate evidence | A read-only GitHub runner generated the 0.41.1 / 0.39.1 manifest and lockfile (run 42902810943, artifact 13804585049); all five newly locked crate checksums match crates.io. Local recursive OSV exits 0 with 23 pre-existing policy-filtered findings; 17 supply-chain tests pass. Native Rust builds, tests, and the GitHub Supply Chain gate on the candidate are still required. |
+| Candidate evidence | A read-only GitHub runner generated the 0.41.1 / 0.39.1 manifest and lockfile (run 42902810943, artifact 13804585049); all five newly locked crate checksums match crates.io. Local recursive OSV exits 0 with 23 pre-existing policy-filtered findings; 17 supply-chain tests pass. GitHub Supply Chain run 42903110699 passed on commit 43267857. Native Rust builds and tests on the candidate are still required. |
 | Next action | T11.b (earlier T33 collided with the installers task): verify desktop native builds and tests on the candidate and rerun the required CI Supply Chain and desktop gates. No risk acceptance was granted; do not treat local OSV alone as release readiness. |
 
 ### gitleaks — 5 `generic-api-key` hits, all false positives (FIXED in this branch)

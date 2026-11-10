@@ -53,6 +53,15 @@ XR Preview 1 (1.2.0-preview.1) — a local-first, provider-neutral AI agent runt
 > install `1.0.0`. See [docs/release/CHANNELS.md](docs/release/CHANNELS.md#public-version).
 <!-- XR:RELEASE-IDENTITY:END -->
 
+### Preview 1 status
+
+XR Preview 1 is a release candidate, not a completed public release. **Voice and computer
+control are experimental:** the available tests use fixtures or policy checks, not a real
+microphone or a human-driven desktop session. Local-runtime tests used a mock server; no local
+model was benchmarked here. Messaging integrations have mock evidence only. Desktop installers
+need the native CI and real-machine checks described in the
+[readiness report](docs/release/PREVIEW1_READINESS.md).
+
 ---
 
 <div align="center">

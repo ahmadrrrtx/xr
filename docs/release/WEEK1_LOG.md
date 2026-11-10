@@ -456,3 +456,18 @@ fails on nonzero child exit or a missing/incomplete summary, while still reporti
 `bun test test/release/smoke-runner.test.ts` → 6 pass / 0 fail (including exit-42 negative
 controls); `bash scripts/release-smoke/run-all.sh` → 9 pass / 0 fail on Linux. A rerun on
 Windows is still needed. This fix does not fill the separately missing per-feature WS3 coverage.
+
+## Feature-label audit
+
+The tier document had asserted voice and computer control were already labeled Experimental in
+the product, without evidence of consistent in-app labels. Reclassified the table as proposed,
+and added a candid Preview 1 status to the README. Fixture tests and mock integrations are not
+real microphone, GUI, local-model or live messaging evidence. Owner tier decisions and in-app
+label verification remain open; the docs task is doing, not done.
+
+**Supply Chain CI:** run 42903110699 passed all jobs on SQLite-fix commit 43267857,
+including recursive OSV and gitleaks. The native Rust checks on dispatch 42903107866 remain
+in progress; its Flatpak source-build job failed. The newer branch tip needs its own CI evidence.
+The existing README and CODING_CONTRACTS describe other unresolved boundary limitations
+(filesystem authority, estimated spend and desktop pause); these require targeted code/test
+review, not a blanket claim that all P1 work is closed.
