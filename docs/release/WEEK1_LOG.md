@@ -661,3 +661,13 @@ Local trust/security/Flatpak tests: 582 pass, 18 skips, 0 failures; root
 TypeScript, CI policy, claim lint and ownership checks pass. Native reruns
 remain necessary. Fixed missing task path mappings for commit 1f01c829 in an
 append-only ledger row; historical commits were not rewritten.
+
+## T10.a — append-only ledger reconciliation for my commit-format error
+
+I pushed f8a0ce71 with `[T33.a][T05.a]` instead of the required one-task subject;
+the ledger correctly failed after the push. The owner delegated the repair
+choice. Mapped only its full immutable SHA to its two actual ledger tasks; the
+checker still scope-checks every changed path and rejects new missing or
+multi-ID subjects. No history was rewritten and no broad syntax exception was
+added. The ledger passed with 9 exact-SHA mappings; its fixture suite passed
+6/0 including the unrecognized multi-ID and out-of-scope controls.

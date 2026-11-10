@@ -23,12 +23,15 @@ const STATUSES = new Set(["todo", "doing", "done", "blocked", "dropped", "needs_
 const PRIORITIES = new Set(["P0", "P1", "P2"]);
 const SUBJECT = /^\[(T\d{2}(?:\.[a-z0-9]+)?)\]\s+\S/;
 
-// Owner-authorized reconciliation of eight already-pushed historical commits.
+// Owner-authorized reconciliation of nine already-pushed commits.
 // This is an exact immutable SHA → IDs map, NOT a looser subject pattern. New
 // commits must use the original single [Txx] subject; no force-push required.
 // 0588721c accidentally reused T33, the installers task: its security finding
 // is T11.b and its gitleaks work is T34. Every mapped file is still scope-checked.
 const LEGACY_COMMITS: Record<string, string[]> = {
+  // Agent formatting error: adjacent IDs lack the required separating space.
+  // Owner delegated the repair choice; preserve scope checks and history.
+  "f8a0ce71c089cb9cf7b50f4bb641576514302ced": ["T33.a", "T05.a"],
   "9d67a41fa3413fe8cc2662b294f8be63abdb6081": ["T12", "T60.b"],
   "69bd3b65803334d5c88cc7036b7837597ecdd8e6": ["T60", "T05"],
   "c744869ac2eef785b0096ae1e5ad6b2e4048ffc1": ["T12", "T14", "T09"],
