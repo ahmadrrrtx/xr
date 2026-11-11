@@ -2,9 +2,8 @@
  * Inline tool-call card (Phase 4, Phase 9 trace link) — collapsed row
  * (icon + summary + status + chevron), expands to pretty-printed
  * input/output. Category-colored left border; "waiting approval" surfaces
- * the Phase 7 modal. Phase 9 adds a "View trace ↗" link that opens the
- * Brain run (reuses a live run when one is streaming, otherwise starts a
- * fresh demo run — real span deep-linking arrives with Phase 14).
+ * the Phase 7 modal. A trace link is available only when the actual run id
+ * is known; never fabricate a demo trace for a real tool call.
  */
 import {
   ChevronDown,
@@ -25,7 +24,6 @@ import { useNavigate } from 'react-router-dom';
 
 import type { ToolCallRecord } from '@/lib/chat-db';
 import { useApprovalStore } from '@/stores/approvalStore';
-import { useBrainStore } from '@/stores/brainStore';
 
 const ICONS: Record<string, typeof Mail> = {
   gmail: Mail,
@@ -123,23 +121,9 @@ export function ToolCallCard({
     'waiting-approval': 'waiting approval',
   };
 
-  /**
-   * Open the Brain run behind this tool call. Phase 14: a real engine run
-   * id deep-links to its trace (`/brain/<runId>`); the Brain store resolves
-   * engine runs. Without one (mock seam), reuse a live demo run or start one.
-   */
+  /** A missing run id is not evidence of a trace; never invent one. */
   const openTrace = (): void => {
-    if (runId) {
-      navigate(`/brain/${runId}`);
-      return;
-    }
-    const st = useBrainStore.getState();
-    const live = st.runOrder.find(
-      (id) =>
-        st.runs[id]?.status === 'running' || st.runs[id]?.status === 'waiting'
-    );
-    const id = live ?? st.startMockRun(call.summary);
-    navigate(`/brain/${id}`);
+    if (runId) navigate(`/brain/${runId}`);
   };
   const denied = call.denied === true && !call.blocked;
 
@@ -227,7 +211,8 @@ export function ToolCallCard({
           <button
             type="button"
             onClick={openTrace}
-            title="Watch this run in the Brain"
+            disabled={!runId}
+            title={runId ? 'Watch this run in the Brain' : 'Trace unavailable for this tool call'}
             className="text-accent flex w-14 shrink-0 items-center justify-end gap-1 pr-3 font-mono text-[11px]"
             aria-label="Watch this run in the Brain"
           >
@@ -242,11 +227,12 @@ export function ToolCallCard({
           <button
             type="button"
             onClick={openTrace}
-            title="Open the full trace in the Brain"
+            disabled={!runId}
+            title={runId ? 'Open the full trace in the Brain' : 'Trace unavailable for this tool call'}
             className="text-text-tertiary hover:text-accent focus-visible:ring-accent flex shrink-0 items-center justify-end gap-1 pr-3 font-mono text-[11px] whitespace-nowrap focus-visible:ring-1 focus-visible:outline-none"
             aria-label={`View trace for ${call.summary} in the Brain`}
           >
-            View trace
+            {runId ? 'View trace' : 'Trace unavailable'}
             <SquareArrowOutUpRight
               size={12}
               strokeWidth={1.5}

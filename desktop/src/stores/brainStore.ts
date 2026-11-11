@@ -730,6 +730,10 @@ export const useBrainStore = create<BrainState>()(
           if (st.data[id]) return; // already loaded (live or frozen)
 
           const persisted = st.runs[id];
+          // Unknown ids are not evidence of a run. In production only the
+          // explicitly requested mock-latest demo may generate a script.
+          if (!import.meta.env.DEV && !persisted && !id.startsWith('mock-latest-')) return;
+          if (!import.meta.env.DEV && persisted && persisted.source !== 'engine' && !id.startsWith('mock-latest-')) return;
 
           // Phase 14: real engine runs are recorded live (beginEngineRun);
           // after a reload only the run record survives. Never rebuild a

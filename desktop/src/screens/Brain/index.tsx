@@ -6,8 +6,8 @@
  *                     (Trace / Timeline / Events / Cost / Logs) + resizable
  *                     split: virtualized tree | Gantt + detail panel.
  *
- * Everything renders from mock data (honest: the button says "demo");
- * the store's StreamHooks seam is where Phase 14's real runtime plugs in.
+ * Recent history contains observed engine runs only. The optional demo is
+ * explicitly labelled and never inserted as fabricated recent history.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { useListRef } from 'react-window';
 
 import { startDemoRun } from '@/brain/demo';
+import { realRecentRuns } from '@/brain/recent';
 import { modelInfo } from '@/budget/models';
 import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { resolveDefaultModel } from '@/stores/sessionsStore';
@@ -79,85 +80,6 @@ export default function BrainScreen() {
  * Index (/brain) — brief §5
  * ══════════════════════════════════════════════════════════════════════ */
 
-const RECENT_FLAVORS: {
-  id: string;
-  shortId: string;
-  title: string;
-  agent: string;
-  model: string;
-  status: SpanStatus;
-  startedAgo: number;
-  durationMs: number;
-  cost: number;
-}[] = [
-  {
-    id: 'mock-medium',
-    shortId: '#847',
-    title: 'Summarize Q3 reports',
-    agent: 'Main',
-    model: 'gpt-4o',
-    status: 'completed',
-    startedAgo: 12 * 60_000,
-    durationMs: 27_400,
-    cost: 0.187,
-  },
-  {
-    id: 'mock-error',
-    shortId: '#303',
-    title: 'Deploy staging build',
-    agent: 'Coder',
-    model: 'gpt-4o',
-    status: 'failed',
-    startedAgo: 41 * 60_000,
-    durationMs: 9_600,
-    cost: 0.031,
-  },
-  {
-    id: 'mock-long',
-    shortId: '#512',
-    title: 'Research: agentic AI trust in Q3',
-    agent: 'Research',
-    model: 'gpt-4o',
-    status: 'completed',
-    startedAgo: 3 * 3_600_000,
-    durationMs: 90_000,
-    cost: 0.942,
-  },
-  {
-    id: 'mock-waiting',
-    shortId: '#847',
-    title: 'Summarize Q3 reports',
-    agent: 'Main',
-    model: 'gpt-4o',
-    status: 'waiting',
-    startedAgo: 4 * 60_000,
-    durationMs: 17_200,
-    cost: 0.104,
-  },
-  {
-    id: 'mock-short',
-    shortId: '#101',
-    title: 'Quick question: best way to log spans',
-    agent: 'Main',
-    model: 'gpt-4o-mini',
-    status: 'completed',
-    startedAgo: 6 * 3_600_000,
-    durationMs: 4_600,
-    cost: 0.002,
-  },
-  {
-    id: 'mock-stress',
-    shortId: '#900',
-    title: 'Stress: 10,000-span ingest',
-    agent: 'Main',
-    model: 'gpt-4o-mini',
-    status: 'completed',
-    startedAgo: 26 * 3_600_000,
-    durationMs: 30_000,
-    cost: 0.31,
-  },
-];
-
 // The index table is a snapshot (not a live view) — capture "now" once so
 // render stays pure (same convention as SessionList's MOUNT_NOW).
 const MOUNT_NOW = Date.now();
@@ -186,36 +108,7 @@ function BrainIndex() {
     navigate(`/brain/${id}`);
   };
 
-  // Recent runs = this session's real store entries, then the canned mocks
-  // (which seed the list until the user has their own history).
-  const recent = useMemo(() => {
-    const seen = new Set<string>();
-    const out: typeof RECENT_FLAVORS = [];
-    for (const id of runOrder) {
-      const r = runs[id];
-      if (!r || seen.has(r.shortId)) continue;
-      seen.add(r.shortId);
-      out.push({
-        id: r.id,
-        shortId: r.shortId,
-        title: r.title,
-        agent: r.agent,
-        model: r.model,
-        status: r.status,
-        startedAgo: MOUNT_NOW - r.startedAt,
-        durationMs: r.endedAt
-          ? r.endedAt - r.startedAt
-          : MOUNT_NOW - r.startedAt,
-        cost: r.costUsd,
-      });
-    }
-    for (const c of RECENT_FLAVORS) {
-      if (seen.has(c.shortId) || out.length >= 10) continue;
-      seen.add(c.shortId);
-      out.push(c);
-    }
-    return out.slice(0, 10);
-  }, [runOrder, runs]);
+  const recent = useMemo(() => realRecentRuns(runOrder, runs, MOUNT_NOW), [runOrder, runs]);
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-[880px] flex-col items-center pt-10 pb-16">
@@ -289,7 +182,7 @@ function BrainIndex() {
         {recent.length === 0 ? (
           <div className="border-border-subtle bg-bg-ink rounded-lg border p-6 text-center">
             <p className="text-text-secondary text-[13px]">
-              No runs yet. Every chat turn and agent run records a trace here. Start one above, or open Chat.
+              No recorded engine runs yet. Start a run above, or open Chat.
             </p>
           </div>
         ) : (
@@ -429,8 +322,11 @@ function BrainRun({ runId }: { runId: string }) {
   const treeListRef = useListRef();
 
   /* ── Load on mount / id change ─────────────────────────────────────── */
+  const [loadedId, setLoadedId] = useState<string | null>(null);
   useEffect(() => {
-    void loadRun(runId);
+    let active = true;
+    void loadRun(runId).finally(() => { if (active) setLoadedId(runId); });
+    return () => { active = false; };
   }, [runId, loadRun]);
 
   /* ── Search input + focus plumbing ─────────────────────────────────── */
@@ -657,7 +553,8 @@ function BrainRun({ runId }: { runId: string }) {
 
   /* ── Render ────────────────────────────────────────────────────────── */
   if (!run) {
-    return <RunLoading />;
+    if (loadedId !== runId) return <RunLoading />;
+    return <div className="text-text-secondary p-6" role="status">No trace is available for this run in this window.</div>;
   }
 
   const selectedSpan = selectedSpanId
