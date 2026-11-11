@@ -56,7 +56,7 @@ const RULES: Rule[] = [
   // Common API-key formats.
   { kind: "api_key", re: /\b(?:sk|pk|xox[baprs]|ghp|gho|ghu|ghs|ghr|github_pat|glpat|AKIA|ASIA|AIza|ya29|dop_v1|r8_|hf_)[A-Za-z0-9_-]{8,}\b/g },
   // Bearer / Authorization headers.
-  { kind: "credential", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b/gi },
+  { kind: "credential", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi },
   // Cookie-shaped secrets (Set-Cookie / Cookie header fragments).
   {
     kind: "cookie",
@@ -101,9 +101,11 @@ const RULES: Rule[] = [
 
 export const REDACTED = "⟨redacted:secret⟩";
 
-function redactStringWith(value: string): string {
+const CREDENTIAL_KINDS = new Set(["pem", "telegram_token", "jwt", "api_key", "credential", "cookie"]);
+function redactStringWith(value: string, credentialsOnly = false): string {
   let out = value;
   for (const { kind, re, format } of RULES) {
+    if (credentialsOnly && !CREDENTIAL_KINDS.has(kind)) continue;
     out = out.replace(re, (match) => {
       if (format) return format(match);
       if (kind === "home") return `⟨redacted:home⟩/${match.split("/").slice(3).join("/") ?? ""}`.replace(/\/$/, "");
@@ -117,6 +119,11 @@ export function redactString(value: string): string {
   return redactStringWith(value);
 }
 
+/** Export content: mask recognized credentials without changing ordinary PII. */
+export function redactCredentialString(value: string): string {
+  return redactStringWith(value, true);
+}
+
 /** Known credential-bearing field names. Avoid masking token counts/metrics. */
 const SECRET_FIELD = /^(?:api[_-]?key|apikey|authorization|password|passwd|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|token|credential|credentials|private[_-]?key)$/i;
 
@@ -125,9 +132,9 @@ const SECRET_FIELD = /^(?:api[_-]?key|apikey|authorization|password|passwd|secre
  * serialize internals rather than accidentally emitting an opaque credential.
  * Cycles are replaced rather than allowing JSON.stringify to throw.
  */
-function redactNested(value: unknown, key: string | undefined, ancestors: Set<object>, depth = 0): unknown {
+function redactNested(value: unknown, key: string | undefined, ancestors: Set<object>, depth = 0, credentialsOnly = false): unknown {
   if (key && SECRET_FIELD.test(key) && value !== undefined && value !== null && value !== "" && (typeof value === "string" || typeof value === "object")) return REDACTED;
-  if (typeof value === "string") return redactStringWith(value);
+  if (typeof value === "string") return redactStringWith(value, credentialsOnly);
   if (!value || typeof value !== "object") return value;
   if (depth >= 64) return "⟨redacted:depth-limit⟩";
   if (ancestors.has(value)) return "⟨redacted:circular⟩";
@@ -135,15 +142,30 @@ function redactNested(value: unknown, key: string | undefined, ancestors: Set<ob
   if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return "⟨redacted:object⟩";
   ancestors.add(value);
   try {
-    if (Array.isArray(value)) return value.map(item => redactNested(item, undefined, ancestors, depth + 1));
+    if (Array.isArray(value)) return value.map(item => redactNested(item, undefined, ancestors, depth + 1, credentialsOnly));
     const out: Record<string, unknown> = Object.create(null);
-    for (const [childKey, child] of Object.entries(value)) out[childKey] = redactNested(child, childKey, ancestors, depth + 1);
+    for (const [childKey, child] of Object.entries(value)) out[childKey] = redactNested(child, childKey, ancestors, depth + 1, credentialsOnly);
     return out;
   } finally { ancestors.delete(value); }
 }
 
 export function redactValue(value: unknown): unknown {
   return redactNested(value, undefined, new Set());
+}
+
+/** Recursively mask known secret fields and credential patterns for exports. */
+export function redactCredentialValue(value: unknown): unknown {
+  return redactNested(value, undefined, new Set(), 0, true);
+}
+
+/** Structured JSON output can hide opaque secrets behind sensitive field names. */
+export function redactCredentialContent(value: string): string {
+  const text = value.trimStart();
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try { return JSON.stringify(redactCredentialValue(JSON.parse(value)), null, 2); }
+    catch { /* Not a complete JSON value: use the bounded text patterns. */ }
+  }
+  return redactCredentialString(value);
 }
 
 /** Redact credential-named fields and nested JSON-like values. */

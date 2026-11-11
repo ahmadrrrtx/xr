@@ -843,3 +843,34 @@ uninstall assertion. Local fake controls 13 pass/0 fail; release suite 325/0.
 Native Windows rerun required; no installer pass claimed.
 
 Pre-checkpoint re-read §§1, 3, 10; ledger: **drift-check OK**.
+
+### T14 — independent 3062b855 artifact inspection
+
+Downloaded desktop dispatch 42917971949 artifacts 13812551009 (Linux) and
+13810943474 (Windows); both archive SHA256s match GitHub. Debian metadata says
+`1.2.0-preview.1` amd64; extracted packaged engine passed version and protected
+bearer-auth smoke. The Windows archive contains one x64 MSI and an NSIS setup;
+`file` and SHA256 inspected both, and the NSIS SHA matches the failed native
+installer evidence. This is neither Linux GUI installation nor Windows runtime
+proof. RPM/AppImage contents and current-tip artifacts remain uninspected.
+Large binaries were deleted; detailed output is in T14-artifact-inspection-3062.log.
+
+### T41.b — user-requested transcript exports
+
+Reproduced plaintext synthetic credentials in CLI and desktop Markdown exports,
+and a nested opaque secret in JSON tool output. Added bounded credential-only
+redaction to those new exports, including full JSON output and redaction before
+the 40-line tool-output limit, and the suggested desktop filename. Export warning says other sensitive information
+may remain. Ordinary email/IP are preserved and local history is not rewritten.
+Security 412/1 native skip/0 fail, observability 23/0, desktop 504/0, CLI 262/0, security:check, root and desktop tsc, desktop
+build/lint, sink lint, size gate and IPC ACL check pass locally. Generated ACL
+changes only increment module counts; permissions are unchanged. The initial
+root typecheck failure came from placing a desktop import in root test/security;
+moved that test under test/desktop, which root tsc intentionally excludes.
+Heuristic coverage, historic files, full renderer/broker scan and native CI
+remain open. No real credentials were used in fixtures.
+
+Drift check 2026-11-10: sections 1, 3 and 10 re-read; local work and existing
+G1 authorization only. GitHub Actions status recovered and `38bd12c1` native
+runs are in progress. They are not evidence for the newer transcript commit.
+No merge, publication, or archive performed; conditional G3 remains unsatisfied.

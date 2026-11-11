@@ -7,7 +7,7 @@ from a docstring.
 | # | Class | Control in XR | Evidence | Status |
 |---|---|---|---|---|
 | **LLM01** | Prompt injection | Tool output is scanned and framed as untrusted; policy, approval and isolation independently govern dangerous actions | `llm01-injection-e2e.test.ts`: payload-dependent scripted provider, poisoned file, shell approval denied and independent isolation refusal; benign control. `llm01-web-mcp-e2e.test.ts`: real loopback `fetch_url` and production MCP wrapper with fake client, poisoned and benign controls; poisoned shell requests denied. Security suite 386 pass. | **PARTIAL** — scripted provider and MCP client, not a live model or live external MCP server; no claim that every possible injection or tool call is blocked |
-| **LLM02** | Sensitive information disclosure | Broker, disabled-by-default opt-in telemetry and bounded redaction | New synthetic tests exercise nested fields and credential-shaped event/project text in fresh audit rows, structured logs and the Markdown audit report; telemetry privacy tests cover the disabled default. Rust crash redaction has unit tests. | **PARTIAL** — heuristics are not complete; existing records/transcripts and all renderer paths have not been scanned end to end; optional telemetry exists |
+| **LLM02** | Sensitive information disclosure | Broker, disabled-by-default opt-in telemetry and bounded redaction | Synthetic tests exercise selected new audit/log/report paths and CLI/desktop transcript exports, including nested tool fields and JSON output; telemetry privacy tests cover the disabled default. Rust crash redaction has unit tests. | **PARTIAL** — heuristics are not complete; existing records and exports are not rewritten, and all renderer paths have not been scanned end to end; optional telemetry exists |
 | **LLM03** | Supply chain | Lockfiles, dependency audit, pinned GitHub Actions, plugin/MCP install trust | Supply Chain run 42912762788 passed on f8a0ce71 after the SQLite fix; final candidate/native packaging and broader install-trust checks still need evidence. | **IN PROGRESS** |
 | **LLM04** | Data and model poisoning | Untrusted content is marked when it enters memory/context and must not silently become an instruction (`src/context/poison.ts`, `scanUntrusted`) | `test/context` 316 pass, including the poison-detection path; the framing tests pin the marker | **Verified** (heuristic, not a proof — see gap note 2) |
 | **LLM05** | Improper output handling | D1 (the `new Function()` workflow-condition executor) removed and tested; tool arguments are schema-checked (`shell` requires a non-empty `cmd`); desktop CSP disallows inline scripts but permits inline styles; renderer sinks are linted | T01 (D1); `test/security` 382 pass; desktop build + `desktop:sink-lint`; dashboard DOM/CSP hash pin normalizes only generated identity fields | **PARTIAL** — these checks are not a full audit of every shell, path, SQL and HTML flow |
@@ -20,10 +20,10 @@ from a docstring.
 
 ## Gap notes (stated, not hidden)
 
-1. **LLM02** — the new tests cover synthetic values in selected new audit/log/report paths; redaction
-   is heuristic, not a guarantee for arbitrary secret formats. Historical records are not rewritten,
-   and there is no end-to-end transcript or full crash-report scan. Telemetry exists as an explicit
-   opt-in and defaults to disabled; it is not accurate to say XR has no telemetry.
+1. **LLM02** — tests cover synthetic values in selected audit/log/report and user-requested CLI/desktop
+   transcript export paths; redaction is heuristic, not a guarantee for arbitrary secret formats.
+   Historical records and earlier exports are not rewritten; full crash-report and renderer/broker
+   scans remain incomplete. Telemetry exists as opt-in and defaults to disabled.
 2. **LLM04** — poisoning detection is a signature heuristic with an audit trail, exactly as
    `tool-output.ts` says. It is defense-in-depth, not immunity, and it is labelled that way in the
    source and here.
