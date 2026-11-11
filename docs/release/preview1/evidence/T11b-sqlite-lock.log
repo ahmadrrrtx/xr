@@ -7,3 +7,9 @@ libsqlite3-sys v0.39.1
 Locally, five added crate-version checksums matched the crates.io API.
 Checksum-pinned osv-scanner v2.4.0 -r --format table .: exit 0, No issues found; 23 pre-existing policy-filtered advisories.
 Native desktop builds and tests remain pending.
+
+Follow-up on 3062b855: supply-chain PR run 42917975302 PASS; full desktop
+workflow_dispatch 42917971949 PASS, including Linux/Windows native gates and
+Flatpak. OSV was not suppressed. CI toolchain 1.99.1, not an independent test
+of the declared Rust 1.90 minimum. Earlier local recursive OSV exit 0 and its
+23 policy-filtered advisories remain separately disclosed above.

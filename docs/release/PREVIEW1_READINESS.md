@@ -12,13 +12,11 @@
 
 ## 1. Recommendation
 
-**NO-GO / HOLD.** The desktop packaging gate is pending and desktop journey evidence remains incomplete. The SQLite fix passed the GitHub Supply Chain gate on `43267857`; Linux Rust check/Clippy and Windows Rust tests passed in dispatch `42904607032` on `ddd97858`, but the full desktop run did not pass. Final current-tip native validation is pending. The ledger checker now passes with eight documented legacy SHA mappings. A green packaging run alone is not a release approval.
+**NO-GO / HOLD.** On `3062b855`, CI `42917975158`, cross-platform `42917975243`, clean-machine `42917975220`, desktop PR `42917975248`, full desktop dispatch `42917971949`, and supply chain `42917975302` all passed. The full dispatch includes the source Flatpak build and desktop journey gate. Those runs precede subsequent documentation changes and do not replace a final-tip check. The strict ledger passed with nine documented exact-SHA historical mappings.
 
-**Additional blockers (T05.a/T60.c):** direct host computer-control on Windows/macOS was not wired to a sandbox; the refusal fix is a local candidate and needs native validation. Windows Preview installer job success in run `42907522824` was metadata-only, not an install. A candidate workflow now performs the real installer lifecycle when a same-SHA artifact exists and fails BLOCKED when it does not; native execution remains NOT RUN. Current-SHA NSIS/MSI install, authenticated installed sidecar health, data retention and uninstall remain NOT RUN.
+**Windows installer FAIL, cause under investigation:** Windows Preview run `42917963976`, job `130193707541`, failed its installer lifecycle after acquiring an artifact from exact-head desktop dispatch `42917971949`. The prerequisite evidence `13810284797` confirms the head and artifact provenance. The lifecycle evidence artifact `13811731189` exists but GitHub Actions currently reports a major outage and its download and job logs return HTTP 502; the failing phase is unknown. NSIS/MSI, installed sidecar auth, uninstall and data handling cannot be declared passed. Separate Windows CLI and Rust jobs appear in the run, but inspect native logs before individual claims.
 
-**Latest Flatpak dispatch:** `42908959944` completed the offline pinned-Rust release compile, then failed on a nonexistent 256px icon source. The manifest now uses the existing 256px `128x128@2x.png` and has an image-dimension regression; a full rerun is required. On `1f01c829` Windows native CLI/refusal tests passed, but CI security failed an outdated Windows AppContainer remediation expectation; its correction also awaits native CI.
-
-**Native runner update:** GitHub retired `macos-14` on 2026-11-02. The cancelled 640ffe59 macOS 14 CLI legs had no runner or steps. T06.a moves CLI and desktop arm64 journeys to `macos-26`, retaining macOS 15 arm64 and Intel. New native results remain pending; this is not evidence that macOS 14 was tested.
+**Native evidence and owner work:** desktop and Flatpak builds/journeys passed on `3062b855`; independent artifact inspection and current-tip reruns remain open. These CI results do not substitute for a human install on Windows or Linux. The macOS 26 runner replacement passed CI and does not prove macOS 14 or manual Mac behavior. Updater signing was not provisioned in the development build. Direct Windows/macOS host-control is refused; this is not proof of a universal sandbox.
 
 **LLM02 remains partial:** T41.a fixes synthetic credential leaks in selected newly written audit rows, structured logs, spans and Markdown reports. Historical records are not rewritten, redaction is heuristic, and complete transcript, crash and renderer-path scans remain unverified. OTLP telemetry exists as opt-in and is disabled by default.
 
@@ -27,7 +25,7 @@ All three week-1 blockers are now closed or explained:
 | # | Blocker | Where it stands now |
 |---|---|---|
 | B1 | `consumer-smoke` failed (gate item 8) | **CLOSED.** The root cause was a product defect, not a broken test: the provider-URL guard refuses loopback **custom** providers (an SSRF control), so the smoke's stub was never registered and the CLI printed `Unknown provider "consumer-stub"` — the message a real user gets after pointing a custom provider at a model on their own machine. In week 2 the gateway names the guard and the supported alternative, the guard is **unchanged**, and the smoke moved to the built-in local preset path. `consumer-smoke` → `{"ok":true,"doctorExit":0,"taskExit":0}`. |
-| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **OPEN.** Dispatch `42903107866` on `43267857` had a failed Flatpak source build and a Linux Clippy failure; the Clippy correction is in `dfefcf3c`. Dispatch `42904607032` on `ddd97858` passed Linux Rust check/Clippy and Windows Rust tests, but Flatpak failed and bundle legs were cancelled. Offline Flatpak staging was committed in `f783d63f`; real Cargo vendoring and sandboxed build remain unverified, with dispatch `42907089739` pending. Older x64 artifacts were partly inspected, but they predate the SQLite fix. A build is not proof a human can install and launch it. |
+| B2 | `desktop-app.yml` Linux-x64 + Windows-x64 green, artifacts inspected (item 9) | **OPEN.** Desktop PR `42917975248` and full dispatch `42917971949` passed on `3062b855`, including full offline Flatpak and native journey gate. Independent inspection of current x64 artifacts remains pending; GitHub Actions artifact endpoints returned HTTP 502 during the outage. A build is not proof of a human installation. |
 | B3 | Competitor comparison (T16) | **CLOSED.** `COMPETITOR-STATUS.md`: every competitor cell is from-docs with a version and date, every XR cell is verified-by-run, and anything a source did not establish is **Unknown**. No competitor was installed, and the document says so. |
 
 Week 2 additions, all in this repo:
@@ -57,10 +55,11 @@ The existing README and `docs/cli/CODING_CONTRACTS.md` also describe filesystem 
 estimated-spend limits, and desktop pause/cancellation as incomplete. Their present code and tests
 need a targeted review before release; this report does not declare those claims resolved.
 
-CI run `42895932985` failed Ubuntu 24.04 desktop journey: its launch step reported the engine
-still listening 15 seconds after app closure. This is **unresolved**, not yet diagnosed as product
-bug versus test interference. Its Flatpak build also failed with `DNSResolveFailed`. No claim of
-a fully green desktop gate is justified.
+CI run `42895932985` failed the Ubuntu 24.04 desktop journey because the engine remained listening
+and its Flatpak build failed with `DNSResolveFailed`. The earlier failure's exact cause was not
+established. Subsequent desktop PR `42917975248` and full dispatch `42917971949` passed on
+`3062b855`, including the native journey gate and full source Flatpak build; final-tip reruns and
+independent artifact inspection remain necessary.
 
 ### Desktop user-menu follow-up
 
@@ -68,8 +67,9 @@ Source inspection found that the user-menu Quit only hid the main window, worksp
 was a placeholder, and the updater entry claimed a fixed old version was current without a check.
 A candidate fix now navigates to the real screens and uses a main-only explicit quit command;
 the desktop journey requests explicit quit before testing sidecar containment. Local renderer,
-ACL and build checks pass; actual native quit/journey and manual installation remain **NOT RUN**.
-The earlier journey failure's exact cause is unproven.
+ACL and build checks pass; the native CI desktop journey gate passed on `3062b855`. Manual
+installation and human verification of the user menu remain **NOT RUN**. The earlier journey
+failure's exact cause is unproven.
 
 ## 2. Release identity (D4)
 
@@ -104,10 +104,10 @@ api:schema:check     292 operations, matches registry      PASS
 | 6 | `desktop:sink-lint`, desktop `build`, `lint` | **PASS** | sink-lint 0; build exit 0 (2.18s); lint exit 0 (0 errors, 2 pre-existing warnings) |
 | 7 | `bash scripts/smoke-sidecar.sh` (Linux) | **PASS** | `--version v1.2.0-preview.1 (Preview 1)`; locally compiled candidate `7f489a2d`: public health OK; protected version endpoint refused anonymous/invalid bearer and accepted the generated token (T14.a). Earlier runs checked only public health and a token banner, not bearer authentication. Current packaged artifacts remain unverified |
 | 8 | `bun run consumer-smoke` **and** `bun run journey:cli` | **PASS** | journey:cli end to end (build → package → `install.sh` → launch → agent task → update → uninstall, shell profiles byte-identical). consumer-smoke now `{"ok":true,"doctorExit":0,"taskExit":0}` — the week-1 failure was T17.a, and its root cause was a product defect, not a test: the provider-URL guard refuses loopback *custom* providers (an SSRF control), so the smoke's own stub was never registered and the CLI said `Unknown provider`. In week 2 the gateway now names the guard and the supported alternative, the guard is unchanged, and the smoke uses the built-in local preset path |
-| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` was cancelled; dispatch `42903107866` on `43267857` failed Flatpak and Linux Clippy; Clippy correction committed in `dfefcf3c`; dispatch `42904607032` passed Linux Rust check/Clippy and Windows Rust tests, but Flatpak failed and bundle legs were cancelled. Offline staging candidate `f783d63f` awaits dispatch `42907089739`. Earlier `e551b234` artifacts were partly inspected, not valid for this candidate |
+| 9 | `desktop-app.yml` green (Linux x64 + Windows x64), artifacts inspected | **PENDING** | Latest 3062b855 desktop PR and dispatch passed; independent artifact inspection pending. Earlier dispatch `42895932985` on `895fd306`: Linux x64 and Windows x64 bundle jobs succeeded; Flatpak source build and Ubuntu 24.04 journey failed; overall run cancelled. PR run `42897513049` on `e551b234` was cancelled; dispatch `42903107866` on `43267857` failed Flatpak and Linux Clippy; Clippy correction committed in `dfefcf3c`; dispatch `42904607032` passed Linux Rust check/Clippy and Windows Rust tests, but Flatpak failed and bundle legs were cancelled. Offline staging candidate `f783d63f` awaits dispatch `42907089739`. Earlier `e551b234` artifacts were partly inspected, not valid for this candidate |
 | 10 | New WS3 smoke scripts pass | **PENDING** | Corrected the aggregate to fail on child crashes (T12.a); Linux: 9 passed / 0 failed. Earlier Windows individual checks passed; a Windows rerun of the corrected aggregate is pending. Per-feature smoke coverage is also incomplete. |
 
-**Gate Lite snapshot:** items 9 and 10 are pending; items 1–8 have the stated earlier evidence and should be rerun at final freeze. Supply Chain passed on `43267857`; a desktop journey failed. Packaging success would not prove a human installation or launch.
+**Gate Lite snapshot:** items 9 and 10 remain pending: desktop CI passed on `3062b855` but independent artifact inspection and full per-feature smoke coverage remain open. Items 1–8 have the stated evidence and need a final-freeze check. Supply Chain and desktop journey gates subsequently passed on `3062b855`. CI success does not prove a human installation or launch.
 
 ---
 
@@ -116,7 +116,7 @@ api:schema:check     292 operations, matches registry      PASS
 Main went red after Dependabot merge `1834fd16` (owner's, 2026-11-10). Two required jobs failed, and
 both were investigated rather than re-run until green.
 
-### RUSTSEC-2026-0459 — bundled SQLite (fix candidate, native CI pending)
+### RUSTSEC-2026-0459 — bundled SQLite (fix and native CI verified on 3062b855)
 
 | | |
 |---|---|
@@ -124,9 +124,9 @@ both were investigated rather than re-run until green.
 | Score | CVSS v4 6.8 — `AV:L/AC:L/PR:N/UI:P`, confidentiality-only |
 | How it reached XR | Previously `rusqlite 0.37` (bundled SQLite) → `libsqlite3-sys 0.35.0`. Bundled means the vulnerable SQLite was compiled into the desktop app |
 | Fix | `rusqlite 0.41` → `libsqlite3-sys 0.39.1` (SQLite 3.54.1). `rusqlite` requires Rust 1.89, but the locked Tauri dependencies require **1.90**; the crate declares `rust-version = "1.90"`. The desktop workflow pins Rust 1.99.1, and native checks passed on an earlier candidate; the declared 1.90 minimum itself has not been tested |
-| Exposure | The advisory requires the process to open a crafted database plus sibling WAL. **Correction:** `desktop/src-tauri/src/data_safety.rs:stage_into` extracts user-selected archives, skips `.db-shm` but not `.db-wal`, then opens each `.db` and runs `PRAGMA integrity_check`; imported data is therefore a possible path, not just a pre-existing database in the data directory. Actual exploitability and impact through this path have not been tested. Treat the finding as open, not low-risk by assumption. |
+| Exposure | The advisory requires the process to open a crafted database plus sibling WAL. **Correction:** `desktop/src-tauri/src/data_safety.rs:stage_into` extracts user-selected archives, skips `.db-shm` but not `.db-wal`, then opens each `.db` and runs `PRAGMA integrity_check`; imported data is therefore a possible path, not just a pre-existing database in the data directory. Actual exploitability and impact through this path have not been tested. This was a real pre-fix exposure path, not a finding to dismiss as low-risk by assumption. The dependency fix was validated in later CI; exploitability was not separately tested. |
 | Candidate evidence | A read-only GitHub runner generated the 0.41.1 / 0.39.1 manifest and lockfile (run 42902810943, artifact 13804585049); all five newly locked crate checksums match crates.io. Local recursive OSV exits 0 with 23 pre-existing policy-filtered findings; 17 supply-chain tests pass. GitHub Supply Chain run 42903110699 passed on commit 43267857. Windows cargo-test step passed in run 42903107866, but its job was cancelled during cache cleanup; Linux Clippy failed and a correction is awaiting rerun. Native builds and complete jobs remain required. |
-| Next action | T11.b (earlier T33 collided with the installers task): verify desktop native builds and tests on the candidate and rerun the required CI Supply Chain and desktop gates. No risk acceptance was granted; do not treat local OSV alone as release readiness. |
+| Follow-up | T11.b: Supply Chain `42917975302` and full desktop dispatch `42917971949` passed on `3062b855`. The declared minimum Rust 1.90 was not separately tested. A green dependency check is not full release readiness. |
 
 ### gitleaks — 5 `generic-api-key` hits, all false positives (FIXED in this branch)
 
@@ -151,7 +151,7 @@ and the comment says so.
 |---|---|---|
 | **Linux x64** | full suite, gates, sidecar boot, journey:cli, smoke lane 9/0 | this machine (2 GB, no GUI) |
 | **Windows x64** | workflow run **42707408342**, all three jobs success: CLI smoke 9/0 on `MINGW64_NT-10.0-26100`; `cargo test` on the Tauri shell; 122 path-escape assertions native; installers job ran its inspection path | GitHub-hosted `windows-latest` only |
-| **macOS arm64/x64** | Tauri **bundles built** in `desktop-app.yml`; journey job cancelled in the same run | CI artifacts, **journey NOT RUN** |
+| **macOS arm64/x64** | Bundles and desktop journey gate passed on supported hosted runners; no manual Mac check | dispatch `42917971949` on `3062b855`; not macOS 14 proof |
 | **D5 refusal (Windows)** | guarantee matrix on the runner: `win32/x64`, `shell / arbitrary code` → tier2_isolated, placement **`BLOCKED (fail-closed)`**, kernel boundary ✗, fail-closed ✓, remediation names Docker Desktop/Podman or experimental AppContainer | run 42707408342, artifact 13714491518 |
 | **Unattended approval** | one-shot turn against a keyless loopback provider: the shell call is **DENIED**, exit code 4 | Linux + Windows smoke lanes |
 
@@ -199,7 +199,7 @@ works.
 | Desktop app: build, lint, typecheck, screens | **verified for build/typecheck/screens** | 491 desktop tests, axe + keyboard in CI, bundles build on 3 OSes |
 | Desktop UI honesty (no dead controls) | **fixed this week** | T03: Research/Memory wired, Files removed, archived-chats dead end withdrawn, `coming_soon` cards filtered |
 | Windows shell execution | **refused by design, verified** | fail-closed row + exit-code-4 refusal |
-| Windows/macOS installers (MSI/NSIS/DMG) | **bundles build; install not exercised** | artifacts only |
+| Windows/macOS installers (MSI/NSIS/DMG) | **Windows lifecycle FAIL; failing phase unknown; macOS manual install NOT RUN** | Windows `42917963976` failed; evidence retrieval is blocked by GitHub Actions HTTP 502 |
 | Voice, computer-use, multi-agent/orchestrator, Telegram/Discord/WhatsApp, MCP/plugins/skills, research, memory, cloud plane | **NOT VERIFIED THIS WEEK** | their suites exist and run in CI; no human-driven verification yet |
 | npm / Homebrew / WinGet / Scoop / Docker | **not Preview 1 channels** | by owner decision D4 |
 
@@ -214,12 +214,12 @@ not hands-on tests; unknowns remain unknown. No competitor was installed.
 
 ## 8. Owner actions needed
 
-1. **Supply chain** — validate the RUSTSEC-2026-0459 dependency fix on native desktop CI and the
-   required Supply Chain gate; local OSV passed with 23 existing filtered advisories.
+1. **Supply chain** — review the 23 existing policy-filtered OSV advisories and any final-tip
+   changes; the SQLite fix and desktop/supply-chain gates passed on `3062b855`.
 2. **Desktop** — inspect Linux and Windows x64 artifacts and verify a complete packaging run; test
    installation and launch on a real Windows machine. CI bundle success is not manual evidence.
 3. **Ledger reconciliation** — six malformed historical entries were repaired with owner approval;
-   eight exact-SHA legacy subject mappings are explicit in the checker. Published Git history was
+   nine exact-SHA legacy subject mappings are explicit in the checker. Published Git history was
    not rewritten; new entries and commits remain subject to strict validation.
 4. **Signing** — the existing desktop tag preflight requires Windows Authenticode and macOS Developer ID plus notarization, even for preview tags; it also requires the updater key if its public key is provisioned. PR builds are development artifacts and do not prove signing. Whether the owner has configured tag-environment credentials is **unknown**. An unsigned tag would require a separately approved policy change, not a bypass.
 5. **G3** — the owner provided `APPROVE G3` conditional on all fixes and verification. That condition is not met: do not publish the pre-release or archive old releases while the recommendation is NO-GO. Do not publish Preview 1 to npm/WinGet/Homebrew/Scoop.

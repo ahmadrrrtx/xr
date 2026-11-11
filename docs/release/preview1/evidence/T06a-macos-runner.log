@@ -13,3 +13,8 @@ checks guard supported architecture/version combinations and retired label.
 Local `bun test test/release/macos-runner-policy.test.ts test/release/windows-artifact-wait.test.ts test/release/windows-preview-workflow.test.ts test/release/windows-installers-negative.test.ts test/journey`:
 25 pass, 0 fail; `bun run ci:policy`: PASS; strict ledger: PASS.
 The newly configured macOS 26 native execution remains NOT RUN until CI reports.
+
+Follow-up on 3062b855: clean-machine run 42917975220 PASS and full desktop
+dispatch 42917971949 PASS, including required native journey gate. CLI
+macos-26 binary and npm jobs passed; desktop journey matrix retained macOS 15,
+26 and Intel. These are CI-runner results, not manual Mac or macOS 14 proof.

@@ -10,10 +10,10 @@ from a docstring.
 | **LLM02** | Sensitive information disclosure | Broker, disabled-by-default opt-in telemetry and bounded redaction | New synthetic tests exercise nested fields and credential-shaped event/project text in fresh audit rows, structured logs and the Markdown audit report; telemetry privacy tests cover the disabled default. Rust crash redaction has unit tests. | **PARTIAL** — heuristics are not complete; existing records/transcripts and all renderer paths have not been scanned end to end; optional telemetry exists |
 | **LLM03** | Supply chain | Lockfiles, dependency audit, pinned GitHub Actions, plugin/MCP install trust | Supply Chain run 42912762788 passed on f8a0ce71 after the SQLite fix; final candidate/native packaging and broader install-trust checks still need evidence. | **IN PROGRESS** |
 | **LLM04** | Data and model poisoning | Untrusted content is marked when it enters memory/context and must not silently become an instruction (`src/context/poison.ts`, `scanUntrusted`) | `test/context` 316 pass, including the poison-detection path; the framing tests pin the marker | **Verified** (heuristic, not a proof — see gap note 2) |
-| **LLM05** | Improper output handling | D1 (the `new Function()` workflow-condition executor) removed and tested; tool arguments are schema-checked (`shell` requires a non-empty `cmd`); desktop renders markdown/HTML under CSP with no inline script or inline style | T01 (D1); `test/security` 382 pass; desktop build + `desktop:sink-lint`; dashboard DOM/CSP hash pin normalizes only generated identity fields | **Verified** |
+| **LLM05** | Improper output handling | D1 (the `new Function()` workflow-condition executor) removed and tested; tool arguments are schema-checked (`shell` requires a non-empty `cmd`); desktop CSP disallows inline scripts but permits inline styles; renderer sinks are linted | T01 (D1); `test/security` 382 pass; desktop build + `desktop:sink-lint`; dashboard DOM/CSP hash pin normalizes only generated identity fields | **PARTIAL** — these checks are not a full audit of every shell, path, SQL and HTML flow |
 | **LLM06** | Excessive agency | Approval plane and Trust sandbox; direct Windows/macOS host-control paths now refuse | Windows Preview run 42911178973 native refusal tests passed; platform-specific and desktop-native reruns still pending. | **PARTIAL** — no universal isolation claim or verified Windows AppContainer |
 | **LLM07** | System prompt leakage | Broker-based credentials and selective redaction | Broker and secret-pattern tests exist, but they do not prove every prompt and transcript excludes secrets. | **PARTIAL** — no full end-to-end prompt/transcript scan |
-| **LLM08** | Vector and embedding weaknesses | If embeddings are used, retrieval is workspace-scoped | `test/context` 316 pass (retrieval, quarantine, ACL paths) | **Verified for the paths exercised**; no cross-workspace retrieval test was added this week — see gap note 3 |
+| **LLM08** | Vector and embedding weaknesses | If embeddings are used, retrieval is workspace-scoped | `test/context/security.test.ts` tests cross-workspace authorization denial and lexical retrieval exclusion | **PARTIAL** — lexical path exercised; no claim about every embedding/vector backend — see gap note 3 |
 | **LLM09** | Misinformation | Research output carries sources and surfaces failures instead of swallowing them; content guard frames fetched pages | `test/research` 66 pass, including `security.test.ts`; the research screen's own tests are in the desktop suite | **Verified** |
 | **LLM10** | Unbounded consumption | Budget governor with atomic admission, per-step estimate before the call, retry/fallback settlement, step ceilings and timeouts | `test/cost.test.ts` 6, **new** `test/cost-adversarial.test.ts` 5 (retry storm exhausts the cap; failed attempts are charged, not free — **mutation-proven**), `test/phase2` 56, `test/phase6` 89 | **Verified** |
 | — | Daemon / desktop extras | Loopback bind, bearer token, IPC grants, CSP, updater signatures and deep links | Local compiled Linux sidecar rejects anonymous/invalid bearer and accepts valid bearer; IPC ACL tests passed. CSP disallows inline script but allows inline styles. | **PARTIAL** — current native installer, all IPC paths, update and deep-link evidence remain incomplete |
@@ -27,9 +27,9 @@ from a docstring.
 2. **LLM04** — poisoning detection is a signature heuristic with an audit trail, exactly as
    `tool-output.ts` says. It is defense-in-depth, not immunity, and it is labelled that way in the
    source and here.
-3. **LLM08** — no new cross-workspace retrieval isolation test was written this week. The existing
-   context/ACL suites pass; treating that as proof of isolation without a targeted test would be the
-   same mistake this release keeps catching elsewhere.
+3. **LLM08** — an existing targeted test denies a foreign workspace item both at authorization and
+   in lexical retrieval. This does not verify every embedding/vector backend, persistence boundary,
+   or adversarial cross-workspace scenario.
 
 ## Scope note on OPSWAT
 

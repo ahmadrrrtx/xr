@@ -793,3 +793,38 @@ runtime verification is implied. Local journey/workflow controls 25 pass, 0
 fail; CI policy and ledger checks pass. New native journeys remain pending.
 
 Before checkpoint re-read §§1, 3, 10; ledger: **drift-check OK**.
+
+## Session start — plan and drift check
+
+Re-read §§1, 3–7, 10, 12–13 of the uploaded plan. Restored the snapshotted
+workspace carefully: the snapshot overlaid 20 older tracked blobs on the clean
+remote checkout, all matching historical objects; preserved them under
+`/home/user/tmp/snapshot-overlay-3062/`, then restored the known clean HEAD
+`3062b855`. `bun run scripts/release-smoke/ledger-check.ts`: **drift-check OK**
+(74 tasks, 64 scoped commits, nine exact-SHA legacy mappings).
+
+On `3062b855`, CI 42917975158, cross-platform 42917975243, clean-machine
+42917975220, desktop PR 42917975248 and full desktop dispatch 42917971949 all
+completed successfully. The dispatch includes the full offline Flatpak build.
+Windows Preview 42917963976 failed installer lifecycle job 130193707541,
+after the exact-head artifact prerequisite succeeded and selected desktop
+run 42917971949. Its small evidence artifact 13811731189 exists, but GitHub
+Actions currently reports a major outage and both job-log and evidence-download
+endpoints return HTTP 502; the failing phase and cause are **not yet known**.
+Do not turn the job into a pass, assume an installer result or change product
+behavior based on speculation. Retry evidence retrieval after recovery.
+
+### Release/security follow-up
+
+Corrected the OWASP LLM05 row: desktop `script-src` excludes inline scripts but
+`style-src` explicitly allows inline styles; lint and prior tests do not prove
+every output path. Corrected LLM08 wording: the existing context security test
+already checks cross-workspace authorization and lexical retrieval, not every
+vector backend. New source-backed documentation test plus existing context
+security tests: 40 pass/0 fail. Marked T06.a (runner migration), T33.a (offline
+Flatpak), T11.b (SQLite) and T14.a (local authenticated sidecar smoke) done
+only for their narrowly stated acceptance; parent release/security tasks stay
+open. The native Windows installer failure and unavailable evidence remain
+separate blockers.
+
+Pre-checkpoint re-read §§1, 3 and 10; strict ledger: **drift-check OK**.

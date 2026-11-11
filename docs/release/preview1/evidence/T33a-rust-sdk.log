@@ -10,3 +10,9 @@ failed installing icons: desktop/src-tauri/icons/256x256.png does not exist.
 uses it. Regression opens every installed PNG, checks PNG signature and IHDR
 pixel dimensions against destination. Local trust/security/Flatpak suite: 582
 pass, 18 skip, 0 fail; full corrected Flatpak build still required.
+
+Follow-up on 3062b855: full desktop workflow_dispatch 42917971949 PASS; its
+required Flatpak source job 130186143949 completed successfully in 12m37s.
+The manifest and staged dependencies keep the build offline; previously
+observed missing icon and Rust SDK errors were not reported in this green run.
+Artifact 13811655449 exists, but independent inspection is still pending.
