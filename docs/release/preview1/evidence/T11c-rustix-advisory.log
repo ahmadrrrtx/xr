@@ -1,0 +1,23 @@
+T11.c — RUSTSEC-2026-0486 desktop rustix dependency
+
+On PR run 43101092638 / job 130792455930 OSV failed. Reproduction with
+checksum-verified osv-scanner 2.4.0 in JSON mode on 9e3f703a returned one
+unfiltered finding: desktop/src-tauri/Cargo.lock rustix 1.1.5,
+RUSTSEC-2026-0486 (unsound xattr functions). RustSec advisory:
+https://rustsec.org/advisories/RUSTSEC-2026-0486.html — fixed >=1.1.6.
+
+The crates.io sparse index https://index.crates.io/ru/st/rustix identifies
+1.1.6 checksum e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa,
+rust-version 1.65, not yanked. Existing locked direct dependencies satisfy the
+index entries; candidate changes only the version and checksum by hand because
+this environment must not install Rust. The Cargo solver has NOT validated the
+candidate here. Required desktop CI uses cargo check/test --locked on Linux and
+Windows; packaging across native legs must be green before claiming completion.
+
+Local pinned OSV recursive scan on candidate exit 0; 23 existing
+policy-filtered advisories remain disclosed — NOT 23 remediations. Synthetic
+lock regression plus SQLite controls: 3 pass / 0 fail. No scanner exceptions
+were added. Current delivered test installer was built before this fix and must
+not be misrepresented as a remediated build.
+Follow-up: bun test test/supply-chain => 19 pass / 0 fail; root tsc --noEmit
+exit 0. claim-lint, CI policy and strict ledger check also pass locally.

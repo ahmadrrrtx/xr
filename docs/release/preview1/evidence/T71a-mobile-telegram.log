@@ -1,0 +1,22 @@
+T71.a — owner-retained Telegram and mobile companion
+
+Owner explicitly says cloud stays out and Telegram bot and mobile PWA work and
+should remain. This is owner confirmation, not an agent-observed real Telegram
+or phone run. Enterprise satellite and Firecracker dispositions remain open.
+
+On 9e3f703a: bun test test/telegram => 52 pass; test/bots => 16 pass;
+test/telegram.test.ts => 15 pass; test/daemon/mobile-lan-integration.test.ts
+and mobile-companion.test.ts => 19 pass. Tests use fixture/mock/loopback paths,
+not a live Telegram bot or a physical phone. npm ci --ignore-scripts and npm
+run build in mobile/ exit 0; build makes service worker and 27 precache entries.
+
+Critical packaging qualification: GitHub run 43101090115 artifact 13893860237
+archive SHA256 947776a0b41d42df736afdb002327a81824eb60f7ef3de2a3bae742f8c7a1b02
+verified, deb XR_1.2.0-preview.1_amd64.deb SHA256
+ef3ae653c1f6a8d30c7a8f9da46498c8f74be5cb80308c56d2bf0521457de718.
+`dpkg-deb -c` contains xr-desktop and xr-engine but no mobile PWA files.
+Daemon uses XR_MOBILE_DIST or $PWD/mobile/dist and returns 404 if absent; shell
+spawns engine loopback-only. No installed-desktop-to-phone path has been proven.
+No live device, HTTPS pairing or live bot token was tested here. Source-built
+PWA plus explicit LAN-enabled daemon is a separate documented path, not proof
+that the provided deb supplies a complete mobile experience.

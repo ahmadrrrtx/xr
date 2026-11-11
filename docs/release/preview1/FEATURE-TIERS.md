@@ -5,7 +5,7 @@ Tier 2 ships behind an Experimental label with a working path. Tier 3 is hidden 
 
 These are **proposed tiers**, not an assertion that every advertised capability or in-app label has
 been verified. Listed evidence is limited to the specific tests or runs cited; a row that could
-not be exercised says so. Owner decisions on the affected Tier 2 / Tier 3 features remain open.
+not be exercised says so. The owner has confirmed that cloud stays out and that Telegram and the mobile PWA should remain in scope; other tier choices remain open.
 
 | Feature | Tier | Evidence | Notes / what a user should expect |
 |---|---|---|---|
@@ -22,8 +22,10 @@ not be exercised says so. Owner decisions on the affected Tier 2 / Tier 3 featur
 | **Local runtimes** (Ollama, LM Studio, llama.cpp, vLLM…) | **2 — EXPERIMENTAL** | `consumer-smoke` and the release smoke lane drive a local OpenAI-compatible server end to end | works with a local server you run; **not** benchmarked for quality on this 2 GB box, and no local model was run here (T24 **BLOCKED**: no model fits) |
 | **Voice mode** (`xr voice setup/test/start`, push-to-talk, hotkey) | **2 — EXPERIMENTAL** | `test/voice` 41 pass (fixture/loopback) | **no audio device on this machine**; real microphone testing is an owner action on Windows/Linux |
 | **Computer control & vision agent** | **2 — EXPERIMENTAL, opt-in** | policy + approval tests in `test/security`/`test/trust` | **not exercised**: no Xvfb or GUI here; direct host automation is blocked on Windows/macOS until an isolated handoff exists; Linux desktop control uses approval and capability gates, not a proven tier-2 boundary |
-| **Telegram / Discord / WhatsApp interfaces** | **2 — EXPERIMENTAL** | `test/integrations` 49 pass, mock-only paths | needs your own bot token; nothing is stored for an unconfigured connector |
-| **Cloud control plane & dashboard sync** | **3 — DEFERRED (not shipped)** | `test/cloud` 36 pass for the local licence/enforcement logic; no hosted infrastructure is confirmed | the README says no cloud account is required and no local feature is paywalled — that is enforced by `test/cloud/license.test.ts`. Preview 1 ships **no** hosted service |
+| **Telegram bot** | **2 — EXPERIMENTAL (retained)** | owner reports it works; Telegram/bot suites 83 pass with fixtures | live bot token and Telegram end-to-end not tested here |
+| **Discord / WhatsApp interfaces** | **2 — EXPERIMENTAL (proposed)** | `test/integrations` 49 pass, mock-only paths | needs configured credentials; no live service test here |
+| **Mobile PWA** | **2 — EXPERIMENTAL (retained)** | production build passes; 19 mobile daemon LAN tests pass; owner reports it works | source-build/LAN path only established here: downloaded deb has no PWA files, desktop-to-phone pairing and real-device install unverified |
+| **Cloud control plane & dashboard sync** | **3 — DEFERRED (owner confirmed)** | `test/cloud` 36 pass for the local licence/enforcement logic; no hosted infrastructure is confirmed | the README says no cloud account is required and no local feature is paywalled — that is enforced by `test/cloud/license.test.ts`. Preview 1 ships **no** hosted service |
 | **npm / Homebrew / WinGet / Scoop / Docker channels** | **3 — DEFERRED** | owner decision D4; `channel:check` tracks the 1.0.0 line they serve today | Preview 1 is a GitHub pre-release only |
 | **Archived chats** | **3 — REMOVED** | T03: both session queries filter `archived = 0`, so an archived chat could never be retrieved | the Archive action and its button are withdrawn rather than left as a one-way door |
 

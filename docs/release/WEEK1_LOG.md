@@ -874,3 +874,25 @@ Drift check 2026-11-10: sections 1, 3 and 10 re-read; local work and existing
 G1 authorization only. GitHub Actions status recovered and `38bd12c1` native
 runs are in progress. They are not evidence for the newer transcript commit.
 No merge, publication, or archive performed; conditional G3 remains unsatisfied.
+
+### Owner scope and current-tip CI check
+
+Owner confirms cloud stays out and wants Telegram bot and mobile PWA retained;
+this is not proof of a live bot or phone test. Enterprise satellite and
+Firecracker tiers remain undecided. Telegram and bot suites passed 83/0; mobile
+LAN/companion daemon tests 19/0; mobile npm ci --ignore-scripts and production
+build pass. The downloaded `9e3f703a` Linux deb has no mobile PWA assets, and
+its desktop starts a loopback sidecar. Therefore source-build LAN tests do not
+prove the deb's desktop-to-phone flow; do not advertise it as complete.
+
+CI 43101092638 fails OSV due to rustix 1.1.5 RUSTSEC-2026-0486; reproducible
+locally. Candidate 1.1.6 lock update with registry checksum gives OSV exit 0
+(23 previously policy-filtered advisories remain) and targeted lock tests 3/0.
+No Rust installed; native Cargo --locked build is required. Cross-platform
+43101092729 failed PowerShell cold-start 15s subprocess bound on one negative
+control; later controls passed. Rerun requested without reducing assertions
+or changing timeouts. PR desktop and CI passed on 9e3f703a; full dispatch and
+Windows lifecycle still pending. Detailed evidence T11c/T71a logs.
+
+Drift check: plan sections 1, 3, 10 and ledger re-read; no cloud addition,
+no publish or merge; explicit owner-retained surfaces are being verified.
