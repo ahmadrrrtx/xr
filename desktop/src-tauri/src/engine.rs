@@ -144,6 +144,13 @@ pub fn spawn_sidecar(state: &Arc<EngineState>) {
     cmd.env("XR_HOME", &home);
     // Keychain services are global: a directory alone is not isolation.
     cmd.env("XR_SECRET_NAMESPACE", "desktop");
+    // Browser CORS is limited to this shell's exact native origin and the
+    // app-owned loopback sidecar; the daemon still requires its bearer token.
+    cmd.env("XR_DESKTOP_WEBVIEW_ORIGIN", if cfg!(windows) {
+        "http://tauri.localhost"
+    } else {
+        "tauri://localhost"
+    });
     cmd.arg("serve")
         .arg("--port")
         .arg("0")

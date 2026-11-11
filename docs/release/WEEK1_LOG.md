@@ -896,3 +896,16 @@ Windows lifecycle still pending. Detailed evidence T11c/T71a logs.
 
 Drift check: plan sections 1, 3, 10 and ledger re-read; no cloud addition,
 no publish or merge; explicit owner-retained surfaces are being verified.
+
+### Owner Linux install regression (T14.b / T03.b / T04.b)
+
+Owner installed the 9e3f703a deb and reports engine disconnected and fake UI
+content. Reproduced missing webview CORS and failed authorization preflight in
+its extracted daemon; that is a likely cause, not yet an installed-webview
+proof. Candidate narrow sidecar CORS, real-only Brain recent history, no
+fabricated tool trace fallback, unknown-production-run guard, and stamped app
+version are tested locally. Added a packaged WebDriver webview-to-engine
+handshake, which must pass on actual new Linux/Windows packages. Evidence and
+remaining gaps: `preview1/evidence/T14b-owner-connectivity-and-history.log`.
+Do not claim all fake UI removed; owner has not identified the affected screen.
+No fixed installer, final native proof, owner retest, merge or release yet.

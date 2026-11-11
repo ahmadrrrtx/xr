@@ -13,7 +13,8 @@
  *   launch         the GUI starts and spawns its engine sidecar, whose
  *                  /api/v1/health answers. With --webdriver (Linux/Windows,
  *                  tauri-driver on PATH) a WebDriver session additionally
- *                  proves the webview rendered (title "XR", #root populated).
+ *                  proves the webview rendered and can authenticate to the
+ *                  app-owned sidecar from inside the webview.
  *                  macOS has no WKWebView driver: launch + sidecar health only.
  *                  An explicit application quit must take the sidecar down.
  *                  Closing only the main window intentionally hides it.
@@ -131,6 +132,7 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       }
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
       const port = await waitForEngineHealth(60_000);
+      const webview = await webviewEngineSmoke(wd, sid);
       const acl = await ipcAclSmoke(wd, sid);
       // Session deletion closes a window, but XR intentionally hides it and keeps
       // the engine alive. Request the same explicit quit as the user menu, then
@@ -141,7 +143,7 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       });
       if (scheduled !== "quit scheduled") throw new Error("could not schedule explicit app quit");
       if (!(await engineGone(15_000))) throw new Error("engine sidecar still listening 15 s after explicit application quit (containment)");
-      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${acl}; explicit quit requested and sidecar stopped`;
+      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${webview}; ${acl}; explicit quit requested and sidecar stopped`;
     } finally {
       await wd("DELETE", `/session/${sid}`).catch(() => undefined);
     }
@@ -150,6 +152,33 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
   } finally {
     driver.kill();
   }
+}
+
+/** Prove the packaged webview, not a privileged runner curl, can reach its
+ * app-spawned daemon. Return only statuses/contract; never return the token. */
+export async function webviewEngineSmoke(wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string): Promise<string> {
+  let result: { linked?: boolean; health?: number; meta?: number; contract?: number; error?: string } = {};
+  for (let i = 0; i < 30; i++) {
+    result = await wd("POST", `/session/${sid}/execute/async`, {
+      script: `const done = arguments[arguments.length - 1];
+        (async () => {
+          const l = await window.__TAURI_INTERNALS__.invoke('engine_link');
+          if (!l.reachable || !l.port || !l.token) return {linked:false};
+          const base = 'http://127.0.0.1:' + l.port + '/api/v1';
+          const headers = {Authorization: 'Bearer ' + l.token, Accept: 'application/json'};
+          const h = await fetch(base + '/health', {headers});
+          const m = await fetch(base + '/meta/version', {headers});
+          const v = m.ok ? await m.json() : {};
+          return {linked:true, health:h.status, meta:m.status, contract:v.contractVersion};
+        })().then(done, () => done({error:'webview request failed'}));`,
+      args: [],
+    }) as typeof result;
+    if (result.linked || result.error) break;
+    await sleep(500);
+  }
+  if (result.health !== 200 || result.meta !== 200 || result.contract !== 1)
+    throw new Error(`webview-to-engine handshake failed: ${JSON.stringify(result)}`);
+  return "webview authenticated health + contract handshake passed";
 }
 
 /**
