@@ -46,3 +46,25 @@ Local fake-gh cases ready/delayed/PR-only/other-SHA/missing/duplicate/API error
 and invalid SHA pass; fake PowerShell controls pass. Combined targeted tests
 12/0; full release suite 323/0 before the final PR-only mock strengthening;
 root typecheck, CI policy and ownership pass. Native end-to-end test pending.
+
+Follow-up: Windows run 42917963976 on 3062b855, artifact 13811731189 ZIP
+SHA256 df6371bb9ea2220a9693157ad2b499b462477d54404093cbc44bf6eab56c1dff
+verified against GitHub metadata. Events are saved as
+T60d-windows-3062-events.json: NSIS package PASS; NSIS install FAIL with
+"installer did not provide a valid install directory"; ALL result FAIL.
+The artifact waiter selected exact-commit dispatch 42917971949. No launch,
+sidecar authentication, uninstall or MSI execution was recorded, so those
+phases are NOT RUN, not passes. Job log retrieval still returned HTTP 502.
+
+Tauri CLI pinned in desktop/bun.lock is 2.12.0; the official matching source
+https://raw.githubusercontent.com/tauri-apps/tauri/tauri-cli-v2.12.0/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
+writes the InstallLocation registry value with literal surrounding quotes.
+Our test previously passed this value directly to Test-Path. On PowerShell
+7.5.4 locally, Test-Path of a quoted existing directory returned False while
+the unquoted directory returned True. This is a strong hypothesis consistent
+with the failure, but the actual registry value was not captured in that run.
+The fix removes one balanced enclosing quote pair, rejects malformed/internal
+quotes, retains empty-location fallback and every existing Test-Path, exact
+binary, authenticated sidecar and uninstall assertion. Quote, plain, fallback,
+malformed input and existing negative/auth controls: 13 pass/0 fail. Entire
+release suite: 325 pass/0 fail locally. Native Windows rerun is essential.

@@ -828,3 +828,18 @@ open. The native Windows installer failure and unavailable evidence remain
 separate blockers.
 
 Pre-checkpoint re-read §§1, 3 and 10; strict ledger: **drift-check OK**.
+
+### T60.d — NSIS install-location failure
+
+Recovered and checksum-verified artifact 13811731189. It records NSIS package
+PASS, NSIS install FAIL: “installer did not provide a valid install directory”;
+MSI, app launch/auth and uninstall were not reached. The matching Tauri CLI
+2.12 NSIS template writes the registry InstallLocation with surrounding quotes;
+PowerShell Test-Path rejects such a quoted literal path locally. The actual
+registry value was not captured, so this is a well-supported hypothesis, not
+native proof of root cause. A small helper removes one balanced quote pair,
+rejects malformed/internal quotes, and retains every path/executable/auth and
+uninstall assertion. Local fake controls 13 pass/0 fail; release suite 325/0.
+Native Windows rerun required; no installer pass claimed.
+
+Pre-checkpoint re-read §§1, 3, 10; ledger: **drift-check OK**.

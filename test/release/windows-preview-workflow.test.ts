@@ -24,6 +24,8 @@ describe("Windows Preview evidence is fail closed", () => {
   });
   test("both installers, app-owned authenticated sidecar, uninstall and data are required", () => {
     expect(lifecycle).toContain("$msis.Count -eq 1 -and $nsis.Count -eq 1");
+    expect(lifecycle).toContain("Resolve-InstallerLocation ([string]$entry.InstallLocation) $uninstaller");
+    expect(lifecycle).toContain("Test-Path -LiteralPath $dir -PathType Container");
     expect(lifecycle).toContain("pre-existing XR registration");
     expect(lifecycle).toContain("ParentProcessId = $appId");
     expect(lifecycle).toContain("$_.ExecutablePath -ieq $enginePath");

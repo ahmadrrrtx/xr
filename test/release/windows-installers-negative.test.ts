@@ -35,3 +35,11 @@ test.skipIf(!pwsh)("app-owned sidecar auth orchestration rejects four fake fault
   expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
   expect(result.stdout).toContain("5 PASS");
 }, 25_000);
+
+test.skipIf(!pwsh)("installer location normalization handles quotes and rejects malformed values", () => {
+  const result = spawnSync(pwsh!, ["-NoProfile", "-File", resolve("test/release/windows-install-path-controls.ps1")], {
+    encoding: "utf8", timeout: 15_000,
+  });
+  expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: "" });
+  expect(result.stdout).toContain("8 PASS");
+}, 25_000);

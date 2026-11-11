@@ -6,6 +6,7 @@ param(
   [Parameter(Mandatory=$true)][string]$EvidenceDir
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'windows-install-path.ps1')
 if ($env:RUNNER_OS -ne 'Windows' -or $env:CI -ne 'true' -or $env:GITHUB_ACTIONS -ne 'true') { throw 'Windows GitHub Actions runner required; refusing to modify this machine' }
 New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
 $EvidenceDir = (Resolve-Path -LiteralPath $EvidenceDir).Path
@@ -120,8 +121,7 @@ try {
         $uninstaller = if ($m.Groups[1].Success) { $m.Groups[1].Value } else { $m.Groups[2].Value }
         Assert (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'registered NSIS uninstaller does not exist'
       }
-      $dir = [string]$entry.InstallLocation
-      if (!$dir -and $uninstaller) { $dir = Split-Path -Parent $uninstaller }
+      $dir = Resolve-InstallerLocation ([string]$entry.InstallLocation) $uninstaller
       Assert ($dir -and (Test-Path -LiteralPath $dir -PathType Container)) 'installer did not provide a valid install directory'
       $engines = @(Get-ChildItem -LiteralPath $dir -File -Filter 'xr-engine*.exe')
       $apps = @(Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.Name -match '^xr-desktop\.exe$' })
