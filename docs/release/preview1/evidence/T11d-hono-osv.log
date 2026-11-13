@@ -1,0 +1,14 @@
+T11.d — supply-chain locked Hono advisory remediation
+
+CI supply-chain 43396119196 at 238d3247 failed OSV. Reproduced with the
+checksum-pinned scanner v2.4.0: cloud/bun.lock hono 4.13.13 is affected by
+GHSA-3gg2-335m-rxc6, GHSA-46wx-v44x-9hh2, GHSA-4h7h-rv7c-7m2v,
+GHSA-4m76-xfj5-7975 and GHSA-h7mg-cq63-vhpq (each fixed in 4.13.16).
+Updated that independent deployable's declared range and lock to 4.13.18.
+This is dependency hygiene only: cloud remains outside the preview scope.
+
+Local frozen --ignore-scripts cloud install and cloud typecheck PASS. Full
+recursive OSV scan PASS with the same existing 23 policy-filtered findings;
+those filters remain, so exit zero does not mean no underlying advisories.
+A lockfile regression asserts the selected version is at least 4.13.16.
+The exact-commit CI supply-chain gate remains pending; no waiver was added.
