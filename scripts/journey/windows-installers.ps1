@@ -49,10 +49,26 @@ function MsiProductCode([string]$path) {
   Assert ($id -match '^\{[0-9A-Fa-f-]{36}\}$') 'MSI ProductCode malformed'
   return $id
 }
-function WaitForAppEngine([int]$appId, [string]$desktopHome, [string]$enginePath) {
+function WaitForAppEngine([System.Diagnostics.Process]$app, [string]$desktopHome, [string]$enginePath) {
   $end = (Get-Date).AddSeconds(90)
   do {
-    if (-not (Get-Process -Id $appId -ErrorAction SilentlyContinue)) { throw 'installed desktop process exited before engine was ready' }
+    $app.Refresh()
+    if ($app.HasExited) {
+      # Exit code and selected OS fault metadata are safe to publish; never
+      # upload unfiltered stdout, stderr, environment, token files or logs.
+      $exitCode = ('0x{0:X8}' -f ([uint32]([int64]$app.ExitCode -band 0xFFFFFFFFL)))
+      Start-Sleep -Seconds 2 # allow Windows Application Error to be recorded
+      $faults = @(Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match '(?i)xr-desktop\.exe' } | Select-Object -First 1)
+      $fault = 'no matching application-error event'
+      if ($faults.Count) {
+        $message = [string]$faults[0].Message
+        $exception = [regex]::Match($message, '(?i)exception code:\s*(0x[0-9a-f]+)')
+        $module = [regex]::Match($message, '(?i)faulting module name:\s*([a-z0-9_.-]+)')
+        $fault = "application-error event present; exception=$($exception.Groups[1].Value); module=$($module.Groups[1].Value)"
+      }
+      throw "installed desktop process exited before engine was ready; exit=$exitCode; $fault"
+    }
+    $appId = $app.Id
     $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $appId" -ErrorAction SilentlyContinue | Where-Object { $_.ExecutablePath -and $_.ExecutablePath -ieq $enginePath })
     foreach ($child in $children) {
       $listeners = @(Get-NetTCPConnection -OwningProcess $child.ProcessId -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -eq '127.0.0.1' })
@@ -130,7 +146,7 @@ try {
       Record $kind $phase 'PASS' 'registered installer, desktop executable and sidecar found'
       $phase = 'launch-auth'
       $app = Start-Process -FilePath $appPath -PassThru
-      $childId = WaitForAppEngine $app.Id $desktopHome $enginePath
+      $childId = WaitForAppEngine $app $desktopHome $enginePath
       Record $kind $phase 'PASS' 'installed app-owned sidecar: health 200; anonymous and invalid bearer 401; valid bearer 200; expected version'
       Screenshot $kind
       $phase = 'shutdown'

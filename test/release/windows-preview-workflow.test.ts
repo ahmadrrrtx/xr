@@ -53,3 +53,10 @@ test("MSI COM query suppresses non-value output before returning ProductCode", (
   expect(lifecycle).toContain('$entry.PSChildName -ieq $productCode');
   expect(lifecycle).toContain("Assert ($id -match '^\\{[0-9A-Fa-f-]{36}\\}$')");
 });
+test("early desktop exit records bounded safe diagnostics and remains a hard failure", () => {
+  expect(lifecycle).toContain("if ($app.HasExited)");
+  expect(lifecycle).toContain("$app.ExitCode");
+  expect(lifecycle).toContain("LogName='Application'; Id=1000");
+  expect(lifecycle).toContain("throw \"installed desktop process exited before engine was ready; exit=$exitCode; $fault\"");
+  expect(lifecycle).not.toMatch(/Get-Content[^\n]*daemon[\\/]token[^\n]*Record/);
+});
