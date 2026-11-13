@@ -12,6 +12,7 @@
 
 import type { z } from "zod/v4";
 import { CLOUD_CONTRACT } from "./contract-cloud.ts";
+import { MODELS_CONTRACT } from "./contract-models.ts";
 import {
   ApiError,
   BusinessApprovalDecisionRequest,
@@ -30,6 +31,8 @@ import {
   MemorySearchQuery,
   ModelsSelectRequest,
   ModelsTestRequest,
+  ModelsPullRequest,
+  CustomProviderAddRequest,
   ObjectResponse,
   OkResponse,
   ProviderSetRequest,
@@ -403,47 +406,8 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "capabilities.quarantine": { summary: "Quarantine a capability (fail-closed).", tag: "capabilities", stability: "experimental", request: CapabilityIdRequest },
   "capabilities.rollback": { summary: "Rollback a capability to a previous version.", tag: "capabilities", stability: "experimental", request: CapabilityIdRequest },
 
-  // ── providers / workspaces / models ───────────────────────────────────────
-  "providers.list": { summary: "Provider status (keys present, health, defaults).", tag: "providers", stability: "stable" },
-  "providers.set": {
-    summary: "Select default provider/model (+ optional fallback).",
-    tag: "providers",
-    stability: "stable",
-    request: ProviderSetRequest,
-    response: OkResponse,
-  },
-  "providers.route": { summary: "Show the explainable routing decision for a task profile.", tag: "providers", stability: "stable" },
-  "providers.slo": { summary: "Routing SLO measurements (selection-latency compliance).", tag: "providers", stability: "stable" },
-  "providers.catalog": { summary: "Full provider/model catalog with capabilities.", tag: "providers", stability: "stable" },
-  "providers.capabilities": { summary: "Provider capabilities (supported features per provider). Phase 04 gateway.", tag: "providers", stability: "stable" },
-  "providers.fallback": { summary: "Resolved fallback chain (primary → fallbackProvider → local). Phase 04 gateway.", tag: "providers", stability: "stable" },
-  "workspaces.list": { summary: "List workspaces and the active one.", tag: "workspaces", stability: "stable" },
-  "workspaces.create": {
-    summary: "Create a workspace.",
-    tag: "workspaces",
-    stability: "stable",
-    request: WorkspaceCreateRequest,
-  },
-  "workspaces.switch": {
-    summary: "Switch the active workspace.",
-    tag: "workspaces",
-    stability: "stable",
-    request: WorkspaceSwitchRequest,
-    response: OkResponse,
-  },
-  "models.list": { summary: "Local model runtimes: detection status and installed models.", tag: "models", stability: "stable" },
-  "models.select": {
-    summary: "Select a local runtime+model and routing posture.",
-    tag: "models",
-    stability: "stable",
-    request: ModelsSelectRequest,
-  },
-  "models.test": {
-    summary: "Smoke-test a local runtime+model round-trip.",
-    tag: "models",
-    stability: "stable",
-    request: ModelsTestRequest,
-  },
+  // ── providers / workspaces / models → contract-models.ts (XR-REL-02/06) ──
+  ...MODELS_CONTRACT,
 
   // ── skills / plugins (sub-APIs) ───────────────────────────────────────────
   "skills.api": {

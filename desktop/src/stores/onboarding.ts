@@ -9,7 +9,13 @@ import { create } from 'zustand';
 import { toast } from 'sonner';
 import { prepareModelSetup, type SetupChoice } from '@/engine/setup';
 
-import type { GpuInfo, MicInfo, OllamaInfo, SystemInfo } from '@/lib/detect';
+import type {
+  DetectionProbe,
+  GpuInfo,
+  MicInfo,
+  OllamaInfo,
+  SystemInfo,
+} from '@/lib/detect';
 import { applyTheme, type ThemeId } from '@/stores/theme';
 import {
   purgeLegacyCredentialSettings,
@@ -22,6 +28,55 @@ const ONBOARDED_AT_KEY = 'xr.onboarding.at';
 const BUDGET_KEY = 'xr.budget.default';
 const MODEL_KEY = 'xr.model.default';
 const VOICE_KEY = 'xr.voice';
+
+/*
+ * S-2 · the wizard's voice choice has to reach the engine.
+ *
+ * `xr.voice` is a desktop-local key. The engine keeps its own settings behind
+ * /voice/settings, and THAT is what synthesis reads — so writing only the local
+ * key let onboarding "configure" a voice that never spoke a word, with the
+ * Voice screen confidently reporting it as the current voice afterwards.
+ *
+ * This pushes the choice to the engine and reports the two states the wizard
+ * has to be honest about: the engine was unreachable (choice kept, applied on
+ * first connect) or the chosen model is not on disk yet (`voice-not-installed`).
+ * Neither blocks onboarding — a mute voice must not cost the user a working
+ * agent — but both are announced instead of silently dropped.
+ */
+async function applyOnboardingVoice(s: {
+  ttsVoice: string;
+  micSelected: string | null;
+  noiseSuppression: boolean;
+  wakeWordEnabled: boolean;
+}): Promise<void> {
+  try {
+    const [{ EngineHttpError }, { voiceApi }, { isEngineUsable, useEngineStore }] = await Promise.all([
+      import('@/engine/transport'),
+      import('@/voice/voiceApi'),
+      import('@/stores/engineStore'),
+    ]);
+    type HttpError = InstanceType<typeof EngineHttpError>;
+    if (!isEngineUsable(useEngineStore.getState().status)) {
+      toast.info('Voice saved — it will be applied when the engine starts.');
+      return;
+    }
+    await voiceApi.settingsSet({ ttsVoice: s.ttsVoice, desktop: { micDeviceId: s.micSelected } });
+    // The engine accepts the id but cannot speak it until the model is on disk.
+    // /voice/test-tts is the one endpoint that says so, with the byte size.
+    try {
+      await voiceApi.testTts('Ready when you are.', s.ttsVoice);
+    } catch (err) {
+      if (!(err instanceof EngineHttpError) || err.body?.error !== 'voice-not-installed') return;
+      const bytes = Number((err as HttpError).body?.bytes ?? 0);
+      toast.info(
+        `Voice saved. Its model is not downloaded yet (${Math.round(bytes / 1e6)} MB) — ` +
+          'Settings → Voice → Download starts it.',
+      );
+    }
+  } catch {
+    /* the engine is the authority; a failed push is retried by the Voice screen */
+  }
+}
 const INTEGRATIONS_KEY = 'xr.integrations.desired';
 
 export type ModelChoice = SetupChoice;
@@ -40,6 +95,12 @@ interface OnboardingState {
   gpu: GpuInfo | null;
   mics: MicInfo | null;
   ollama: OllamaInfo | null;
+  /**
+   * XR-REL-01 — why a probe returned nothing. `null` value = the probe has not
+   * resolved yet; a key present = it resolved to "unknown" and the UI MUST say
+   * so instead of rendering a number. There is no fabricated fallback.
+   */
+  detectFailures: Partial<Record<DetectionProbe, string>>;
   checking: boolean;
   // selections
   modelChoice: ModelChoice;
@@ -63,7 +124,7 @@ interface OnboardingState {
     d: Partial<
       Pick<
         OnboardingState,
-        'systemInfo' | 'gpu' | 'mics' | 'ollama' | 'checking'
+        'systemInfo' | 'gpu' | 'mics' | 'ollama' | 'checking' | 'detectFailures'
       >
     >
   ) => void;
@@ -114,6 +175,7 @@ const initial = {
   gpu: null,
   mics: null,
   ollama: null,
+  detectFailures: {},
   checking: true,
   modelChoice: { source: 'skip' } as ModelChoice,
   micSelected: null,
@@ -227,6 +289,12 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
       wakeWord: s.wakeWordEnabled,
       noiseSuppression: s.noiseSuppression,
     });
+    // S-2: the engine's voice settings are the ones that speak. The wizard used
+    // to write `xr.voice` — a key no other surface reads — so a chosen voice
+    // could finish onboarding without ever reaching the engine, and nothing
+    // noticed. Resolve it to the engine now. The engine is asked last and
+    // hard-fails nothing: the wizard must not dead-end on a voice.
+    await applyOnboardingVoice(s);
     await writeSettingJSON(INTEGRATIONS_KEY, s.desiredIntegrations);
     applyTheme(s.theme);
     // Completion is after the engine's acknowledgement, never after a swallowed

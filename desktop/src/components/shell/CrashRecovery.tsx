@@ -250,7 +250,9 @@ export function CrashRecovery({ info, onResolve }: CrashRecoveryProps) {
                       </Button>
                     ) : (
                       <span className="text-text-tertiary text-xs">
-                        You can attach to a running engine later in Settings.
+                        You can switch back to XR's own engine any time in
+                        Settings → Diagnostics → "Use the local engine". This
+                        choice applies to this launch only.
                       </span>
                     )}
                   </div>

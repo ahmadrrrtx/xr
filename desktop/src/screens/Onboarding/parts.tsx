@@ -96,7 +96,7 @@ export function CheckRow({
 }: {
   label: string;
   value: string | null;
-  state: 'checking' | 'ok' | 'warn';
+  state: 'checking' | 'ok' | 'warn' | 'unknown';
   hint?: string;
 }) {
   return (
@@ -107,8 +107,14 @@ export function CheckRow({
       className="border-border-subtle flex items-center gap-3 border-b py-2.5 last:border-b-0"
     >
       <span className="text-text-secondary w-40 shrink-0 text-[13px]">{label}</span>
-      <span className="text-text-primary min-w-0 flex-1 truncate text-[13px] font-medium">
-        {value ?? 'Detecting…'}
+      <span
+        className={`min-w-0 flex-1 truncate text-[13px] font-medium ${
+          state === 'unknown' && value === null
+            ? 'text-text-tertiary italic'
+            : 'text-text-primary'
+        }`}
+      >
+        {value ?? (state === 'unknown' ? 'Could not detect' : 'Detecting…')}
       </span>
       {state === 'checking' && (
         <span
@@ -127,6 +133,15 @@ export function CheckRow({
           className="text-warning text-[13px]"
         >
           ⚠
+        </span>
+      )}
+      {state === 'unknown' && (
+        <span
+          aria-label={`${label} could not be detected`}
+          title={hint ?? 'This check could not run.'}
+          className="text-text-tertiary text-[13px]"
+        >
+          ?
         </span>
       )}
     </motion.div>

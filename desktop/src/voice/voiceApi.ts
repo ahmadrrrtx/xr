@@ -181,11 +181,14 @@ export const voiceApi = {
   cancelDownload: () => enginePost<{ ok: boolean }>('/voice/cancel-download', {}),
   clearModels: () => enginePost<{ ok: boolean; removed: number }>('/voice/clear-models', {}),
   testTts: (text: string, voice?: string, speed?: number) =>
-    enginePost<{ ok: boolean; wav: string; sampleRate: number; engine: string }>('/voice/test-tts', {
-      text,
-      voice,
-      speed,
-    }),
+    enginePost<{ ok: boolean; wav?: string; sampleRate?: number; engine: string; detail?: string }>(
+      '/voice/test-tts',
+      {
+        text,
+        voice,
+        speed,
+      },
+    ),
   transcribe: (pcm: string) =>
     enginePost<{ ok: boolean; text: string; backend: string; detail: string; ms: number }>(
       '/voice/transcribe',

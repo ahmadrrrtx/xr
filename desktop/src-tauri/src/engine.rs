@@ -302,6 +302,23 @@ pub fn stop_sidecar(state: &EngineState, grace: Duration) -> bool {
 /// token: the link then behaves exactly like a spawned one for the webview,
 /// while `engine_link.mode` reports "external" so nothing pretends the shell
 /// owns a process it does not.
+/// Drop an external attachment (XR-REL-04). The token stays in memory only, so
+/// "detach" means: forget the link and let the caller spawn our own sidecar.
+pub fn detach_external(state: &EngineState) {
+    if !*lock(&state.external) {
+        return;
+    }
+    *lock(&state.port) = None;
+    *lock(&state.token) = None;
+    *lock(&state.external) = false;
+    *lock(&state.note) = None;
+    *lock(&state.containment) = None;
+    if let Ok(mut cache) = state.probe_cache.lock() {
+        *cache = ProbeCache::default();
+    }
+    *lock(&state.generation) += 1;
+}
+
 pub fn attach_external(state: &EngineState, port: u16, token: String) {
     *lock(&state.port) = Some(port);
     *lock(&state.token) = Some(token);
@@ -411,12 +428,27 @@ pub fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
 /// sync commands run on the main thread, which is where the Linux
 /// parent-death signal must be armed from.
 #[tauri::command]
-pub fn engine_restart(state: State<'_, Arc<EngineState>>) -> Result<serde_json::Value, String> {
+pub fn engine_restart(
+    app: tauri::AppHandle,
+    state: State<'_, Arc<EngineState>>,
+) -> Result<serde_json::Value, String> {
     if sidecar_path().is_none() {
         return Err(
             "no sidecar in this build — in development start the engine with `bun run engine` (desktop/)"
                 .into(),
         );
+    }
+    // XR-REL-04 — an explicit restart is the user asking for a LOCAL engine.
+    // Clear the "started without the local engine" preference, otherwise the
+    // next launch would honour it again and report no engine. This is the
+    // recovery path Settings → Engine relies on, so it must not depend on the
+    // user finding a second, separate toggle.
+    if let Some(store) = crate::commands::settings::settings(&app) {
+        let _ = store.delete("xr.engine.withoutLocal");
+        let _ = store.save();
+    }
+    if *lock(&state.external) {
+        detach_external(state.inner());
     }
     let was_running = stop_sidecar(state.inner(), Duration::from_millis(1_000));
     spawn_sidecar(state.inner());
@@ -441,6 +473,47 @@ pub fn engine_logs_tail(state: State<'_, Arc<EngineState>>, lines: Option<usize>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// XR-REL-04 — detaching must forget the external link (its token lives in
+    /// memory only) and leave a state the caller can re-spawn into.
+    #[test]
+    fn detach_external_clears_the_link_and_its_token() {
+        let state = EngineState::default();
+        attach_external(&state, 3141, "external-token".to_string());
+        assert!(*lock(&state.external));
+        assert_eq!(*lock(&state.port), Some(3141));
+        assert_eq!(lock(&state.token).as_deref(), Some("external-token"));
+        let generation_before = *lock(&state.generation);
+
+        detach_external(&state);
+
+        assert!(!*lock(&state.external), "external flag must clear");
+        assert_eq!(*lock(&state.port), None, "port must clear");
+        assert_eq!(*lock(&state.token), None, "the external token must not linger");
+        // A bump is what makes pollers re-handshake instead of trusting the
+        // link they had cached. Assert the DELTA — attach does not bump.
+        assert_eq!(
+            *lock(&state.generation),
+            generation_before + 1,
+            "generation must bump so pollers re-handshake"
+        );
+    }
+
+    /// Detaching an engine we never attached to is a no-op, not a reset of a
+    /// live sidecar link.
+    #[test]
+    fn detach_external_is_a_noop_without_an_attachment() {
+        let state = EngineState::default();
+        *lock(&state.port) = Some(40000);
+        *lock(&state.token) = Some("sidecar-token".to_string());
+        let before = *lock(&state.generation);
+
+        detach_external(&state);
+
+        assert_eq!(*lock(&state.port), Some(40000));
+        assert_eq!(lock(&state.token).as_deref(), Some("sidecar-token"));
+        assert_eq!(*lock(&state.generation), before);
+    }
 
     #[test]
     fn a_fresh_state_reports_nothing_spawned_and_no_logs() {

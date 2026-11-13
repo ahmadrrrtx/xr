@@ -117,7 +117,7 @@
     {
       "id": "registry-expired",
       "model": "openai::gpt-6-luna",
-      "now": "2027-01-25T00:00:00Z",
+      "now": "2027-02-12T00:00:00Z",
       "input": 2000,
       "output": 800,
       "usd": null

@@ -125,6 +125,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/repo-map/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/research.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/research/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/scripts/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/security.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/security/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/services/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -211,6 +212,8 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/measure-baseline.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/measure-trust-perf.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/memory-recall-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/mock-data-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/model-facts-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/mutate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/native-budget-check/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/npm-ghost-versions.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
