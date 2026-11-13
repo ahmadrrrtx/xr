@@ -136,7 +136,10 @@ describe('XR-REL-07 · model-facts gate', () => {
   });
 
   test('the repository register itself passes its own gate today', async () => {
-    const root = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
+    const { fileURLToPath } = await import('node:url');
+    // fileURLToPath, not .pathname: the latter yields "/D:/a/..." on Windows and
+    // leaves percent-escapes in place — this test must run on all three lanes.
+    const root = fileURLToPath(new URL('../..', import.meta.url));
     const report = await lintRepositoryModelFacts(root);
     // If this fails the build is right to fail: re-verify the register.
     expect(report.violations).toEqual([]);

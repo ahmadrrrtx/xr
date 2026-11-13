@@ -193,7 +193,10 @@ export function lintModelFacts(
 /** Read + lint the repository's own register against its own presets. */
 export async function lintRepositoryModelFacts(root: string): Promise<ModelFactsReport> {
   const facts = JSON.parse(readFileSync(join(root, FILE), 'utf8')) as ModelFactsFile;
-  const { PRESETS } = await import(join(root, 'src/providers/presets.ts'));
+  // A bare Windows drive path is not a valid dynamic-import specifier; a file
+  // URL is, and works unchanged on POSIX.
+  const { pathToFileURL } = await import('node:url');
+  const { PRESETS } = await import(pathToFileURL(join(root, 'src/providers/presets.ts')).href);
   const presets = Object.values(PRESETS as Record<string, { id: string; knownModels?: string[] }>);
   return lintModelFacts(facts, presets, Date.now(), FILE, root);
 }
