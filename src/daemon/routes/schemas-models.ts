@@ -15,25 +15,12 @@ export const ModelsSelectRequest = z.looseObject({
   routing: LocalRouting.optional(),
 });
 
-export const ModelsTestRequest = z.looseObject({
-  runtime: z.string().optional(),
-  model: z.string().optional(),
-});
+export const ModelsTestRequest = z.looseObject({ runtime: z.string().optional(), model: z.string().optional() });
 
-/**
- * XR-REL-02 — `model` is required: this endpoint downloads bytes, so it may
- * never infer a target from config the way `models.test` does. SSE response.
- */
-export const ModelsPullRequest = z.looseObject({
-  runtime: z.string().optional(),
-  model: z.string().min(1),
-});
+/** XR-REL-02 — `model` is required: this downloads bytes, so it may not infer a target. */
+export const ModelsPullRequest = z.looseObject({ runtime: z.string().optional(), model: z.string().min(1) });
 
-/**
- * XR-REL-06 — "any OpenAI-compatible API" over the daemon API (the engine could
- * already hold these via `xr providers add`, but had no route). `id` is derived
- * by the engine when omitted; the URL is SSRF-guarded before anything is saved.
- */
+/** XR-REL-06 — `id` is derived when omitted; the URL is SSRF-guarded before saving. */
 export const CustomProviderAddRequest = z.looseObject({
   id: z
     .string()
@@ -52,6 +39,4 @@ export const CustomProviderAddRequest = z.looseObject({
   headers: z.record(z.string(), z.string()).optional(),
 });
 
-export const CustomProviderRemoveRequest = z.looseObject({
-  id: z.string().min(1).max(64),
-});
+export const CustomProviderRemoveRequest = z.looseObject({ id: z.string().min(1).max(64) });

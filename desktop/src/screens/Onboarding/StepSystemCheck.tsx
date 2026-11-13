@@ -46,15 +46,6 @@ export function StepSystemCheck() {
     const set = (k: string, s: RowState) =>
       !cancelled && setRows((r) => ({ ...r, [k]: s }));
 
-    setRows({
-      os: 'checking',
-      cpu: 'checking',
-      memory: 'checking',
-      gpu: 'checking',
-      mic: 'checking',
-      ollama: 'checking',
-    });
-
     (async () => {
       // Kick everything off in parallel; render staggered as results land.
       const sysP = probeDetection('system', detectSystem).then((r) => {
@@ -229,7 +220,16 @@ export function StepSystemCheck() {
           </p>
           <button
             type="button"
-            onClick={() => setAttempt((n) => n + 1)}
+            onClick={() => {
+              // Reset here, not in the effect: an effect must not setState
+              // synchronously (react-hooks/set-state-in-effect).
+              setRows({
+                os: 'checking', cpu: 'checking', memory: 'checking',
+                gpu: 'checking', mic: 'checking', ollama: 'checking',
+              });
+              setMicDenied(false);
+              setAttempt((n) => n + 1);
+            }}
             className="text-accent hover:text-accent-hover mt-2 text-[12.5px] font-medium"
           >
             Retry detection

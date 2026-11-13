@@ -9,7 +9,8 @@
 import type { ApiOperationMeta } from "./contract.ts";
 import {
   ModelsPullRequest, ModelsSelectRequest, ModelsTestRequest, CustomProviderAddRequest,
-  ProviderSetRequest, WorkspaceCreateRequest, WorkspaceSwitchRequest, OkResponse,
+  CustomProviderRemoveRequest, ProviderSetRequest, WorkspaceCreateRequest,
+  WorkspaceSwitchRequest, OkResponse,
 } from "./schemas.ts";
 
 export const MODELS_CONTRACT: Record<string, ApiOperationMeta> = {
@@ -50,11 +51,20 @@ export const MODELS_CONTRACT: Record<string, ApiOperationMeta> = {
     tag: "providers",
     stability: "stable",
   },
-  "providers.custom.add": {
-    summary:
-      "Add or replace a custom OpenAI-compatible endpoint (any base URL the SSRF guard allows).",
+  "providers.custom.list": {
+    summary: "List custom OpenAI-compatible endpoints (env-var names only).",
     tag: "providers",
-    // New in 1.1.1: "any OpenAI-compatible API", reachable from the desktop.
+    stability: "experimental",
+  },
+  "providers.custom.remove": {
+    summary: "Remove a custom endpoint (its stored secret is retained).",
+    tag: "providers",
+    stability: "experimental",
+    request: CustomProviderRemoveRequest,
+  },
+  "providers.custom.add": {
+    summary: "Add or replace a custom OpenAI-compatible endpoint (SSRF-guarded).",
+    tag: "providers",
     stability: "experimental",
     request: CustomProviderAddRequest,
   },
@@ -94,10 +104,8 @@ export const MODELS_CONTRACT: Record<string, ApiOperationMeta> = {
     request: ModelsTestRequest,
   },
   "models.pull": {
-    summary:
-      "Pull a local model through the runtime, streaming its own byte-level progress (SSE).",
+    summary: "Pull a local model, streaming the runtime's own byte progress (SSE).",
     tag: "models",
-    // New in 1.1.1: the download step needs a real pull. Additive.
     stability: "experimental",
     request: ModelsPullRequest,
   },

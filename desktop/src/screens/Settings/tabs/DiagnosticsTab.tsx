@@ -102,7 +102,7 @@ export function DiagnosticsTab() {
    * report "engine not connected" on every launch with no control to fix it.
    * This detaches (dropping the external link) and spawns our own sidecar now.
    */
-  const useLocalEngine = async (): Promise<void> => {
+  const switchToLocalEngine = async (): Promise<void> => {
     setDetaching(true);
     try {
       const info = await crashDetachExternal();
@@ -194,7 +194,7 @@ export function DiagnosticsTab() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void useLocalEngine()}
+              onClick={() => void switchToLocalEngine()}
               disabled={detaching || restarting}
               data-testid="diag-engine-use-local"
             >
