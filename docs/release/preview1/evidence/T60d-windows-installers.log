@@ -90,3 +90,12 @@ Execute() call. Suppressing that method output with [void] keeps the strict
 GUID shape and exact registry-vs-package assertion. Candidate is NOT a native
 pass until the full lifecycle re-runs successfully, including MSI launch,
 authentication, shutdown, uninstall and sentinel retention.
+
+Historical diagnostic retest: 43398319038, job 131794611940, artifact
+14023208751, PASS using the original 88d artifact and corrected comparison.
+NSIS and MSI each installed, launched an app-owned sidecar that rejected
+anonymous/invalid bearer and accepted the valid bearer, shut down and
+uninstalled; isolated home sentinel survived. Full event JSON is in
+T60d-windows-88d-fixed-events.json. This is an isolated historical-artifact
+reproduction, not final-tip evidence or a real user installation. The
+exact-tip installer workflow remains required.
