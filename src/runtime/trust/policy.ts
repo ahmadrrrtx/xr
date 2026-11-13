@@ -62,7 +62,7 @@ export function tier2Remediation(platform: NodeJS.Platform): string {
     return "macOS: high-risk actions (shell commands) need an isolated environment and will not run in-process. Start Docker Desktop or Podman, or opt in to the experimental Seatbelt sandbox with XR_OS_SANDBOX=experimental (not yet hardware-verified).";
   }
   if (platform === "win32") {
-    return "Windows: high-risk actions (shell commands) need an isolated environment and will not run in-process. Start Docker Desktop or Podman, or opt in to the experimental AppContainer sandbox with XR_OS_SANDBOX=experimental (x64; not yet hardware-verified).";
+    return "Windows: high-risk actions (shell commands) need an isolated environment and will not run in-process. Start Docker Desktop or Podman. The experimental Windows AppContainer backend is currently disabled pending per-execution SID/ACL verification.";
   }
   return "Install bubblewrap (e.g. `sudo apt install bubblewrap`) or allow unprivileged user namespaces, or install a container runtime, so high-risk actions can run isolated; high-risk work will not run in-process.";
 }

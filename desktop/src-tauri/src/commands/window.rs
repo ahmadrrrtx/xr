@@ -1,8 +1,7 @@
 /*
  * Window control commands for the frameless main window.
  *
- * App-defined commands need no capability grants, so the frontend can drive
- * the custom titlebar without broad `core:window:*` permissions.
+ * App-defined commands are granted per window by the generated IPC ACL.
  */
 use tauri::{AppHandle, Manager, Runtime};
 
@@ -34,6 +33,13 @@ pub async fn close_window<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
         window.close().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Explicit user quit, unlike `close_window`, which hides the main window.
+/// `app.exit` follows the same shutdown path as the native tray Quit action.
+#[tauri::command]
+pub fn quit_app<R: Runtime>(app: AppHandle<R>) {
+    app.exit(0);
 }
 
 /// Host OS of the running shell ("macos" | "windows" | "linux" | …).

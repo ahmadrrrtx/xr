@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 
 import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
-import { demoRunIsReal } from '@/brain/demo';
 import { useRunsStore } from '@/stores/runsStore';
 
 import { GRID, ROW_HEIGHT, TableHeader } from './RunsTable';
@@ -113,20 +112,19 @@ export function EmptyFresh() {
                 data-testid="runs-demo"
                 onClick={() => {
                   const id = useRunsStore.getState().startDemoRun();
-                  toast(demoRunIsReal() ? 'Run started' : 'Demo run started', {
-                    description: demoRunIsReal()
-                      ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
-                      : 'No model configured — this is a canned trace. Watch it live here, or open it.',
-                    action: {
-                      label: 'View trace',
-                      onClick: () => navigate(`/brain/${id}`),
-                    },
+                  if (!id) {
+                    toast.error('Connect the engine and configure a provider to start a run.');
+                    return;
+                  }
+                  toast('Run started', {
+                    description: 'A real agent turn on the engine. Watch it live here, or open the trace.',
+                    action: { label: 'View trace', onClick: () => navigate(`/brain/${id}`) },
                   });
                 }}
                 className="border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-raised flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[13px] transition-colors"
               >
                 <Play className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-                Start a demo run
+                Start a run
               </button>
             </>
           }

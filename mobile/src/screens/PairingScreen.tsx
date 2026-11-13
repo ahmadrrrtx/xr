@@ -86,7 +86,7 @@ export function PairingScreen({ reason }: { reason?: string }) {
         ...(subscription ? { pushSubscription: subscription } : {}),
       });
 
-      // Only after the user has compared and confirmed do we pin the cert.
+      // Store the reported value for change detection; this is not TLS pinning.
       if (fp) await writePin(window.location.host, fp);
       else {
         const offered = await fetchFingerprint();
@@ -117,11 +117,11 @@ export function PairingScreen({ reason }: { reason?: string }) {
       <Centered>
         <ShieldAlert size={30} strokeWidth={1.4} style={{ color: 'var(--danger)' }} aria-hidden />
         <h1 className="mt-3 text-[20px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-          Unrecognised XR certificate
+          XR-reported fingerprint changed
         </h1>
         <p className="mt-2 max-w-[310px] text-[14px] leading-[1.5]" style={{ color: 'var(--text-secondary)' }}>
-          This computer is presenting a different certificate than the one you paired with. That can
-          mean XR was reinstalled — or that someone is impersonating it on your network.
+          The server reports a different fingerprint. It may have changed or the server may be
+          impersonated. This app cannot verify the actual TLS certificate.
         </p>
         <Fingerprint value={fingerprint} />
         <div className="mt-5 flex w-full gap-2">
@@ -129,7 +129,7 @@ export function PairingScreen({ reason }: { reason?: string }) {
             type="button"
             onClick={async () => {
               await clearPin();
-              markUnpaired('Certificate not recognised');
+              markUnpaired('Reported fingerprint changed');
               setStage('scan');
             }}
             className="tap flex-1 rounded-[12px] text-[15px] font-medium"
@@ -147,7 +147,7 @@ export function PairingScreen({ reason }: { reason?: string }) {
             className="tap flex-1 rounded-[12px] text-[15px] font-semibold"
             style={{ background: 'var(--accent)', color: 'var(--bg-void)' }}
           >
-            Trust anyway
+            Continue after verifying
           </button>
         </div>
       </Centered>
@@ -163,7 +163,8 @@ export function PairingScreen({ reason }: { reason?: string }) {
           Pair with your XR desktop
         </h1>
         <p className="mt-1.5 max-w-[320px] text-[14px] leading-[1.5]" style={{ color: 'var(--text-secondary)' }}>
-          Compare this fingerprint with the one on your desktop. They must match.
+          This value is reported by the server and does not verify its TLS certificate.
+          Independently verify the connection before entering a pairing code.
         </p>
         <Fingerprint value={fingerprint} />
         {error ? (
@@ -179,7 +180,7 @@ export function PairingScreen({ reason }: { reason?: string }) {
             className="tap w-full rounded-[12px] text-[16px] font-semibold disabled:opacity-60"
             style={{ background: 'var(--accent)', color: 'var(--bg-void)' }}
           >
-            {busy ? 'Pairing…' : 'They match — Pair'}
+            {busy ? 'Pairing…' : 'Continue pairing'}
           </button>
           <button
             type="button"
@@ -320,8 +321,8 @@ export function PairingScreen({ reason }: { reason?: string }) {
       </div>
 
       <p className="mt-6 max-w-[320px] text-center text-[11.5px] leading-[1.5]" style={{ color: 'var(--text-tertiary)' }}>
-        If Safari warns about the certificate, tap “Visit Website”. XR uses a self-signed certificate
-        on your own network — you’ll verify its fingerprint before pairing.
+        Do not bypass a browser certificate warning unless you can independently verify the server.
+        This web app cannot inspect or pin the actual TLS certificate.
       </p>
     </Centered>
   );
@@ -354,7 +355,7 @@ function Fingerprint({ value }: { value: string }) {
         className="text-[10.5px] font-semibold uppercase tracking-[0.08em]"
         style={{ color: 'var(--text-tertiary)' }}
       >
-        Certificate fingerprint
+        Server-reported fingerprint
       </p>
       <p
         className="mt-1 break-all font-mono text-[14px] leading-[1.4]"

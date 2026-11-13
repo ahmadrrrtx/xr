@@ -1,0 +1,51 @@
+T71.c — desktop mobile security implementation in progress
+
+A browser page cannot inspect the actual TLS peer certificate, and an attacker
+can forge a self-reported fingerprint. The intended path relies on the phone's
+browser/OS certificate validation, not JavaScript pinning. No certificates are
+installed or trusted on a phone by the application. Users must configure a
+CA-issued certificate for a host trusted by the phone, and must not bypass TLS
+warnings. This task remains open pending listener/control implementation,
+adversarial tests, native packaging CI and an actual phone journey.
+
+Candidate implemented: Settings → Mobile shows an explicit start/stop control;
+the app-owned loopback engine starts a separate TLS listener only after owner
+confirmation and validation of a CA-issued leaf, matching hostname and key,
+validity, owner-only Unix key permissions and PWA asset presence. The phone
+browser must trust the issuer; the app does not claim to verify phone trust.
+Only private/link-local/loopback IPv4 peers and an allowlist of PWA/companion
+routes are accepted; bearer authorization and desktop-control routes are
+rejected on the LAN listener. Disable closes existing connections and burns an
+unredeemed code. Desktop mobile registry, chat and VAPID use desktop XR_HOME,
+not the CLI's ~/.xr. Pairing/revocation use existing rate limits and sessions.
+
+Local actual HTTPS integration uses a generated test CA and normal certificate
+validation (no insecure TLS bypass): trusted client pairs, untrusted CA fails,
+remote bearer/admin and unsafe endpoints are refused, single-use code and
+revocation work, and disable stops the listener. Unit tests reject wrong host,
+key and self-signed leaf. Daemon directory 341 pass, desktop directory 513
+pass. No real phone, owner CA/DNS or native Tauri/packaging test was run.
+
+Open gate: size-gate reports the new security implementation and regenerated
+API client exceed the existing tree ceiling / generated-client size ratchet.
+These checks have NOT been relaxed; a proper reviewed resolution is required.
+
+Further local evidence: root typecheck PASS, daemon directory 343 pass,
+desktop directory 513 pass, API directory 115 pass, security directory 412
+pass / 1 native-OS skip, security:check PASS, API schema/client/compat PASS,
+claim-lint PASS, desktop IPC and sink checks PASS, desktop + PWA builds and
+typechecks PASS. Desktop lint has two pre-existing refresh warnings.
+
+Compiled x86_64 Linux sidecar built without Tauri/GTK and passed the existing
+authenticated sidecar smoke. A separate process test with a fresh CA and
+normal Python TLS validation passed: untrusted CA rejected; trusted client
+loaded PWA, received a real QR, paired, read models, was refused privileged
+routes/bearer, and listener stopped. The initial fixture CA omitted a required
+key-usage extension and was correctly refused by Python's strict verifier; the
+fixture was repaired, not TLS verification weakened. These are local
+loopback tests, not a native desktop or physical phone test.
+
+Current size-gate FAIL is concrete: generated client 1530 -> 1544 lines and
+core 175624 -> ceiling 175500 (values may change with later edits). The gate
+and waivers have not been altered. No current-tip native packaging or Windows
+installer journey is claimed from older CI results.

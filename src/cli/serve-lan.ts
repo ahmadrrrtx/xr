@@ -52,11 +52,11 @@ export function printLanBanner(startup: LanStartup): void {
     '',
     `   Certificate fingerprint`,
     `   ${B}${startup.cert.fingerprintPretty}${R}`,
-    `   ${D}(compare this on your phone before you tap Pair)${R}`,
+    `   ${D}(the web app cannot verify the actual TLS certificate; verify independently)${R}`,
     '',
     `   LAN addresses   ${lanAddresses().join(', ')}`,
     `   Mobile pairing  ${startup.url}`,
-    `   ${D}Pair a phone: Settings → Mobile → Pair new device${R}`,
+    `   ${D}Packaged desktop pairing controls are not yet available.${R}`,
     `   ${D}Push requires this computer to stay awake.${R}`,
     '',
   ];

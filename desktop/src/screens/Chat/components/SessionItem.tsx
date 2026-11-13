@@ -3,7 +3,7 @@
  * active treatment (bg-bg-raised + 3px accent bar), hover actions
  * (rename inline / archive / delete). Rename: Enter saves, Escape cancels.
  */
-import { Archive, Check, Pencil, Trash2 } from 'lucide-react';
+import { Check, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import type { Session } from '@/lib/chat-db';
@@ -49,14 +49,12 @@ export function SessionItem({
   active,
   onSelect,
   onRename,
-  onArchive,
   onDelete,
 }: {
   session: Session;
   active: boolean;
   onSelect: () => void;
   onRename: (title: string) => void;
-  onArchive: () => void;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -140,9 +138,7 @@ export function SessionItem({
           <TinyAction label="Rename session" onClick={() => setEditing(true)}>
             <Pencil aria-hidden="true" className="size-3.5" strokeWidth={1.5} />
           </TinyAction>
-          <TinyAction label="Archive session" onClick={onArchive}>
-            <Archive aria-hidden="true" className="size-3.5" strokeWidth={1.5} />
-          </TinyAction>
+
           <TinyAction label="Delete session" onClick={onDelete}>
             <Trash2 aria-hidden="true" className="text-danger/80 size-3.5" strokeWidth={1.5} />
           </TinyAction>

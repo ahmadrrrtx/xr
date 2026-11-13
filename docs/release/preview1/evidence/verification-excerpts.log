@@ -1,0 +1,187 @@
+Week 1 / week 2 verification excerpts from retained command output.
+Only final lines are reproduced. These are historical observations, not fresh runs or proof of all task criteria.
+
+--- /home/user/tmp/g-release:check.log (last 6 lines) ---
+  ok    desktop/src-tauri/tauri.conf.json in sync at 1.2.0-preview.1
+  ok    desktop/src-tauri/Cargo.toml in sync at 1.2.0-preview.1
+  ok    desktop/package.json         in sync at 1.2.0-preview.1
+  ok    desktop/src-tauri/Cargo.lock in sync at 1.2.0-preview.1
+
+[release-manifest] all 10 surfaces in sync at 1.2.0-preview.1 (Preview 1)
+
+--- /home/user/tmp/g-claim-lint.log (last 6 lines) ---
+$ bun run scripts/claim-lint.ts
+[claim-lint] ✓ no unsupported claims · 20 evidenced claims · every cited Article exists in docs/CONSTITUTION.md · published numbers and doc links single-sourced · v1.2.0-preview.1
+
+--- /home/user/tmp/g-placeholder-lint.log (last 6 lines) ---
+$ bun run scripts/placeholder-lint.ts
+✅ placeholder-lint: no placeholder markers — 77 files scanned under website/src
+
+--- /home/user/tmp/g-changelog:check.log (last 6 lines) ---
+$ bun run scripts/changelog.ts --check
+[changelog] ok — entry for 1.2.0-preview.1 present (201 commits since v1.1.0)
+
+--- /home/user/tmp/g-api:schema:check.log (last 6 lines) ---
+$ bun run scripts/generate-openapi.ts --check
+[api-schema] OK — /home/user/xr/docs/api/openapi.json matches the live route registry (292 operations)
+
+--- /home/user/tmp/g-client:check.log (last 6 lines) ---
+$ bun run scripts/generate-client.ts --check
+[client-check] OK — typed client matches the live route registry
+
+--- /home/user/tmp/g-desktop:sink-lint.log (last 6 lines) ---
+$ bun run scripts/desktop-sink-lint.ts
+[desktop-sink-lint] scanned 496 renderer file(s) · 0 violation(s) · 3 declared exception(s)
+  note REACT-HTML desktop/src/brain/detail.tsx:70 — exempt via sink-allow:
+  note REACT-HTML desktop/src/screens/Shield/components/shared.tsx:407 — exempt via sink-allow:
+  note REACT-HTML desktop/src/screens/Chat/components/CodeBlock.tsx:69 — exempt via sink-allow:
+[desktop-sink-lint] ✓ no raw HTML/eval sinks in the desktop renderer
+
+--- /home/user/tmp/desk-build.log (last 6 lines) ---
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/lib/detect.ts is dynamically imported by src/screens/Onboarding/StepDownload.tsx but also statically imported by src/screens/Builder/components/PreviewPane.tsx, src/screens/Onboarding/StepDownload.tsx, src/screens/Onboarding/StepMicSetup.tsx, src/screens/Onboarding/StepModelSetup.tsx, src/screens/Onboarding/StepSystemCheck.tsx, dynamic import will not move module into another chunk.
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/budget/enforce.ts is dynamically imported by src/screens/Budget/components/Playground.tsx, src/screens/Budget/components/SettingsTab.tsx, src/stores/budgetStore.ts, src/stores/researchStore.ts, src/stores/workflowEditorStore.ts but also statically imported by src/components/layout/AppShell.tsx, src/engine/chat.ts, src/lib/mockLLM.ts, src/stores/brainStore.ts, dynamic import will not move module into another chunk.
+
+✓ built in 2.18s
+
+--- /home/user/tmp/desk-lint.log (last 6 lines) ---
+
+/home/user/xr/desktop/src/screens/WorkspaceLanding.tsx
+  52:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+✖ 2 problems (0 errors, 2 warnings)
+
+
+--- /home/user/tmp/consumer-smoke-current.log (last 6 lines) ---
+$ bun run scripts/consumer-smoke.ts
+{"ok":true,"mode":"from-source","version":"v1.2.0-preview.1 (Preview 1)","doctorExit":0,"taskExit":0}
+
+--- /home/user/tmp/c-cost.log (last 6 lines) ---
+(pass) AGENT LOOP: raising the ceiling lets it continue [20.67ms]
+
+ 6 pass
+ 0 fail
+ 12 expect() calls
+Ran 6 tests across 1 file. [179.00ms]
+
+--- /home/user/tmp/c-cost-adversarial.log (last 6 lines) ---
+(pass) an attempt with no usable pricing is refused BEFORE any request is sent [0.27ms]
+
+ 5 pass
+ 0 fail
+ 13 expect() calls
+Ran 5 tests across 1 file. [54.00ms]
+
+--- /home/user/tmp/o-security.log (last 6 lines) ---
+[suite-tmp] 12 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 12
+
+ 381 pass
+ 0 fail
+ 1275 expect() calls
+Ran 381 tests across 28 files. [2.62s]
+
+--- /home/user/tmp/o-trust.log (last 6 lines) ---
+
+ 159 pass
+ 17 skip
+ 0 fail
+ 556 expect() calls
+Ran 176 tests across 22 files. [7.66s]
+
+--- /home/user/tmp/o-context.log (last 6 lines) ---
+[suite-tmp] 125 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 125
+
+ 316 pass
+ 0 fail
+ 1889 expect() calls
+Ran 316 tests across 22 files. [10.93s]
+
+--- /home/user/tmp/o-research.log (last 6 lines) ---
+[suite-tmp] 1 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 1
+
+ 66 pass
+ 0 fail
+ 281 expect() calls
+Ran 66 tests across 10 files. [1244.00ms]
+
+--- /home/user/tmp/o-plugins.log (last 6 lines) ---
+[suite-tmp] 13 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 13
+
+ 65 pass
+ 0 fail
+ 203 expect() calls
+Ran 65 tests across 3 files. [1357.00ms]
+
+--- /home/user/tmp/o-supply-chain.log (last 6 lines) ---
+(pass) RC-207 scanner output fails closed > transport errors, missing severity, invalid envelopes and unknown levels are never zero findings [0.27ms]
+
+ 16 pass
+ 0 fail
+ 318 expect() calls
+Ran 16 tests across 3 files. [108.00ms]
+
+--- /home/user/tmp/f-agents.log (last 6 lines) ---
+(pass) team-run view composer > awaitingReview flag marks exactly the tasks a human decision can move [0.19ms]
+
+ 14 pass
+ 0 fail
+ 74 expect() calls
+Ran 14 tests across 2 files. [94.00ms]
+
+--- /home/user/tmp/f-automation.log (last 6 lines) ---
+[suite-tmp] 11 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 11
+
+ 11 pass
+ 0 fail
+ 45 expect() calls
+Ran 11 tests across 1 file. [361.00ms]
+
+--- /home/user/tmp/f-integrations.log (last 6 lines) ---
+(pass) instance URL rules (API-key connectors) > a non-URL is refused with a plain message [0.05ms]
+
+ 49 pass
+ 0 fail
+ 207 expect() calls
+Ran 49 tests across 3 files. [4.89s]
+
+--- /home/user/tmp/f-cloud.log (last 6 lines) ---
+[suite-tmp] 1 WorkspaceStore connection(s) were still open at exit (tests that never close their store); closed 1
+
+ 36 pass
+ 0 fail
+ 160 expect() calls
+Ran 36 tests across 3 files. [355.00ms]
+
+--- /home/user/tmp/r-release.log (last 6 lines) ---
+
+ 288 pass
+ 11 skip
+ 0 fail
+ 1645 expect() calls
+Ran 299 tests across 28 files. [1286.00ms]
+
+--- /home/user/tmp/r-workflow.log (last 6 lines) ---
+(pass) D1 — branch conditions never execute author-supplied source > the type surface itself no longer admits an expression condition [0.14ms]
+
+ 58 pass
+ 0 fail
+ 200 expect() calls
+Ran 58 tests across 4 files. [456.00ms]
+
+--- /home/user/tmp/t-providers.log (last 6 lines) ---
+(pass) real loopback redirect never forwards a model prompt/credential to another endpoint [24.72ms]
+
+ 120 pass
+ 0 fail
+ 717 expect() calls
+Ran 120 tests across 12 files. [2.36s]
+
+--- /home/user/tmp/t-cli.log (last 6 lines) ---
+(pass) XR-LAUNCH-024 · classifier and event builder > every code is documented in docs/cli/CODING_CONTRACTS.md (codes are a public contract) [0.89ms]
+
+ 262 pass
+ 0 fail
+ 869 expect() calls
+Ran 262 tests across 13 files. [4.10s]
+

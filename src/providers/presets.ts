@@ -191,14 +191,17 @@ export const PRESETS: Record<string, ProviderPreset> = {
     baseUrl: "https://api.groq.com/openai/v1",
     apiKeyEnv: "GROQ_API_KEY",
     authType: "bearer",
-    defaultModel: "llama-3.3-70b-versatile",
+    // Verified against GET https://api.groq.com/openai/v1/models on 2026-11-10:
+    // the 2024-era ids this list used to carry (llama-3.3-70b-versatile,
+    // llama-3.1-8b-instant, mixtral-8x7b-32768, gemma2-9b-it) are no longer
+    // served, so selecting Groq failed on the first request.
+    defaultModel: "openai/gpt-oss-20b",
     knownModels: [
-      "llama-3.3-70b-versatile",
-      "llama-3.1-8b-instant",
-      "mixtral-8x7b-32768",
-      "gemma2-9b-it",
-      "openai/gpt-oss-120b",
       "openai/gpt-oss-20b",
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-safeguard-20b",
+      "qwen/qwen3.8-27b",
+      "allam-2-7b",
     ],
     capabilities: caps({ toolUse: true, jsonMode: true, streaming: true }),
     description: "Blazing fast inference on open-source models. Generous free tier.",

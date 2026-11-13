@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { chatDb, type ChatMessage } from '@/lib/chat-db';
-import { transcriptMarkdown } from '@/lib/transcript';
+import { transcriptFilename, transcriptMarkdown } from '@/lib/transcript';
 import { useChatStore } from '@/stores/chatStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { ModelPicker } from './ModelPicker';
@@ -81,13 +81,7 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
 
   const exportMd = async (): Promise<void> => {
     const md = transcriptMarkdown(title, messages);
-    const name = `${
-      title
-        .replace(/[^\w\s-]+/g, '')
-        .trim()
-        .replace(/\s+/g, '-')
-        .toLowerCase() || 'chat'
-    }.md`;
+    const name = transcriptFilename(title);
     try {
       const { isTauri } = await import('@/lib/tauri');
       if (isTauri()) {
@@ -99,7 +93,7 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
         if (!path) return;
         const { writeTextFile } = await import('@tauri-apps/plugin-fs');
         await writeTextFile(path, md);
-        toast('Exported', { description: path });
+        toast('Exported with credential redaction', { description: `${path} — review before sharing` });
         return;
       }
     } catch {
@@ -112,7 +106,7 @@ export function ChatHeader({ sessionId }: { sessionId: string }) {
     a.download = name;
     a.click();
     URL.revokeObjectURL(url);
-    toast('Exported', { description: name });
+    toast('Exported with credential redaction', { description: `${name} — review before sharing` });
   };
 
   const clear = async (): Promise<void> => {

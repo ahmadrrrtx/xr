@@ -1,0 +1,323 @@
+# =============================================================================
+# XR Preview 1 — Windows evidence (plan section 13, task T60)
+#
+# The agent's Linux box cannot run Windows, so every Windows claim in the
+# Preview 1 readiness report must come from a GitHub-hosted Windows runner
+# (owner decision, section 10/D2). Wine is never evidence.
+#
+# What this workflow establishes, in order:
+#   1. build the CLI exe for Windows and install it where the installer would
+#   2. CLI truth: --version, doctor, env capabilities --json
+#   3. one-shot task against a loopback mock provider that writes a file, plus
+#      workspace path-escape denials (..\ , UNC, drive letter, junction)
+#   4. sandbox tiers: what the runner actually has (docker info), the
+#      experimental AppContainer path, and the D5 refusal when no sandbox exists
+#   5. the repository's own Windows-only Rust tests (shell-test-windows)
+#   6. installers: download same-head desktop artifacts; install, launch and
+#      authenticate, uninstall and check data retention on the Windows runner
+#   7. every log and screenshot uploaded as an artifact
+#
+# Steps that cannot run are reported as NOT RUN / BLOCKED in the step summary.
+# Nothing here is allowed to turn an absent result into a PASS.
+# =============================================================================
+name: Windows Preview Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      diagnostic_only:
+        description: "Reproduce the recorded 88d MSI failure only; not current-tip release evidence"
+        type: boolean
+        default: false
+  push:
+    branches: [release/preview-1]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: win-preview-${{ github.ref }}-${{ inputs.diagnostic_only && 'diagnostic' || 'release' }}
+  cancel-in-progress: false
+
+jobs:
+  # ── 1-4. CLI truth, path escapes, sandbox policy ───────────────────────────
+  cli:
+    if: ${{ !inputs.diagnostic_only }}
+    name: Windows CLI (x64)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Bun (repo pin)
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      # 1. Build the Windows CLI exe with the repo's ONE computation source
+      #    (scripts/compile-sidecar.ts), which is also what desktop-app.yml ships.
+      #    T60.a: the hand-rolled `bun build --compile` here lacked
+      #    --external playwright --external playwright-core and failed on
+      #    chromium-bidi on a real Windows runner (run 42703322271).
+      - name: Build xr.exe (scripts/compile-sidecar.ts)
+        shell: bash
+        env:
+          SIDECAR_TRIPLE: x86_64-pc-windows-msvc
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          bun run scripts/compile-sidecar.ts
+          cp desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe out/xr.exe
+          ls -l out/xr.exe
+
+      # 2. CLI truth.
+      - name: CLI truth (--version, doctor, env capabilities)
+        shell: bash
+        run: |
+          set -uo pipefail
+          ./out/xr.exe --version || echo "EXIT_VERSION=$?"
+          echo "--- doctor ---"
+          ./out/xr.exe doctor || echo "EXIT_DOCTOR=$?"
+          echo "--- env capabilities --json ---"
+          ./out/xr.exe env capabilities --json > env-capabilities.json || echo "EXIT_CAPS=$?"
+          head -c 2000 env-capabilities.json || true
+
+      # 3. THE SMOKE LANE (T12) — the same script that runs on Linux, against the
+      #    compiled Windows exe. Real provider path via a loopback mock (keyless
+      #    ollama preset), real approval gate, real isolation report for THIS host.
+      - name: Release smoke (scripts/release-smoke/run-all.sh, XR_BIN=out/xr.exe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XR_BIN="$PWD/out/xr.exe"
+          export TMPDIR="$RUNNER_TEMP"
+          bash scripts/release-smoke/run-all.sh 2>&1 | tee smoke.log
+          # tee hides the real status; re-derive it from the summary line so a
+          # FAIL can never be swallowed by the pipe.
+          grep -q "RESULT: PASS" smoke.log || { echo "::error::release smoke did not pass"; exit 1; }
+
+      # 4. PATH-ESCAPE POLICY — run the repository's own escape tests ON WINDOWS.
+      #    An earlier version of this workflow "tested" escapes by running
+      #    `xr "read the file ..\..\Windows\win.ini"` and treating ANY non-zero
+      #    exit as a denial. It was a false pass: with no provider configured the
+      #    CLI died at provider preflight, so all four "denials" proved nothing
+      #    (run 42705917814, escape-summary's four logs all read
+      #    "No coding CLI provider ... was detected"). The policy itself is unit-tested
+      #    here instead, natively, where it actually runs.
+      - name: Workspace path-escape policy (native Windows unit tests)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun test test/security/filesystem-authority.test.ts \
+                   test/security/filesystem-implicit.test.ts \
+                   test/security/filesystem-index-context.test.ts \
+                   test/security/canonical-bypass.test.ts 2>&1 | tee escape-tests.log
+          grep -qE "^ *[0-9]+ fail$| 0 fail" escape-tests.log || { echo "::error::escape tests did not report a result"; exit 1; }
+          grep -qE " 0 fail" escape-tests.log || { echo "::error::escape policy tests failed on Windows"; exit 1; }
+
+      - name: Installer evidence negative controls (native PowerShell)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun test test/release/windows-preview-workflow.test.ts test/release/windows-installers-negative.test.ts 2>&1 | tee installer-negative-controls.log
+
+      - name: Direct host automation refusal (native Windows)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun test test/security/desktop-control-policy.test.ts test/trust/canonical-shell-isolation.test.ts 2>&1 | tee desktop-control-refusal.log
+
+      # 5. Sandbox tiers — recorded honestly, not asserted.
+      - name: Sandbox tiers (recorded, not claimed)
+        shell: bash
+        run: |
+          set -uo pipefail
+          {
+            echo "## Windows sandbox availability (recorded)"
+            echo
+            echo '```'
+            docker version 2>&1 | head -20 || echo "docker: NOT PRESENT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "--- docker info ---"; docker info 2>&1 | head -30 || true
+
+      # 6. The experimental AppContainer path: capability report only. Whether it
+      #    is a boundary is decided by the guarantee matrix in the smoke lane above,
+      #    which reads "fail closed" on a host that cannot provide one.
+      - name: Experimental AppContainer sandbox (capabilities only)
+        shell: bash
+        run: |
+          set -uo pipefail
+          export XR_HOME="$RUNNER_TEMP/xrhome"
+          mkdir -p "$XR_HOME"
+          export XR_OS_SANDBOX=experimental
+          ./out/xr.exe env capabilities --json > appcontainer.json || echo "EXIT=$?"
+          head -c 1200 appcontainer.json || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-cli-logs
+          path: |
+            *.log
+            *.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ── 5. The repo's own Windows-only Rust tests ──────────────────────────────
+  rust-windows:
+    if: ${{ !inputs.diagnostic_only }}
+    name: Rust Windows tests (shell-test-windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+      - name: Setup Bun (repo pin)
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install engine dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
+      # T60.a: build.rs calls tauri_build::try_build, which VALIDATES that
+      # bundle.externalBin exists. A from-scratch `cargo test` therefore failed
+      # with "resource path binaries\xr-engine-x86_64-pc-windows-msvc.exe
+      # doesn't exist" until the sidecar is compiled — exactly what
+      # desktop-app.yml's shell-test-windows job already does.
+      - name: Compile engine sidecar (x86_64-pc-windows-msvc)
+        env:
+          SIDECAR_TRIPLE: x86_64-pc-windows-msvc
+        run: bun run scripts/compile-sidecar.ts
+      - name: cargo test (desktop shell)
+        working-directory: desktop/src-tauri
+        timeout-minutes: 45
+        env:
+          RUSTFLAGS: -D warnings
+        shell: pwsh
+        run: |
+          cargo test --locked --jobs 1 --lib -- --nocapture 2>&1 | Tee-Object -FilePath cargo-test.log
+          $cargoExit = $LASTEXITCODE
+          if ($cargoExit -ne 0) { exit $cargoExit }
+      - name: Upload cargo log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-cargo-test-log
+          path: desktop/src-tauri/cargo-test.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Wait on a Linux runner, not a billed Windows runner, while the same-commit
+  # desktop bundle builds. A timeout or API failure is BLOCKED, never a pass.
+  installer-artifact:
+    if: ${{ !inputs.diagnostic_only }}
+    name: Wait for same-commit Windows bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    outputs:
+      run_id: ${{ steps.wait.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Wait for exact-head artifact (at most one hour)
+        id: wait
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/journey/wait-windows-artifact.sh 3600 30
+      - name: Upload artifact prerequisite evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-installer-artifact-prerequisite
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Historical diagnostic only. It cannot satisfy the exact-head release gate.
+  diagnose-88d:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_only }}
+    name: Diagnose recorded 88d Windows installer mismatch (not release evidence)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download known historical installer artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence bundles
+          gh run download 43111084223 --repo "$GITHUB_REPOSITORY" --name xr-desktop-windows-x64 --dir bundles
+          printf 'Historical SHA 88d381a32e00862728cb224587055aab0206e087; run 43111084223. Diagnostic only, NOT current-tip evidence.\n' > evidence/artifact-status.txt
+      - name: Reproduce installed registry and package comparison
+        shell: pwsh
+        run: ./scripts/journey/windows-installers.ps1 -Bundles bundles -EvidenceDir evidence
+      - name: Upload historical diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-88d-installer-diagnostic
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ── 6-7. Actual installer lifecycle, exact-head artifact only ──────────────
+  installers:
+    if: ${{ !inputs.diagnostic_only }}
+    needs: [installer-artifact]
+    name: Windows MSI and NSIS installer lifecycle
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download same-commit Windows installer artifact
+        id: artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence bundles
+          # This run ID comes only from the exact-SHA prerequisite job.
+          run="${{ needs.installer-artifact.outputs.run_id }}"
+          [[ "$run" =~ ^[0-9]+$ ]] || { echo '::error::Invalid prerequisite run ID'; exit 1; }
+          gh run download "$run" --repo "$GITHUB_REPOSITORY" --name xr-desktop-windows-x64 --dir bundles
+          printf 'head_sha=%s\ndesktop_run_id=%s\nartifact=xr-desktop-windows-x64\n' "$GITHUB_SHA" "$run" | tee evidence/artifact-status.txt
+      - name: Install, launch, authenticate sidecar, uninstall (MSI and NSIS)
+        id: lifecycle
+        shell: pwsh
+        run: ./scripts/journey/windows-installers.ps1 -Bundles bundles -EvidenceDir evidence
+      - name: Installer status summary
+        if: always()
+        shell: bash
+        env:
+          ARTIFACT_RESULT: ${{ steps.artifact.outcome }}
+          LIFECYCLE_RESULT: ${{ steps.lifecycle.outcome }}
+        run: |
+          {
+            echo '## Windows installers'
+            echo "Exact-head artifact lookup: $ARTIFACT_RESULT; lifecycle execution: $LIFECYCLE_RESULT."
+            echo 'A missing or failed step is NOT RUN or FAIL, never PASS. See the evidence artifact for per-phase outcomes.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload installer evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-installer-lifecycle-evidence
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,7 +1,7 @@
 /*
  * User menu (Phase 1 brief §5.9) — avatar dropdown in the topbar, also used
- * as the expanded-sidebar user card. Placeholder actions are honest toasts;
- * Settings navigates; Quit closes the window inside the Tauri shell.
+ * as the expanded-sidebar user card. Workspace and update entries navigate to
+ * real screens; Quit exits the native app instead of only hiding its window.
  *
  * The trigger button is rendered here directly (not passed as a child
  * component) so Radix's asChild pattern can attach its ref to a plain DOM
@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { closeWindow, isTauri } from '@/lib/tauri';
+import { isTauri, quitApp } from '@/lib/tauri';
 import { useUIStore } from '@/stores/ui';
 
 export function UserMenu({
@@ -95,14 +95,7 @@ export function UserMenu({
           <User size={16} strokeWidth={1.5} aria-hidden="true" />
           Profile
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() =>
-            toast('Workspaces coming in Phase 10', {
-              description:
-                'Workspace switching lands with the Workspaces screen.',
-            })
-          }
-        >
+        <DropdownMenuItem onSelect={() => navigate('/workspaces')}>
           <ChevronsUpDown size={16} strokeWidth={1.5} aria-hidden="true" />
           Switch workspace
         </DropdownMenuItem>
@@ -111,22 +104,18 @@ export function UserMenu({
           Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() =>
-            toast.success("You're on the latest version", {
-              description: 'XR 0.2.0 — updater checks arrive with Phase 23.',
-            })
-          }
-        >
+        <DropdownMenuItem onSelect={() => navigate('/settings#updates')}>
           <RefreshCw size={16} strokeWidth={1.5} aria-hidden="true" />
-          Check for updates
+          Updates
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
           onSelect={() => {
             if (isTauri()) {
-              void closeWindow();
+              void quitApp().catch(() => {
+                toast.error('Could not quit XR', { description: 'Use Quit XR in the tray menu.' });
+              });
             } else {
               toast('Quit works inside the XR app', {
                 description:

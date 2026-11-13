@@ -1,3 +1,4 @@
+import { DesktopMobileListener } from "./desktop-mobile-listener.ts";
 import { setDesktopGrantRegistry } from "../control/files.ts";
 /**
  * XR — Local Daemon ("xr serve")
@@ -58,19 +59,21 @@ import {
 import { CORE_VERSION } from "../core/version.ts";
 import { BANNER_BOOTSTRAP_TTL_MS, BOOTSTRAP_PATH, BrowserSessions, handleLoginPost, handleSessionPost, LOGIN_PATH, LOGOUT_PATH, sessionCookie, signInPageResponse, tokenEquals, wantsSignInPage } from "./session-auth.ts";
 import { writeDaemonTokenFile } from "./token-file.ts";
-import { applySecurityHeaders, SECURITY_TXT_URL } from "./security-headers.ts";
+import { applySecurityHeaders, clientIpFor, desktopCorsPreflight, SECURITY_TXT_URL } from "./security-headers.ts";
 import { envSecretCompatEnabled, setSecretReadAuditor } from "../security/secret-broker.ts";
 import { installDevGlobal, isDevMode } from "../util/dev-mode.ts";
 import { PRIVATE_PROVIDER_WARNING, privateProviderAllowed } from "../providers/provider-url-guard.ts";
 import { TelegramManager } from "../telegram/manager.ts";
 import { DiscordManager } from "../discord/manager.ts";
 import { WhatsAppManager } from "../whatsapp/manager.ts";
+export { clientIpFor } from "./security-headers.ts";
 
 /** Phase 2.4 · P1-1 — LAN opt-in DTO from the CLI; presence IS the §15#10
  * TLS marker. lanUrl lands after bind; until then "" (honest: unknown). */
 export interface LanInput {
   cert: LanCert;
   lanUrl?: string;
+  allowedHosts?: string[];
 }
 
 export interface DaemonOptions {
@@ -229,23 +232,6 @@ export function originAllowed(
 /** Structural slice of Bun.Server used here (keeps tests type-free). */
 export type PeerLookup = { requestIP(req: Request): { address: string } | null };
 
-/**
- * Phase 34 · R1 (audit §15#27) — rate-limit client key. `x-forwarded-for` is
- * spoofable on a loopback-daemon without a real reverse proxy, so it is only
- * honoured when the operator explicitly opts in (`XR_TRUST_PROXY=1`); by
- * default the socket peer (Bun's `requestIP`, probes/tests → "local") wins.
- */
-export function clientIpFor(
-  req: Request,
-  peer: { address: string } | null = null,
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  if (env.XR_TRUST_PROXY === "1") {
-    return (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "local";
-  }
-  return peer?.address ?? "local";
-}
-
 /** Phase 4 · T5 — fixed-window per-IP rate limiter (memory-only). */
 export class RateLimiter {
   private hits = new Map<string, { windowStart: number; count: number }>();
@@ -386,12 +372,16 @@ export function makeHandler(
     lan?: LanInput;
     /** XR-LAUNCH-027 — browser sessions + bootstrap codes, shared with serve()'s banner links. */
     browser?: BrowserSessions;
+    /** Exact app webview origin; only enabled for the desktop loopback sidecar. */
+    desktopWebviewOrigin?: string;
+    desktopMobile?: DesktopMobileListener;
+    sharedState?: DaemonState;
   } = {},
 ) {
   const browser = opts.browser ?? new BrowserSessions();
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
-  const state: DaemonState = {
+  const state: DaemonState = opts.sharedState ?? {
     store: initialStore,
     shield: new XRShieldService(initialStore),
     workspaceManager,
@@ -408,8 +398,10 @@ export function makeHandler(
     // the user pairs (QR) or auto-start finds sealed credentials.
     whatsapp: opts.whatsapp ?? new WhatsAppManager({ store: initialStore }),
   };
+  opts.desktopMobile?.captureState(state);
   const lanRuntime = opts.lan; // extra hosts only under LAN; loopback posture untouched (2.1)
-  const lanExtraHosts: readonly string[] = lanRuntime ? lanAddresses() : [];
+  const desktopOrigin = lanRuntime ? undefined : opts.desktopWebviewOrigin;
+  const lanExtraHosts: readonly string[] = lanRuntime ? [...lanAddresses(), ...(lanRuntime.allowedHosts ?? [])] : [];
   const mobileCtx: MobileContext | null = lanRuntime
     ? { lan: true, fingerprint: lanRuntime.cert.fingerprint, lanUrl: "", version: CORE_VERSION, daemonToken: token }
     : null;
@@ -440,6 +432,8 @@ export function makeHandler(
     if (!hostAllowed(req.headers.get("host") ?? (url.host || null), process.env, lanExtraHosts)) {
       return safeJson({ error: "misdirected request — unknown Host authority" }, 421);
     }
+    const preflight = desktopCorsPreflight(req, desktopOrigin);
+    if (preflight) return preflight;
     // Canonical (mount-free) path for policy checks: /api/v1/* ≡ /api/*.
     const canonicalPath = path.startsWith("/api/v1/") ? `/api${path.slice(7)}` : path;
     let mobileSession: MobileSession | null = null;
@@ -615,7 +609,8 @@ export function makeHandler(
         config,
         mobile: mobileCtx && mobileDeps
           ? (mobileCtx.lanUrl = lanRuntime?.lanUrl ?? "", { session: mobileSession ?? { privileged: desktopPrivileged }, deps: mobileDeps })
-          : undefined,
+          : opts.desktopMobile?.deps && actor === "local:token" ? { session: { privileged: true }, deps: opts.desktopMobile.deps } : undefined,
+        desktopMobile: actor === "local:token" ? opts.desktopMobile : undefined,
       })) ?? safeJson({ error: "not found" }, 404);
 
     // Phase 31 · A10 — pairing outcomes feed the failure backoff.
@@ -652,7 +647,7 @@ export function makeHandler(
       );
       status = response.status;
       // Phase 31 · A1/A6 — security headers + strict CORS on EVERY response.
-      return applySecurityHeaders(response, req);
+      return applySecurityHeaders(response, req, desktopOrigin);
     } catch (err) {
       span.setStatus("error", (err as Error)?.name ?? "Error");
       // Phase 31 · A12 — production clients get an opaque error + correlation
@@ -667,7 +662,7 @@ export function makeHandler(
         error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
       });
       status = 500;
-      return applySecurityHeaders(safeJson({ error: "internal error", id }, 500), req);
+      return applySecurityHeaders(safeJson({ error: "internal error", id }, 500), req, desktopOrigin);
     } finally {
       endHttpServerSpan(span, status);
       const durationMs = Date.now() - started;
@@ -759,7 +754,9 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const whatsapp = new WhatsAppManager({ store, dashboardBaseUrl: `http://127.0.0.1:${port}/` });
   const lanRuntime: LanInput | undefined = opts.lan;
   const browser = new BrowserSessions(); // XR-LAUNCH-027: the banner's links are single-use codes from this store
-  const handler = makeHandler(store, token, { telegram, discord, whatsapp, lan: opts.lan, browser });
+  const desktopMobile = !lanRuntime && process.env.XR_DESKTOP_WEBVIEW_ORIGIN && process.env.XR_HOME ? new DesktopMobileListener(token, process.env.XR_HOME, (lan, state) => makeHandler(store, token, { lan, sharedState: state })) : undefined;
+  const handler = makeHandler(store, token, { telegram, discord, whatsapp, lan: opts.lan, browser, desktopMobile,
+    desktopWebviewOrigin: process.env.XR_DESKTOP_WEBVIEW_ORIGIN });
   void telegram.autoStartOnBoot().catch((err) => {
     structuredLog("warn", "telegram.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
   });
@@ -788,7 +785,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   }
 
   const lanBind = lanRuntime ? "0.0.0.0" : undefined; // LAN mode binds the LAN (runtime hoisted beside makeHandler)
-  const bindHost = lanBind ?? resolveBindHost();
+  const bindHost = lanBind ?? (desktopMobile ? DEFAULT_LOOPBACK : resolveBindHost());
   // Phase 14 — SSE streams send a keepalive comment every 5 s (chat.routes),
   // so a 120 s idle ceiling only ever closes a connection whose peer is gone;
   // the Bun default (10 s) cut cold local-model streams before the first token.
@@ -847,6 +844,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     // ":0"); the runtime is finalised in place for the mobile context.
     ...(lanRuntime ? { lanUrl: (lanRuntime.lanUrl = lanUrlFor(boundPort)) } : {}),
     stop: () => {
+      desktopMobile?.stop();
       tokenFile.release();
       stopTriggers();
       void telegram.shutdown();

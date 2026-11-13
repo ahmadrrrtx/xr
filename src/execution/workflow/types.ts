@@ -338,8 +338,7 @@ export type BranchCondition =
   | { type: "review_approved"; nodeId: string }
   | { type: "review_changes_requested"; nodeId: string }
   | { type: "approval_granted"; nodeId: string }
-  | { type: "approval_denied"; nodeId: string }
-  | { type: "expression"; expression: string; description: string };
+  | { type: "approval_denied"; nodeId: string };
 
 /** Join node: waits for all specified dependencies, then emits. */
 export interface JoinNode extends WorkflowNodeBase {

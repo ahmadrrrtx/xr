@@ -109,12 +109,27 @@ export class ProviderRegistry {
   }
 
   /**
+   * T17.a — a custom provider the SSRF guard refused must not present as
+   * "Unknown provider": that error sends the operator hunting for a typo while a
+   * security control is what removed it, and it hides the reason. Returns the
+   * refusal text for a blocked id, or null when the id was never blocked.
+   */
+  blockedReason(id: string): string | null {
+    const hit = this.blockedCustomProviders.find((b) => b.id === id);
+    return hit ? hit.reason : null;
+  }
+
+  /**
    * Canonical resolve: providerId + optional modelId → resolved entry.
    * Validates existence and returns preset + factory.
    */
   resolve(providerId: string, modelId?: string): ResolvedProvider {
     const entry = this.entries.get(providerId);
     if (!entry) {
+      const blocked = this.blockedReason(providerId);
+      if (blocked) throw new Error(
+        `Provider "${providerId}" is configured but was BLOCKED by the provider-URL guard: ${blocked}. That is a security decision, not a typo — a custom provider may not point at a loopback or private destination. For a model on this machine use a built-in local preset (ollama, lmstudio, llamacpp, vllm).`,
+      );
       const known = Array.from(this.entries.keys()).join(", ");
       throw new Error(
         `Unknown provider "${providerId}". Known providers:\n` +
@@ -135,6 +150,10 @@ export class ProviderRegistry {
   createProvider(id: string, config: XRConfig, model: string): Provider {
     const entry = this.entries.get(id);
     if (!entry) {
+      const blocked = this.blockedReason(id);
+      if (blocked) throw new Error(
+        `Provider "${id}" is configured but was BLOCKED by the provider-URL guard: ${blocked}. That is a security decision, not a typo — a custom provider may not point at a loopback or private destination. For a model on this machine use a built-in local preset (ollama, lmstudio, llamacpp, vllm).`,
+      );
       const known = Array.from(this.entries.keys()).join(", ");
       throw new Error(
         `Unknown provider "${id}". Known providers:\n` +

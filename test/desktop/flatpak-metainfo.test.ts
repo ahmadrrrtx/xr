@@ -126,7 +126,7 @@ describe("Phase 27 · flatpak manifest", () => {
     expect(text).toContain("runtime: org.gnome.Platform");
     expect(text).toContain("sdk: org.gnome.Sdk");
     expect(text).not.toContain("runtime: org.freedesktop.Platform");
-    expect(text).toContain("org.freedesktop.Sdk.Extension.rust-stable");
+    expect(text).not.toMatch(/^\s*- org\.freedesktop\.Sdk\.Extension\.rust-stable/m);
     expect(text).toContain("org.freedesktop.Sdk.Extension.node22");
   });
 
@@ -146,6 +146,18 @@ describe("Phase 27 · flatpak manifest", () => {
     expect(text).not.toContain("sha256: PLACEHOLDER");
   });
 
+  test("Rust is pinned to the CI toolchain with checksums for both architectures", () => {
+    const workflow = read(".github/workflows/desktop-app.yml");
+    expect(workflow).toContain("toolchain: 1.99.1");
+    expect(text).toContain("rust-1.99.1-x86_64-unknown-linux-gnu.tar.xz");
+    expect(text).toContain("231fcae47ee950621374725b5fc3b5441d2fbda2955ac45dd7dc816d8876cfe7");
+    expect(text).toContain("rust-1.99.1-aarch64-unknown-linux-gnu.tar.xz");
+    expect(text).toContain("a48fb1e853be56ce9b8e2751f5464dbd5e16440cd81e237920f3a5e7e806333e");
+    expect(text).toContain("prepend-path: /run/build/xr-desktop/.flatpak-tools/rust/bin");
+    expect(text).toContain("--disable-ldconfig");
+    expect(text).not.toMatch(/build-args:[^\n]*--share=network/);
+  });
+
   test("the manifest never reintroduces npm ci (there is no package-lock.json)", () => {
     // Comments are stripped first: the file *explains* why `npm ci` cannot work
     // here, and that sentence must not be mistaken for the command itself.
@@ -155,6 +167,34 @@ describe("Phase 27 · flatpak manifest", () => {
       .join("\n");
     expect(commands).not.toMatch(/npm ci/);
     expect(commands).toContain("--frozen-lockfile");
+  });
+
+  test("build dependencies are staged and consumed offline without build-network permission", () => {
+    const workflow = read(".github/workflows/desktop-app.yml");
+    const prepare = read("scripts/prepare-flatpak-sources.sh");
+    const module = text.split("modules:")[1] ?? "";
+    expect(module).toContain('CARGO_NET_OFFLINE: "true"');
+    expect(module).toContain("--frozen-lockfile --ignore-scripts --offline");
+    expect(module).toContain("cargo build --release --locked --offline");
+    expect(module).not.toMatch(/build-args:[^\n]*--share=network/);
+    expect(prepare).toContain("git archive HEAD");
+    expect(prepare).toContain("cargo vendor --locked --versioned-dirs");
+    expect(prepare).toContain("--frozen-lockfile --ignore-scripts");
+    expect(workflow).toContain('scripts/prepare-flatpak-sources.sh "$RUNNER_TEMP/xr-flatpak-source"');
+    const flatpakJob = workflow.split("  flatpak:")[1]?.split("\n  # ── Phase 5")[0] ?? "";
+    expect(flatpakJob).not.toMatch(/^    continue-on-error:\s*true/m);
+  });
+
+  test("all installed Flatpak icons exist and have the advertised pixel dimensions", () => {
+    const installs = [...text.matchAll(/install -Dm644 (desktop\/src-tauri\/icons\/\S+\.png) \/app\/share\/icons\/hicolor\/(\d+)x(\d+)\/apps\/[^\s]+\.png/g)];
+    expect(installs.length).toBe(3);
+    for (const [, source, width, height] of installs) {
+      // PNG IHDR width and height are the big-endian words at bytes 16/20.
+      const png = readFileSync(resolve(repoRoot, source));
+      expect(png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))).toBe(true);
+      expect(png.readUInt32BE(16)).toBe(Number(width));
+      expect(png.readUInt32BE(20)).toBe(Number(height));
+    }
   });
 
   test("the engine sidecar is installed next to the shell under /app/bin", () => {

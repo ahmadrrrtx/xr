@@ -8,14 +8,15 @@ tray situation under GNOME, and the sandbox the engine actually runs skills in.
 ## Flatpak
 
 ```sh
-# One-time: the GNOME runtime, not the freedesktop one — org.gnome.Platform is
-# the runtime that ships webkit2gtk-4.1, which is what a Tauri v2 app needs at
-# both build and run time. The two SDK extensions are the freedesktop ones.
-flatpak install flathub org.gnome.Platform//46 org.gnome.Sdk//46 \
-  org.freedesktop.Sdk.Extension.rust-stable//46 org.freedesktop.Sdk.Extension.node22//46
+# One-time runtime and the matching Freedesktop Node SDK extension.
+flatpak install --user flathub org.gnome.Platform//48 org.gnome.Sdk//48 \
+  org.freedesktop.Sdk.Extension.node22//24.08
 
-# Build + install locally
+# From a clean committed checkout, stage locked dependencies outside the sandbox.
+# Requires pinned Bun and Rust 1.99.1 for cargo vendor. The destination must not exist.
 cd /path/to/xr
+bash scripts/prepare-flatpak-sources.sh /absolute/path/to/new-staging-directory
+cd /absolute/path/to/new-staging-directory
 flatpak-builder --user --install --force-clean build-dir packaging/flatpak/ai.rrrtx.xr-desktop.yml
 flatpak run ai.rrrtx.xr-desktop
 
@@ -45,7 +46,9 @@ Bun is a real requirement of this build, not a preference: the repo locks with
 calls `Bun.spawnSync`. So rather than downloading a runtime mid-build — which is
 exactly the supply-chain hole a Flatpak manifest exists to avoid — bun is a
 **checksummed source** (`type: archive`, `sha256`, pinned to `.bun-version`), and
-flatpak-builder verifies it before anything runs. The Rust step is a plain
+flatpak-builder verifies it before anything runs. Rust 1.99.1 is likewise fetched as a
+checksum-pinned distribution for each architecture, because the 24.08 Rust SDK extension
+provides 1.89, below the locked Tauri dependencies' 1.90 requirement. The Rust step is a plain
 `cargo build --release --locked` rather than `tauri build`: there is no `.deb` to
 produce inside the sandbox, and the frontend is built by the `beforeBuildCommand`
 in `tauri.conf.json` (`bun run build`) one command earlier.
@@ -163,8 +166,10 @@ code changes to the app:
    a release-asset URL does not exist until its tag is cut. Replace them with
    on-device captures before submitting.
 
-Until (1) and (2) exist, a `flatpak-builder` run works only on a machine with
-network access — which is what the `workflow_dispatch` CI job provides.
+The preview CI dispatch stages locked Bun caches and Cargo-vendored sources on the runner,
+then builds without network access inside the Flatpak sandbox. This staged CI approach is not
+a Flathub source manifest and must not be described as one. The new CI path remains unverified
+until its full build succeeds.
 
 ## Verifying a Linux package
 

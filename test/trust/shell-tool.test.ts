@@ -70,19 +70,30 @@ describe("XR 4.2 shell tool isolation wiring", () => {
     const res = await shellTool.run({ cmd: "echo must-not-run" }, ctx);
     expect(res.ok).toBe(false);
     expect(res.output).toContain("blocked:");
-    expect(res.output).toContain("hardened");
+    if (process.platform === "win32" || process.platform === "darwin") {
+      expect(res.output).toContain("no host fallback");
+    } else {
+      expect(res.output).toContain("hardened");
+    }
     expect(ctx.events.some((e) => e.event === "shell.hardened_blocked")).toBe(true);
     rmSync(ctx.cwd, { recursive: true, force: true });
   });
 
-  // Phase 4 · T1 — the legacy host-authority path survives ONLY as an explicit
-  // opt-out (hardened: false), audited as a degraded execution.
-  test("hardened OFF: falls back to the legacy in-process path when no runner is wired", async () => {
+  // Preview 1 prohibits host fallback on Windows/macOS, even when hardened is
+  // off. Linux retains the explicitly opted-out compatibility path.
+  test("hardened OFF: host fallback is refused on sandbox-only platforms", async () => {
     const ctx = ctxWith({ hardened: false }); // no runIsolated, hardened off
     const res = await shellTool.run({ cmd: "echo legacy-fallback-ok" }, ctx);
-    expect(res.ok).toBe(true);
-    expect(res.output).toContain("legacy-fallback-ok");
-    expect(ctx.events.some((e) => e.event === "shell.run")).toBe(true);
+    if (process.platform === "win32" || process.platform === "darwin") {
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("blocked:isolation-unavailable");
+      expect(ctx.events.some((e) => e.event === "shell.run")).toBe(false);
+      expect(ctx.events.some((e) => e.event === "shell.hardened_blocked")).toBe(true);
+    } else {
+      expect(res.ok).toBe(true);
+      expect(res.output).toContain("legacy-fallback-ok");
+      expect(ctx.events.some((e) => e.event === "shell.run")).toBe(true);
+    }
     rmSync(ctx.cwd, { recursive: true, force: true });
   });
 });

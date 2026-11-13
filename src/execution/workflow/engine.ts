@@ -33,6 +33,7 @@ import type {
   WorkflowRunSummary,
   WorkflowInspection,
 } from "./types.ts";
+import { isSupportedCondition } from "./conditions.ts";
 import { applyRunEvent, applyNodeEvent, canAdvanceNodes, canAcceptHumanInput, canPause, canCancel } from "./state-machine.ts";
 import { verifyIntegrity } from "./versioning.ts";
 import type { RunEvent } from "./state-machine.ts";
@@ -1078,6 +1079,11 @@ export class WorkflowEngine {
 
     let conditionResult = false;
     const c = node.condition;
+    // Defense in depth: stored JSON may carry a kind this engine no longer
+    // evaluates (the removed `expression`). Fail loudly, never silently.
+    if (!isSupportedCondition(c.type)) {
+      throw new Error(`branch node "${node.id}": unsupported condition type "${c.type}"`);
+    }
     try {
       if (c.type === "field_exists") {
         conditionResult = c.field in availableOutputs;
@@ -1092,13 +1098,6 @@ export class WorkflowEngine {
           case "lt": conditionResult = (val as number) < (c.value as number); break;
           case "contains": conditionResult = String(val).includes(String(c.value)); break;
           default: conditionResult = false;
-        }
-      } else if (c.type === "expression") {
-        // Safe eval for simple expressions — in production, use a proper expression parser
-        try {
-          conditionResult = !!new Function("ctx", `"use strict"; return (${c.expression});`)(availableOutputs);
-        } catch {
-          conditionResult = false;
         }
       } else if (c.type.startsWith("review_") || c.type.startsWith("approval_")) {
         // Check human decision state for a specific node

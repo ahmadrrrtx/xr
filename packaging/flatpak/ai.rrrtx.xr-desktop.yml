@@ -3,16 +3,14 @@
 # Reviewed against Tauri v2's own Flatpak guide: a Tauri app needs webkit2gtk-4.1
 # at build AND run time, and the GNOME runtime is the one that ships it with the
 # right versions (the freedesktop runtime does not). So: org.gnome.Platform, not
-# org.freedesktop.Platform. The two SDK extensions below are the freedesktop ones
-# Prism/Flathub Tauri apps use, and they are compatible with the GNOME SDK.
+# org.freedesktop.Platform. Rust is a checksum-pinned source because the 24.08
+# SDK extension ships rustc 1.89, older than the locked Tauri dependencies.
 #
-# Status, stated plainly: this manifest is authored and its metadata is validated
-# in CI (appstream + desktop entry). A full `flatpak-builder` run is NOT proven —
-# there is no flatpak-builder in the sandbox this was written in, and Flathub
-# additionally requires vendored sources (cargo-sources.json + a node/bun source
-# manifest) because its builders have no network. The CI build step is therefore
-# report-only until those are generated; see docs/linux/PACKAGING.md §"Before a
-# Flathub submission" for the exact remaining steps.
+# Status: metadata is validated in CI. Dispatch builds stage frozen Bun caches
+# and Cargo-vendored sources before entering the network-isolated builder; the
+# new staging path is not considered verified until a full CI build succeeds.
+# This CI staging is not a Flathub submission: Flathub needs its own explicit,
+# reviewable source manifests; see docs/linux/PACKAGING.md.
 
 id: ai.rrrtx.xr-desktop
 runtime: org.gnome.Platform
@@ -23,7 +21,6 @@ runtime: org.gnome.Platform
 runtime-version: "48"
 sdk: org.gnome.Sdk
 sdk-extensions:
-  - org.freedesktop.Sdk.Extension.rust-stable
   - org.freedesktop.Sdk.Extension.node22
 command: xr-desktop
 
@@ -77,30 +74,40 @@ modules:
   - name: xr-desktop
     buildsystem: simple
     build-options:
-      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin:/usr/lib/sdk/node20/bin
+      prepend-path: /run/build/xr-desktop/.flatpak-tools/rust/bin
+      append-path: /usr/lib/sdk/node22/bin
       env:
         # Cargo must write somewhere; the build dir is the only writable place.
         CARGO_HOME: /run/build/xr-desktop/cargo
+        CARGO_NET_OFFLINE: "true"
         NODE_ENV: production
     build-commands:
+      # Install only the compiler, standard library and Cargo from the verified
+      # Rust distribution, into this build directory (never into the runtime).
+      - arch=$(uname -m) && case "$arch" in x86_64|aarch64) ;; *) exit 1 ;; esac && ./.flatpak-tools/rust-dist/install.sh --prefix=/run/build/xr-desktop/.flatpak-tools/rust --components="rustc,cargo,rust-std-${arch}-unknown-linux-gnu" --disable-ldconfig
+      - rustc --version && cargo --version
       # 1. Dependencies. The repo locks with bun (`.bun-version` = 1.4.2,
       #    `packageManager` in package.json) — there is no package-lock.json, so
       #    `npm ci` does not and cannot work here. Bun comes in as a checksummed
       #    source below rather than being downloaded mid-build: flatpak-builder
       #    verifies sources, so the toolchain is pinned like everything else.
-      - ./.flatpak-tools/bun install --frozen-lockfile
+      #    CI stages frozen Bun caches and vendored Cargo sources before entering
+      #    the network-isolated build sandbox; never download dependencies here.
+      - ./.flatpak-tools/bun install --frozen-lockfile --ignore-scripts --offline --cache-dir=.flatpak-cache/bun
       # 2. Engine deps + sidecar. The sidecar binary is what makes XR an agent;
       #    failing loudly here beats shipping a shell with no engine.
       - ./.flatpak-tools/bun run scripts/compile-sidecar.ts
       # 3. The shell. tauri.conf.json's beforeBuildCommand is `bun run build`
       #    (tsc --noEmit && vite build), so bun has to be on PATH for the Rust
       #    step that follows.
-      - cd desktop && ../.flatpak-tools/bun install --frozen-lockfile
+      - cd desktop && ../.flatpak-tools/bun install --frozen-lockfile --ignore-scripts --offline --cache-dir=../.flatpak-cache/bun
       - cd desktop && ../.flatpak-tools/bun run build
       # `cargo build` rather than `tauri build --no-bundle`: no bundler output is
       # wanted inside /app, and the frontend is already built above.
-      - cd desktop/src-tauri && cargo build --release --locked
+      - cd desktop/src-tauri && cargo build --release --locked --offline
       - install -Dm755 desktop/src-tauri/target/release/xr-desktop /app/bin/xr-desktop
+      # The staged PWA is built from mobile/package-lock.json before sandboxing.
+      - mkdir -p /app/share/xr/mobile && cp -a mobile/dist/. /app/share/xr/mobile/
       # The shell and the engine ship together and must stay side by side: the
       # Rust side resolves `xr-engine-<target-triple>` next to its own executable.
       # Kept arch-agnostic so the same manifest builds aarch64 without edits.
@@ -108,9 +115,21 @@ modules:
       - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.desktop /app/share/applications/ai.rrrtx.xr-desktop.desktop
       - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml /app/share/metainfo/ai.rrrtx.xr-desktop.metainfo.xml
       - install -Dm644 desktop/src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/ai.rrrtx.xr-desktop.png
-      - install -Dm644 desktop/src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/ai.rrrtx.xr-desktop.png
+      - install -Dm644 desktop/src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/ai.rrrtx.xr-desktop.png
       - install -Dm644 desktop/src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/ai.rrrtx.xr-desktop.png
     sources:
+      # The upstream official Rust distributions are checksum-verified before
+      # entering the network-isolated build. Use the same compiler as CI.
+      - type: archive
+        url: https://static.rust-lang.org/dist/rust-1.99.1-x86_64-unknown-linux-gnu.tar.xz
+        sha256: 231fcae47ee950621374725b5fc3b5441d2fbda2955ac45dd7dc816d8876cfe7
+        only-arches: [x86_64]
+        dest: .flatpak-tools/rust-dist
+      - type: archive
+        url: https://static.rust-lang.org/dist/rust-1.99.1-aarch64-unknown-linux-gnu.tar.xz
+        sha256: a48fb1e853be56ce9b8e2751f5464dbd5e16440cd81e237920f3a5e7e806333e
+        only-arches: [aarch64]
+        dest: .flatpak-tools/rust-dist
       # Pinned toolchain (bun 1.4.2, the repo's canonical pin). Verified by
       # checksum at fetch time — this is how flathub handles build tools, and it
       # keeps the version from drifting with whatever CI happens to have.

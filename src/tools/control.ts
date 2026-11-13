@@ -18,6 +18,7 @@
  */
 
 import type { Tool, ToolResult, ToolContext } from "../core/types.ts";
+import { desktopControlBlock } from "../security/desktop-control-policy.ts";
 import { loadConfig } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { Store } from "../state/workspace-store.ts";
@@ -44,6 +45,11 @@ export const computerControlTool: Tool = {
       : "auto";
 
     if (!task) return { ok: false, output: "computer_control requires a non-empty `task` argument" };
+    const blocked = desktopControlBlock();
+    if (blocked && !ctx.dryRun && mode !== "dry-run") {
+      ctx.audit("computer_control.isolation_blocked", { reason: blocked });
+      return { ok: false, output: blocked, reason: "blocked:isolation-unavailable" };
+    }
 
     const kill = isDisabled();
     if (kill.disabled) {

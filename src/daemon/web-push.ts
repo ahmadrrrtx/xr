@@ -8,7 +8,7 @@
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { mobileHome } from './mobile-home.ts';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { PairedDevice } from './mobile-devices.js';
@@ -27,7 +27,7 @@ interface VapidPrivateJwk {
 }
 
 // Phase 2.4 · P1-1 — lazy HOME resolution (Phase 24 convention, same as lan-tls).
-const VAPID_PATH = () => join(homedir(), '.xr', 'vapid.json');
+const VAPID_PATH = () => join(mobileHome(), 'vapid.json');
 
 /** 10 minutes: an approval you resolved on your desk shouldn't buzz your phone. */
 export const DEFAULT_TTL_SECONDS = 600;
@@ -38,17 +38,20 @@ interface VapidKeys {
 }
 
 let vapidCache: VapidKeys | null = null;
+let vapidCachePath: string | null = null;
 
 /** Load (or create on first run) the VAPID key pair persisted to ~/.xr/vapid.json. */
 
 
 export async function ensureVapidKeys(): Promise<VapidKeys> {
-  if (vapidCache) return vapidCache;
+  const path = VAPID_PATH();
+  if (vapidCache && vapidCachePath === path) return vapidCache;
   try {
-    const raw = await readFile(VAPID_PATH(), 'utf8');
+    const raw = await readFile(path, 'utf8');
     const parsed = JSON.parse(raw) as { publicKey?: string; privateJwk?: VapidPrivateJwk };
     if (parsed.publicKey && parsed.privateJwk) {
       vapidCache = { publicKey: parsed.publicKey, privateJwk: parsed.privateJwk };
+      vapidCachePath = path;
       return vapidCache;
     }
   } catch {
@@ -71,9 +74,10 @@ export async function generateVapidKeys(): Promise<VapidKeys> {
   const privateJwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
   const keys: VapidKeys = { publicKey: toBase64Url(raw), privateJwk };
 
-  await mkdir(join(homedir(), '.xr'), { recursive: true, mode: 0o700 });
+  await mkdir(mobileHome(), { recursive: true, mode: 0o700 });
   await writeFile(VAPID_PATH(), `${JSON.stringify(keys, null, 2)}\n`, { mode: 0o600 });
   vapidCache = keys;
+  vapidCachePath = VAPID_PATH();
   return keys;
 }
 

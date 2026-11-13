@@ -1,5 +1,11 @@
 # XR Mobile PWA — setup, pairing, LAN mode
 
+> **Preview candidate:** The packaged desktop has an opt-in mobile listener
+> implementation, but native packaging CI and a real phone journey remain
+> unverified. A CA-issued certificate whose hostname is trusted by the phone
+> is required. Never bypass browser TLS warnings based on the app's displayed
+> fingerprint: it is not certificate pinning. See [security model](SECURITY.md).
+
 XR on your phone is a **companion**, not a second desktop: chat, push-to-talk,
 approvals and budget. It talks to the XR daemon running on your computer over
 your own WiFi. There is no XR cloud, no relay, no sync server.
@@ -20,7 +26,7 @@ your own WiFi. There is no XR cloud, no relay, no sync server.
 | Companion chat store (mobile-scoped sync) | `src/daemon/mobile-chats.ts` (`~/.xr/mobile-chats.json`, 0600, bounded) |
 | PWA static serving (`/mobile/`) | `src/daemon/routes/mobile-companion.routes.ts` (LAN mode; `XR_MOBILE_DIST` overrides the `mobile/dist` location for packaged layouts) |
 | Web Push (VAPID + double encryption) | `src/daemon/web-push.ts` |
-| Desktop Settings → Mobile card | `desktop/src/components/settings/MobileCard.tsx` |
+| Desktop Settings → Mobile | Explicit opt-in candidate; trusted TLS setup required |
 | Reference daemon (test harness) | `tools/reference-daemon.mjs` |
 
 The daemon serves the built PWA from `/mobile/` when in LAN mode, so the phone
@@ -56,23 +62,34 @@ On first `--lan` start the daemon:
 Without the flag the daemon binds `127.0.0.1` exactly as before. There is no
 code path that opens the LAN listener silently.
 
-## 3. Pairing a phone
+## 3. Packaged desktop: pairing candidate
 
-1. Desktop: **Settings → Mobile → Pair new device** → QR + 6-digit code +
-   fingerprint (code lives 10 minutes, one use).
-2. Phone: open `https://<lan-ip>:3141/mobile/` in Safari/Chrome. The browser
-   warns about the certificate — expected. Compare the fingerprint the phone
-   shows with the one on your desktop screen, then tap **Visit Website**.
-3. The app reads `?code=&fp=` from the QR, shows the fingerprint again and asks
-   you to confirm: **They match — Pair**.
-4. Pairing mints a device session (HttpOnly `xr_session` cookie), registers the
-   device in `~/.xr/devices.json` and pins the cert fingerprint on the phone.
+1. Provision a CA-issued server certificate and private key for an address
+   that your phone resolves to this computer. Configure the phone to trust its
+   CA through an independent, secure process. XR does **not** provision or
+   install a CA, certificate or DNS record, and cannot tell if your phone trusts it.
+2. Open **Settings → Mobile → Allow mobile access**. The screen shows the
+   desktop-specific directory; put the PEM certificate chain in `cert.pem`
+   and its private key in `key.pem`. On Unix the key must be owner-only
+   (`chmod 600`). Enter the certificate's matching hostname or IPv4 address,
+   confirm the trust prerequisite and select **Enable mobile access**.
+3. XR validates the key, validity and hostname, rejects self-signed leaves,
+   and starts a separate TLS listener. Only private/link-local/loopback IPv4
+   peers are accepted; other reachable private networks or VPNs may also
+   reach it. Do not port-forward the listener.
+4. Use **Pair new device** and open the QR/link on your phone. The browser/OS
+   must validate the connection without a warning. **Do not bypass a browser
+   warning**: the PWA's reported fingerprint cannot authenticate TLS.
+5. Disable mobile access in Settings to close the listener and invalidate an
+   unused code; paired-device revocation is available on the same card. The
+   listener also stops when the app-owned engine exits. Device and push data
+   belong to the desktop XR home, not the separate CLI home.
 
-Manual fallback: the pairing screen has a 3-field form (address, code,
-fingerprint) if the QR won't scan.
-
-Unpairing: desktop **Settings → Mobile → revoke** (the phone's cookie stops
-working on its next request), or phone **Settings → Unpair this device**.
+This is a candidate with automated loopback TLS coverage, not a tested
+installed-desktop-to-physical-phone journey. CA provisioning, local DNS,
+firewall, router isolation and device-specific browser trust remain owner work.
+The older standalone `xr serve --lan` self-signed flow is distinct and does
+not provide independently authenticated TLS by itself.
 
 ## 4. Offline behaviour
 
@@ -109,8 +126,8 @@ working on its next request), or phone **Settings → Unpair this device**.
 
 | Symptom | Fix |
 | --- | --- |
-| TLS warning on the phone | Expected — self-signed. Verify the fingerprint against your desktop before pairing. |
-| "Unrecognised XR certificate" | The cert changed (regen/rotate) or something is impersonating XR. Only continue if you rotated it yourself. |
+| TLS warning on the phone | Stop: the app cannot authenticate the TLS peer from the displayed fingerprint. Use an independently trusted certificate/verification mechanism. |
+| "Unrecognised XR certificate" | The server-reported value changed. This is not proof of the actual certificate; verify independently. |
 | App stuck on pairing screen | Code expired (10 min) or was used. Generate a new one on the desktop. |
 | Phone can't reach the LAN URL | Different network, client isolation on the router, or the desktop firewall. `xr serve` without `--lan` is loopback-only. |
 | Push never arrives | Desktop asleep/offline, or notifications denied in phone settings. Settings → Notifications shows the state. |

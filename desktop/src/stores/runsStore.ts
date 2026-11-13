@@ -115,7 +115,7 @@ export interface RunsState {
   archive: (id: string) => void;
   unarchive: (id: string) => void;
   copyId: (id: string) => Promise<void>;
-  startDemoRun: (title?: string) => string;
+  startDemoRun: (title?: string) => string | null;
 
   exportCsv: () => Promise<void>;
   exportJson: () => Promise<void>;
@@ -333,9 +333,8 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       const keep: Record<string, RunSummary> = {};
       for (const r of Object.values(get().runs)) {
         if (
-          inProgress(r.status) ||
-          r.id.startsWith('mock-latest') ||
-          isEngineRunId(r.id)
+          isEngineRunId(r.id) ||
+          (import.meta.env.DEV && (inProgress(r.status) || r.id.startsWith('mock-latest')))
         )
           keep[r.id] = r;
       }
@@ -413,6 +412,8 @@ export const useRunsStore = create<RunsState>()((set, get) => {
     },
 
     upsertFromBrain: (run) => {
+      // Persisted demo runs from older builds are not real history.
+      if (!import.meta.env.DEV && run.source !== 'engine') return;
       const prev = get().runs[run.id];
       get().upsert(summaryFromRun(run, prev), 'brain');
     },
@@ -421,6 +422,7 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       const s = get();
       switch (payload.kind) {
         case 'run-start': {
+          if (!import.meta.env.DEV && payload.run.source !== 'engine') return;
           const prev = s.runs[payload.runId];
           get().upsert(summaryFromRun(payload.run, prev), 'event');
           return;
@@ -622,10 +624,9 @@ export const useRunsStore = create<RunsState>()((set, get) => {
     },
 
     startDemoRun: (title) => {
-      // Real engine run when a provider answers (same path as Brain's button);
-      // a titled request is always the local mock (used by seeds/tests).
-      if (title) return useBrainStore.getState().startMockRun(title);
-      return startDemoRun().id;
+      // Keep the explicit test-only seam out of production.
+      if (title && import.meta.env.DEV) return useBrainStore.getState().startMockRun(title);
+      return startDemoRun()?.id ?? null;
     },
 
     exportCsv: async () => {

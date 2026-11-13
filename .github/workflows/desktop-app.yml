@@ -102,6 +102,11 @@ jobs:
           bun-version-file: .bun-version
       - name: Install engine dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
       # Sidecar MUST exist before cargo check: tauri-build validates
       # bundle.externalBin paths at build-script time.
       - name: Compile engine sidecar (single source — scripts/compile-sidecar.ts)
@@ -175,6 +180,11 @@ jobs:
           bun-version-file: .bun-version
       - name: Install engine dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
       # Same precondition as the Linux job: tauri-build validates externalBin.
       - name: Compile engine sidecar (x86_64-pc-windows-msvc)
         env:
@@ -249,6 +259,11 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install engine dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
       - name: Compile engine sidecar (externalBin for this triple)
         env:
           SIDECAR_TRIPLE: ${{ matrix.triple }}
@@ -500,6 +515,7 @@ jobs:
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
           Copy-Item "desktop/src-tauri/target/release/xr-desktop.exe" $dir
           Copy-Item "desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe" $dir
+          Copy-Item "mobile/dist" "$dir/mobile" -Recurse
           $tmp = Join-Path $env:RUNNER_TEMP 'xr-portable-stage'
           if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
           # Compress-Archive keeps the folder itself when given the parent,
@@ -565,7 +581,7 @@ jobs:
           - { slug: windows-x64, runsOn: windows-latest, webdriver: true }
           # No arm64 msedgedriver from msedgedriver-tool: launch + sidecar only.
           - { slug: windows-arm64, runsOn: windows-11-arm, webdriver: false }
-          - { slug: darwin-arm64, runsOn: macos-14, webdriver: false }
+          - { slug: darwin-arm64, runsOn: macos-26, webdriver: false }
           - { slug: darwin-arm64, runsOn: macos-15, webdriver: false }
           # The cross-built Intel bundle, run natively on Intel hardware.
           - { slug: darwin-x64, runsOn: macos-15-intel, webdriver: false }
@@ -638,14 +654,8 @@ jobs:
   flatpak:
     needs: [release-preflight]
     name: Linux — Flatpak metadata (required) + build (workflow_dispatch)
-    # 2026-11-01: the from-source build is REPORT-ONLY per the manifest's own
-    # status note (packaging/flatpak/ai.rrrtx.xr-desktop.yml — Flathub needs
-    # vendored cargo/npm sources that do not exist yet, and flathub has since
-    # retired the runtime branches this lane was authored against). The
-    # metadata validations above stay REQUIRED and gating; the build answer
-    # stays visible (red step + annotation) without poisoning the dispatch
-    # gate jobs. Re-enable hard-gating when the vendored sources land.
-    continue-on-error: true
+    # Metadata is required on all runs; dispatch additionally requires the
+    # offline-source Flatpak build. A failed step must not become a green job.
     # 24.04, not 22.04, for one specific reason: the AppStream CLI on 22.04 is
     # from 2022 and does not know the modern tags this metadata uses — it reports
     # `<developer>` as an unknown tag and `url type="vcs-browser"` as invalid,
@@ -695,17 +705,28 @@ jobs:
           # the GNOME version — the historical //46 refs never resolved.
           flatpak install --user -y --noninteractive flathub \
             org.gnome.Platform//48 org.gnome.Sdk//48 \
-            org.freedesktop.Sdk.Extension.rust-stable//24.08 \
             org.freedesktop.Sdk.Extension.node22//24.08
 
-      # Report-only is deliberately NOT set: dispatching this workflow is a
-      # request for the answer, so a failure here is red on purpose.
+      # Fetch pinned lockfile dependencies on the runner, then give the build
+      # sandbox only the staged offline sources. No build-network permission.
+      - name: Rust toolchain for locked Flatpak vendoring
+        if: github.event_name == 'workflow_dispatch'
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: 1.99.1
+
+      - name: Stage locked sources for offline Flatpak build
+        if: github.event_name == 'workflow_dispatch'
+        run: bash scripts/prepare-flatpak-sources.sh "$RUNNER_TEMP/xr-flatpak-source"
+
+      # A dispatch requests a real offline build; a failure remains a failure.
       - name: Build the Flatpak from source
         if: github.event_name == 'workflow_dispatch'
         run: |
-          flatpak-builder --user --force-clean --repo=flatpak-repo \
-            flatpak-build packaging/flatpak/ai.rrrtx.xr-desktop.yml
-          flatpak --user remote-add --if-not-exists xr-local flatpak-repo --no-gpg-verify
+          cd "$RUNNER_TEMP/xr-flatpak-source"
+          flatpak-builder --user --force-clean --repo="$GITHUB_WORKSPACE/flatpak-repo" \
+            "$RUNNER_TEMP/flatpak-build" packaging/flatpak/ai.rrrtx.xr-desktop.yml
+          flatpak --user remote-add --if-not-exists xr-local "$GITHUB_WORKSPACE/flatpak-repo" --no-gpg-verify
           flatpak --user install -y xr-local ai.rrrtx.xr-desktop
           flatpak run --command=sh ai.rrrtx.xr-desktop -c 'test -x /app/bin/xr-desktop'
 

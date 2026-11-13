@@ -27,23 +27,40 @@ gate, your approval, estimated-spend admission checks, and a hash-chained log yo
 <!-- XR:RELEASE-IDENTITY:BEGIN -->
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
-**Version:** `1.1.1-rc.1 (Graphite)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+**Version:** `1.2.0-preview.1 (Preview 1)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
-> **Status: Developer preview.** APIs and behavior may change without a deprecation cycle. Check the [known-limitations register](docs/release/1.1.1-rc.1/known-limitations.md) and [candidate evidence](docs/release/RELEASE_CANDIDATE_REPORT.md); a preview label does not imply native-platform or signing validation.
+> **Status: Public beta.** @rrrtx/xr is labelled beta until every launch gate in
+> [docs/release/launch-gates.json](docs/release/launch-gates.json) is green (decision D2; enforced by
+> `bun run claim-lint`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)
+> and the [known-limitations register](docs/release/1.2.0-preview.1/known-limitations.md) before relying on it
+> for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on `PATH`;
+> the installer binaries do not. Desktop app builds are not code-signed yet. On macOS and Windows the
+> agent's shell commands require a wired isolated backend and are refused otherwise. Windows AppContainer
+> is disabled pending security verification; direct computer control on Windows/macOS is unavailable; never approve commands in a repository you do not trust. Feedback goes
+> through the [beta loop](docs/release/BETA.md).
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
 > is stamped from that one file, and CI fails the build if any of them drift
 > (Constitution Article XXII.1).
 
-XR — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.
+XR Preview 1 (1.2.0-preview.1) — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.
 
 **Bundled skills:** 65 (counted from `skills/` at release time.)
 
-> **Install channels currently serve `1.0.0`.** `1.1.1-rc.1` is the in-development line on
+> **Install channels currently serve `1.0.0`.** `1.2.0-preview.1` is the in-development line on
 > `main`: it is not published to npm, Homebrew, WinGet, Scoop or Docker, and the installers below
 > install `1.0.0`. See [docs/release/CHANNELS.md](docs/release/CHANNELS.md#public-version).
 <!-- XR:RELEASE-IDENTITY:END -->
+
+### Preview 1 status
+
+XR Preview 1 is a release candidate, not a completed public release. **Voice and computer
+control are experimental:** the available tests use fixtures or policy checks, not a real
+microphone or a human-driven desktop session. Local-runtime tests used a mock server; no local
+model was benchmarked here. Messaging integrations have mock evidence only. Desktop installers
+need the native CI and real-machine checks described in the
+[readiness report](docs/release/PREVIEW1_READINESS.md).
 
 ---
 
@@ -73,7 +90,7 @@ The difference is **what surrounds that loop**:
 | 🛑 **It asks before it acts** | Consequential actions stop and wait for your approval. Denial is enforced in the execution path, not suggested in a prompt. |
 | 💸 **It tracks spending and checks task limits** | USD/token limits are checked during the loop. USD costs are estimates: a response can exceed the requested limit, and unknown pricing cannot enforce a USD cap. |
 | 🔗 **It writes down what it did** | Every event is SHA-256-linked into a local chain you can verify offline with one command. |
-| 💻 **It runs on your machine** | One SQLite database, no telemetry, no mandatory network. Ten local model runtimes are first-class. |
+| 💻 **It runs on your machine** | One SQLite database, opt-in telemetry off by default, no mandatory network. Ten local model runtimes are first-class. |
 | 🆓 **Every local feature is free** | Voice, memory, themes, CLI, bots, the editor surface, research, agents, skills and MCP are on the free tier permanently — [no paywall, by test](#pricing). |
 
 ```bash
@@ -101,6 +118,12 @@ Every public channel serves the same canonical **v1.0.0** build (`channels.publi
 [`release.manifest.json`](release.manifest.json)). Status is checked against the live registries
 by `bun run channel:live`; see [`docs/release/CHANNELS.md`](docs/release/CHANNELS.md#public-version).
 
+Preview 1 itself does **not** ship through these channels. It is a GitHub **pre-release** of the
+`1.2.0-preview.1` development line; the table below describes the **public `1.0.0` line** these
+channels serve today and are not a claim that Preview 1 is installable from them. What is missing,
+and why, is listed in
+[`docs/release/1.2.0-preview.1/known-limitations.md`](docs/release/1.2.0-preview.1/known-limitations.md).
+
 | Channel | Platform | Command | Status |
 |---|---|---|---|
 | **Installer** (verified binary) | Linux · macOS · WSL · Termux¹ | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` | ✅ live |
@@ -112,6 +135,19 @@ by `bun run channel:live`; see [`docs/release/CHANNELS.md`](docs/release/CHANNEL
 | **Homebrew** | macOS · Linux | `brew install ahmadrrrtx/tap/xr` | ⏳ tap publish pending |
 | **WinGet** | Windows x64 | `winget install ahmadrrrtx.XR` | ⏳ community-repo review pending |
 | **From source** | any | `git clone --branch v1.0.0 https://github.com/ahmadrrrtx/xr && cd xr && bun install --frozen-lockfile` | ✅ |
+
+**Installing Preview 1 over an existing 1.0.0.** The updater never moves anyone down a version, so
+installing a pre-release is a deliberate choice, not an automatic update. Back up `~/.xr` first.
+
+Preview 1 deliberately keeps one channel. `channels.claimed` in
+[`release.manifest.json`](release.manifest.json) still describes the **1.0.0 public line**, which is
+what those channels serve today; Preview 1 itself ships only as a GitHub pre-release, and
+[`docs/release/1.2.0-preview.1/known-limitations.md`](docs/release/1.2.0-preview.1/known-limitations.md)
+says so in the user-facing list.
+
+**Installing over an existing 1.0.0.** Preview 1 is a pre-release of the development line. The
+updater never moves anyone down a version, so installing Preview 1 is a deliberate choice, not an
+automatic update. Back up `~/.xr` first.
 
 ¹ Platforms without a compiled binary (Termux, Windows ARM64, Alpine/musl) get the same
 release's checksum-verified source archive, which needs Bun. Pin a release with
@@ -528,7 +564,7 @@ See [`docs/business-os-extension.md`](docs/business-os-extension.md) and the
 | 🛰 **Always alive** | Tray keeps the engine, shortcuts and approvals badge working when the window closes; menu shows today's spend and pending approvals in the platform's own idiom. |
 | ⌨️ **Global, honestly** | HUD, push-to-talk and screenshot-a-region-and-ask work while unfocused; chords fall back when the OS owns them, and the Settings screen shows what the machine actually holds. |
 | 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart; no release key → refuses to update rather than updating unverified. **Not provisioned yet:** current desktop builds have no update feed ([signing runbook](docs/release/DESKTOP_SIGNING.md)). |
-| 🧯 **Truthful crash recovery** | Marker-file detection; cut-off runs are marked `killed`, never "completed"; optional redacted report you choose to send. No telemetry anywhere. |
+| 🧯 **Truthful crash recovery** | Marker-file detection; cut-off runs are marked `killed`, never "completed"; optional redacted report you choose to send. Crash reporting is not automatic; separate telemetry is opt-in. |
 | 🪟 **Native where it counts** | macOS HIG application menu, Windows MSIX with deep links + toast activation, Linux Flathub-ready Flatpak. |
 
 ```bash
@@ -702,7 +738,7 @@ Found an inaccurate claim in this README or the docs? That is a bug with its own
 **XR Personal is free, forever, with every feature in this repository included.** Voice, local
 memory, themes, the CLI, bots, the VS Code surface, the mobile PWA, research, agents, skills and
 MCP are free, unlimited, and identical whether you are signed in or not. There is no seat
-count, no time limit, no watermark, no nag screen, no telemetry, and no feature that a licence can
+count, no time limit, no watermark, no nag screen, no mandatory telemetry, and no feature that a licence can
 turn off — because the entire list of what a licence gates is eight *hosted* services
 (`BUSINESS_FEATURES` in [`src/cloud/license.ts`](src/cloud/license.ts)) and not one of them runs on
 your machine.

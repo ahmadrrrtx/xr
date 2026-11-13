@@ -13,6 +13,7 @@ pub const APP_COMMANDS: &[&str] = &[
     "minimize_window",
     "toggle_maximize",
     "close_window",
+    "quit_app",
     "get_platform",
     // commands::system
     "detect_system",

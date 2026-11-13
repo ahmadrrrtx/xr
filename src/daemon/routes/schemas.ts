@@ -24,6 +24,7 @@ export * from "./schemas-integrations.ts"; // Phase 22
 export * from "./schemas-telegram.ts"; // Phase 24
 export * from "./schemas-discord.ts"; // Phase 26
 export * from "./schemas-whatsapp.ts"; // Phase 26
+export { DesktopMobileStartRequest } from "./schemas-mobile.ts"; // desktop TLS start body
 
 // ── Shared primitives ────────────────────────────────────────────────────────
 

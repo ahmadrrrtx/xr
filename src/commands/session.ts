@@ -7,6 +7,7 @@
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { redactCredentialString, redactCredentialValue } from "../observability/redaction.ts";
 import type { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import { Store } from "../state/workspace-store.ts";
@@ -211,6 +212,8 @@ export class SessionCommand implements Command {
     const lines: string[] = [
       `# Session: ${session.title || session.id}`,
       "",
+      "_Known credential patterns and fields are redacted; review before sharing. Other sensitive information may remain._",
+      "",
       `- **id:** ${session.id}`,
       `- **mode:** ${session.mode}`,
       `- **status:** ${session.status}`,
@@ -223,12 +226,13 @@ export class SessionCommand implements Command {
       lines.push(`### ${st.idx}. ${st.phase}${st.tool ? ` · ${st.tool}` : ""}`);
       lines.push("");
       lines.push("```json");
-      lines.push(typeof st.detail === "string" ? st.detail : JSON.stringify(st.detail, null, 2));
+      const safeDetail = redactCredentialValue(safeParse(st.detail));
+      lines.push(typeof safeDetail === "string" ? safeDetail : JSON.stringify(safeDetail, null, 2));
       lines.push("```");
       lines.push("");
     }
 
-    writeFileSync(outPath, lines.join("\n"), "utf8");
+    writeFileSync(outPath, redactCredentialString(lines.join("\n")), "utf8");
 
     emit(
       { ok: true, path: outPath, sessionId: session.id, steps: steps.length },

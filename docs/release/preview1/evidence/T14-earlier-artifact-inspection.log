@@ -1,0 +1,21 @@
+Artifact inspection — older CI candidate e551b234, NOT the patched-SQLite candidate
+Source: Desktop App run 42897513049; GitHub artifact 13802557124 (Linux x64)
+and 13801004899 (Windows x64), downloaded 2026-11-10.
+Linux zip sha256 ae2a19af9e7758a829d60be374ffabcd419e5c226ea215fc3c118c2317a817a6
+Zip entries: deb/XR_1.2.0-preview.1_amd64.deb; rpm/XR-1.2.0-preview.1-1.x86_64.rpm; appimage/XR_1.2.0-preview.1_amd64.AppImage.
+Deb sha256 38e68145a519d51e537e8c7b78dd51c702730cc0522df6c714427b515ac8f050.
+dpkg-deb -I: Package xr; Version 1.2.0-preview.1; Architecture amd64.
+dpkg-deb -c: /usr/bin/xr-desktop and /usr/bin/xr-engine present; both ELF x86-64.
+Extracted xr-engine --version: v1.2.0-preview.1 (Preview 1).
+Using the extracted engine with scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu:
+  [smoke] health OK — token handshake banner present:
+  [smoke] PASS
+RPM and AppImage names listed only; contents not inspected in this pass.
+Windows zip sha256 338b29273b5dd3aad0eeff79b9fe0ac289abe8fc586fd4814f9875e3b77d3503
+Zip entries: msi/XR_1.2.0-preview.1_x64_en-US.msi; nsis/XR_1.2.0-preview.1_x64-setup.exe.
+MSI sha256 6fb37b6a0938d4f95bd39fb4f5b11e553f57c08eb1e94f6d77077a31cec35cfe.
+file: MSI Installer, Installation Database, Template x64.
+NSIS sha256 ee445ef01ced76216bf8e35c87ae97d91f11e42592b1f83400bcde209bf9c498.
+file: PE32 GUI Intel i386 Nullsoft Installer self-extracting archive (bootstrapper; not proof of payload architecture).
+No Windows installation, execution, signature verification, or payload inspection was performed here.
+This evidence predates the SQLite fix and cannot satisfy current-tip artifact gating.

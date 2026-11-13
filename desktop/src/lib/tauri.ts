@@ -78,6 +78,10 @@ export const toggleMaximize = (): Promise<void> =>
 export const closeWindow = (): Promise<void> =>
   invokeWindowCommand('close_window');
 
+/** Explicit application quit; closing the main window only hides it. */
+export const quitApp = (): Promise<void> =>
+  invokeWindowCommand('quit_app');
+
 /** Notify the Rust host (tray/telemetry) that the theme changed. */
 export async function emitThemeChanged(theme: ThemeId): Promise<void> {
   if (!isTauri()) return;

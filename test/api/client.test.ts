@@ -85,3 +85,48 @@ test("client library is generated from the registry (drift gate equivalent)", as
   // (bun run client:check) proves it is in lockstep with the registry.
   expect(XRDaemonClient.name).toBe("XRDaemonClient");
 });
+
+test("every generated operation preserves method, encoded path, body and SSE transport", async () => {
+  const { listDaemonRoutes } = await import("../../src/daemon/routes/index.ts");
+  const { apiRegistry } = await import("../../src/daemon/routes/registry.ts");
+  const schemas = await import("../../src/daemon/routes/schemas.ts");
+  const knownSchemas = new Set<unknown>(Object.values(schemas).filter((v) => v && typeof v === "object" && "safeParse" in v));
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  const c = new XRDaemonClient({ baseUrl: "http://127.0.0.1:3141/", token: TOKEN, fetchImpl: async (url, init) => {
+    requests.push({ url: String(url), init }); return new Response('{"ok":true}', { status: 200 });
+  } });
+  const used = new Set<string>();
+  let checked = 0, encoded = 0, bodies = 0, streams = 0;
+  for (const op of apiRegistry(listDaemonRoutes())) {
+    if (op.path.includes("{path}") || op.method === "ANY") continue;
+    const parts = op.id.split(/[.]/).filter(Boolean);
+    let name = parts[0]!.replace(/[^a-zA-Z0-9_$]/g, "");
+    for (const p of parts.slice(1)) name += p.charAt(0).toUpperCase() + p.slice(1).replace(/[^a-zA-Z0-9_$]/g, "");
+    if (used.has(name)) name += "Op";
+    used.add(name);
+    const count = [...op.path.matchAll(/\{([^}]+)\}/g)].length;
+    const params = Array.from({ length: count }, (_, i) => `parameter ${i}/?#`);
+    const hasBody = Boolean(op.meta.request && knownSchemas.has(op.meta.request));
+    const body = { probe: "payload" };
+    const method = (c as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)[name];
+    expect(typeof method).toBe("function");
+    expect(Object.getOwnPropertyDescriptor(XRDaemonClient.prototype, name)?.enumerable).toBe(false);
+    const beforeCount = requests.length;
+    const result = await method!.apply(c, hasBody ? [...params, body] : params);
+    expect(requests.length).toBe(beforeCount + 1);
+    const request = requests[beforeCount]!;
+    let index = 0;
+    const path = op.path.replace(/\{[^}]+\}/g, () => encodeURIComponent(params[index++]!));
+    expect(request?.url).toBe(`http://127.0.0.1:3141${path}`);
+    expect(request?.init?.method).toBe(op.method);
+    expect(request?.init?.body).toBe(hasBody ? JSON.stringify(body) : undefined);
+    expect((request?.init?.headers as Record<string, string>).authorization).toBe(`Bearer ${TOKEN}`);
+    if (op.meta.sse) { expect(result).toBeInstanceOf(Response); streams++; }
+    else expect(result).toEqual({ ok: true });
+    checked++; if (count) encoded++; if (hasBody) bodies++;
+  }
+  expect(checked).toBeGreaterThan(200);
+  expect(encoded).toBeGreaterThan(0);
+  expect(bodies).toBeGreaterThan(0);
+  expect(streams).toBeGreaterThan(0);
+});

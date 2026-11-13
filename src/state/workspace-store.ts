@@ -27,6 +27,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
 import { existsSync, mkdirSync, copyFileSync, readFileSync, rmSync } from "node:fs";
 import { XR_HOME } from "../config/config.ts";
+import { redactAuditDetail, redactString } from "../observability/redaction.ts";
 // XR 4.5 — context schema. `context/repository.ts` imports only `context/types.ts`
 // (dependency-free), so this static import introduces no cycle.
 import { ContextRepository, adaptStoreForContext } from "../context/repository.ts";
@@ -445,7 +446,7 @@ export class WorkspaceStore {
       const prev = this.lastHashInTxn();
       const ts = Date.now();
       const counter = this.nextCounterInTxn();
-      const safe = this.redact({
+      const safe = redactAuditDetail({
         pubkey: identity.publicKeyB64,
         fingerprint: identity.publicKeyFingerprint,
         actor,
@@ -501,7 +502,7 @@ export class WorkspaceStore {
       const prev = this.lastHashInTxn();
       const ts = Date.now();
       const counter = this.nextCounterInTxn();
-      const safe = this.redact({
+      const safe = redactAuditDetail({
         pubkey: identity.publicKeyB64,
         fingerprint: identity.publicKeyFingerprint,
         previousPubkey: oldPubkey,
@@ -1393,15 +1394,6 @@ export class WorkspaceStore {
     return row?.hash ?? GENESIS;
   }
 
-  /** Redact obvious secrets before persisting. */
-  private redact(detail: Record<string, unknown>): Record<string, unknown> {
-    const json = JSON.stringify(detail).replace(
-      /(sk-[A-Za-z0-9]{8,}|Bearer\s+[A-Za-z0-9._-]{8,})/g,
-      "«redacted»",
-    );
-    return JSON.parse(json);
-  }
-
   /**
    * Append one audit entry. The chain append (read last hash → compute →
    * insert) is ONE atomic `IMMEDIATE` transaction (T1): concurrent writers —
@@ -1420,7 +1412,9 @@ export class WorkspaceStore {
     if (this.chainBrokenAt !== null) {
       throw new AuditChainCorruptedError(this.chainBrokenAt);
     }
-    const safe = this.redact(detail);
+    const safe = redactAuditDetail(detail);
+    // Event text is part of the persisted, hashed payload too.
+    event = redactString(event);
     let hash = "";
     this.write(() => {
       const prev = this.lastHashInTxn();

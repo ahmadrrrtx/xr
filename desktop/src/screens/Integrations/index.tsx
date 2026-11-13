@@ -35,15 +35,24 @@ export default function IntegrationsScreen() {
   const { status: telegram } = useTelegramStatus(4000);
   const { status: discord } = useDiscordStatus(5000);
   const { status: whatsapp } = useWhatsAppStatus(5000);
+  // D3 — no control that cannot do anything. Connectors the engine reports as
+  // `coming_soon` used to render as a locked card; the screen now shows only
+  // connectors that can actually be connected. The engine API still reports the
+  // full catalogue with its support status, so nothing is hidden from the truth —
+  // it is removed from the UI that pretends it is a choice.
+  const supportedConnectors = useMemo(
+    () => connectors.filter((c) => c.support !== 'coming_soon'),
+    [connectors],
+  );
   const cards = useMemo(
     () =>
-      connectors.map((c) => {
+      supportedConnectors.map((c) => {
         if (c.id === 'telegram' && telegram) return { ...c, status: telegramCardStatus(telegram.label) };
         if (c.id === 'discord' && discord) return { ...c, status: discordCardStatus(discord) };
         if (c.id === 'whatsapp' && whatsapp) return { ...c, status: whatsappCardStatus(whatsapp) };
         return c;
       }),
-    [connectors, telegram, discord, whatsapp],
+    [supportedConnectors, telegram, discord, whatsapp],
   );
   // Green = answering, yellow = configured but not answering, red = needs attention.
   const dots = useMemo(() => {

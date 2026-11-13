@@ -1,6 +1,11 @@
 /*
  * Sessions panel (Phase 4) — 260px, New Chat primary, search (>5 sessions),
- * date groups (Today / Yesterday / Last 7 days / Older), archived link.
+ * date groups (Today / Yesterday / Last 7 days / Older).
+ * D3: the "Archived chats" control is GONE — it only ever raised a
+ * "coming soon" toast, and the archived list cannot exist yet because both
+ * session queries (SQLite adapter and its Rust command) filter
+ * `archived = 0`, so an archived session has no way back in the UI. The
+ * per-session archive action is withdrawn with it until the list exists.
  * Auto-hides under 960px; ⌘⇧O toggles.
  */
 import { Plus, Search } from 'lucide-react';
@@ -26,14 +31,13 @@ interface SessionRowProps {
   activeSessionId: string | null;
   onSelect: (id: string) => void;
   onRename: (id: string, title: string) => void;
-  onArchive: (id: string) => void;
   onDelete: (id: string) => void;
   index: number;
   style: React.CSSProperties;
   ariaAttributes: Record<string, unknown>;
 }
 
-function SessionRow({ rows, activeSessionId, onSelect, onRename, onArchive, onDelete, index, style, ariaAttributes }: SessionRowProps) {
+function SessionRow({ rows, activeSessionId, onSelect, onRename, onDelete, index, style, ariaAttributes }: SessionRowProps) {
   const row = rows[index];
   if (!row) return null;
   if (row.kind === 'header') {
@@ -55,7 +59,6 @@ function SessionRow({ rows, activeSessionId, onSelect, onRename, onArchive, onDe
         active={s.id === activeSessionId}
         onSelect={() => onSelect(s.id)}
         onRename={(t) => onRename(s.id, t)}
-        onArchive={() => onArchive(s.id)}
         onDelete={() => onDelete(s.id)}
       />
     </div>
@@ -89,7 +92,6 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
   const createNewSession = useSessionsStore((s) => s.createNewSession);
   const selectSession = useSessionsStore((s) => s.selectSession);
   const renameSession = useSessionsStore((s) => s.renameSession);
-  const archiveSession = useSessionsStore((s) => s.archiveSession);
   const deleteSession = useSessionsStore((s) => s.deleteSession);
   const [query, setQuery] = useState('');
   // "Now" for date grouping — set in an effect (purity rule) and refreshed
@@ -212,7 +214,6 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
               activeSessionId,
               onSelect: open,
               onRename: (id, t) => void renameSession(id, t),
-              onArchive: (id) => void archiveSession(id),
               onDelete: (id) => void deleteSession(id),
             }}
             overscanCount={8}
@@ -235,7 +236,6 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
                       navigate(`/chat/${s.id}`);
                     }}
                     onRename={(t) => void renameSession(s.id, t)}
-                    onArchive={() => void archiveSession(s.id)}
                     onDelete={() => void deleteSession(s.id)}
                   />
                 ))}
@@ -245,21 +245,6 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
         )}
       </div>
 
-      <div className="border-border-subtle border-t p-2">
-        <button
-          type="button"
-          className="text-text-tertiary hover:text-text-secondary w-full rounded-md px-2 py-1.5 text-left text-[12px]"
-          onClick={() =>
-            import('sonner').then(({ toast }) =>
-              toast('Archived chats coming soon', {
-                description: 'The archived list lands with Settings (Phase 8).',
-              }),
-            )
-          }
-        >
-          Archived chats
-        </button>
-      </div>
     </aside>
   );
 }

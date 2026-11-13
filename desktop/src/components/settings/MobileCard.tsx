@@ -66,7 +66,7 @@ export function MobileCard({
     return fetchJson<{ devices: DeviceSummary[] }>('/api/mobile/devices')
       .then((data) => setDevices(data.devices ?? []))
       .catch(() => {
-        /* offline or not in LAN mode */
+        setError('Could not load paired devices. Check that the engine is running.');
       });
   }, [fetchJson]);
 
@@ -134,7 +134,8 @@ export function MobileCard({
     setBusy(true);
     setError(null);
     try {
-      await fetchJson(`/api/mobile/devices/${id}/push-test`, { method: 'POST' });
+      const result = await fetchJson<{ ok: boolean }>(`/api/mobile/devices/${id}/push-test`, { method: 'POST' });
+      if (!result.ok) throw new Error('Push delivery failed');
     } catch {
       setError('Test push failed — is XR reachable from the push service?');
     } finally {
@@ -182,16 +183,8 @@ export function MobileCard({
       {!lanEnabled ? (
         <div>
           <p className="text-[13px] leading-[1.5]" style={{ color: 'var(--text-secondary)' }}>
-            XR is only reachable from this computer. To use your phone, restart XR with LAN access:
-          </p>
-          <pre
-            className="mt-2 overflow-x-auto rounded-lg px-3 py-2 text-[12.5px]"
-            style={{ ...mono, background: 'var(--bg-void)', border: '1px solid var(--border-default)', color: 'var(--accent)' }}
-          >
-            xr serve --lan
-          </pre>
-          <p className="mt-2 text-[12px] leading-[1.5]" style={{ color: 'var(--text-tertiary)' }}>
-            XR never opens itself to your network on its own — this flag is the only way.
+            Mobile access is off. Enabling it requires a CA-issued certificate trusted by your phone.
+            Never bypass a browser certificate warning to pair.
           </p>
           {onEnableLan ? (
             <button
@@ -236,7 +229,7 @@ export function MobileCard({
               <IconButton onClick={() => void copy(fingerprintPretty ?? '', 'fp')} done={copied === 'fp'} label="Copy fingerprint" />
             </div>
             <p className="mt-1 text-[11.5px] leading-[1.45]" style={{ color: 'var(--text-tertiary)' }}>
-              Your phone shows this same fingerprint before you pair. If they differ, don’t connect.
+              The phone app displays a server-reported value, not the actual TLS certificate. Verify the connection independently; a matching value is not proof.
             </p>
           </div>
 
@@ -355,7 +348,7 @@ export function MobileCard({
               style={{ background: 'var(--bg-void)', border: '1px solid var(--border-default)' }}
             >
               <p className="text-[10.5px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-tertiary)' }}>
-                Fingerprint — must match your phone
+                Server certificate fingerprint (informational only)
               </p>
               <p className="mt-1 break-all text-[11.5px] leading-[1.45]" style={{ ...mono, color: 'var(--accent)' }}>
                 {pairing.fingerprintPretty}
@@ -363,9 +356,9 @@ export function MobileCard({
             </div>
 
             <ol className="mt-3 list-decimal space-y-1 pl-5 text-[12px] leading-[1.5]" style={{ color: 'var(--text-secondary)' }}>
-              <li>On your phone, open Safari or Chrome and go to the LAN address above.</li>
-              <li>Tap “Visit Website” to accept XR’s self-signed certificate.</li>
-              <li>Scan this QR code (or type the code) and compare the fingerprint.</li>
+              <li>Scan the QR code or open the LAN address in your phone’s browser.</li>
+              <li>Only continue if the browser trusts the certificate without a warning.</li>
+              <li>Enter the code if needed. Never bypass a TLS warning; this fingerprint is not proof of identity.</li>
             </ol>
 
             <div className="mt-4 flex gap-2">

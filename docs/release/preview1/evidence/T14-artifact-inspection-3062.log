@@ -1,0 +1,25 @@
+T14 artifact inspection on 3062b855, workflow_dispatch 42917971949
+
+Linux x64 artifact 13812551009 downloaded. Archive SHA256
+30a2ea53c970f88316ff325233ae980f532d9062289287e4e2e1232cd83c3a84
+matches GitHub digest. Contents: deb 64843980 bytes, rpm 64840902 bytes,
+AppImage 139598328 bytes. `dpkg-deb -I` reports XR 1.2.0-preview.1 amd64;
+extracted `/usr/bin/xr-desktop` and `/usr/bin/xr-engine` are Linux x86-64 ELF.
+Packaged engine: `--version` v1.2.0-preview.1 (Preview 1); isolated-home
+`scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu`: public health PASS,
+protected endpoint anonymous/invalid bearer 401 and valid bearer 200 PASS.
+Deb was extracted, not installed; GUI/human test was not performed.
+
+Windows x64 artifact 13810943474 downloaded. Archive SHA256
+120b7574cb3fbaa621288e7628a55b057a39bf159d2bb89113e4049b40e1ebd8
+matches GitHub digest. Contents: MSI 281817088 bytes, NSIS 272408345 bytes.
+`file` identifies MSI x64 Windows Installer database and NSIS PE32 setup stub
+(the setup stub itself being PE32 does NOT establish the installed app's CPU).
+MSI SHA256 c24b16609668261364f6c420786615b20db22b2366f2cb2140145de236e0e662.
+NSIS SHA256 255a7e77367896d68e704e6061ad841344527797b6b936501cc947030f568841,
+matching the NSIS package recorded in native Windows run 42917963976. These
+are static checks, not Windows execution. Native NSIS install phase failed;
+MSI install was not run. 7z unavailable; RPM/AppImage/Windows contents beyond
+file types and inventory were not inspected. Large downloaded archives and
+extracted binaries were deleted after inspection. New final-tip artifacts need
+separate inspection; GitHub Actions recovered after a major outage, and earlier-tip reruns are in progress.

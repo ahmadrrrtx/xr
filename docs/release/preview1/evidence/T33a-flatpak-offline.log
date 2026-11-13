@@ -1,0 +1,8 @@
+Flatpak offline source preparation — local evidence, 2026-11-10
+Original dispatch 42904607032 failed the source build at Bun DNS resolution; no sandbox-network permission was added.
+Local Bun staging rehearsal: fresh root + desktop frozen-lockfile installs populated a shared cache; removal of node_modules followed by --offline installs succeeded (82 root and 457 desktop packages). Desktop offline install also succeeded with NODE_ENV=production.
+prepare-flatpak-sources.sh: shell syntax passed; an existing destination is rejected with exit 2.
+Full staging rehearsal: git archive staging, removal of installed node_modules, config generation and offline desktop install passed. Cargo vendor was replaced with a local stub for this rehearsal: REAL Rust vendoring and Flatpak build were NOT RUN locally.
+bun test test/desktop/flatpak-metainfo.test.ts: 14 pass, 0 fail, 62 assertions.
+bun test test/desktop/: 492 pass, 0 fail. ci:policy and ownership:check passed.
+Required remaining evidence: a GitHub Actions workflow_dispatch with actual cargo vendor and Flatpak builder, native install/validation, and artifact upload.

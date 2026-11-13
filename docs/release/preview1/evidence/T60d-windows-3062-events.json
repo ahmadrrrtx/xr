@@ -1,0 +1,20 @@
+[
+  {
+    "installer": "NSIS",
+    "phase": "package",
+    "state": "PASS",
+    "detail": "file=XR_1.2.0-preview.1_x64-setup.exe; sha256=255a7e77367896d68e704e6061ad841344527797b6b936501cc947030f568841"
+  },
+  {
+    "installer": "NSIS",
+    "phase": "install",
+    "state": "FAIL",
+    "detail": "installer did not provide a valid install directory"
+  },
+  {
+    "installer": "ALL",
+    "phase": "result",
+    "state": "FAIL",
+    "detail": "installer did not provide a valid install directory"
+  }
+]

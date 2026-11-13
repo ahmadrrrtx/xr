@@ -130,6 +130,7 @@ pub fn run() {
             // the engine: "start without the local engine" has to be honoured
             // from the first moment, otherwise a crash-looping engine gets one
             // more chance to take the app down before the user sees the screen.
+            engine::set_mobile_dist(&engine_setup, app.path().resource_dir().ok());
             let skip_engine = commands::recovery::started_without_engine(app.handle());
             // Phase 14 — spawn the engine sidecar first (main thread: the
             // Linux parent-death signal binds to the spawning thread). In
@@ -262,6 +263,7 @@ pub fn run() {
             commands::window::minimize_window,
             commands::window::toggle_maximize,
             commands::window::close_window,
+            commands::window::quit_app,
             commands::window::get_platform,
             commands::system::detect_system,
             commands::system::detect_ollama,
