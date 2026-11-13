@@ -50,6 +50,9 @@ run_suite() {
 run_suite "cli"        bash scripts/release-smoke/smoke-cli.sh
 run_suite "agent-turn" bash scripts/release-smoke/smoke-agent-turn.sh
 run_suite "isolation"  bash scripts/release-smoke/smoke-isolation.sh
+for feature in providers budget security research orchestration ecosystem telegram mobile voice control local; do
+  run_suite "$feature" bash "scripts/release-smoke/smoke-$feature.sh"
+done
 
 echo
 echo "════ summary"
@@ -63,8 +66,8 @@ if [ "$total_pass" -eq 0 ]; then
   echo "  RESULT: NOT RUN (nothing executed)"
   exit 1
 fi
-if [ "$total_blocked" -ne 0 ]; then
-  echo "  RESULT: PASS (with ${total_blocked} blocked)"
+if [ "$total_blocked" -ne 0 ] || [ "$total_notrun" -ne 0 ]; then
+  echo "  RESULT: PASS (with ${total_blocked} blocked, ${total_notrun} not run)"
 else
   echo "  RESULT: PASS"
 fi

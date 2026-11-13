@@ -1,0 +1,16 @@
+T12 feature-smoke expansion — local Linux run
+
+Added individual repeatable fixture smoke entry points for providers, budget,
+security plane, research, orchestration, MCP/plugins/skills, Telegram, mobile,
+voice, computer control and local-runtime onboarding. Each invokes named
+existing tests and fails on a nonzero test exit or zero passing tests. These
+are fixture tests, not proof that production integrations or physical devices
+work. Cloud is intentionally excluded per owner scope.
+
+bash scripts/release-smoke/run-all.sh: 20 suite checks passed, 0 failed,
+0 blocked, 6 explicitly NOT RUN: live provider, Telegram, installed phone,
+physical microphone, real GUI control and real local model. Each PASS is one
+suite check, not one test. Provider/research/etc fixture details are in the
+runner output; a prior real-provider result is separately recorded in
+T07-real-provider-groq.md. T12 remains open: all feature states, true OS/device
+paths and complete per-feature behavioral acceptance are not proven here.

@@ -936,3 +936,12 @@ suites pass. This does not turn on LAN: desktop pairing controls and secure
 opt-in listener remain unimplemented, so do not claim the installed phone flow
 works. Native package and actual phone tests remain pending. Evidence:
 `preview1/evidence/T71b-mobile-bundling.log`.
+
+### Per-feature smoke implementation (T12)
+
+Added repeatable per-feature fixture smoke commands for providers, budgets,
+security, research, orchestration, ecosystem, Telegram, mobile, voice,
+computer control and local runtime. The aggregate prints 20 passing suite
+checks, zero failures and six explicit NOT RUN live/device checks. These are
+not a substitute for actual devices or a live service; T12 remains open.
+Evidence `preview1/evidence/T12b-feature-smokes.log`.

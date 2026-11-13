@@ -11,7 +11,8 @@ function run(cli: string, agent = ok, isolation = ok) {
   const dir = mkdtempSync(join(tmpdir(), "xr-smoke-runner-test-")); dirs.push(dir);
   const suiteDir = join(dir, "scripts/release-smoke"); mkdirSync(suiteDir, { recursive: true });
   copyFileSync(original, join(suiteDir, "run-all.sh"));
-  for (const [name, body] of [["cli", cli], ["agent-turn", agent], ["isolation", isolation]])
+  for (const [name, body] of [["cli", cli], ["agent-turn", agent], ["isolation", isolation],
+    ...["providers", "budget", "security", "research", "orchestration", "ecosystem", "telegram", "mobile", "voice", "control", "local"].map((name) => [name, ok])])
     writeFileSync(join(suiteDir, `smoke-${name}.sh`), `#!/bin/bash\n${body}`);
   return spawnSync("bash", [join(suiteDir, "run-all.sh")], { encoding: "utf8" });
 }
@@ -22,3 +23,14 @@ test("a nonzero exit fails even if the suite prints a passing summary", () => { 
 test("an incomplete summary fails rather than counting missing fields as zero", () => { const r = run('echo "1 passed · 0 failed"\nexit 0\n'); expect(r.status).not.toBe(0); });
 test("a reported failed check fails the aggregate", () => { const r = run('echo "── fixture: 1 passed · 1 failed · 0 blocked · 0 not run"\nexit 1\n'); expect(r.status).not.toBe(0); expect(r.stdout).toContain("RESULT: FAIL"); });
 test("blocked results remain explicitly reported", () => { const r = run('echo "── fixture: 1 passed · 0 failed · 1 blocked · 0 not run"\nexit 0\n'); expect(r.status).toBe(0); expect(r.stdout).toContain("1 blocked"); });
+test("feature entry point rejects unknown feature names", () => {
+  const script = resolve(import.meta.dir, "../../scripts/release-smoke/smoke-feature.sh");
+  const r = spawnSync("bash", [script, "not-a-feature"], { encoding: "utf8" });
+  expect(r.status).not.toBe(0);
+  expect(r.stdout).toContain("unknown feature");
+});
+test("summary explicitly includes not-run counts", () => {
+  const r = run('echo "── fixture: 1 passed · 0 failed · 0 blocked · 1 not run"\nexit 0\n');
+  expect(r.status).toBe(0);
+  expect(r.stdout).toContain("1 not run");
+});
