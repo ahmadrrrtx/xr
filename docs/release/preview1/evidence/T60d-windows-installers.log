@@ -68,3 +68,11 @@ quotes, retains empty-location fallback and every existing Test-Path, exact
 binary, authenticated sidecar and uninstall assertion. Quote, plain, fallback,
 malformed input and existing negative/auth controls: 13 pass/0 fail. Entire
 release suite: 325 pass/0 fail locally. Native Windows rerun is essential.
+
+Follow-up 88d381a3, Windows Preview run 43111168844:
+NSIS package/install/launch-auth/shutdown/uninstall PASS; isolated sentinel
+retained. MSI package PASS, install FAIL "MSI registration ProductCode
+mismatch"; MSI launch/auth and uninstall NOT RUN. Full events in
+T60d-windows-88d-events.json. A later candidate prints the two public product
+GUIDs on mismatch for root-cause diagnosis; assertion is unchanged. No MSI
+fix or pass claimed until a subsequent Windows run demonstrates it.

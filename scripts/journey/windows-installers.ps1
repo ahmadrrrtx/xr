@@ -114,7 +114,7 @@ try {
       else { $productCode = MsiProductCode $file; Exec "$env:SystemRoot\System32\msiexec.exe" @('/i', "`"$file`"", '/qn', '/norestart') }
       Assert (WaitUntil { @(XrRegistrations).Count -eq 1 } 60) 'expected exactly one XR uninstall registration after install'
       $entry = @(XrRegistrations)[0]
-      if ($kind -eq 'MSI') { Assert ($entry.PSChildName -ieq $productCode) 'MSI registration ProductCode mismatch' }
+      if ($kind -eq 'MSI') { Assert ($entry.PSChildName -ieq $productCode) ("MSI registration ProductCode mismatch: registry=$($entry.PSChildName); package=$productCode") }
       else {
         $m = [regex]::Match([string]$entry.UninstallString, '^\s*(?:"([^"]+\.exe)"|(.+?\.exe))', 'IgnoreCase')
         Assert $m.Success 'NSIS uninstall path missing from registration'
