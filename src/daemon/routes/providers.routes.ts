@@ -16,6 +16,7 @@ import { BehavioralStore, behavioralView } from "../../intelligence/behavioral.t
 import { RoutingHealth, healthView } from "../../intelligence/health.ts";
 import { RoutingSlo } from "../../intelligence/slo.ts";
 import { route, type DaemonRoute } from "./router.ts";
+import { sseResponse } from "./builder-shared.ts";
 import type { ModelClass } from "../../intelligence/types.ts";
 
 const MODEL_CLASSES: ReadonlySet<string> = new Set<ModelClass>([
@@ -436,8 +437,145 @@ export function providersRoutes(): DaemonRoute[] {
         }
       },
     }),
+    /**
+     * XR-REL-02 — real model pull, streamed.
+     *
+     * The desktop's download step used to fabricate its progress (a 6-second
+     * `setInterval` over a made-up byte total, rendered as "real bytes, real
+     * progress"), because the engine had NO pull route at all. This is that
+     * route: it proxies the local runtime's own pull endpoint and forwards the
+     * runtime's bytes/layers verbatim, ending on a real installed-model check.
+     *
+     * Honesty rules:
+     *   · local runtimes only — a hosted provider has nothing to download;
+     *   · the model id is validated before it reaches a URL or a process;
+     *   · `status: "success"` is only emitted after the runtime reports the
+     *     model as present, otherwise `error` names what is missing;
+     *   · when the runtime is unreachable the stream says so immediately
+     *     instead of hanging on a spinner.
+     */
+    route({
+      id: "models.pull",
+      path: "/api/models/pull",
+      method: "POST",
+      handle: async ({ req, json, state, config }) => {
+        let body: { runtime?: string; model?: string };
+        try {
+          body = await req.json() as { runtime?: string; model?: string };
+        } catch {
+          return json({ error: "a JSON body is required" }, 400);
+        }
+        const runtime = (body.runtime ?? config.localModels.runtime ?? "ollama").trim();
+        const model = (body.model ?? "").trim();
+        if (!isLocalRuntimeId(runtime))
+          return json({ error: "valid local runtime is required" }, 400);
+        if (!model || !validateLocalModelId(model))
+          return json({ error: "valid local model id is required" }, 400);
+
+        // Reuse the runtime probe: it resolves the CONFIGURED base URL (a user
+        // may have moved Ollama off :11434) and tells us whether it is up, so a
+        // dead runtime is reported as such instead of surfacing as a fetch error.
+        const status = await detectRuntime(runtime);
+        const root = (status.baseUrl ?? "").replace(/\/$/, "").replace(/\/v1$/, "");
+        if (!root || !status.healthy || !status.running)
+          return json(
+            {
+              error: `${runtime} is not reachable${status.detail ? `: ${status.detail}` : ""}`,
+              runtimeUnavailable: true,
+            },
+            409
+          );
+
+        state.store.audit("models.pull.requested", { runtime, model });
+
+        return sseResponse(async (send, signal) => {
+          const emit = (status: string, extra: Record<string, unknown> = {}): void =>
+            send({ type: "pull", status, runtime, model, ...extra });
+
+          emit("starting");
+          try {
+            const res = await fetch(`${root}/api/pull`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ name: model, stream: true }),
+              signal,
+            });
+            if (!res.ok || !res.body) {
+              emit("error", { detail: `${runtime} answered ${res.status} for /api/pull` });
+              return;
+            }
+
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let sawSuccess = false;
+            const reader = res.body.getReader();
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              // NDJSON: one JSON object per line.
+              let nl = buffer.indexOf("\n");
+              while (nl !== -1) {
+                const line = buffer.slice(0, nl).trim();
+                buffer = buffer.slice(nl + 1);
+                nl = buffer.indexOf("\n");
+                if (!line) continue;
+                let frame: Record<string, unknown>;
+                try {
+                  frame = JSON.parse(line) as Record<string, unknown>;
+                } catch {
+                  continue; // a partial/odd line is not progress
+                }
+                const err = typeof frame.error === "string" ? frame.error : null;
+                if (err) {
+                  emit("error", { detail: err });
+                  return;
+                }
+                const status = typeof frame.status === "string" ? frame.status : "";
+                if (status === "success") sawSuccess = true;
+                const completed = typeof frame.completed === "number" ? frame.completed : undefined;
+                const total = typeof frame.total === "number" ? frame.total : undefined;
+                // The runtime's own wording is kept in `detail`; `pct` is only
+                // present when the runtime reported a real denominator.
+                emit(
+                  status === "success" ? "success" : /verif|sha256|writing/i.test(status) ? "verifying" : "pulling",
+                  {
+                    detail: status || null,
+                    digest: typeof frame.digest === "string" ? frame.digest : undefined,
+                    completed,
+                    total,
+                    pct: completed !== undefined && total ? completed / total : undefined,
+                  }
+                );
+                if (status === "success") break;
+              }
+            }
+
+            if (!sawSuccess) {
+              emit("error", { detail: "the runtime's pull stream ended without a success frame" });
+              return;
+            }
+
+            // A success frame is the runtime's word; the installed list is ours.
+            const after = await detectRuntime(runtime);
+            // `LocalRuntimeStatus.models` is a list of model NAMES (strings).
+            const present = after.models.includes(model) || after.models.includes(`${model}:latest`);
+            if (!present) {
+              emit("error", { detail: `${runtime} reported success but ${model} is not in its model list` });
+              return;
+            }
+            state.store.audit("models.pull.done", { runtime, model });
+            emit("done", { installed: true });
+          } catch (e) {
+            if (signal.aborted) return; // the client went away; not a failure
+            emit("error", { detail: (e as Error).message });
+          }
+        });
+      },
+    }),
     route({
       id: "models.test",
+
       path: "/api/models/test",
       method: "POST",
       handle: async ({ req, json, state, config }) => {

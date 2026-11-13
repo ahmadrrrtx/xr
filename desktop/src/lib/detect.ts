@@ -200,55 +200,138 @@ export async function detectMics(requestPermission: boolean): Promise<MicInfo> {
 }
 
 export interface PullProgressEvent {
-  id: number;
-  status: 'pulling' | 'verifying' | 'success' | 'error';
+  status: 'starting' | 'pulling' | 'verifying' | 'success' | 'error';
+  /** Real bytes reported by the runtime. Absent until the runtime says. */
   completed?: number;
   total?: number;
+  /** Only present when the runtime supplied a real total. */
+  pct?: number;
   detail?: string;
 }
 
-/** Start a pull; returns the event id + a subscribe fn. Mocks in browser. */
-export async function startOllamaPull(
+export interface PullHandle {
+  cancel: () => void;
+  /** Resolves when the stream ends (success, error, or cancel). */
+  done: Promise<void>;
+}
+
+/**
+ * XR-REL-02 — start a REAL model pull through the engine and stream its
+ * progress.
+ *
+ * The previous implementation simulated a download in the browser (a 6-second
+ * timer over a made-up 2.1 GB total) and, in the shell, bypassed the engine
+ * entirely by calling the Tauri command directly. Both are gone:
+ *
+ *   · the engine owns the pull (`POST /api/v1/models/pull`, SSE), so the
+ *     runtime, the validated model id and the audit record are the engine's;
+ *   · `completed`/`total` are the runtime's own numbers — there is no timer,
+ *     no estimated percentage, and no fabricated byte count;
+ *   · outside the app (browser dev / preview) there is no engine, so this
+ *     rejects with `DetectionUnavailable` instead of pretending to download.
+ */
+export async function startModelPull(
   model: string,
   onProgress: (e: PullProgressEvent) => void,
-): Promise<{ id: number; unsubscribe: () => void }> {
-  if (isTauri()) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const { listen } = await import('@tauri-apps/api/event');
-    const unlisten = await listen<PullProgressEvent>('ollama://pull-progress', (e) => onProgress(e.payload));
-    const id = await invoke<number>('ollama_pull', { model });
-    return { id, unsubscribe: () => void unlisten() };
+  opts: { runtime?: string; signal?: AbortSignal } = {}
+): Promise<PullHandle> {
+  const { engineFetch } = await import('@/engine/transport');
+  const controller = new AbortController();
+  const abort = (): void => controller.abort();
+  if (opts.signal) {
+    if (opts.signal.aborted) abort();
+    else opts.signal.addEventListener('abort', abort, { once: true });
   }
-  // Browser dev: simulated pull over ~6s with realistic layer phases.
-  const id = Math.floor(Math.random() * 1e6);
-  let cancelled = false;
-  const total = 2_100_000_000;
-  const started = Date.now();
-  const tick = window.setInterval(() => {
-    if (cancelled) return;
-    const elapsed = Date.now() - started;
-    if (elapsed > 6200) {
-      window.clearInterval(tick);
-      onProgress({ id, status: 'success' });
+
+  const run = async (): Promise<void> => {
+    let res: Response;
+    try {
+      res = await engineFetch('/models/pull', {
+        method: 'POST',
+        body: JSON.stringify({ runtime: opts.runtime ?? 'ollama', model }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      onProgress({
+        status: 'error',
+        detail: 'The engine is not reachable, so nothing can be downloaded.',
+      });
+      throw new DetectionUnavailable('ollama', error);
+    }
+    if (!res.ok) {
+      let detail = `The engine refused the pull (${res.status}).`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body?.error) detail = body.error;
+      } catch {
+        /* non-JSON error body */
+      }
+      onProgress({ status: 'error', detail });
       return;
     }
-    const frac = Math.min(0.97, elapsed / 6000);
-    onProgress({
-      id,
-      status: elapsed > 5600 ? 'verifying' : 'pulling',
-      completed: Math.round(total * frac),
-      total,
-      detail: 'pulling a6e87b2a...',
-    });
-  }, 250);
-  return {
-    id,
-    unsubscribe: () => {
-      cancelled = true;
-      window.clearInterval(tick);
-    },
+    if (!res.body) {
+      onProgress({ status: 'error', detail: 'The engine returned no progress stream.' });
+      return;
+    }
+
+    // SSE frames: `data: {json}\n\n`. Frames arrive in chunks, so buffer.
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const reader = res.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep = buffer.indexOf('\n\n');
+        while (sep !== -1) {
+          const raw = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          sep = buffer.indexOf('\n\n');
+          const dataLine = raw
+            .split('\n')
+            .filter((l) => l.startsWith('data:'))
+            .map((l) => l.slice(5).trim())
+            .join('');
+          if (!dataLine || dataLine === '[DONE]') continue;
+          let frame: Record<string, unknown>;
+          try {
+            frame = JSON.parse(dataLine) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+          const status = String(frame.status ?? '');
+          const completed =
+            typeof frame.completed === 'number' ? frame.completed : undefined;
+          const total = typeof frame.total === 'number' ? frame.total : undefined;
+          const detail = typeof frame.detail === 'string' ? frame.detail : undefined;
+          if (status === 'error') {
+            onProgress({ status: 'error', detail: detail ?? 'The pull failed.' });
+            continue;
+          }
+          if (status === 'done' || status === 'success') {
+            onProgress({ status: 'success' });
+            continue;
+          }
+          onProgress({
+            status: status === 'verifying' ? 'verifying' : status === 'starting' ? 'starting' : 'pulling',
+            completed,
+            total,
+            // No client-side interpolation: absent unless the runtime said.
+            pct: completed !== undefined && total ? completed / total : undefined,
+            detail,
+          });
+        }
+      }
+    } finally {
+      opts.signal?.removeEventListener('abort', abort);
+    }
   };
+
+  return { cancel: abort, done: run() };
 }
+
 
 /** Open a URL in the system browser (Ollama download page). */
 export async function openExternal(url: string): Promise<void> {

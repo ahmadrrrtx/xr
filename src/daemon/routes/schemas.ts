@@ -419,6 +419,17 @@ export const ModelsTestRequest = z.looseObject({
   model: z.string().optional(),
 });
 
+/**
+ * XR-REL-02 — a real local-model pull. `model` is required: this endpoint
+ * downloads bytes, so it may never infer the target from config the way
+ * `models.test` does. The response is an SSE stream of runtime-reported
+ * progress frames (`models.pull`), not JSON.
+ */
+export const ModelsPullRequest = z.looseObject({
+  runtime: z.string().optional(),
+  model: z.string().min(1),
+});
+
 export const ControlApproveRequest = z.looseObject({
   id: z.string().min(1),
   approved: z.boolean(),

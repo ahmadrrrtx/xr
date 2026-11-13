@@ -30,6 +30,7 @@ import {
   MemorySearchQuery,
   ModelsSelectRequest,
   ModelsTestRequest,
+  ModelsPullRequest,
   ObjectResponse,
   OkResponse,
   ProviderSetRequest,
@@ -443,6 +444,14 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     tag: "models",
     stability: "stable",
     request: ModelsTestRequest,
+  },
+  "models.pull": {
+    summary: "Pull a local model through the runtime, streaming its own byte-level progress (SSE).",
+    tag: "models",
+    // New in 1.1.1: the desktop download step needs a real pull. Additive, so
+    // compatible; promoted to `stable` once it has shipped in a release.
+    stability: "experimental",
+    request: ModelsPullRequest,
   },
 
   // ── skills / plugins (sub-APIs) ───────────────────────────────────────────

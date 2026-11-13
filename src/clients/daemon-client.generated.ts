@@ -851,6 +851,11 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/models/select", body);
   }
 
+  /** Pull a local model through the runtime, streaming its own byte-level progress (SSE). */
+  async modelsPull(body: z.infer<typeof S.ModelsPullRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/models/pull", body);
+  }
+
   /** Smoke-test a local runtime+model round-trip. */
   async modelsTest(body: z.infer<typeof S.ModelsTestRequest>): Promise<Record<string, unknown>> {
     return await this.call("POST", "/api/v1/models/test", body);
