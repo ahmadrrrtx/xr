@@ -45,23 +45,27 @@ const MAX_CHATS = 200;
 const MAX_MESSAGES_PER_CHAT = 500;
 
 let cache: MobileChatRegistry | null = null;
+let cachePath: string | null = null;
 /** Serializes read-modify-write cycles so concurrent requests cannot tear. */
 let chain: Promise<unknown> = Promise.resolve();
 
 async function load(): Promise<MobileChatRegistry> {
-  if (cache) return cache;
+  const path = STORE_PATH();
+  if (cache && cachePath === path) return cache;
   try {
-    const raw = await readFile(STORE_PATH(), "utf8");
+    const raw = await readFile(path, "utf8");
     const parsed = JSON.parse(raw) as MobileChatRegistry;
     cache = parsed.version === 1 ? parsed : { version: 1, chats: [], messages: {} };
   } catch {
     cache = { version: 1, chats: [], messages: {} };
   }
+  cachePath = path;
   return cache;
 }
 
 async function save(registry: MobileChatRegistry): Promise<void> {
   cache = registry;
+  cachePath = STORE_PATH();
   await mkdir(mobileHome(), { recursive: true, mode: 0o700 });
   await writeFile(STORE_PATH(), `${JSON.stringify(registry, null, 2)}\n`, { mode: 0o600 });
 }
@@ -140,6 +144,7 @@ export function appendMessage(chatId: string, role: "user" | "assistant", conten
 /** Test hook: drop the in-memory cache + the on-disk file (isolated HOME). */
 export async function resetMobileChatsForTest(): Promise<void> {
   cache = null;
+  cachePath = null;
   chain = Promise.resolve();
   try {
     const { rmSync } = await import("node:fs");

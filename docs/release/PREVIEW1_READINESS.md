@@ -241,3 +241,35 @@ not hands-on tests; unknowns remain unknown. No competitor was installed.
 4. **Signing** — the existing desktop tag preflight requires Windows Authenticode and macOS Developer ID plus notarization, even for preview tags; it also requires the updater key if its public key is provisioned. PR builds are development artifacts and do not prove signing. Whether the owner has configured tag-environment credentials is **unknown**. An unsigned tag would require a separately approved policy change, not a bypass.
 5. **G3** — the owner provided `APPROVE G3` conditional on all fixes and verification. That condition is not met: do not publish the pre-release or archive old releases while the recommendation is NO-GO. Do not publish Preview 1 to npm/WinGet/Homebrew/Scoop.
 6. **Credentials** — rotate the credentials supplied during the engagement.
+
+## Latest checkpoint and next-week carryover (owner direction, 2026-11-10)
+
+This checkpoint supersedes older “current PR checks” and pending Windows paragraphs above;
+they are historical, not the state of the latest tip. The owner authorized merging the PR,
+not publishing a release. **NO-GO remains**, and merge must not bypass repository rules.
+
+- **CA and real phone — NEXT WEEK / BLOCKED:** procure a CA-issued certificate and matching
+  private key for the desktop's reachable DNS name; configure a DNS name/route resolving on the
+  phone and install the issuing CA in the phone/browser trust store. On a real phone with normal
+  TLS validation (no warning bypass), open the QR URL, pair, use the PWA, revoke and stop the
+  listener, including negative access tests. Temporary test-CA/compiled-sidecar tests are not
+  evidence of actual phone trust. Coordinate certificate and phone provisioning with the owner.
+- **New desktop installer — NEXT WEEK / NOT RUN:** inspect and checksum the final commit's
+  packaged PWA/sidecar, install on a clean owner Linux machine, confirm authenticated engine
+  connection and real UI data, and repeat the phone journey. Windows: obtain matching final-tip
+  NSIS/MSI artifacts and complete the runner lifecycle and owner install. Windows historical
+  retest `43398319038` passed on 88d but is not proof of a newer package. Signing/updater
+  provisioning and a human retest remain outstanding; do not distribute the old deb as fixed.
+- **Size gate — NEXT WEEK / FAIL:** current local run reports the generated client 1544 lines
+  versus its 1530-line recorded maximum, and core 175,637 versus 175,500. Split generated API <!-- xr:numeric-history -->
+  client and make an architectural reduction or obtain a separately reviewed, justified policy
+  decision; do not hide growth with formatting, relax thresholds, or waive checks to merge.
+  CI `43400560011` failed the size gate, unit tier and core on that violation. Its truth gate
+  also exposed mobile cache profile contamination. A candidate keys mobile caches by state path
+  and restores test environment; local daemon suite 344/0 and typecheck pass, but final-tip CI
+  is not yet established.
+- **Merge — BLOCKED:** repository rules require Quality Gate, Cross-Platform gate, Supply Chain
+  gate and npm Pack Smoke gate. PR #210 is blocked by failed/incomplete checks. Re-run on the
+  actual final tip, review results and merge only through the normal PR path when allowed.
+  Recheck full native dispatch and Windows results against that same tip after changes. A merge
+  does not grant permission to publish.

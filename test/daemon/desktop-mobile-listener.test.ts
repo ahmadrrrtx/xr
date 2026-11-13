@@ -6,14 +6,11 @@ import { execFileSync } from "node:child_process";
 import { request } from "node:https";
 
 const home = mkdtempSync(join(tmpdir(), "xr-desktop-mobile-it-"));
-delete process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER;
-process.env.HOME = home;
-process.env.XR_HOME = join(home, "desktop");
-process.env.XR_SECRET_NAMESPACE = "desktop";
-process.env.XR_AUDIT_LOG_DIR = join(home, "audit");
-process.env.XR_DESKTOP_WEBVIEW_ORIGIN = "tauri://localhost";
-process.env.XR_MOBILE_DIST = join(home, "dist");
-const certDir = join(process.env.XR_HOME, "mobile-tls");
+const desktopHome = join(home, "desktop");
+const dist = join(home, "dist");
+const certDir = join(desktopHome, "mobile-tls");
+const keys = ["HOME", "XR_HOME", "XR_SECRET_NAMESPACE", "XR_AUDIT_LOG_DIR", "XR_DESKTOP_WEBVIEW_ORIGIN", "XR_MOBILE_DIST", "XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER"] as const;
+let saved: Partial<Record<(typeof keys)[number], string | undefined>> = {};
 const token = "desktop-mobile-integration-token";
 let base: string, stop: () => void, currentPairingCode: () => unknown;
 const run = (...args: string[]) => execFileSync("openssl", args, { cwd: home, stdio: "ignore" });
@@ -27,18 +24,30 @@ const phone = (url: string, opts: { method?: string; body?: string; cookie?: str
 });
 
 beforeAll(async () => {
-  mkdirSync(certDir, { recursive: true }); mkdirSync(process.env.XR_MOBILE_DIST!, { recursive: true });
-  writeFileSync(join(process.env.XR_MOBILE_DIST!, "index.html"), "<!doctype html><title>mobile</title>");
+  saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  Object.assign(process.env, { HOME: home, XR_HOME: desktopHome, XR_SECRET_NAMESPACE: "desktop", XR_AUDIT_LOG_DIR: join(home, "audit"), XR_DESKTOP_WEBVIEW_ORIGIN: "tauri://localhost", XR_MOBILE_DIST: dist });
+  delete process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER;
+  mkdirSync(certDir, { recursive: true }); mkdirSync(dist, { recursive: true });
+  writeFileSync(join(dist, "index.html"), "<!doctype html><title>mobile</title>");
   run("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=XR test CA", "-keyout", "ca.key", "-out", "ca.crt");
   run("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=127.0.0.1", "-keyout", "desktop/mobile-tls/key.pem", "-out", "leaf.csr");
   writeFileSync(join(home, "ext.cnf"), "subjectAltName=IP:127.0.0.1,DNS:phone.xr.test\nextendedKeyUsage=serverAuth\n");
   run("x509", "-req", "-in", "leaf.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-days", "1", "-extfile", "ext.cnf", "-out", "desktop/mobile-tls/cert.pem");
+  const { ensureVapidKeys } = await import("../../src/daemon/web-push.ts");
+  process.env.XR_SECRET_NAMESPACE = "cli";
+  const cliKey = (await ensureVapidKeys()).publicKey;
+  process.env.XR_SECRET_NAMESPACE = "desktop";
+  const desktopKey = (await ensureVapidKeys()).publicKey;
+  if (cliKey === desktopKey || !existsSync(join(desktopHome, "vapid.json"))) throw new Error("mobile VAPID caches must be profile-isolated");
   const { serve } = await import("../../src/daemon/server.ts");
   ({ currentPairingCode } = await import("../../src/daemon/mobile-pairing.ts"));
   const h = await serve({ port: 0, token });
   base = `http://127.0.0.1:${h.port}`; stop = h.stop;
 }, 30_000);
-afterAll(() => { stop?.(); rmSync(home, { recursive: true, force: true }); });
+afterAll(() => {
+  stop?.(); rmSync(home, { recursive: true, force: true });
+  for (const key of keys) { if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]; }
+});
 
 test("desktop-only start requires a bearer; wrong host is refused before opening LAN", async () => {
   expect((await fetch(`${base}/api/v1/mobile/desktop/status`)).status).toBe(401);
@@ -68,8 +77,8 @@ test("trusted TLS phone pairs, remote admin/bearer denied, stop closes listener 
   const pairData = await pair.json() as { code: string };
   const response = await phone(`${status.url}/api/mobile/pair`, { method: "POST", body: JSON.stringify({ code: pairData.code, deviceName: "test phone" }) });
   expect(response.status).toBe(200);
-  expect(existsSync(join(process.env.XR_HOME!, "devices.json"))).toBe(true);
-  expect(existsSync(join(process.env.XR_HOME!, "vapid.json"))).toBe(true);
+  expect(existsSync(join(desktopHome, "devices.json"))).toBe(true);
+  expect(existsSync(join(desktopHome, "vapid.json"))).toBe(true);
   expect(existsSync(join(home, ".xr", "devices.json"))).toBe(false);
   expect(response.cookie).toContain("HttpOnly"); expect(response.cookie).toContain("Secure");
   const cookie = response.cookie.split(";")[0]!;

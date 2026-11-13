@@ -955,3 +955,28 @@ integration covers pairing, revocation, remote endpoint restrictions and
 shutdown, while real phone/native-package testing remains open. Size gate
 currently fails on the new implementation and generated-client ratchet; no
 size/security check was relaxed. Evidence `preview1/evidence/T71c-secure-desktop-mobile.log`.
+
+## Owner-requested next-week carryover — 2026-11-10
+
+Drift-check: ledger check passed before this checkpoint; owner explicitly authorized a normal PR
+merge and deferred unresolved items to next week. Cloud remains excluded; Telegram and PWA remain.
+
+- CI `43400560011` at 0a38c35b: Quality Gate FAIL; generated-client size and core tree size fail.
+  Unit/core failed for the size assertion; truth/security additionally failed when a prior test's
+  cached VAPID key was reused under a different XR home. This is a real profile-isolation issue.
+- Candidate fix keys mobile device, chat and VAPID caches to the selected path; the integration
+  fixture saves/restores its environment. `bun test test/daemon` PASS 344/0, and
+  `bun run typecheck` PASS. The CI behavioral test selection was also run locally: 1385 pass,
+  34 skip, 0 fail (host-dependent tests skipped); this is not the complete security gate.
+  Final-tip CI NOT RUN at this checkpoint. `bun run lint` is not a
+  package script (exit 1); it is not claimed as a passing gate.
+- Size gate FAIL locally: client 1544 > 1530 and core 175,637 > 175,500. No limit or waiver <!-- xr:numeric-history -->
+  changed. Next week: architectural reduction/split, then rerun all required checks.
+- Desktop dispatch 43400589888: Rust checks/tests PASS; native bundle/Flatpak jobs in progress
+  when checked. Windows preview 43400551138 pending. These use prior SHA, not the eventual tip.
+- Next week: provision and trust actual CA/certificate and DNS; real phone PWA pairing, denial,
+  revoke and disable; inspect/install current-tip desktop, owner engine/UI retest, and current-tip
+  Windows NSIS/MSI lifecycle and owner installation. Document results honestly; historical 88d
+  Windows lifecycle PASS does not cover a later tip.
+- PR #210 merge is BLOCKED by rules requiring Quality Gate, Cross-Platform, Supply Chain and npm
+  Pack Smoke checks. Do not bypass. No public release is authorized.

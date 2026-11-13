@@ -54,21 +54,25 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 let cache: DeviceRegistry | null = null;
+let cachePath: string | null = null;
 
 export async function loadRegistry(): Promise<DeviceRegistry> {
-  if (cache) return cache;
+  const path = REGISTRY_PATH();
+  if (cache && cachePath === path) return cache;
   try {
-    const raw = await readFile(REGISTRY_PATH(), 'utf8');
+    const raw = await readFile(path, 'utf8');
     const parsed = JSON.parse(raw) as DeviceRegistry;
     cache = parsed.version === 1 ? parsed : { version: 1, devices: [] };
   } catch {
     cache = { version: 1, devices: [] };
   }
+  cachePath = path;
   return cache;
 }
 
 export async function saveRegistry(registry: DeviceRegistry): Promise<void> {
   cache = registry;
+  cachePath = REGISTRY_PATH();
   await mkdir(mobileHome(), { recursive: true, mode: 0o700 });
   await writeFile(REGISTRY_PATH(), `${JSON.stringify(registry, null, 2)}\n`, { mode: 0o600 });
 }

@@ -38,17 +38,20 @@ interface VapidKeys {
 }
 
 let vapidCache: VapidKeys | null = null;
+let vapidCachePath: string | null = null;
 
 /** Load (or create on first run) the VAPID key pair persisted to ~/.xr/vapid.json. */
 
 
 export async function ensureVapidKeys(): Promise<VapidKeys> {
-  if (vapidCache) return vapidCache;
+  const path = VAPID_PATH();
+  if (vapidCache && vapidCachePath === path) return vapidCache;
   try {
-    const raw = await readFile(VAPID_PATH(), 'utf8');
+    const raw = await readFile(path, 'utf8');
     const parsed = JSON.parse(raw) as { publicKey?: string; privateJwk?: VapidPrivateJwk };
     if (parsed.publicKey && parsed.privateJwk) {
       vapidCache = { publicKey: parsed.publicKey, privateJwk: parsed.privateJwk };
+      vapidCachePath = path;
       return vapidCache;
     }
   } catch {
@@ -74,6 +77,7 @@ export async function generateVapidKeys(): Promise<VapidKeys> {
   await mkdir(mobileHome(), { recursive: true, mode: 0o700 });
   await writeFile(VAPID_PATH(), `${JSON.stringify(keys, null, 2)}\n`, { mode: 0o600 });
   vapidCache = keys;
+  vapidCachePath = VAPID_PATH();
   return keys;
 }
 
