@@ -1,0 +1,28 @@
+bun test v1.4.2 (744846f84)
+
+test/release/smoke-runner.test.ts:
+(pass) all complete passing suites pass [58.05ms]
+(pass) a crashed suite with no summary fails even if other suites pass [57.62ms]
+(pass) a nonzero exit fails even if the suite prints a passing summary [46.06ms]
+(pass) an incomplete summary fails rather than counting missing fields as zero [44.19ms]
+(pass) a reported failed check fails the aggregate [45.97ms]
+(pass) blocked results remain explicitly reported [47.44ms]
+
+ 6 pass
+ 0 fail
+ 12 expect() calls
+Ran 6 tests across 1 file. [366.00ms]
+
+--- real smoke lane (local Linux) ---
+
+════ isolation
+  **Host:** `linux/x64` · **root:** `false` · **hardened mode:** on (fail-closed)
+  | shell / arbitrary code | tier2_isolated | `namespace_sandbox` | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+PASS     shell commands run inside an OS boundary here (placement: `namespace_sandbox`)
+PASS     remediation names a real backend for this platform
+── isolation: 2 passed · 0 failed · 0 blocked · 0 not run
+
+════ summary
+  host: Linux/x86_64
+  9 passed · 0 failed · 0 blocked · 0 not run
+  RESULT: PASS

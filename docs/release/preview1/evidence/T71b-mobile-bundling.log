@@ -1,0 +1,31 @@
+T71.b — packaged PWA assets, implementation candidate
+
+Gap: the 88d381a3 CI deb has no mobile PWA resources. Desktop's loopback
+sidecar cannot be paired from a phone. The mobile source LAN daemon works in
+its tests, but those tests do not prove packaged desktop-to-phone operation.
+
+Change: native desktop builds build mobile/ from its npm lock with scripts
+disabled and include mobile/dist as Tauri resources; the sidecar receives the
+resolved resource path via XR_MOBILE_DIST and retains it across restart.
+Windows portable zip includes the assets; Flatpak builds the locked PWA
+before entering its network-isolated build and installs the files in
+/app/share/xr/mobile. Native journey asserts the installed PWA file exists.
+This does NOT enable LAN, modify bearer authentication, or expose a listener.
+
+Local: npm --prefix mobile ci --ignore-scripts + npm --prefix mobile run build
+PASS, PWA built (27 precache entries). Focused mobile packaging/Flatpak/journey
+tests 32 pass; mobile LAN + companion tests 19 pass; root typecheck, CI policy,
+size and desktop IPC checks pass. No local Rust/Tauri build was run. Native
+CI must compile, package and verify actual installed paths. Desktop settings
+pairing and an explicit secure opt-in LAN listener remain NOT IMPLEMENTED;
+the phone experience remains NOT VERIFIED. Do not advertise it as complete.
+
+SECURITY BLOCKER discovered in mobile fingerprint UX: browser JavaScript
+cannot access the actual TLS peer certificate. The fingerprint API and app
+code travel over the same connection and may be controlled by an attacker;
+storing/comparing its reported value is not cryptographic certificate pinning,
+and comparison cannot authenticate a self-signed connection. Corrected UI,
+CLI banner and documentation to avoid claiming otherwise. No new LAN listener
+was enabled. Secure peer authentication, packaged desktop controls and real
+phone testing remain OPEN; the PWA is not approved for release as secure.
+Mobile typecheck/build and desktop typecheck PASS after the copy correction.

@@ -13,9 +13,11 @@
  *   launch         the GUI starts and spawns its engine sidecar, whose
  *                  /api/v1/health answers. With --webdriver (Linux/Windows,
  *                  tauri-driver on PATH) a WebDriver session additionally
- *                  proves the webview rendered (title "XR", #root populated).
+ *                  proves the webview rendered and can authenticate to the
+ *                  app-owned sidecar from inside the webview.
  *                  macOS has no WKWebView driver: launch + sidecar health only.
- *                  Closing the app must take the sidecar down with it.
+ *                  An explicit application quit must take the sidecar down.
+ *                  Closing only the main window intentionally hides it.
  *   agent          the INSTALLED engine (the sidecar the app ships) performs a
  *                  real task against the deterministic fixture provider
  *   update         actual same-version reinstall/data retention; cross-version
@@ -130,8 +132,18 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       }
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
       const port = await waitForEngineHealth(60_000);
+      const webview = await webviewEngineSmoke(wd, sid);
       const acl = await ipcAclSmoke(wd, sid);
-      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${acl}`;
+      // Session deletion closes a window, but XR intentionally hides it and keeps
+      // the engine alive. Request the same explicit quit as the user menu, then
+      // keep the session alive until containment is actually verified.
+      const scheduled = await wd("POST", `/session/${sid}/execute/sync`, {
+        script: "setTimeout(() => { void window.__TAURI_INTERNALS__.invoke('quit_app'); }, 250); return 'quit scheduled';",
+        args: [],
+      });
+      if (scheduled !== "quit scheduled") throw new Error("could not schedule explicit app quit");
+      if (!(await engineGone(15_000))) throw new Error("engine sidecar still listening 15 s after explicit application quit (containment)");
+      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${webview}; ${acl}; explicit quit requested and sidecar stopped`;
     } finally {
       await wd("DELETE", `/session/${sid}`).catch(() => undefined);
     }
@@ -140,6 +152,33 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
   } finally {
     driver.kill();
   }
+}
+
+/** Prove the packaged webview, not a privileged runner curl, can reach its
+ * app-spawned daemon. Return only statuses/contract; never return the token. */
+export async function webviewEngineSmoke(wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string): Promise<string> {
+  let result: { linked?: boolean; health?: number; meta?: number; contract?: number; error?: string } = {};
+  for (let i = 0; i < 30; i++) {
+    result = await wd("POST", `/session/${sid}/execute/async`, {
+      script: `const done = arguments[arguments.length - 1];
+        (async () => {
+          const l = await window.__TAURI_INTERNALS__.invoke('engine_link');
+          if (!l.reachable || !l.port || !l.token) return {linked:false};
+          const base = 'http://127.0.0.1:' + l.port + '/api/v1';
+          const headers = {Authorization: 'Bearer ' + l.token, Accept: 'application/json'};
+          const h = await fetch(base + '/health', {headers});
+          const m = await fetch(base + '/meta/version', {headers});
+          const v = m.ok ? await m.json() : {};
+          return {linked:true, health:h.status, meta:m.status, contract:v.contractVersion};
+        })().then(done, () => done({error:'webview request failed'}));`,
+      args: [],
+    }) as typeof result;
+    if (result.linked || result.error) break;
+    await sleep(500);
+  }
+  if (result.health !== 200 || result.meta !== 200 || result.contract !== 1)
+    throw new Error(`webview-to-engine handshake failed: ${JSON.stringify(result)}`);
+  return "webview authenticated health + contract handshake passed";
 }
 
 /**
@@ -233,7 +272,9 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
         ctx.pkg = (await sh(["dpkg-deb", "-f", ctx.installer, "Package"])).out.trim();
         const r = await sh(["sudo", "-n", "apt-get", "install", "-y", "--no-install-recommends", resolve(ctx.installer)], { timeoutMs: 600_000 });
         need(r.status === 0, `apt-get install: ${tail(r.out)}`);
-        const files = (await sh(["dpkg", "-L", ctx.pkg])).out.split(/\r?\n/).filter((f) => f.startsWith("/usr/bin/"));
+        const listed = (await sh(["dpkg", "-L", ctx.pkg])).out.split(/\r?\n/);
+        need(listed.some((f) => f.endsWith("/mobile/index.html") && existsSync(f)), "installed mobile PWA assets missing from deb");
+        const files = listed.filter((f) => f.startsWith("/usr/bin/"));
         ctx.engine = files.find((f) => basename(f).startsWith("xr-engine")) ?? "";
         ctx.app = files.find((f) => !basename(f).startsWith("xr-engine")) ?? "";
       } else if (flavour.channel === "nsis") {
@@ -267,9 +308,13 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
         ctx.engine = join(macos, bins.find((f) => f.startsWith("xr-engine")) ?? "");
         ctx.app = join(macos, bins.find((f) => !f.startsWith("xr-engine")) ?? "");
       }
+      if (flavour.channel !== "deb") {
+        const resources = flavour.channel === "dmg" ? join(ctx.installDir, "Contents", "Resources") : ctx.installDir;
+        need(existsSync(join(resources, "mobile", "index.html")), "installed mobile PWA assets missing");
+      }
       need(existsSync(ctx.app) && statSync(ctx.app).isFile(), `installed app binary not found (${ctx.app || "none"})`);
       need(existsSync(ctx.engine) && statSync(ctx.engine).isFile(), `installed engine sidecar not found (${ctx.engine || "none"})`);
-      return `${flavour.channel} installed: app ${ctx.app}, engine ${basename(ctx.engine)}`;
+      return `${flavour.channel} installed: app ${ctx.app}, engine ${basename(ctx.engine)}; mobile PWA assets present`;
     });
 
     await step("launch", async () => {
@@ -277,8 +322,8 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       need(v.status === 0 && v.out.includes(N), `installed engine --version: ${tail(v.out, 200)}`);
       if (opts.webdriver) {
         const detail = await webdriverSmoke(ctx.app, env);
-        need(await engineGone(15_000), "engine sidecar still listening 15 s after the app closed (containment)");
-        return `${detail}; sidecar exited with the app`;
+        need(await engineGone(15_000), "engine sidecar still listening after explicit application quit (containment)");
+        return detail;
       }
       const app: ChildProcess = spawn(ctx.app, [], { env, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
       const explain = captureOutput(app);

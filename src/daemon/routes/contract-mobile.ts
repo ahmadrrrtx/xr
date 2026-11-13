@@ -1,6 +1,6 @@
 /** Phase 2.4 · P1-1 — mobile contract entries (spread into contract.ts).
- * Every op mounts on BOTH mounts; only the TOFU fingerprint is `public: true`. */
-import type { ApiOperationMeta } from "./contract.ts"; import { MobileApprovalDecideRequest, MobileChatsCreateRequest, MobileChatSendRequest, MobileEmptyRequest, MobilePairRequest, MobilePushSubscribeRequest } from "./schemas-mobile.ts";
+ * Every op mounts on BOTH mounts; the reported fingerprint is public but not a TLS trust anchor. */
+import type { ApiOperationMeta } from "./contract.ts"; import { DesktopMobileStartRequest, MobileApprovalDecideRequest, MobileChatsCreateRequest, MobileChatSendRequest, MobileEmptyRequest, MobilePairRequest, MobilePushSubscribeRequest } from "./schemas-mobile.ts";
 
 /** Defaults shared by every mobile op: experimental stability, its own tag. */
 const m = (summary: string, extra?: Partial<ApiOperationMeta>): ApiOperationMeta => ({
@@ -8,7 +8,10 @@ const m = (summary: string, extra?: Partial<ApiOperationMeta>): ApiOperationMeta
 });
 
 export const MOBILE_CONTRACT: Record<string, ApiOperationMeta> = {
-  "mobile.certFingerprint.get": m("SHA-256 fingerprint of the served LAN certificate (public TOFU anchor; no key material).", { public: true }),
+  "mobile.desktop.status.get": m("Desktop-local mobile listener status (bearer authenticated)."),
+  "mobile.desktop.start.post": m("Explicitly start desktop mobile listener using a CA-issued TLS identity.", { request: DesktopMobileStartRequest }),
+  "mobile.desktop.stop.post": m("Stop the desktop mobile listener and invalidate outstanding pairing codes.", { request: MobileEmptyRequest }),
+  "mobile.certFingerprint.get": m("SHA-256 fingerprint of the served LAN certificate (server-reported only; not peer certificate pinning).", { public: true }),
   "mobile.pair.post": m("Redeem the 6-digit pairing code; issues the HttpOnly Secure paired-device cookie.", { request: MobilePairRequest }),
   "mobile.session.delete": m("Close the caller's session (rejects anonymous; clears the cookie; device self-revokes).", { request: MobileEmptyRequest }),
   "mobile.devices.list.get": m("List paired devices (desktop/privileged sessions only)."),

@@ -57,7 +57,13 @@ function buildClient(ops: ApiOperation[], schemaNames: Map<unknown, string>): st
 
   interface GenMethod {
     name: string;
-    source: string;
+    signature: string;
+    summary: string;
+    method: string;
+    path: string;
+    paramCount: number;
+    hasBody: boolean;
+    sse: boolean;
   }
   const methods: GenMethod[] = [];
 
@@ -75,32 +81,11 @@ function buildClient(ops: ApiOperation[], schemaNames: Map<unknown, string>): st
     const paramSig = params.map((p) => `${p.replace(/[^a-zA-Z0-9_$]/g, "_")}: string`).join(", ");
     const bodySig = reqName ? `${paramSig ? ", " : ""}body: z.infer<typeof S.${reqName}>` : "";
     const sig = `${paramSig}${bodySig}`;
-    const pathExpr = params.length > 0
-      ? "`" + op.path.replace(/\{([^}]+)\}/g, (_, p) => `\${encodeURIComponent(${p.replace(/[^a-zA-Z0-9_$]/g, "_")})}`) + "`"
-      : JSON.stringify(op.path);
-
-    if (op.meta.sse) {
-      // Phase 10 — SSE routes may have no request body (GET streams). Use the
-      // route's real method and only pass `body` when a request schema exists.
-      const bodyArg = reqName ? ", body" : "";
-      methods.push({
-        name,
-        source:
-          `  /** ${op.meta.summary} (SSE stream — returns the raw Response). */\n` +
-          `  async ${name}(${sig.replace(/^, /, "")}): Promise<Response> {\n` +
-          `    return await this.raw("${op.method}", ${pathExpr}${bodyArg});\n` +
-          `  }`,
-      });
-      continue;
-    }
-
     methods.push({
-      name,
-      source:
-        `  /** ${op.meta.summary} */\n` +
-        `  async ${name}(${sig.replace(/^, /, "")}): Promise<${resType}> {\n` +
-        `    return await this.call("${op.method}", ${pathExpr}${reqName ? ", body" : ""});\n` +
-        `  }`,
+      name, signature: `${sig.replace(/^, /, "")}): Promise<${op.meta.sse ? "Response" : resType}>`,
+      summary: `${op.meta.summary}${op.meta.sse ? " (SSE stream — returns the raw Response)." : ""}`,
+      method: op.method, path: op.path, paramCount: params.length,
+      hasBody: Boolean(reqName), sse: Boolean(op.meta.sse),
     });
   }
 
@@ -133,6 +118,21 @@ function buildClient(ops: ApiOperation[], schemaNames: Map<unknown, string>): st
   lines.push('    this.name = "XRApiError";');
   lines.push("  }");
   lines.push("}");
+  lines.push("");
+  // API shape is generated once; a compact operation table drives one shared
+  // request implementation rather than duplicating hundreds of method bodies.
+  lines.push("/** Typed operations generated from the versioned route registry. */");
+  lines.push("export interface XRDaemonClient {");
+  for (const m of methods) {
+    lines.push(`  /** ${m.summary} */`);
+    lines.push(`  ${m.name}(${m.signature};`);
+  }
+  lines.push("}");
+  lines.push("");
+  lines.push("// [name, HTTP method, route template, path parameter count, body, raw SSE]");
+  lines.push("const OPERATIONS: ReadonlyArray<readonly [string, string, string, number, boolean, boolean]> = [");
+  for (const m of methods) lines.push(`  ${JSON.stringify([m.name, m.method, m.path, m.paramCount, m.hasBody, m.sse])},`);
+  lines.push("];");
   lines.push("");
   lines.push("/** Typed client for the versioned daemon API (/api/v1). */");
   lines.push("export class XRDaemonClient {");
@@ -172,7 +172,19 @@ function buildClient(ops: ApiOperation[], schemaNames: Map<unknown, string>): st
   lines.push("    return (await res.json()) as T;");
   lines.push("  }");
   lines.push("");
-  for (const m of methods) lines.push(m.source, "");
+  lines.push("  static {");
+  lines.push("    for (const [name, method, template, parameterCount, hasBody, sse] of OPERATIONS) {");
+  lines.push("      Object.defineProperty(this.prototype, name, {");
+  lines.push("        configurable: true, writable: true,");
+  lines.push("        value: async function(this: XRDaemonClient, ...args: unknown[]) {");
+  lines.push("          let i = 0;");
+  lines.push('          const path = template.replace(/\\{[^}]+\\}/g, () => encodeURIComponent(args[i++] as string));');
+  lines.push("          const body = hasBody ? args[parameterCount] : undefined;");
+  lines.push("          return sse ? this.raw(method, path, body) : this.call(method, path, body);");
+  lines.push("        },");
+  lines.push("      });");
+  lines.push("    }");
+  lines.push("  }");
   lines.push("}");
   lines.push("");
   lines.push("/** Convenience factory. */");

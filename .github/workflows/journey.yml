@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runsOn: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-14, macos-15, macos-15-intel, windows-latest, windows-11-arm]
+        runsOn: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-26, macos-15, macos-15-intel, windows-latest, windows-11-arm]
         channel: [binary, npm]
     defaults:
       run:

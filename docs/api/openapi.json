@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "XR Daemon API",
-    "version": "1.1.1-rc.1",
+    "version": "1.2.0-preview.1",
     "summary": "The local-first daemon API of the XR AI agent runtime.",
     "description": "Versioned surface mounted at /api/v1. Legacy /api/* mounts serve during the deprecation window with Deprecation/Sunset headers and are removed no earlier than XR 2.0.0. Compatibility policy: docs/api/COMPATIBILITY.md. Authentication: local bearer token (x-session bootstrap cookie for browsers).",
     "license": {
@@ -18563,7 +18563,7 @@
     "/api/v1/mobile/cert-fingerprint": {
       "get": {
         "operationId": "mobile.certFingerprint.get",
-        "summary": "SHA-256 fingerprint of the served LAN certificate (public TOFU anchor; no key material).",
+        "summary": "SHA-256 fingerprint of the served LAN certificate (server-reported only; not peer certificate pinning).",
         "tags": [
           "mobile"
         ],
@@ -18876,6 +18876,310 @@
                   }
                 },
                 "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mobile/desktop/start": {
+      "post": {
+        "operationId": "mobile.desktop.start.post",
+        "summary": "Explicitly start desktop mobile listener using a CA-issued TLS identity.",
+        "tags": [
+          "mobile"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 253
+                  }
+                },
+                "required": [
+                  "host"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mobile/desktop/status": {
+      "get": {
+        "operationId": "mobile.desktop.status.get",
+        "summary": "Desktop-local mobile listener status (bearer authenticated).",
+        "tags": [
+          "mobile"
+        ],
+        "x-xr-stability": "experimental",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mobile/desktop/stop": {
+      "post": {
+        "operationId": "mobile.desktop.stop.post",
+        "summary": "Stop the desktop mobile listener and invalidate outstanding pairing codes.",
+        "tags": [
+          "mobile"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false,
+                "description": "No request fields."
               }
             }
           }

@@ -6,8 +6,9 @@ break.
 
 ## 1. Invariants (non-negotiable)
 
-1. **LAN access is opt-in.** `xr serve` binds `127.0.0.1`. Only `--lan`
-   (or `XR_DAEMON_LAN=1`) binds `0.0.0.0`, and it says so loudly on stdout.
+1. **LAN access is opt-in.** The desktop engine is loopback-only by default.
+   A separate private-peer-limited listener starts only after an authenticated
+   Settings action. The standalone CLI has its own explicit `--lan` mode.
 2. **Fail closed.** No session ⇒ no API. Wrong pairing code ⇒ generic 401 that
    reveals nothing (not even that LAN mode is on).
 3. **No bearer tokens in web storage.** Auth is an HttpOnly, Secure,
@@ -22,35 +23,34 @@ break.
 ## 2. Trust boundaries
 
 ```
- phone (PWA)  ──TLS, TOFU-pinned──▶  daemon (your machine)  ──▶ model providers
+ phone (PWA)  ──TLS (peer trust required)──▶  daemon (your machine)  ──▶ model providers
       │                                      │
       └──Web Push (ciphertext)──▶ FCM/APNS ──┘  (relay only; cannot decrypt)
 ```
 
-- The **phone** trusts: the cert fingerprint the human compared out-of-band,
-  and the session cookie the daemon issued.
+- The **phone** relies on the browser/OS to authenticate the TLS peer; an
+  app-reported fingerprint is not an independently verified certificate.
 - The **daemon** trusts: its bearer token (desktop/CLI), paired-device cookies,
   and nothing else. `Origin: null` is accepted only with a valid paired cookie.
 - **FCM/APNS** are untrusted couriers: they get ciphertext and metadata
   (endpoint, TTL) — never titles, bodies or approval ids in clear.
 
-## 3. TLS without a CA: TOFU + pinning
+## 3. TLS identity: unresolved blocker
 
-The cert is self-signed ECDSA P-256 with SANs for LAN IPs, hostname and
-`.local`. Browsers will always warn; that warning is the feature — it forces
-the human comparison:
+The LAN daemon generates a self-signed certificate. Browser JavaScript cannot
+read the actual TLS peer certificate. The fingerprint endpoint and app code
+come over the same connection and can be controlled by an impersonator. The
+IndexedDB comparison detects changes to a *reported string* only; it is not
+certificate pinning, and matching values do not authenticate the connection.
 
-1. Desktop prints/shows the SHA-256 fingerprint (Settings → Mobile, 24px mono).
-2. The phone shows the same fingerprint before pairing; the user compares.
-3. Only after confirmation is the fingerprint pinned in IndexedDB. Later
-   connections to that host must present the same hash or the app refuses with
-   an "Unrecognised XR certificate" dialog.
-
-Why this is sound: the fingerprint is also served at
-`/api/mobile/cert-fingerprint` over the (untrusted on first use) channel. An
-attacker who can MITM the first load could lie about it — which is exactly why
-step 2 is out-of-band. After the pin exists, the pin is the authority and a
-later MITM fails verification.
+Do not bypass browser TLS warnings based on the app's displayed value. A
+trusted certificate/independent verification mechanism and a complete threat
+review are required before this flow can be claimed secure. A packaged-desktop
+candidate now requires a CA-issued certificate for the configured host and
+relies on the phone browser's normal CA/hostname verification. XR cannot check
+whether the phone trusts that CA or whether the user bypassed a warning.
+Physical-phone and installed-package verification remain open. The separate
+CLI `--lan` self-signed flow does not gain this trust from the candidate.
 
 ## 4. Pairing
 
@@ -59,7 +59,7 @@ later MITM fails verification.
 - Rate-limited: 10 attempts/minute per source address.
 - Wrong/expired code ⇒ 401 with a constant body. No oracle.
 - Pairing binds a device record: name, pairing time, last seen, push
-  subscription, the device's AES-GCM push key, and the pinned fingerprint.
+  subscription, the device's AES-GCM push key, and a recorded fingerprint (not TLS pinning).
 - Session tokens are stored **hashed** (SHA-256) in `~/.xr/devices.json`
   (0600). A stolen registry cannot be replayed.
 - Revocation rotates the stored hash, so the phone's cookie matches nothing on
@@ -121,10 +121,11 @@ fonts. Production builds ship **no source maps**.
 
 ## 8. Residual risks (accepted, documented)
 
-- **LAN attacker + user inattention:** TOFU relies on the human comparing
-  fingerprints. A user who taps through without comparing can be MITMed once.
-  Mitigation: the dialog makes comparison the primary action; pinning prevents
-  repeats.
+- **LAN impersonation:** the browser app cannot bind a server-reported
+  fingerprint to the TLS peer. A malicious endpoint can repeat the reported
+  value and serve malicious code; the existing comparison does not prevent it.
+  The candidate desktop flow relies on browser/OS TLS validation, not this
+  comparison. Owner CA setup, device trust and real-device tests remain open.
 - **Router-level clients see metadata:** SSID, IPs, ports, TLS handshake.
   Payloads remain encrypted; approval text never appears in clear on the wire.
 - **Awake-desktop requirement:** push and chat need the daemon up. Chosen

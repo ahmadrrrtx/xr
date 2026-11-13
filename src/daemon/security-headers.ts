@@ -16,10 +16,52 @@
  *   · HSTS is emitted ONLY for https requests (LAN mode, Phase 28) — sending
  *     it on http://127.0.0.1 would poison the loopback origin in browsers.
  *   · CORS is never `*`. An Origin is reflected only when it exactly matches
- *     the request's own host (the dashboard/PWA served from this daemon);
- *     otherwise no CORS headers are sent and browsers block cross-origin
- *     reads, which is the desired local-first posture.
+ *     the request's own host, or the exact explicitly configured desktop
+ *     webview origin on an app-owned loopback sidecar. All other origins fail.
  */
+
+// Only the app-spawned, loopback sidecar opts in to its exact native webview
+// origin. Origin alone is not authentication; protected routes still need the
+// per-launch bearer. Never allow opaque origins, wildcard origins, or cookies.
+const DESKTOP_ORIGINS = new Set(["tauri://localhost", "http://tauri.localhost"]);
+const DESKTOP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+const DESKTOP_HEADERS = new Set(["accept", "authorization", "content-type", "x-xr-filename"]);
+export function desktopCorsAllowed(req: Request, origin?: string): boolean {
+  if (!origin || !DESKTOP_ORIGINS.has(origin) || req.headers.get("origin") !== origin) return false;
+  try {
+    const u = new URL(req.url), host = req.headers.get("host");
+    return u.protocol === "http:" && u.hostname === "127.0.0.1" &&
+      u.pathname.startsWith("/api/") && (!host || host.toLowerCase() === u.host.toLowerCase());
+  } catch { return false; }
+}
+export function desktopCorsPreflight(req: Request, origin?: string): Response | null {
+  if (req.method !== "OPTIONS" || !desktopCorsAllowed(req, origin)) return null;
+  const method = req.headers.get("access-control-request-method")?.toUpperCase() ?? "";
+  const headers = (req.headers.get("access-control-request-headers") ?? "").split(",").map(h => h.trim().toLowerCase()).filter(Boolean);
+  if (!DESKTOP_METHODS.has(method) || headers.some(h => !DESKTOP_HEADERS.has(h))) return null;
+  return new Response(null, { status: 204, headers: {
+    "access-control-allow-methods": [...DESKTOP_METHODS].join(", "),
+    "access-control-allow-headers": [...DESKTOP_HEADERS].join(", "),
+    "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+  } });
+}
+
+/**
+ * Phase 34 · R1 (audit §15#27) — rate-limit client key. `x-forwarded-for` is
+ * spoofable on a loopback-daemon without a real reverse proxy, so it is only
+ * honoured when the operator explicitly opts in (`XR_TRUST_PROXY=1`); by
+ * default the socket peer (Bun's `requestIP`, probes/tests → "local") wins.
+ */
+export function clientIpFor(
+  req: Request,
+  peer: { address: string } | null = null,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (env.XR_TRUST_PROXY === "1") {
+    return (req.headers.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || "local";
+  }
+  return peer?.address ?? "local";
+}
 
 export const API_CSP = "default-src 'none'; frame-ancestors 'none'";
 
@@ -67,7 +109,7 @@ export function isHttpsRequest(req: Request): boolean {
  * variance (e.g. a binary asset's `Cache-Control: private, max-age=…`, an
  * SSE stream's `no-cache`); CSP / framing / sniffing headers always win.
  */
-export function applySecurityHeaders(res: Response, req: Request): Response {
+export function applySecurityHeaders(res: Response, req: Request, desktopOrigin?: string): Response {
   const contentType = res.headers.get("content-type") ?? "";
   const isHtml = contentType.includes("text/html");
   const headers = new Headers(res.headers);
@@ -103,6 +145,11 @@ export function applySecurityHeaders(res: Response, req: Request): Response {
   }
 
   applyCorsHeaders(headers, req);
+  if (desktopCorsAllowed(req, desktopOrigin) &&
+      (req.method !== "OPTIONS" || res.status === 204)) {
+    headers.set("access-control-allow-origin", desktopOrigin!);
+    headers.append("vary", "Origin");
+  }
 
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }

@@ -21,6 +21,7 @@ import {
   Palette,
   RefreshCw,
   Settings2,
+  Smartphone,
   Shield,
   type LucideIcon,
   Activity,
@@ -43,6 +44,7 @@ import { PrivacyTab } from './tabs/PrivacyTab';
 import { ShortcutsTab } from './tabs/ShortcutsTab';
 import { UpdatesTab } from './tabs/UpdatesTab';
 import { VoiceTab } from './tabs/VoiceTab';
+import { MobileTab } from './tabs/MobileTab';
 
 export type SettingsTabId =
   | 'general'
@@ -52,6 +54,7 @@ export type SettingsTabId =
   | 'models'
   | 'shortcuts'
   | 'voice'
+  | 'mobile'
   | 'privacy'
   | 'updates'
   | 'diagnostics'
@@ -79,6 +82,7 @@ const TABS: readonly TabDef[] = [
   { id: 'models', icon: Cpu, labelKey: 'tab.models', group: 'preferences', subtitle: 'Connect providers and pick the models XR uses.' },
   { id: 'shortcuts', icon: Keyboard, labelKey: 'tab.shortcuts', group: 'preferences', subtitle: 'Rebind every chord to your hands.' },
   { id: 'voice', icon: Mic, labelKey: 'tab.voice', group: 'preferences', subtitle: 'Microphone, speech and push-to-talk.' },
+  { id: 'mobile', icon: Smartphone, labelKey: 'tab.mobile', group: 'preferences', subtitle: 'Pair a phone over a trusted local connection.' },
   { id: 'privacy', icon: Shield, labelKey: 'tab.privacy', group: 'privacy', subtitle: 'Local-first by design. You decide what leaves the machine.' },
   { id: 'updates', icon: RefreshCw, labelKey: 'tab.updates', group: 'system', subtitle: 'Keep XR current.' },
   { id: 'diagnostics', icon: Activity, labelKey: 'tab.diagnostics', group: 'system', subtitle: 'Engine link, version, providers and recent errors.' },
@@ -321,6 +325,7 @@ export default function SettingsScreen() {
                 {active === 'models' ? <ModelsTab /> : null}
                 {active === 'shortcuts' ? <ShortcutsTab /> : null}
                 {active === 'voice' ? <VoiceTab /> : null}
+                {active === 'mobile' ? <MobileTab /> : null}
                 {active === 'privacy' ? <PrivacyTab /> : null}
                 {active === 'updates' ? <UpdatesTab /> : null}
                 {active === 'diagnostics' ? <DiagnosticsTab /> : null}

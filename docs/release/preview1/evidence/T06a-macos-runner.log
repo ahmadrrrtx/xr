@@ -1,0 +1,20 @@
+T06.a — 2026-11-10 native runner retirement
+GitHub's official notice: https://github.blog/changelog/2026-10-01-github-actions-macos-14-runner-image-retirement/
+The GitHub Actions macos-14 image was retired 2026-11-02; suggested arm64
+replacements include macos-15 and macos-26. Clean-machine run 42915406499 on
+640ffe59: both macos-14 CLI channels cancelled with no runner or steps while
+other macOS 15/Intel legs passed. Same two macos-14 cancellations observed on
+run 42917263860 on 69fb0e3b. This is consistent with retirement, although the
+job API contains no explicit failure reason. No macOS 14 runtime pass claimed.
+Fix: swap macos-14 for macos-26 in CLI matrix and desktop arm64 journey; keep
+macos-15 arm64, macos-15-intel, both CLI channels and all existing gate
+conditions. No journey leg was downgraded or marked non-blocking. Regression
+checks guard supported architecture/version combinations and retired label.
+Local `bun test test/release/macos-runner-policy.test.ts test/release/windows-artifact-wait.test.ts test/release/windows-preview-workflow.test.ts test/release/windows-installers-negative.test.ts test/journey`:
+25 pass, 0 fail; `bun run ci:policy`: PASS; strict ledger: PASS.
+The newly configured macOS 26 native execution remains NOT RUN until CI reports.
+
+Follow-up on 3062b855: clean-machine run 42917975220 PASS and full desktop
+dispatch 42917971949 PASS, including required native journey gate. CLI
+macos-26 binary and npm jobs passed; desktop journey matrix retained macOS 15,
+26 and Intel. These are CI-runner results, not manual Mac or macOS 14 proof.

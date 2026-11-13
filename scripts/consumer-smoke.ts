@@ -28,10 +28,15 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { CONFIG_VERSION as SCHEMA_VERSION } from "../src/config/config.ts";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CLI_ENTRY = join(REPO_ROOT, "src", "index.ts");
-const CONFIG_VERSION = 20;
+// Single source: the real config schema version. This was a hand-copied 20 while
+// src/config/config.ts had already moved to 22, so the stub config the smoke wrote
+// was "migrated" and lost its customProviders — the CLI then reported
+// `Unknown provider "consumer-stub"` and the gate failed for the wrong reason.
+const CONFIG_VERSION = SCHEMA_VERSION;
 const STALE_MARKERS = ["3.1.5", "Unified AI Operating System", "XR 3.0"];
 
 /**
@@ -107,7 +112,7 @@ function envelope(message: string): string {
   return JSON.stringify({ message, tool_calls: [], done: true });
 }
 
-export function startSmokeStub(message = "CONSUMER-SMOKE-OK"): Promise<{
+export function startSmokeStub(port = 0, message = "CONSUMER-SMOKE-OK"): Promise<{
   baseUrl: string;
   close: () => Promise<void>;
 }> {
@@ -146,7 +151,7 @@ export function startSmokeStub(message = "CONSUMER-SMOKE-OK"): Promise<{
       s.on("close", () => sockets.delete(s));
     });
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(port, "127.0.0.1", () => {
       const port = (server.address() as AddressInfo).port;
       server.unref();
       resolve({
@@ -165,23 +170,22 @@ export function startSmokeStub(message = "CONSUMER-SMOKE-OK"): Promise<{
 
 export function writeStubConfig(home: string, baseUrl: string): void {
   mkdirSync(home, { recursive: true });
+  // T17.a — a loopback CUSTOM provider is refused by the provider-URL guard (SSRF
+  // protection: a custom entry could otherwise reach metadata or internal
+  // services). The supported way to talk to a server on this machine is a built-in
+  // LOCAL preset, so the smoke binds its stub where the `ollama` preset already
+  // points and selects that. The control stays exactly as it was; the test moved.
   const config = {
     version: CONFIG_VERSION,
-    defaults: { provider: "consumer-stub", model: "stub-model" },
+    defaults: { provider: "ollama", model: "qwen2.5:3b" },
     providerEngine: {
       routingStrategy: "hybrid",
-      customProviders: [
-        {
-          id: "consumer-stub",
-          label: "Consumer smoke stub",
-          baseUrl,
-          defaultModel: "stub-model",
-          capabilities: { chat: true, streaming: false, toolUse: true },
-        },
-      ],
+      customProviders: [],
       providerCapabilities: {},
     },
   };
+  // baseUrl is asserted below: the ollama preset must be pointing at our stub.
+  void baseUrl;
   writeFileSync(join(home, "config.json"), JSON.stringify(config, null, 2) + "\n");
 }
 
@@ -258,7 +262,8 @@ export async function runConsumerSmoke(opts: {
 
   const home = mkdtempSync(join(tmpdir(), "xr-consumer-home-"));
   const work = mkdtempSync(join(tmpdir(), "xr-consumer-work-"));
-  const stub = await startSmokeStub();
+  // The ollama preset is fixed at http://localhost:11434/v1, so the stub must bind there.
+  const stub = await startSmokeStub(11434);
   try {
     writeStubConfig(home, stub.baseUrl);
     const env: NodeJS.ProcessEnv = {
@@ -308,7 +313,7 @@ export async function runConsumerSmoke(opts: {
     }
 
     const task = await runCli(
-      [...xrCmd, "run", "Say hello", "--provider", "consumer-stub"],
+      [...xrCmd, "run", "Say hello", "--provider", "ollama", "--model", "qwen2.5:3b"],
       env,
       cwd,
       180_000,

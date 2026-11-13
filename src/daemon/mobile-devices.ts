@@ -8,7 +8,7 @@
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { mobileHome } from './mobile-home.ts';
 import { join } from 'node:path';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 
@@ -38,7 +38,7 @@ export interface DeviceRegistry {
 }
 
 // Phase 2.4 · P1-1 — lazy HOME resolution (Phase 24 convention).
-const REGISTRY_PATH = () => join(homedir(), '.xr', 'devices.json');
+const REGISTRY_PATH = () => join(mobileHome(), 'devices.json');
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -54,22 +54,26 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 let cache: DeviceRegistry | null = null;
+let cachePath: string | null = null;
 
 export async function loadRegistry(): Promise<DeviceRegistry> {
-  if (cache) return cache;
+  const path = REGISTRY_PATH();
+  if (cache && cachePath === path) return cache;
   try {
-    const raw = await readFile(REGISTRY_PATH(), 'utf8');
+    const raw = await readFile(path, 'utf8');
     const parsed = JSON.parse(raw) as DeviceRegistry;
     cache = parsed.version === 1 ? parsed : { version: 1, devices: [] };
   } catch {
     cache = { version: 1, devices: [] };
   }
+  cachePath = path;
   return cache;
 }
 
 export async function saveRegistry(registry: DeviceRegistry): Promise<void> {
   cache = registry;
-  await mkdir(join(homedir(), '.xr'), { recursive: true, mode: 0o700 });
+  cachePath = REGISTRY_PATH();
+  await mkdir(mobileHome(), { recursive: true, mode: 0o700 });
   await writeFile(REGISTRY_PATH(), `${JSON.stringify(registry, null, 2)}\n`, { mode: 0o600 });
 }
 

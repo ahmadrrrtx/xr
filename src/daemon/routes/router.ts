@@ -61,6 +61,7 @@ export interface DaemonRouteContext extends DaemonResponseHelpers {
   /** Phase 2.4 · P1-1 — LAN-only mobile plumbing (dispatcher-resolved session
    * + route deps); absent whenever the LAN runtime is off. */
   mobile?: { session: Session; deps: MobileRouteDeps };
+  desktopMobile?: import("../desktop-mobile-listener.ts").DesktopMobileListener;
 }
 
 export type DaemonRouteHandler = (ctx: DaemonRouteContext) => Response | null | undefined | Promise<Response | null | undefined>;

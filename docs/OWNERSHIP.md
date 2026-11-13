@@ -80,6 +80,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/control.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/control/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/core/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/cost-adversarial.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/cost.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -225,6 +226,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/phase26-mockups.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/placeholder-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/platform-parity.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/prepare-flatpak-sources.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/provider-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -235,6 +237,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/release-assets-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-ci-evidence.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/release-smoke/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/repo-intelligence-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/size-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

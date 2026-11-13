@@ -111,33 +111,20 @@ export function EmptyFresh() {
                 type="button"
                 data-testid="runs-demo"
                 onClick={() => {
-                  // XR-REL-03 — never fabricate a run to fill an empty state.
-                  const outcome = useRunsStore.getState().startDemoRun();
-                  if (outcome.kind === 'no-provider') {
-                    toast('No model configured yet', {
-                      description:
-                        'A run needs a provider. Add a cloud key or start a local runtime first.',
-                      action: {
-                        label: 'Set up a model',
-                        onClick: () => navigate('/settings?tab=models'),
-                      },
-                    });
+                  const id = useRunsStore.getState().startDemoRun();
+                  if (!id) {
+                    toast.error('Connect the engine and configure a provider to start a run.');
                     return;
                   }
-                  toast(outcome.real ? 'Run started' : 'Demo run started', {
-                    description: outcome.real
-                      ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
-                      : 'Development build: this is a scripted trace, not a real run.',
-                    action: {
-                      label: 'View trace',
-                      onClick: () => navigate(`/brain/${outcome.id}`),
-                    },
+                  toast('Run started', {
+                    description: 'A real agent turn on the engine. Watch it live here, or open the trace.',
+                    action: { label: 'View trace', onClick: () => navigate(`/brain/${id}`) },
                   });
                 }}
                 className="border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-raised flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[13px] transition-colors"
               >
                 <Play className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-                Start a demo run
+                Start a run
               </button>
             </>
           }

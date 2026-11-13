@@ -1,0 +1,39 @@
+T05.a — Preview 1 host-automation refusal candidate, local Linux, 2026-11-10
+Source audit: direct desktop-control, capture and system-control paths ran host
+subprocesses without a sandbox handoff; non-hardened legacy shell also allowed
+host execution when Trust was absent. These were inconsistent with D5.
+Candidate: block direct desktop automation on Windows/macOS regardless of
+sandbox availability and block non-hardened legacy shell fallback there. The
+canonical isolated shell path remains governed by Trust. Linux unchanged.
+Commands on Linux, not native OS confinement evidence:
+  bun test test/security test/control test/trust/canonical-shell-isolation.test.ts
+    496 pass, 1 skip, 0 fail (before the added service override regression).
+  bun test test/security/desktop-control-policy.test.ts test/release/windows-preview-workflow.test.ts
+    7 pass, 1 skip, 0 fail (native shell case skipped on Linux).
+The Windows/macOS control branches were simulated via process.platform, and a
+runner-spy confirmed the control service cannot reach an injected executor.
+No Windows or macOS test of this candidate has yet completed; no real desktop
+interaction or sandbox escape result is asserted. The policy is scoped to these
+paths; it is not proof all OS subprocesses or plugins are sandboxed.
+Final combined rerun after adding service-spy and workflow tests:
+  bun test test/security test/control test/trust/canonical-shell-isolation.test.ts test/release/windows-preview-workflow.test.ts
+    500 pass, 1 native-only skip, 0 fail; root tsc --noEmit exit 0.
+
+2026-11-10: Windows Preview CLI job 130164103772 in run 42911178973 on
+1f01c829 ran direct control refusal and canonical-shell tests: 8 pass, 0 fail.
+The namespace-success test returns early on Windows and is not sandbox proof.
+The non-hardened shell refusal case did execute natively. The separate CI
+security/Truth and non-gating native sandbox workflows failed because an old
+unit test expected Windows remediation to offer experimental AppContainer,
+which is policy-disabled. Updated the test to require the honest disabled
+message and preserve the macOS opt-in assertion. Rerun on CI is required.
+
+2026-11-10: Cross-Platform macOS job 130167571401 on f8a0ce71 failed three
+old tests: two shell-tool expectations still required host fallback/old wording,
+and a cancellation test attempted that now-blocked host fallback. Updated the
+tests to assert refusal and audit on sandbox-only hosts while keeping real
+Linux host-fallback and subprocess-cancellation assertions. Added a separate
+cross-platform fake-isolated-runner test that verifies the identical signal is
+forwarded and cancellation is surfaced. Local trust+execution: 317 pass, 17
+skips, 0 fail. The actual macOS isolated-runner cancellation and these revised
+assertions require a native rerun; the fake is not kernel-containment evidence.

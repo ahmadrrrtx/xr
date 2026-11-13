@@ -4,6 +4,7 @@
  */
 
 import { confirm, colors as C } from "../interfaces/cli.ts";
+import { desktopControlBlock } from "../security/desktop-control-policy.ts";
 import { loadConfig } from "../config/config.ts";
 import type { Store } from "../state/workspace-store.ts";
 import { ActionSchema, type Action, type ActionResult, type ControlOptions, type RiskAssessment, type Plan } from "./types.ts";
@@ -172,6 +173,15 @@ export async function runAction(
     };
   }
   const action = parsed.data;
+  // Dry-run is a preview only. Neither approvals nor a configured backend may
+  // authorize this direct executor until it has a real sandbox handoff.
+  const hostBlock = desktopControlBlock();
+  if (hostBlock && opts.mode !== "dry-run") {
+    const risk = classify(action);
+    const result: ActionResult = { ok: false, skipped: true, message: hostBlock };
+    auditExecuted(store, action, risk, result);
+    return { action, risk, result };
+  }
 
   // Permission check – Stage 9
   const perm = process.env.XR_CONTROL_FORCE_TEST === "1" ? { allowed: true } : checkPermissionForAction(action.type);

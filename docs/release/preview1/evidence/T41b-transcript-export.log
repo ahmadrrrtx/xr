@@ -1,0 +1,25 @@
+T41.b — user-requested transcript exports, 2026-11-10
+Source inspection found CLI `xr session export` and desktop Markdown export
+wrote session title, chat/tool text and nested tool input without credential
+redaction. Two tests with synthetic `sk-` keys, bearer values and opaque named
+secrets reproduced 0 pass / 2 fail. A follow-up JSON tool-output fixture
+reproduced another opaque secret leak (1 pass / 1 fail).
+
+Candidate masks recognized credential patterns and recursively masks known
+secret field names in export-only values. It processes complete JSON tool
+output before the 40-line output limit, and redacts complete multiline PEM
+blocks before truncation. CLI and desktop exported files state that redaction
+is heuristic and users must review before sharing; desktop toast also warns.
+Ordinary email addresses and IPs are preserved; local history is NOT rewritten.
+Unrecognized secrets, malformed/embedded JSON fragments and earlier exports can
+still contain credentials. This is not a guarantee of safe disclosure.
+
+Targeted tests: 4 pass/0 fail, including JSON output, original stored history,
+non-secret controls, PEM before truncation, and credential-safe suggested filename. Security: 412 pass, one native
+Windows/macOS-only skip; observability 23/0; desktop 504/0; CLI 262/0; `bun run security:check` exit 0. Root and desktop
+tsc, desktop build and lint passed (two pre-existing lint warnings), sink lint
+and generated IPC ACL checks pass. Adding the shared module changed only the
+three generated IPC descriptions' reachable-module counts, not permissions.
+Size gate passes without cap changes; boundaries reports 0 errors, one existing
+orphan warning. Current native CI and complete secret/crash/broker scan remain
+open. Reproductions use synthetic values only; no real credentials were used.

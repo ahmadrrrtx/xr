@@ -346,7 +346,10 @@ export async function runJourney(opts: { channel: "binary" | "npm"; evidenceClas
 if (import.meta.main) {
   const argv = process.argv.slice(2);
   const get = (f: string) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : undefined; };
-  const channel = get("--channel");
+  // The Release Gate Lite command is `bun run journey:cli` with no arguments, so a
+  // missing --channel defaults to the binary channel (the one Preview 1 ships) rather
+  // than exiting with a usage error. An explicit bad value is still rejected.
+  const channel = get("--channel") ?? "binary";
   if (channel !== "binary" && channel !== "npm") { console.error("usage: cli-journey.ts --channel binary|npm [--evidence file] [--class CI|LR] [--keep]"); process.exit(2); }
   const evidenceClass = (get("--class") ?? (process.env.GITHUB_ACTIONS ? "CI" : "LR")) as "CI" | "LR";
   const ev = await runJourney({ channel, evidenceClass, keep: argv.includes("--keep") });

@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { CORE_VERSION } from "../../src/core/version.ts";
+import { CORE_VERSION, PKG } from "../../src/core/version.ts";
 import {
   dashboardHtml,
   DASHBOARD_CSS,
@@ -99,9 +99,18 @@ describe("T7 — dashboard split preserves behaviour exactly (Phase 4 hardened o
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("style=\"");
     expect(html).toContain(CORE_VERSION);
-    // Release identity is intentionally generated; normalize ONLY that exact
-    // field so the pinned post-hardening DOM/CSP stays byte-for-byte guarded.
-    expect(sha256(html.replaceAll(CORE_VERSION,"1.1.0"))).toBe(POST_PHASE4_SHA256);
+    // Release identity is intentionally generated; normalize ONLY those exact
+    // fields so the pinned post-hardening DOM/CSP stays byte-for-byte guarded.
+    // Both halves of the displayed identity are generated — the version AND the
+    // codename (DISPLAY_VERSION = "<version> (<codename>)") — so normalizing
+    // only the version left the pin re-breaking on every codename change
+    // (D4: Graphite → Preview 1). Pin-time values are what the hash was taken at.
+    const PIN_VERSION = "1.1.0";
+    const PIN_CODENAME = "Graphite";
+    const normalized = html
+      .replaceAll(CORE_VERSION, PIN_VERSION)
+      .replaceAll(PKG.codename, PIN_CODENAME);
+    expect(sha256(normalized)).toBe(POST_PHASE4_SHA256);
   });
 
   test("the token is NOT embedded in the dashboard HTML (Phase 4 T5)", () => {

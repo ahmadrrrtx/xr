@@ -45,3 +45,6 @@ export const MobileChatSendRequest = z.object({
   content: z.string().min(1).describe("The user's message."),
   model: z.string().max(200).optional().describe("Optional model override (defaults to the effective config selection)."),
 });
+
+/** Desktop-only opt-in; the certificate/key are read from fixed XR_HOME paths. */
+export const DesktopMobileStartRequest = z.object({ host: z.string().min(1).max(253) });

@@ -1,0 +1,80 @@
+[
+  {
+    "installer": "NSIS",
+    "phase": "package",
+    "state": "PASS",
+    "detail": "file=XR_1.2.0-preview.1_x64-setup.exe; sha256=7a907a7db521030867d193d85e3d3c481c951294be4e18a51bcb8c750167832c"
+  },
+  {
+    "installer": "NSIS",
+    "phase": "install",
+    "state": "PASS",
+    "detail": "registered installer, desktop executable and sidecar found"
+  },
+  {
+    "installer": "NSIS",
+    "phase": "launch-auth",
+    "state": "PASS",
+    "detail": "installed app-owned sidecar: health 200; anonymous and invalid bearer 401; valid bearer 200; expected version"
+  },
+  {
+    "installer": "NSIS",
+    "phase": "screenshot",
+    "state": "PASS",
+    "detail": "runner screen captured; not a human visual inspection"
+  },
+  {
+    "installer": "NSIS",
+    "phase": "shutdown",
+    "state": "PASS",
+    "detail": "app and its sidecar terminated"
+  },
+  {
+    "installer": "NSIS",
+    "phase": "uninstall",
+    "state": "PASS",
+    "detail": "binaries and registration removed; isolated desktop-home sentinel retained"
+  },
+  {
+    "installer": "MSI",
+    "phase": "package",
+    "state": "PASS",
+    "detail": "file=XR_1.2.0-preview.1_x64_en-US.msi; sha256=0dcaa5712764b4d544bb8c015464e2a72c7c78197118445339394fcd413403d8"
+  },
+  {
+    "installer": "MSI",
+    "phase": "install",
+    "state": "PASS",
+    "detail": "registered installer, desktop executable and sidecar found"
+  },
+  {
+    "installer": "MSI",
+    "phase": "launch-auth",
+    "state": "PASS",
+    "detail": "installed app-owned sidecar: health 200; anonymous and invalid bearer 401; valid bearer 200; expected version"
+  },
+  {
+    "installer": "MSI",
+    "phase": "screenshot",
+    "state": "PASS",
+    "detail": "runner screen captured; not a human visual inspection"
+  },
+  {
+    "installer": "MSI",
+    "phase": "shutdown",
+    "state": "PASS",
+    "detail": "app and its sidecar terminated"
+  },
+  {
+    "installer": "MSI",
+    "phase": "uninstall",
+    "state": "PASS",
+    "detail": "binaries and registration removed; isolated desktop-home sentinel retained"
+  },
+  {
+    "installer": "ALL",
+    "phase": "result",
+    "state": "PASS",
+    "detail": "both installers completed all required assertions"
+  }
+]

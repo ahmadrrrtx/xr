@@ -1,13 +1,11 @@
 import { get, set, del, createStore } from 'idb-keyval';
 
 /**
- * Trust-on-first-use certificate pinning.
- *
- * The daemon uses a self-signed cert, so the browser will always show a TLS
- * warning. The user is asked to compare the fingerprint shown on their desktop
- * with the one shown on the phone. Once confirmed we pin it: every later
- * connection to this host must present the same cert hash, or we stop and show
- * a safety dialog. That's what makes "self-signed on a LAN" acceptable.
+ * An application-reported fingerprint change detector, NOT TLS pinning.
+ * Browser JavaScript cannot inspect the actual peer certificate. An attacker
+ * who controls the endpoint can return a previously seen fingerprint and serve
+ * altered JavaScript; this check cannot authenticate the connection. Browser/
+ * OS certificate validation or independent certificate verification is needed.
  */
 
 const store = createStore('xr-mobile', 'cache');
@@ -41,10 +39,10 @@ export async function clearPin(): Promise<void> {
 }
 
 /**
- * Compare the cert fingerprint offered by this connection with the pin.
+ * Compare a server-reported fingerprint with the stored application value.
  * - 'first-use' — nothing pinned yet; the UI must ask the user to compare.
  * - 'ok'        — matches the pin; proceed.
- * - 'mismatch'  — different cert for a known host: possible MITM, block.
+ * - 'mismatch'  — different reported value for a known host: warn.
  */
 export async function checkPin(host: string, fingerprint: string): Promise<PinCheck> {
   const pin = await readPin();
@@ -53,17 +51,8 @@ export async function checkPin(host: string, fingerprint: string): Promise<PinCh
   return pin.fingerprint === normalise(fingerprint) ? 'ok' : 'mismatch';
 }
 
-/**
- * Where does the fingerprint actually come from?
- *
- * A web page cannot read the TLS certificate of its own connection. So the
- * daemon publishes it: `GET /api/mobile/cert-fingerprint` returns the SHA-256
- * of the cert it is currently serving. That response is itself delivered over
- * the (untrusted-but-pinned) TLS channel, which is sound: an attacker who can
- * present a *different* cert can also lie about the hash — which is exactly why
- * the FIRST confirmation is done out-of-band, by eyeballing the desktop screen.
- * After that, the pin is the authority.
- */
+/** Fetch the server's self-reported fingerprint. It is not proof of the TLS
+ * peer certificate and cannot substitute for independent TLS authentication. */
 export async function fetchFingerprint(base = ''): Promise<string | null> {
   try {
     const res = await fetch(`${base}/api/mobile/cert-fingerprint`, {

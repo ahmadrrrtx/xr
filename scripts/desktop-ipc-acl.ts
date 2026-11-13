@@ -33,7 +33,7 @@ export const CAP_DIR = join(TAURI, "capabilities");
  * available to workspace windows on purpose: refusing it would make the
  * provider dialog fall back to local-insecure key storage.
  */
-export const MAIN_ONLY = ["import_all_data", "export_all_data", "reset_app", "set_devtools_enabled", "crash_simulate"] as const;
+export const MAIN_ONLY = ["import_all_data", "export_all_data", "reset_app", "set_devtools_enabled", "crash_simulate", "quit_app"] as const;
 
 /**
  * Never granted to the secondary surfaces (HUD palette, Orb, Theater), even if

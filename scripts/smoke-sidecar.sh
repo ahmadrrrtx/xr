@@ -7,7 +7,9 @@
 #   1. `xr-engine-<triple> --version` prints a version;
 #   2. `serve --port 39417` starts and /api/v1/health answers 200 (no auth —
 #      health is the only unauthenticated route by design);
-#   3. the daemon is killed cleanly (best effort; runners are ephemeral).
+#   3. protected version endpoint rejects anonymous and invalid bearer requests
+#      and accepts the fresh owner-only daemon token;
+#   4. the daemon is killed cleanly (best effort; runners are ephemeral).
 #
 # Usage: bash scripts/smoke-sidecar.sh <target-triple>
 #
@@ -75,13 +77,21 @@ echo "[smoke] --version"
 
 echo "[smoke] booting serve on :$PORT (isolated XR_HOME)"
 SMOKE_HOME="$(mktemp -d)"
-NO_COLOR=1 XR_HOME="$SMOKE_HOME" "$BIN" serve --port "$PORT" > "$SMOKE_HOME/serve.log" 2>&1 &
+NO_COLOR=1 XR_DAEMON_TOKEN= XR_HOME="$SMOKE_HOME" "$BIN" serve --port "$PORT" > "$SMOKE_HOME/serve.log" 2>&1 &
 PID=$!
 
 cleanup() {
   kill "$PID" 2>/dev/null || true
   # Windows runners: git-bash kill may not reap a native process.
   command -v taskkill >/dev/null 2>&1 && taskkill //PID "$PID" //F >/dev/null 2>&1 || true
+  # A bounded shutdown prevents a stalled child from hanging the CI runner.
+  for _ in $(seq 1 30); do
+    kill -0 "$PID" 2>/dev/null || break
+    sleep 0.1
+  done
+  kill -KILL "$PID" 2>/dev/null || true
+  wait "$PID" 2>/dev/null || true
+  rm -rf "$SMOKE_HOME" || true
 }
 trap cleanup EXIT
 
@@ -98,8 +108,20 @@ if [ -z "$ok" ]; then
   echo "[smoke] FAIL: health probe never answered — log:"; sed -E 's/(Token: ).*/\1[REDACTED]/; s/(Bearer )[A-Za-z0-9._~-]+/\1[REDACTED]/g' "$SMOKE_HOME/serve.log" || true; exit 1
 fi
 
-echo "[smoke] health OK — token handshake banner present:"
-# Strip ANSI (Windows Bun may emit color codes even redirected) before matching.
-sed 's/\x1b\[[0-9;]*m//g' "$SMOKE_HOME/serve.log" | grep -q "Token: " \
-  && echo "[smoke] PASS" \
-  || { echo "[smoke] FAIL: no token banner — log:"; sed -E 's/(Token: ).*/\1[REDACTED]/; s/(Bearer )[A-Za-z0-9._~-]+/\1[REDACTED]/g' "$SMOKE_HOME/serve.log" || true; exit 1; }
+# Health is intentionally public. Test the actual protected engine handshake,
+# including a negative control, rather than treating the word "Token:" in the
+# startup banner as proof of authentication. Never put the token in process args.
+TOKEN_FILE="$SMOKE_HOME/daemon/token"
+[ -s "$TOKEN_FILE" ] || { echo "[smoke] FAIL: daemon token file missing"; exit 1; }
+TOKEN="$(cat "$TOKEN_FILE")"
+[[ "$TOKEN" =~ ^[0-9a-f]{48}$ ]] || { echo "[smoke] FAIL: unexpected daemon token format"; exit 1; }
+URL="http://127.0.0.1:${PORT}/api/v1/meta/version"
+anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "$URL")"
+wrong="$(printf 'header = "Authorization: Bearer %s"\n' '000000000000000000000000000000000000000000000000' | curl -sS -K - -o /dev/null -w '%{http_code}' "$URL")"
+authorized="$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" | curl -sS -K - -o "$SMOKE_HOME/version.json" -w '%{http_code}' "$URL")"
+unset TOKEN
+[ "$anonymous" = 401 ] || { echo "[smoke] FAIL: anonymous version request returned $anonymous, expected 401"; exit 1; }
+[ "$wrong" = 401 ] || { echo "[smoke] FAIL: incorrect bearer returned $wrong, expected 401"; exit 1; }
+[ "$authorized" = 200 ] || { echo "[smoke] FAIL: authorized version request returned $authorized, expected 200"; exit 1; }
+grep -qE '"version"[[:space:]]*:[[:space:]]*"[^" ]+' "$SMOKE_HOME/version.json" || { echo "[smoke] FAIL: authenticated version response lacked version"; exit 1; }
+echo "[smoke] PASS: public health OK; protected version denied anonymous/invalid bearer and accepted the daemon token"

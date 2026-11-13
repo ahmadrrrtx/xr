@@ -1,0 +1,31 @@
+T41.a — bounded LLM02 audit and structured-log fix, 2026-11-10
+Reproduction before fix: 3 tests failed with synthetic credential-shaped values
+in fresh audit event/detail, nested structured-log fields/event and audit report
+project/event. Audit detail used a narrow regex that could redact only the
+prefix of a hyphenated key; structured logs only redacted one level and not the
+event; Markdown report wrote project and event as given.
+Candidate: recursively redact known credential-named fields and recognized
+credential/PII patterns, with cycle/depth handling; apply to new audit rows
+before chain hashing, structured logs and span fields/names, and report output.
+Audit retains the legacy generic redaction marker. Existing audit rows are NOT
+rewritten. Report digest verification and audit chain tests pass. Synthetic
+controls include key suffixes, opaque values under sensitive names, nested
+arrays, cycles, ordinary token counts and invalid/valid output verification.
+Local: targeted 56 pass/0 fail before numeric-token control; full security,
+state, observability and daemon suites 824 pass/1 native-only skip/0 fail;
+root tsc, architecture boundaries (0 errors, 1 pre-existing orphan warning),
+claim lint, CI policy, ownership and ledger checks passed. `bun run
+security:check` exit 0 including dependency audit and governed smoke.
+This is not proof all arbitrary secrets are recognizable; previous audit rows,
+other logs, transcripts, crash exports and every renderer/broker path remain
+unverified. Optional OTLP telemetry exists and defaults disabled. No telemetry
+is not a correct product claim. Current-tip native CI remains pending.
+
+CI size-gate correction 2026-11-10: 640ffe59 CI 42915406242 failed
+workspace-store 2550 -> 2555 lines; unit architecture assertion propagated
+into core, DX and Linux/macOS parity. Extracted only the just-added audit
+helper into the existing observability redaction module, preserving prior
+JSON normalization, failure semantics and legacy marker; no size allowance
+changed. Local size-gate passes, tree 175391/175500; focused architecture,
+audit, observability and store 131/0; unit tier 271/0 in 2119ms (<5000ms);
+root tsc exit 0. Native current-head runs are still needed.

@@ -21,13 +21,13 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "1.1.1-rc.1",
-  codename: "Graphite",
-  displayVersion: "1.1.1-rc.1 (Graphite)",
+  version: "1.2.0-preview.1",
+  codename: "Preview 1",
+  displayVersion: "1.2.0-preview.1 (Preview 1)",
   /** Version every install channel serves (release.manifest.json channels.publicVersion). */
   publicVersion: "1.0.0",
   /** Release label (release.manifest.json identity.stability; decision D2). */
-  status: "Developer preview",
+  status: "Public beta",
   /** Bundled skills, mechanically counted from skills/ at stamp time. */
   skillCount: 65,
   nav: [

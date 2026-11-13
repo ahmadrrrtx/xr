@@ -2,6 +2,7 @@
  * XR screen capture + OCR — fully async subprocess I/O.
  */
 import { tmpdir } from "node:os";
+import { desktopControlBlock } from "../security/desktop-control-policy.ts";
 import { join } from "node:path";
 import { runCommand } from "../util/process.ts";
 import { pathExists, readBytes, writeBytes, removePath } from "../util/fs-async.ts";
@@ -14,6 +15,8 @@ function detectOS(): "macos" | "linux" | "windows" {
 }
 
 export async function captureScreen(savePath?: string): Promise<{ ok: boolean; path?: string; base64?: string; message: string }> {
+  const blocked = desktopControlBlock();
+  if (blocked) return { ok: false, message: blocked };
   const os = detectOS();
   const path = savePath || join(tmpdir(), `xr-screen-${Date.now()}.png`);
 

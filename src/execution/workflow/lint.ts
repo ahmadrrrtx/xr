@@ -12,6 +12,7 @@
  *   - `warning` → publishable; shown so the author can decide.
  */
 import type { WorkflowNode } from "./types.ts";
+import { isSupportedCondition } from "./conditions.ts";
 import { downstreamNodes, entryNodes, validateGraph } from "./nodes.ts";
 
 export type WorkflowProblemSeverity = "error" | "warning";
@@ -93,8 +94,13 @@ export function lintDefinition(nodes: WorkflowNode[], entryNodeIds?: string[]): 
         else if (n.trueNodes.length === 0 || n.falseNodes.length === 0) push("warning", "branch_one_sided", `"${n.label}" only routes the ${n.trueNodes.length ? "true" : "false"} path; the other outcome ends the branch.`, n.id);
         for (const id of [...n.trueNodes, ...n.falseNodes]) if (!ids.has(id)) push("error", "branch_bad_target", `"${n.label}" routes to a node that does not exist (${id}).`, n.id);
         const c = n.condition;
+        // A stored workflow may carry a condition kind this engine no longer
+        // evaluates (raw `expression` was removed). Reject it at lint time.
+        if (!isSupportedCondition(c.type)) {
+          push("error", "branch_unsupported_condition", `"${n.label}" uses an unsupported condition type (${c.type}) — rebuild it with a typed condition.`, n.id);
+          break;
+        }
         if ((c.type === "field_compare" || c.type === "field_exists" || c.type === "field_is_empty") && !c.field) push("error", "branch_no_field", `"${n.label}" compares an empty field.`, n.id);
-        if (c.type === "expression" && !c.expression.trim()) push("error", "branch_no_expression", `"${n.label}" has an empty expression.`, n.id);
         break;
       }
       case "human_approval":

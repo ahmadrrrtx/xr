@@ -133,11 +133,14 @@ export const shellTool: Tool = {
         data: { isolated: true, placement: r.placement, verified: r.verified, exit: r.exitCode },
       };
     }
-    if (ctx.hardened !== false) {
-      ctx.audit("shell.hardened_blocked", { cmd, reason: "no isolated runner wired and hardened mode is on" });
+    const sandboxOnlyHost = process.platform === "win32" || process.platform === "darwin";
+    if (sandboxOnlyHost || ctx.hardened !== false) {
+      ctx.audit("shell.hardened_blocked", { cmd, reason: "no isolated runner wired", sandboxOnlyHost });
       return {
         ok: false,
-        output: "blocked: shell requires an isolated execution environment, but none is wired (hardened mode). Set XR_TRUST_HARDENED=0 only on hosts where this is explicitly accepted.",
+        output: sandboxOnlyHost
+          ? "blocked: shell requires a wired isolated execution environment on Windows/macOS; no host fallback. See https://github.com/ahmadrrrtx/xr/blob/main/docs/release/1.2.0-preview.1/known-limitations.md#agent-command-execution"
+          : "blocked: shell requires an isolated execution environment, but none is wired (hardened mode). Set XR_TRUST_HARDENED=0 only on hosts where this is explicitly accepted.",
         reason: "blocked:isolation-unavailable",
       };
     }

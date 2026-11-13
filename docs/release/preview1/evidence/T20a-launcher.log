@@ -1,0 +1,36 @@
+bun test v1.4.2 (744846f84)
+
+test/cli/npm-runtime-launcher.test.ts:
+(pass) npm runtime dependency and launcher > every supported platform runtime is an exact pin matching .bun-version [0.45ms]
+(pass) npm runtime dependency and launcher > platform and libc selection is explicit and never guesses unknown Linux libc [10.82ms]
+(pass) npm runtime dependency and launcher > missing runtime and missing system Bun fail with an actionable no-script diagnostic [169.89ms]
+(pass) npm runtime dependency and launcher > a matching bundled runtime wins even when Bun is absent from PATH [104.90ms]
+(pass) npm runtime dependency and launcher > the pinned runtime wins over a Bun executable on PATH [102.43ms]
+(pass) npm runtime dependency and launcher > npm-style hoisted optional dependencies are found [104.12ms]
+(pass) npm runtime dependency and launcher > a missing optional runtime preserves the system Bun fallback with a warning [107.21ms]
+(pass) npm runtime dependency and launcher > NODE_PATH cannot inject an unrelated runtime package [107.39ms]
+(pass) npm runtime dependency and launcher > an installed runtime at the wrong version fails closed, even if system Bun exists [96.84ms]
+(pass) npm runtime dependency and launcher > a missing source entry is diagnosed before invoking the runtime [105.99ms]
+(pass) npm runtime dependency and launcher > a corrupt installed runtime does not silently use system Bun [111.20ms]
+(pass) npm runtime dependency and launcher > a non-executable installed runtime reports an error without falling back [105.60ms]
+(pass) npm runtime dependency and launcher > child exits and signals are propagated accurately [200.51ms]
+(pass) npm runtime dependency and launcher > a termination signal sent to the launcher is forwarded to its child [226.35ms]
+(pass) npm runtime dependency and launcher > non-TTY SIGINT addressed to the launcher is forwarded [199.76ms]
+(pass) npm runtime dependency and launcher > one real terminal Ctrl+C reaches the runtime only once [474.00ms]
+(pass) npm runtime dependency and launcher > a missing explicit XR_BINARY does not switch to dist instead of the runtime [103.91ms]
+(pass) npm runtime dependency and launcher > a canonical dist binary still takes precedence over the bundled runtime [91.99ms]
+(pass) npm runtime dependency and launcher > the explicit XR_BINARY override still wins [88.95ms]
+
+ 19 pass
+ 0 fail
+ 79 expect() calls
+Ran 19 tests across 1 file. [2.62s]
+
+--- full CLI suite ---
+(pass) XR-LAUNCH-024 · classifier and event builder > every code has a next step and the codes are namespaced [0.14ms]
+(pass) XR-LAUNCH-024 · classifier and event builder > every code is documented in docs/cli/CODING_CONTRACTS.md (codes are a public contract) [10.43ms]
+
+ 262 pass
+ 0 fail
+ 869 expect() calls
+Ran 262 tests across 13 files. [3.63s]

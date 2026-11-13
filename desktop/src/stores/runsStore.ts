@@ -41,7 +41,7 @@ import {
   type StatusFilter,
 } from '@/runs/core';
 import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
-import { startDemoRun, type DemoOutcome } from '@/brain/demo';
+import { startDemoRun } from '@/brain/demo';
 import { isEngineRunId, useBrainStore } from '@/stores/brainStore';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -115,7 +115,7 @@ export interface RunsState {
   archive: (id: string) => void;
   unarchive: (id: string) => void;
   copyId: (id: string) => Promise<void>;
-  startDemoRun: (title?: string) => DemoOutcome;
+  startDemoRun: (title?: string) => string | null;
 
   exportCsv: () => Promise<void>;
   exportJson: () => Promise<void>;
@@ -323,9 +323,6 @@ export const useRunsStore = create<RunsState>()((set, get) => {
         import.meta.env.DEV &&
         (mode === 'stress' || (mode === 'default' && !engineUp))
       ) {
-        // XR-REL-03: the guard is the STATIC `import.meta.env.DEV` literal, so
-        // Vite drops this whole branch (and the seed module with it) from a
-        // release bundle. The dynamic import stays inside it on purpose.
         const seed = await import('@/runs/seed');
         seeded =
           mode === 'stress' ? seed.seedStress(now) : seed.seedMockHistory(now);
@@ -336,12 +333,8 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       const keep: Record<string, RunSummary> = {};
       for (const r of Object.values(get().runs)) {
         if (
-          inProgress(r.status) ||
-          // XR-REL-03 — a dev build may have persisted a scripted row; a
-          // release build never creates one, so it must not carry the id
-          // pattern either (the marker would otherwise ship).
-          (import.meta.env.DEV && r.id.startsWith('mock-latest')) ||
-          isEngineRunId(r.id)
+          isEngineRunId(r.id) ||
+          (import.meta.env.DEV && (inProgress(r.status) || r.id.startsWith('mock-latest')))
         )
           keep[r.id] = r;
       }
@@ -419,6 +412,8 @@ export const useRunsStore = create<RunsState>()((set, get) => {
     },
 
     upsertFromBrain: (run) => {
+      // Persisted demo runs from older builds are not real history.
+      if (!import.meta.env.DEV && run.source !== 'engine') return;
       const prev = get().runs[run.id];
       get().upsert(summaryFromRun(run, prev), 'brain');
     },
@@ -427,6 +422,7 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       const s = get();
       switch (payload.kind) {
         case 'run-start': {
+          if (!import.meta.env.DEV && payload.run.source !== 'engine') return;
           const prev = s.runs[payload.runId];
           get().upsert(summaryFromRun(payload.run, prev), 'event');
           return;
@@ -628,20 +624,9 @@ export const useRunsStore = create<RunsState>()((set, get) => {
     },
 
     startDemoRun: (title) => {
-      // XR-REL-03 — same outcomes as `@/brain/demo`, never a synthesised run
-      // in a release build. A titled request is a DEV seed helper; outside dev
-      // it is refused by the store rather than quietly mocked.
-      if (title) {
-        if (!import.meta.env.DEV)
-          return { kind: 'no-provider' } as const;
-        return {
-          kind: 'started',
-          id: useBrainStore.getState().startMockRun(title),
-          real: false,
-          title,
-        } as const;
-      }
-      return startDemoRun();
+      // Keep the explicit test-only seam out of production.
+      if (title && import.meta.env.DEV) return useBrainStore.getState().startMockRun(title);
+      return startDemoRun()?.id ?? null;
     },
 
     exportCsv: async () => {

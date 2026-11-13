@@ -867,7 +867,7 @@ export async function runAgentLoop(
           auditStore.audit("budget.stop", { snapshot: governor.snapshot() }, sessionId);
           return {
             sessionId,
-            finalMessage: finalMessage || `Stopped to respect your budget. ${governor.meter()}`,
+            finalMessage: finalMessage || `Stopped to respect your budget: ${decision.reason}. ${governor.meter()}`,
             steps: stepIdx,
             stopped: "budget",
             routingDecisionId: deps.routingDecision?.decisionId,

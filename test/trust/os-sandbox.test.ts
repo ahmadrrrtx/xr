@@ -29,8 +29,14 @@ describe("XR-LAUNCH-003 · native sandboxes are opt-in and remediation fits the 
     for (const p of ["darwin", "win32"] as const) {
       const text = tier2Remediation(p);
       expect(text.toLowerCase()).not.toContain("bubblewrap");
-      expect(text).toContain("XR_OS_SANDBOX=experimental");
       expect(text).toContain("will not run in-process");
+      expect(text).toContain("Docker Desktop or Podman");
+      if (p === "darwin") expect(text).toContain("XR_OS_SANDBOX=experimental");
+      else {
+        expect(text).toContain("AppContainer backend is currently disabled");
+        expect(text).toContain("per-execution SID/ACL verification");
+        expect(text).not.toContain("opt in to the experimental AppContainer");
+      }
     }
     expect(tier2Remediation("linux")).toContain("bubblewrap");
   });

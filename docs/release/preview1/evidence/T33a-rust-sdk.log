@@ -1,0 +1,18 @@
+Flatpak toolchain mismatch — 2026-11-10
+GitHub Actions dispatch 42907521960 job 130149763414 on 38adc71b: real Cargo vendoring, root and desktop frozen Bun offline installs, sidecar compile and frontend build reached cargo build. Rust 1.89.0 supplied by org.freedesktop.Sdk.Extension.rust-stable//24.08 rejected Tauri 2.12 and related locked packages: rustc 1.90 required. Flatpak job FAILED, not a passed build.
+Proposed fix: replace the old Rust SDK extension with architecture-specific official Rust 1.99.1 distribution archives pinned by SHA256; install only rustc, cargo and matching rust-std in the isolated build directory and use offline vendored sources. Existing application network permissions unchanged; no build-sandbox network grant.
+Checksums retrieved from static.rust-lang.org distribution .sha256 files. x86_64 archive downloaded and checksum verified locally, its component list and installer options inspected, then removed without installing Rust. aarch64 checksum obtained but archive was not downloaded. YAML parsed and install command shell syntax checked. Structural metadata tests: 15 pass, 0 fail; all desktop tests 493 pass, 0 fail; ci:policy and ownership:check passed. None of these prove full Flatpak build; rerun on GitHub Actions required.
+
+2026-11-10: Dispatch 42908959944 at 0c64d09c compiled the Rust 1.99.1
+sandboxed release build and offline dependencies successfully (9m05s), then
+failed installing icons: desktop/src-tauri/icons/256x256.png does not exist.
+128x128@2x.png is a real 256x256 PNG already in the repo; the manifest now
+uses it. Regression opens every installed PNG, checks PNG signature and IHDR
+pixel dimensions against destination. Local trust/security/Flatpak suite: 582
+pass, 18 skip, 0 fail; full corrected Flatpak build still required.
+
+Follow-up on 3062b855: full desktop workflow_dispatch 42917971949 PASS; its
+required Flatpak source job 130186143949 completed successfully in 12m37s.
+The manifest and staged dependencies keep the build offline; previously
+observed missing icon and Rust SDK errors were not reported in this green run.
+Artifact 13811655449 exists, but independent inspection is still pending.

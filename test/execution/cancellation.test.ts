@@ -223,10 +223,10 @@ describe("Phase 06 · cancellation propagation (spec steps 15–18)", () => {
     expect(isTimeout(caught)).toBe(false);
   });
 
-  // `sleep` + AbortSignal→child kill is POSIX. Windows hosted runners cannot
-  // interrupt the subprocess (the test hits its 15s timeout as a hang, not an
-  // assertion miss). Cooperative JS cancellation above is covered on win32.
-  test.skipIf(process.platform === "win32")("shell tool honors ctx.signal and audits the cancellation", async () => {
+  // This exercises the real compatibility host subprocess. That path is
+  // deliberately prohibited on Windows/macOS in Preview 1, not a skip-as-pass.
+  // Signal forwarding to an isolated runner is separately tested on all OSes.
+  test.skipIf(process.platform === "win32" || process.platform === "darwin")("shell tool honors ctx.signal and audits the cancellation", async () => {
     const { shellTool } = await import("../../src/tools/system.ts");
     const audits: Array<{ event: string; detail: Record<string, unknown> }> = [];
     const controller = new AbortController();
@@ -247,6 +247,36 @@ describe("Phase 06 · cancellation propagation (spec steps 15–18)", () => {
     expect(result.output.toLowerCase()).toContain("cancel");
     expect(audits.some((a) => a.event === "shell.cancelled")).toBe(true);
     expect(audits.some((a) => a.event === "shell.run")).toBe(false); // never reported as executed-ok
+  }, 15_000);
+
+  test("shell passes cancellation to its isolated runner", async () => {
+    const { shellTool } = await import("../../src/tools/system.ts");
+    const controller = new AbortController();
+    const audits: string[] = [];
+    let observed: AbortSignal | undefined;
+    const ctx = {
+      cwd: dir,
+      approve: async () => true,
+      audit: (event: string) => audits.push(event),
+      signal: controller.signal,
+      runIsolated: async (_request: unknown, executable: { signal?: AbortSignal }) => {
+        observed = executable.signal;
+        await new Promise<void>((resolve) => {
+          if (executable.signal?.aborted) resolve();
+          else executable.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return { ok: false, exitCode: null, stdout: "", stderr: "cancelled by signal", timedOut: false, blocked: false };
+      },
+    } as unknown as Parameters<typeof shellTool.run>[1];
+    const running = shellTool.run({ cmd: "echo isolated" }, ctx);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    controller.abort();
+    const result = await running;
+    expect(observed).toBe(controller.signal);
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("cancelled");
+    expect(audits).toContain("shell.run_isolated");
+    expect(audits).not.toContain("shell.run");
   }, 15_000);
 
   test("an already-cancelled run does not start new shell side effects", async () => {

@@ -1,0 +1,101 @@
+T60.d — Windows installer lifecycle candidate, 2026-11-10
+The workflow selects only an unexpired xr-desktop-windows-x64 artifact belonging
+to desktop-app.yml with the exact triggering SHA, records run ID and SHA, and
+blocks/fails when none exists. On a Windows GitHub Actions runner, the candidate
+script requires one MSI and one NSIS, rejects existing XR registration, installs
+them separately, verifies app and sidecar, and launches the installed app.
+It identifies its actual child sidecar by parent PID + installed path and its
+loopback listening port; health must be 200, anonymous and bad bearer must be
+401, the generated token must get 200 and the manifest version. Token is not
+logged. It optionally screenshots, checks sidecar termination, uninstalls and
+requires binary and registry removal plus a preserved isolated desktop-home
+sentinel. This is not a live-provider, GUI manual, SmartScreen or cross-version
+upgrade test. The first missing artifact or failed assertion prevents a pass.
+Local PowerShell 7.5.4 was downloaded and SHA256-verified against its GitHub
+release asset digest; parser OK. Negative test inputs missing/duplicated MSI or
+NSIS fail before installer execution. PowerShell fakes test valid auth plus
+four fault cases: anonymous accepted, invalid token accepted, valid token
+rejected, wrong version. An early local control caught a collision with the
+read-only PowerShell HOME variable; fixed by renaming the variable.
+Local release + journey suites with PowerShell available: 331 pass, 0 fail.
+Root TypeScript, CI policy, ownership, claim lint, and ledger checks passed.
+None of this is native Windows installation evidence. The exact current-SHA
+artifact must build, then this candidate must execute and its uploaded evidence
+be inspected before any lifecycle task can be marked done.
+
+Native Windows run 42914372905 on a62b54b0 correctly reported BLOCKED because
+no exact-SHA Windows artifact existed, uploaded evidence artifact 13807699134,
+and did not execute installers. Core CI run 42914382252 on the same SHA later
+failed the first synthetic PowerShell input test: the log explicitly reports
+Bun's 5-second test timeout; the evidence file did not yet exist. The other
+three controls passed. Increased just these process-heavy test timeouts to 25s,
+retaining the 15s child timeout, all assertions and a new explicit diagnostic
+for child timeout/signal; no retry. Local controls 8 pass, 0 fail. CI rerun needed.
+
+2026-11-10: push-triggered 42915394386 installer job 130179973797 failed
+BLOCKED before any same-commit artifact had been uploaded. The prior lookup
+also accepted pull-request desktop runs: GitHub may check out a synthetic merge
+commit even when the run's head_sha names the PR head. The new prerequisite
+waits at most one hour on an Ubuntu runner for an unexpired x64 artifact from
+a desktop workflow_dispatch or push run with the exact head SHA. It refuses PR
+runs, missing or duplicate artifacts, API failure, invalid SHA and timeout;
+only then does the Windows lifecycle job start. A manual desktop dispatch on
+the exact head is still necessary for this branch. No installer assertions
+were weakened and artifact existence does not imply overall desktop CI success.
+Local fake-gh cases ready/delayed/PR-only/other-SHA/missing/duplicate/API error
+and invalid SHA pass; fake PowerShell controls pass. Combined targeted tests
+12/0; full release suite 323/0 before the final PR-only mock strengthening;
+root typecheck, CI policy and ownership pass. Native end-to-end test pending.
+
+Follow-up: Windows run 42917963976 on 3062b855, artifact 13811731189 ZIP
+SHA256 df6371bb9ea2220a9693157ad2b499b462477d54404093cbc44bf6eab56c1dff
+verified against GitHub metadata. Events are saved as
+T60d-windows-3062-events.json: NSIS package PASS; NSIS install FAIL with
+"installer did not provide a valid install directory"; ALL result FAIL.
+The artifact waiter selected exact-commit dispatch 42917971949. No launch,
+sidecar authentication, uninstall or MSI execution was recorded, so those
+phases are NOT RUN, not passes. Job log retrieval still returned HTTP 502.
+
+Tauri CLI pinned in desktop/bun.lock is 2.12.0; the official matching source
+https://raw.githubusercontent.com/tauri-apps/tauri/tauri-cli-v2.12.0/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
+writes the InstallLocation registry value with literal surrounding quotes.
+Our test previously passed this value directly to Test-Path. On PowerShell
+7.5.4 locally, Test-Path of a quoted existing directory returned False while
+the unquoted directory returned True. This is a strong hypothesis consistent
+with the failure, but the actual registry value was not captured in that run.
+The fix removes one balanced enclosing quote pair, rejects malformed/internal
+quotes, retains empty-location fallback and every existing Test-Path, exact
+binary, authenticated sidecar and uninstall assertion. Quote, plain, fallback,
+malformed input and existing negative/auth controls: 13 pass/0 fail. Entire
+release suite: 325 pass/0 fail locally. Native Windows rerun is essential.
+
+Follow-up 88d381a3, Windows Preview run 43111168844:
+NSIS package/install/launch-auth/shutdown/uninstall PASS; isolated sentinel
+retained. MSI package PASS, install FAIL "MSI registration ProductCode
+mismatch"; MSI launch/auth and uninstall NOT RUN. Full events in
+T60d-windows-88d-events.json. A later candidate prints the two public product
+GUIDs on mismatch for root-cause diagnosis; assertion is unchanged. No MSI
+fix or pass claimed until a subsequent Windows run demonstrates it.
+
+Added opt-in, isolated Windows diagnostic workflow job to reproduce the
+recorded 88d MSI failure against its original artifact using GUID-only mismatch
+diagnostics. It is explicitly historical, does not satisfy the exact-head
+gate, and preserves all existing lifecycle assertions. Result pending.
+
+Root cause reproduced on isolated Windows diagnostic 43397927545, job
+131793323819, artifact 14023024509. Registry ProductCode and MSI ProductCode
+were identical: {B192803F-43A5-4799-B536-5FEC5E74D925}; the package value
+was preceded by an extra empty PowerShell pipeline output from the COM view's
+Execute() call. Suppressing that method output with [void] keeps the strict
+GUID shape and exact registry-vs-package assertion. Candidate is NOT a native
+pass until the full lifecycle re-runs successfully, including MSI launch,
+authentication, shutdown, uninstall and sentinel retention.
+
+Historical diagnostic retest: 43398319038, job 131794611940, artifact
+14023208751, PASS using the original 88d artifact and corrected comparison.
+NSIS and MSI each installed, launched an app-owned sidecar that rejected
+anonymous/invalid bearer and accepted the valid bearer, shut down and
+uninstalled; isolated home sentinel survived. Full event JSON is in
+T60d-windows-88d-fixed-events.json. This is an isolated historical-artifact
+reproduction, not final-tip evidence or a real user installation. The
+exact-tip installer workflow remains required.
