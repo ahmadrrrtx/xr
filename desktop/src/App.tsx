@@ -21,6 +21,7 @@ import { UpdateModal } from '@/components/shell/UpdateModal';
 import { crashState, type RecoveryInfo } from '@/lib/shellApi';
 import { dbHealth } from '@/lib/settingsApi';
 import { attachUpdateEvents, useUpdateStore } from '@/stores/updateStore';
+import { useEngineStore } from '@/stores/engineStore';
 
 const MIN_SPLASH_MS = 800;
 const MAX_SPLASH_MS = 5000;
@@ -83,6 +84,18 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * XR-REL-05 — ONE engine poll for the whole app, started before any route.
+   *
+   * Until now the only `startPolling()` caller was `<EngineDownBanner/>`, which
+   * lives INSIDE the app shell. So from the splash until the first shell screen
+   * the store stayed at its initial `starting` with `providers: null` — and
+   * onboarding step 4, which reads `providers`, therefore always fell back to
+   * its hardcoded five-provider list even when the engine was up and answering.
+   * `startPolling` is reference-counted, so the banner's call still works.
+   */
+  useEffect(() => useEngineStore.getState().startPolling(), []);
 
   // Phase 27 — updater events (state + progress) for the whole session.
   useEffect(() => attachUpdateEvents(), []);

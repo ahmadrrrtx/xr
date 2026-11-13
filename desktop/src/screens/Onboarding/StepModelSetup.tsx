@@ -18,35 +18,38 @@ export function StepModelSetup() {
   const engineProviders = useEngineStore(
     (state) => state.providers?.providers ?? null
   );
+  const engineStatus = useEngineStore((state) => state.status);
+  const startupError = useEngineStore((state) => state.lastError);
   const [cloudOpen, setCloudOpen] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [providerId, setProviderId] = useState('openai');
 
   // Keyed, hosted providers only — local runtimes have their own card above
   // and keyless entries make no sense in a "bring a key" flow.
-  const cloudProviders = useMemo(() => {
-    const list = (engineProviders ?? []).filter(
-      (p) => p.kind !== 'local' && p.keyless !== true
-    );
-    if (list.length === 0) {
-      // Engine offline: keep onboarding usable with the usual suspects.
-      return [
-        { id: 'openai', label: 'OpenAI' },
-        { id: 'anthropic', label: 'Anthropic' },
-        { id: 'google', label: 'Google Gemini' },
-        { id: 'groq', label: 'Groq' },
-        { id: 'openrouter', label: 'OpenRouter' },
-      ];
-    }
-    return list
-      .map((p) => ({ id: p.id, label: p.label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [engineProviders]);
+  //
+  // XR-REL-05 — the list is the ENGINE's (26 presets today). It used to fall
+  // back to a hardcoded five whenever the store was empty, which in practice
+  // meant "always": nothing polled the engine outside the app shell, so
+  // onboarding never had a provider list to show. The fallback is gone. While
+  // the link is resolving the card says so; when the engine is unreachable it
+  // says that, and offers a retry.
+  const cloudProviders = useMemo(
+    () =>
+      (engineProviders ?? [])
+        .filter((p) => p.kind !== 'local' && p.keyless !== true)
+        .map((p) => ({ id: p.id, label: p.label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [engineProviders]
+  );
+  const engineResolving =
+    engineStatus === 'starting' && engineProviders === null;
+  const engineUnavailable =
+    !engineResolving && (engineProviders === null || cloudProviders.length === 0);
 
   // Keep the selection valid if the engine list lacks the default id.
   const effectiveProviderId = cloudProviders.some((p) => p.id === providerId)
     ? providerId
-    : cloudProviders[0]?.id ?? 'openai';
+    : cloudProviders[0]?.id ?? '';
 
   const ram = systemInfo?.totalMemoryGb ?? null;
   // XR-REL-01 — no recommendation without a MEASURED machine. The old code
@@ -141,26 +144,56 @@ export function StepModelSetup() {
               >
                 Provider
               </label>
-              <select
-                id="setup-provider"
-                value={effectiveProviderId}
-                onChange={(event) => {
-                  setProviderId(event.target.value);
-                  setModelChoice({
-                    source: 'cloud',
-                    providerId: event.target.value,
-                    apiKey,
-                  });
-                }}
-                className="border-border-default bg-bg-void text-text-primary mb-3 w-full rounded border p-2 text-sm"
-                data-testid="setup-provider-select"
-              >
-                {cloudProviders.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+              {engineResolving ? (
+                <p
+                  className="text-text-tertiary mb-3 text-[12.5px]"
+                  data-testid="setup-provider-loading"
+                  aria-live="polite"
+                >
+                  Waiting for the local engine to list its providers…
+                </p>
+              ) : engineUnavailable ? (
+                <div
+                  className="border-warning/40 bg-warning/5 mb-3 rounded-lg border p-2.5"
+                  data-testid="setup-provider-unavailable"
+                >
+                  <p className="text-warning text-[12px] font-medium">
+                    The engine has not listed any providers yet.
+                  </p>
+                  <p className="text-text-tertiary mt-1 text-[11.5px] leading-relaxed">
+                    {startupError ??
+                      'Provider keys are stored by the engine, so it has to be running before one can be saved.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void useEngineStore.getState().refresh()}
+                    className="text-accent hover:text-accent-hover mt-1.5 text-[11.5px] font-medium"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <select
+                  id="setup-provider"
+                  value={effectiveProviderId}
+                  onChange={(event) => {
+                    setProviderId(event.target.value);
+                    setModelChoice({
+                      source: 'cloud',
+                      providerId: event.target.value,
+                      apiKey,
+                    });
+                  }}
+                  className="border-border-default bg-bg-void text-text-primary mb-3 w-full rounded border p-2 text-sm"
+                  data-testid="setup-provider-select"
+                >
+                  {cloudProviders.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              )}
               <label className="text-text-tertiary mb-1.5 block text-[11px] font-semibold tracking-wide uppercase">
                 API key
               </label>
