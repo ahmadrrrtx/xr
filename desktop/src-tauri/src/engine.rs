@@ -44,6 +44,8 @@ use crate::engine_state::{parse_banner_line, Banner, ProbeCache, StderrTail};
 pub struct EngineState {
     port: Mutex<Option<u16>>,
     token: Mutex<Option<String>>,
+    /// Installed, read-only mobile PWA assets passed only to this sidecar.
+    mobile_dist: Mutex<Option<std::path::PathBuf>>,
     child: Mutex<Option<Child>>,
     /// Honest reason when no sidecar link exists (dev builds, spawn errors).
     note: Mutex<Option<String>>,
@@ -116,6 +118,17 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Set the packaged PWA path before first spawn; retained across restarts.
+pub fn set_mobile_dist(state: &EngineState, resource_dir: Option<std::path::PathBuf>) {
+    let from_bundle = resource_dir.map(|dir| dir.join("mobile"));
+    // Flatpak installs its bundle-free cargo build under /app/share/xr/mobile.
+    let flatpak = std::env::current_exe().ok().and_then(|exe| {
+        exe.parent().map(|dir| dir.join("../share/xr/mobile"))
+    });
+    *lock(&state.mobile_dist) = from_bundle.into_iter().chain(flatpak)
+        .find(|dir| dir.join("index.html").is_file());
+}
+
 /// Spawn the sidecar and start the banner/stderr reader threads.
 ///
 /// Must be called from the MAIN thread: on Linux the parent-death signal is
@@ -144,6 +157,9 @@ pub fn spawn_sidecar(state: &Arc<EngineState>) {
     cmd.env("XR_HOME", &home);
     // Keychain services are global: a directory alone is not isolation.
     cmd.env("XR_SECRET_NAMESPACE", "desktop");
+    if let Some(path) = lock(&state.mobile_dist).as_ref() {
+        cmd.env("XR_MOBILE_DIST", path);
+    }
     // Browser CORS is limited to this shell's exact native origin and the
     // app-owned loopback sidecar; the daemon still requires its bearer token.
     cmd.env("XR_DESKTOP_WEBVIEW_ORIGIN", if cfg!(windows) {

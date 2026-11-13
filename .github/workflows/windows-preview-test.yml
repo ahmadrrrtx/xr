@@ -180,6 +180,11 @@ jobs:
           bun-version-file: .bun-version
       - name: Install engine dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
       # T60.a: build.rs calls tauri_build::try_build, which VALIDATES that
       # bundle.externalBin exists. A from-scratch `cargo test` therefore failed
       # with "resource path binaries\xr-engine-x86_64-pc-windows-msvc.exe

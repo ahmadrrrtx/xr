@@ -79,6 +79,9 @@
     "externalBin": [
       "binaries/xr-engine"
     ],
+    "resources": {
+      "../../mobile/dist/": "mobile/"
+    },
     "targets": [
       "app",
       "dmg",

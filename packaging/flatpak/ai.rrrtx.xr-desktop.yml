@@ -106,6 +106,8 @@ modules:
       # wanted inside /app, and the frontend is already built above.
       - cd desktop/src-tauri && cargo build --release --locked --offline
       - install -Dm755 desktop/src-tauri/target/release/xr-desktop /app/bin/xr-desktop
+      # The staged PWA is built from mobile/package-lock.json before sandboxing.
+      - mkdir -p /app/share/xr/mobile && cp -a mobile/dist/. /app/share/xr/mobile/
       # The shell and the engine ship together and must stay side by side: the
       # Rust side resolves `xr-engine-<target-triple>` next to its own executable.
       # Kept arch-agnostic so the same manifest builds aarch64 without edits.

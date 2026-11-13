@@ -926,3 +926,13 @@ and cross-window demo events from being projected as real Runs history; the
 UI now asks for a working engine/provider. Desktop 509 tests pass, lint has
 only two existing warnings, typecheck and build pass. Owner has not identified
 every affected screen; this is not a proof that all fake UI is gone.
+
+### Mobile PWA packaging implementation (T71.b)
+
+Implemented candidate locked PWA resource staging for native installers,
+Windows portable ZIP and network-isolated Flatpak, with the resolved resource
+path passed to the app-owned sidecar. The mobile build and local targeted
+suites pass. This does not turn on LAN: desktop pairing controls and secure
+opt-in listener remain unimplemented, so do not claim the installed phone flow
+works. Native package and actual phone tests remain pending. Evidence:
+`preview1/evidence/T71b-mobile-bundling.log`.

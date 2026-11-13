@@ -272,7 +272,9 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
         ctx.pkg = (await sh(["dpkg-deb", "-f", ctx.installer, "Package"])).out.trim();
         const r = await sh(["sudo", "-n", "apt-get", "install", "-y", "--no-install-recommends", resolve(ctx.installer)], { timeoutMs: 600_000 });
         need(r.status === 0, `apt-get install: ${tail(r.out)}`);
-        const files = (await sh(["dpkg", "-L", ctx.pkg])).out.split(/\r?\n/).filter((f) => f.startsWith("/usr/bin/"));
+        const listed = (await sh(["dpkg", "-L", ctx.pkg])).out.split(/\r?\n/);
+        need(listed.some((f) => f.endsWith("/mobile/index.html") && existsSync(f)), "installed mobile PWA assets missing from deb");
+        const files = listed.filter((f) => f.startsWith("/usr/bin/"));
         ctx.engine = files.find((f) => basename(f).startsWith("xr-engine")) ?? "";
         ctx.app = files.find((f) => !basename(f).startsWith("xr-engine")) ?? "";
       } else if (flavour.channel === "nsis") {
@@ -306,9 +308,13 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
         ctx.engine = join(macos, bins.find((f) => f.startsWith("xr-engine")) ?? "");
         ctx.app = join(macos, bins.find((f) => !f.startsWith("xr-engine")) ?? "");
       }
+      if (flavour.channel !== "deb") {
+        const resources = flavour.channel === "dmg" ? join(ctx.installDir, "Contents", "Resources") : ctx.installDir;
+        need(existsSync(join(resources, "mobile", "index.html")), "installed mobile PWA assets missing");
+      }
       need(existsSync(ctx.app) && statSync(ctx.app).isFile(), `installed app binary not found (${ctx.app || "none"})`);
       need(existsSync(ctx.engine) && statSync(ctx.engine).isFile(), `installed engine sidecar not found (${ctx.engine || "none"})`);
-      return `${flavour.channel} installed: app ${ctx.app}, engine ${basename(ctx.engine)}`;
+      return `${flavour.channel} installed: app ${ctx.app}, engine ${basename(ctx.engine)}; mobile PWA assets present`;
     });
 
     await step("launch", async () => {

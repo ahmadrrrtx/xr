@@ -102,6 +102,11 @@ jobs:
           bun-version-file: .bun-version
       - name: Install engine dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
       # Sidecar MUST exist before cargo check: tauri-build validates
       # bundle.externalBin paths at build-script time.
       - name: Compile engine sidecar (single source — scripts/compile-sidecar.ts)
@@ -175,6 +180,11 @@ jobs:
           bun-version-file: .bun-version
       - name: Install engine dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
       # Same precondition as the Linux job: tauri-build validates externalBin.
       - name: Compile engine sidecar (x86_64-pc-windows-msvc)
         env:
@@ -249,6 +259,11 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install engine dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build bundled mobile PWA assets (locked)
+        shell: bash
+        run: |
+          npm --prefix mobile ci --ignore-scripts
+          npm --prefix mobile run build
       - name: Compile engine sidecar (externalBin for this triple)
         env:
           SIDECAR_TRIPLE: ${{ matrix.triple }}
@@ -500,6 +515,7 @@ jobs:
           New-Item -ItemType Directory -Path $dir -Force | Out-Null
           Copy-Item "desktop/src-tauri/target/release/xr-desktop.exe" $dir
           Copy-Item "desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe" $dir
+          Copy-Item "mobile/dist" "$dir/mobile" -Recurse
           $tmp = Join-Path $env:RUNNER_TEMP 'xr-portable-stage'
           if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
           # Compress-Archive keeps the folder itself when given the parent,

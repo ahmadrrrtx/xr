@@ -13,6 +13,9 @@ mkdir -p "$stage/.flatpak-cache/bun" "$stage/.flatpak-cache/cargo-vendor"
 # node_modules tree. --ignore-scripts avoids running lifecycle scripts here.
 (cd "$stage" && bun install --frozen-lockfile --ignore-scripts --cache-dir="$stage/.flatpak-cache/bun")
 (cd "$stage/desktop" && bun install --frozen-lockfile --ignore-scripts --cache-dir="$stage/.flatpak-cache/bun")
+# Build PWA outside the network-isolated sandbox from its independent npm lock.
+(cd "$stage" && npm --prefix mobile ci --ignore-scripts && npm --prefix mobile run build)
+rm -rf "$stage/mobile/node_modules"
 rm -rf "$stage/node_modules" "$stage/desktop/node_modules"
 # Cargo checks each crate against Cargo.lock before placing it in the vendor
 # directory. This repo currently has no git-sourced Cargo dependencies; fail
