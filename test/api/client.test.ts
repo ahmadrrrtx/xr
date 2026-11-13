@@ -90,10 +90,10 @@ test("every generated operation preserves method, encoded path, body and SSE tra
   const { listDaemonRoutes } = await import("../../src/daemon/routes/index.ts");
   const { apiRegistry } = await import("../../src/daemon/routes/registry.ts");
   const schemas = await import("../../src/daemon/routes/schemas.ts");
-  const knownSchemas = new Set(Object.values(schemas).filter((v) => v && typeof v === "object" && "safeParse" in v));
-  let request: { url: string; init?: RequestInit } | undefined;
+  const knownSchemas = new Set<unknown>(Object.values(schemas).filter((v) => v && typeof v === "object" && "safeParse" in v));
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
   const c = new XRDaemonClient({ baseUrl: "http://127.0.0.1:3141/", token: TOKEN, fetchImpl: async (url, init) => {
-    request = { url: String(url), init }; return new Response('{"ok":true}', { status: 200 });
+    requests.push({ url: String(url), init }); return new Response('{"ok":true}', { status: 200 });
   } });
   const used = new Set<string>();
   let checked = 0, encoded = 0, bodies = 0, streams = 0;
@@ -111,8 +111,10 @@ test("every generated operation preserves method, encoded path, body and SSE tra
     const method = (c as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)[name];
     expect(typeof method).toBe("function");
     expect(Object.getOwnPropertyDescriptor(XRDaemonClient.prototype, name)?.enumerable).toBe(false);
-    request = undefined;
+    const beforeCount = requests.length;
     const result = await method!.apply(c, hasBody ? [...params, body] : params);
+    expect(requests.length).toBe(beforeCount + 1);
+    const request = requests[beforeCount]!;
     let index = 0;
     const path = op.path.replace(/\{[^}]+\}/g, () => encodeURIComponent(params[index++]!));
     expect(request?.url).toBe(`http://127.0.0.1:3141${path}`);

@@ -13,7 +13,7 @@ $expectedVersion = '1.2.0-preview.1'
 $desktopHome = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path (Join-Path $desktopHome 'daemon') -Force | Out-Null
 [IO.File]::WriteAllText((Join-Path $desktopHome 'daemon/token'), ('a' * 48))
-function Get-Process { param($Id, $ErrorAction); return @{ Id = $Id } }
+function Get-Process { param($Id, $ErrorAction); if ($script:mode -eq 'dead-app') { return $null }; return @{ Id = $Id } }
 function Get-CimInstance { param($Filter, $ErrorAction); return @{ ExecutablePath = 'C:\test\xr-engine.exe'; ProcessId = 123 } }
 function Get-NetTCPConnection { param($OwningProcess, $State, $ErrorAction); return @{ LocalAddress = '127.0.0.1'; LocalPort = 45678 } }
 function Status {
@@ -32,5 +32,9 @@ try {
     try { WaitForAppEngine 100 $desktopHome 'C:\test\xr-engine.exe' | Out-Null } catch { $denied = $true }
     if (!$denied) { throw "invalid $mode control was falsely accepted" }
   }
-  Write-Host 'PowerShell auth controls: 5 PASS (fake app/process/HTTP)'
+  $script:mode = 'dead-app'
+  $denied = $false
+  try { WaitForAppEngine 100 $desktopHome 'C:\test\xr-engine.exe' | Out-Null } catch { $denied = $_.Exception.Message -match 'exited before engine was ready' }
+  if (!$denied) { throw 'exited app was not rejected' }
+  Write-Host 'PowerShell auth controls: 6 PASS (fake app/process/HTTP)'
 } finally { Remove-Item -LiteralPath $desktopHome -Recurse -Force }

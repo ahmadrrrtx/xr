@@ -1001,3 +1001,13 @@ merge and deferred unresolved items to next week. Cloud remains excluded; Telegr
 - PR #211 is a separate Dependabot GitHub Actions update against main. It has its own blocked
   Supply Chain gate and old retired-macOS runner outcomes; it is not proof for PR #210. Review
   and reconcile it separately, rather than merging untested dependency changes into this fix.
+
+- Remediation regression: cb9ef0f3 Linux cross-platform typecheck failed because the new
+  test's inferred schema set and callback-assigned variable were too narrowly typed; corrected
+  and `bun run typecheck` plus `bun test test/api` pass locally. Its Windows CLI negative
+  control failed because diagnostics changed a tested PowerShell function's PID interface;
+  restored that interface and added a dead-app negative control. Native Windows confirmation
+  is still required. These are our regressions, not pre-existing failures.
+- A separate historical diagnostic run 43410016377 reused the same 3e5 artifacts and passed
+  NSIS and MSI; two prior same-byte attempts failed on MSI startup. The mixed outcome does
+  not establish root cause or final-tip correctness, and no old result replaces the new run.
