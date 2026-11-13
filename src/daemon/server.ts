@@ -1,3 +1,4 @@
+import { DesktopMobileListener } from "./desktop-mobile-listener.ts";
 import { setDesktopGrantRegistry } from "../control/files.ts";
 /**
  * XR — Local Daemon ("xr serve")
@@ -72,6 +73,7 @@ export { clientIpFor } from "./security-headers.ts";
 export interface LanInput {
   cert: LanCert;
   lanUrl?: string;
+  allowedHosts?: string[];
 }
 
 export interface DaemonOptions {
@@ -372,12 +374,14 @@ export function makeHandler(
     browser?: BrowserSessions;
     /** Exact app webview origin; only enabled for the desktop loopback sidecar. */
     desktopWebviewOrigin?: string;
+    desktopMobile?: DesktopMobileListener;
+    sharedState?: DaemonState;
   } = {},
 ) {
   const browser = opts.browser ?? new BrowserSessions();
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
-  const state: DaemonState = {
+  const state: DaemonState = opts.sharedState ?? {
     store: initialStore,
     shield: new XRShieldService(initialStore),
     workspaceManager,
@@ -394,9 +398,10 @@ export function makeHandler(
     // the user pairs (QR) or auto-start finds sealed credentials.
     whatsapp: opts.whatsapp ?? new WhatsAppManager({ store: initialStore }),
   };
+  opts.desktopMobile?.captureState(state);
   const lanRuntime = opts.lan; // extra hosts only under LAN; loopback posture untouched (2.1)
   const desktopOrigin = lanRuntime ? undefined : opts.desktopWebviewOrigin;
-  const lanExtraHosts: readonly string[] = lanRuntime ? lanAddresses() : [];
+  const lanExtraHosts: readonly string[] = lanRuntime ? [...lanAddresses(), ...(lanRuntime.allowedHosts ?? [])] : [];
   const mobileCtx: MobileContext | null = lanRuntime
     ? { lan: true, fingerprint: lanRuntime.cert.fingerprint, lanUrl: "", version: CORE_VERSION, daemonToken: token }
     : null;
@@ -604,7 +609,8 @@ export function makeHandler(
         config,
         mobile: mobileCtx && mobileDeps
           ? (mobileCtx.lanUrl = lanRuntime?.lanUrl ?? "", { session: mobileSession ?? { privileged: desktopPrivileged }, deps: mobileDeps })
-          : undefined,
+          : opts.desktopMobile?.deps && actor === "local:token" ? { session: { privileged: true }, deps: opts.desktopMobile.deps } : undefined,
+        desktopMobile: actor === "local:token" ? opts.desktopMobile : undefined,
       })) ?? safeJson({ error: "not found" }, 404);
 
     // Phase 31 · A10 — pairing outcomes feed the failure backoff.
@@ -748,7 +754,8 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const whatsapp = new WhatsAppManager({ store, dashboardBaseUrl: `http://127.0.0.1:${port}/` });
   const lanRuntime: LanInput | undefined = opts.lan;
   const browser = new BrowserSessions(); // XR-LAUNCH-027: the banner's links are single-use codes from this store
-  const handler = makeHandler(store, token, { telegram, discord, whatsapp, lan: opts.lan, browser,
+  const desktopMobile = !lanRuntime && process.env.XR_DESKTOP_WEBVIEW_ORIGIN && process.env.XR_HOME ? new DesktopMobileListener(token, process.env.XR_HOME, (lan, state) => makeHandler(store, token, { lan, sharedState: state })) : undefined;
+  const handler = makeHandler(store, token, { telegram, discord, whatsapp, lan: opts.lan, browser, desktopMobile,
     desktopWebviewOrigin: process.env.XR_DESKTOP_WEBVIEW_ORIGIN });
   void telegram.autoStartOnBoot().catch((err) => {
     structuredLog("warn", "telegram.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
@@ -778,7 +785,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   }
 
   const lanBind = lanRuntime ? "0.0.0.0" : undefined; // LAN mode binds the LAN (runtime hoisted beside makeHandler)
-  const bindHost = lanBind ?? resolveBindHost();
+  const bindHost = lanBind ?? (desktopMobile ? DEFAULT_LOOPBACK : resolveBindHost());
   // Phase 14 — SSE streams send a keepalive comment every 5 s (chat.routes),
   // so a 120 s idle ceiling only ever closes a connection whose peer is gone;
   // the Bun default (10 s) cut cold local-model streams before the first token.
@@ -837,6 +844,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     // ":0"); the runtime is finalised in place for the mobile context.
     ...(lanRuntime ? { lanUrl: (lanRuntime.lanUrl = lanUrlFor(boundPort)) } : {}),
     stop: () => {
+      desktopMobile?.stop();
       tokenFile.release();
       stopTriggers();
       void telegram.shutdown();

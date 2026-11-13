@@ -945,3 +945,13 @@ computer control and local runtime. The aggregate prints 20 passing suite
 checks, zero failures and six explicit NOT RUN live/device checks. These are
 not a substitute for actual devices or a live service; T12 remains open.
 Evidence `preview1/evidence/T12b-feature-smokes.log`.
+
+### Secure desktop mobile candidate (T71.c)
+
+Added an opt-in separate companion TLS listener and desktop Settings control.
+It requires a matching CA-issued certificate and normal phone browser trust;
+self-reported fingerprints are not TLS pinning. Automated trusted-CA
+integration covers pairing, revocation, remote endpoint restrictions and
+shutdown, while real phone/native-package testing remains open. Size gate
+currently fails on the new implementation and generated-client ratchet; no
+size/security check was relaxed. Evidence `preview1/evidence/T71c-secure-desktop-mobile.log`.

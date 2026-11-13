@@ -16,16 +16,18 @@
 
 **Owner-installed Linux regression — OPEN:** owner reports the supplied 9e3f703a deb's engine does not connect and the UI shows fake data. The packaged daemon was independently reproduced without the CORS/preflight response needed by the likely Linux webview origin. Candidate fixes and expanded WebDriver proof are documented in `preview1/evidence/T14b-owner-connectivity-and-history.log`; actual packaged webview and owner retest are pending. Brain's fabricated recent rows were removed, but the owner has not identified every affected screen and a complete fake-data audit is not yet established.
 
-**Latest Linux installer:** Desktop dispatch `43111084223` and PR `43111087327` passed on `88d381a3`; installed Ubuntu 22.04 and 24.04 webviews authenticated to the app-owned engine. The matching deb was offered for owner retest. Separately, Windows Preview `43111168844` passed the NSIS lifecycle but failed MSI install at ProductCode registration comparison; MSI launch/uninstall remain NOT RUN. CI, cross-platform, clean-machine and supply-chain checks passed on this SHA. Later working-tree changes need fresh CI.
+**Latest Linux installer:** Desktop dispatch `43111084223` and PR `43111087327` passed on `88d381a3`; installed Ubuntu 22.04 and 24.04 webviews authenticated to the app-owned engine. The matching deb was offered for owner retest. Separately, Windows Preview `43111168844` initially failed an MSI ProductCode comparison due to extra PowerShell COM output; corrected historical retest `43398319038` passed both installer lifecycles. Current-tip Windows evidence remains pending. CI, cross-platform, clean-machine and supply-chain checks passed on this SHA. Later working-tree changes need fresh CI.
 
 **Current PR checks:** on `9e3f703a`, CI and desktop PR packaging passed; Supply Chain failed on newly reported `rustix` RUSTSEC-2026-0486. A candidate lock bump passes local OSV with the 23 pre-existing policy-filtered findings still present, but requires Cargo `--locked` CI. Cross-Platform failed one PowerShell negative-control subprocess timeout and has been rerun; no product installer assertion was relaxed. Full dispatch and current Windows lifecycle remain pending. The `9e3f703a` Linux deb was provided for trusted local testing, not as a final release, and predates the rustix candidate.
 
-**Mobile TLS identity blocker — OPEN:** the PWA reads a server-reported fingerprint, not
-its actual TLS peer certificate. A malicious endpoint can reproduce that value and serve
-altered app code, so the existing comparison is not certificate pinning or proof of server
-identity. UI and security documentation were corrected, but independent TLS trust, packaged
-desktop opt-in LAN controls and an actual phone journey remain unimplemented. Do not bypass
-TLS warnings based on the PWA display; no secure mobile release is claimed.
+**Mobile TLS / installed-phone proof — OPEN:** a candidate desktop-only,
+explicitly enabled LAN listener uses a configured CA-issued certificate and
+phone browser/OS TLS validation, not the PWA's server-reported fingerprint.
+Local trusted-CA integration checks exercise pairing and revocation, but XR
+cannot establish that an owner's phone trusts its CA or that warnings were not
+bypassed. Native packaging CI, device setup and a real phone journey are NOT
+RUN. The standalone CLI's self-signed LAN flow remains distinct and untrusted
+without independent verification. See `preview1/evidence/T71c-secure-desktop-mobile.log`.
 
 **Owner scope decision:** cloud stays out; Telegram bot and mobile PWA remain in scope. Telegram tests and the mobile production build/daemon tests pass locally, but live Telegram/phone checks were not run. The downloaded Linux deb contains no mobile PWA assets; installed-desktop-to-phone operation is not established. Enterprise satellite and Firecracker tier decisions remain open.
 

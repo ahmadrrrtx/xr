@@ -72,6 +72,9 @@ export function consumePairingCode(candidate: string): boolean {
   return true;
 }
 
+/** Disabling LAN invalidates any unredeemed code. */
+export function clearPairingCode(): void { activeCode = null; }
+
 export function pairingUrl(lanUrl: string, code: string, fingerprint: string): string {
   return `${lanUrl}/mobile/pair?code=${encodeURIComponent(code)}&fp=${encodeURIComponent(fingerprint)}`;
 }

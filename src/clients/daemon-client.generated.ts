@@ -1401,7 +1401,22 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/cloud/usage");
   }
 
-  /** SHA-256 fingerprint of the served LAN certificate (public TOFU anchor; no key material). */
+  /** Desktop-local mobile listener status (bearer authenticated). */
+  async mobileDesktopStatusGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mobile/desktop/status");
+  }
+
+  /** Explicitly start desktop mobile listener using a CA-issued TLS identity. */
+  async mobileDesktopStartPost(body: z.infer<typeof S.DesktopMobileStartRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/desktop/start", body);
+  }
+
+  /** Stop the desktop mobile listener and invalidate outstanding pairing codes. */
+  async mobileDesktopStopPost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mobile/desktop/stop");
+  }
+
+  /** SHA-256 fingerprint of the served LAN certificate (server-reported only; not peer certificate pinning). */
   async mobileCertFingerprintGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/mobile/cert-fingerprint");
   }

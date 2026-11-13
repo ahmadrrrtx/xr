@@ -9,6 +9,8 @@ test('desktop resources include the built PWA and do not enable LAN', () => {
   expect(conf.bundle.resources['../../mobile/dist/']).toBe('mobile/');
   const engine = read('desktop/src-tauri/src/engine.rs');
   expect(engine).toContain('cmd.env("XR_MOBILE_DIST", path)');
+  expect(engine).toContain('cmd.env_remove("XR_MOBILE_DIST")');
+  expect(engine).toContain('cmd.env_remove("XR_DAEMON_TOKEN")');
   expect(engine).not.toContain('.arg("--lan")');
 });
 

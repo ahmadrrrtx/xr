@@ -157,6 +157,9 @@ pub fn spawn_sidecar(state: &Arc<EngineState>) {
     cmd.env("XR_HOME", &home);
     // Keychain services are global: a directory alone is not isolation.
     cmd.env("XR_SECRET_NAMESPACE", "desktop");
+    // Do not inherit a CLI bearer or an arbitrary PWA directory from the parent.
+    cmd.env_remove("XR_DAEMON_TOKEN");
+    cmd.env_remove("XR_MOBILE_DIST");
     if let Some(path) = lock(&state.mobile_dist).as_ref() {
         cmd.env("XR_MOBILE_DIST", path);
     }

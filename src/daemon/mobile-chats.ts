@@ -15,7 +15,7 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mobileHome } from "./mobile-home.ts";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -40,20 +40,9 @@ interface MobileChatRegistry {
   messages: Record<string, MobileMessageRow[]>;
 }
 
-const STORE_PATH = () => join(homeDir(), ".xr", "mobile-chats.json");
+const STORE_PATH = () => join(mobileHome(), "mobile-chats.json");
 const MAX_CHATS = 200;
 const MAX_MESSAGES_PER_CHAT = 500;
-
-/**
- * Resolve the user home per call from $HOME (fallback: os.homedir()). Bun
- * snapshots os.homedir() at process start, so tests that pin HOME at module
- * load (this repo's convention) would otherwise leak state into the real
- * home; reading the env per call is identical in production and isolatable
- * in tests.
- */
-function homeDir(): string {
-  return process.env.HOME ?? homedir();
-}
 
 let cache: MobileChatRegistry | null = null;
 /** Serializes read-modify-write cycles so concurrent requests cannot tear. */
@@ -73,7 +62,7 @@ async function load(): Promise<MobileChatRegistry> {
 
 async function save(registry: MobileChatRegistry): Promise<void> {
   cache = registry;
-  await mkdir(join(homeDir(), ".xr"), { recursive: true, mode: 0o700 });
+  await mkdir(mobileHome(), { recursive: true, mode: 0o700 });
   await writeFile(STORE_PATH(), `${JSON.stringify(registry, null, 2)}\n`, { mode: 0o600 });
 }
 

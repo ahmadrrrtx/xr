@@ -1,9 +1,10 @@
 # XR Mobile PWA — setup, pairing, LAN mode
 
-> **Preview limitation:** Packaged desktop LAN pairing is not implemented or
-> verified. The browser app cannot inspect or pin the real TLS certificate;
-> a server-reported fingerprint can be forged. Do not bypass certificate
-> warnings based on the app's displayed value. See [security model](SECURITY.md).
+> **Preview candidate:** The packaged desktop has an opt-in mobile listener
+> implementation, but native packaging CI and a real phone journey remain
+> unverified. A CA-issued certificate whose hostname is trusted by the phone
+> is required. Never bypass browser TLS warnings based on the app's displayed
+> fingerprint: it is not certificate pinning. See [security model](SECURITY.md).
 
 XR on your phone is a **companion**, not a second desktop: chat, push-to-talk,
 approvals and budget. It talks to the XR daemon running on your computer over
@@ -25,7 +26,7 @@ your own WiFi. There is no XR cloud, no relay, no sync server.
 | Companion chat store (mobile-scoped sync) | `src/daemon/mobile-chats.ts` (`~/.xr/mobile-chats.json`, 0600, bounded) |
 | PWA static serving (`/mobile/`) | `src/daemon/routes/mobile-companion.routes.ts` (LAN mode; `XR_MOBILE_DIST` overrides the `mobile/dist` location for packaged layouts) |
 | Web Push (VAPID + double encryption) | `src/daemon/web-push.ts` |
-| Desktop Mobile card | Component exists but is not wired into Settings |
+| Desktop Settings → Mobile | Explicit opt-in candidate; trusted TLS setup required |
 | Reference daemon (test harness) | `tools/reference-daemon.mjs` |
 
 The daemon serves the built PWA from `/mobile/` when in LAN mode, so the phone
@@ -61,13 +62,34 @@ On first `--lan` start the daemon:
 Without the flag the daemon binds `127.0.0.1` exactly as before. There is no
 code path that opens the LAN listener silently.
 
-## 3. Pairing status
+## 3. Packaged desktop: pairing candidate
 
-The LAN daemon and pairing routes exist for development, but the packaged
-app has no working desktop pairing controls or verified phone journey. The
-phone's fingerprint display is a server-reported string, not authenticated TLS
-pinning. See [SECURITY.md](SECURITY.md) before testing: do not rely on the
-fingerprint display or bypass browser warnings to establish server identity.
+1. Provision a CA-issued server certificate and private key for an address
+   that your phone resolves to this computer. Configure the phone to trust its
+   CA through an independent, secure process. XR does **not** provision or
+   install a CA, certificate or DNS record, and cannot tell if your phone trusts it.
+2. Open **Settings → Mobile → Allow mobile access**. The screen shows the
+   desktop-specific directory; put the PEM certificate chain in `cert.pem`
+   and its private key in `key.pem`. On Unix the key must be owner-only
+   (`chmod 600`). Enter the certificate's matching hostname or IPv4 address,
+   confirm the trust prerequisite and select **Enable mobile access**.
+3. XR validates the key, validity and hostname, rejects self-signed leaves,
+   and starts a separate TLS listener. Only private/link-local/loopback IPv4
+   peers are accepted; other reachable private networks or VPNs may also
+   reach it. Do not port-forward the listener.
+4. Use **Pair new device** and open the QR/link on your phone. The browser/OS
+   must validate the connection without a warning. **Do not bypass a browser
+   warning**: the PWA's reported fingerprint cannot authenticate TLS.
+5. Disable mobile access in Settings to close the listener and invalidate an
+   unused code; paired-device revocation is available on the same card. The
+   listener also stops when the app-owned engine exits. Device and push data
+   belong to the desktop XR home, not the separate CLI home.
+
+This is a candidate with automated loopback TLS coverage, not a tested
+installed-desktop-to-physical-phone journey. CA provisioning, local DNS,
+firewall, router isolation and device-specific browser trust remain owner work.
+The older standalone `xr serve --lan` self-signed flow is distinct and does
+not provide independently authenticated TLS by itself.
 
 ## 4. Offline behaviour
 

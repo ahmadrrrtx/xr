@@ -23,6 +23,16 @@ function mobile(ctx: DaemonRouteContext) {
 export function mobileRoutes(): DaemonRoute[] {
   const P = "/api/mobile";
   return [
+    route({ id: "mobile.desktop.status.get", path: `${P}/desktop/status`, method: "GET", handle: (c) => c.desktopMobile ? c.json(c.desktopMobile.status()) : c.json({ error: "desktop-only operation" }, 403) }),
+    route({ id: "mobile.desktop.start.post", path: `${P}/desktop/start`, method: "POST", handle: async (c) => {
+      if (!c.desktopMobile) return c.json({ error: "desktop-only operation" }, 403);
+      try { const body = await c.req.json() as { host: string }; return c.json(await c.desktopMobile.start(body.host)); }
+      catch (e) { return c.json({ error: e instanceof Error ? e.message : "mobile start failed" }, 400); }
+    } }),
+    route({ id: "mobile.desktop.stop.post", path: `${P}/desktop/stop`, method: "POST", handle: (c) => {
+      if (!c.desktopMobile) return c.json({ error: "desktop-only operation" }, 403);
+      c.desktopMobile.stop(); return c.json(c.desktopMobile.status());
+    } }),
     route({ id: "mobile.certFingerprint.get", path: `${P}/cert-fingerprint`, method: "GET", handle: async (c) => mobile(c)() }),
     route({ id: "mobile.pair.post", path: `${P}/pair`, method: "POST", handle: async (c) => mobile(c)() }),
     route({ id: "mobile.session.delete", path: `${P}/session`, method: "DELETE", handle: async (c) => mobile(c)() }),

@@ -6,8 +6,9 @@ break.
 
 ## 1. Invariants (non-negotiable)
 
-1. **LAN access is opt-in.** `xr serve` binds `127.0.0.1`. Only `--lan`
-   (or `XR_DAEMON_LAN=1`) binds `0.0.0.0`, and it says so loudly on stdout.
+1. **LAN access is opt-in.** The desktop engine is loopback-only by default.
+   A separate private-peer-limited listener starts only after an authenticated
+   Settings action. The standalone CLI has its own explicit `--lan` mode.
 2. **Fail closed.** No session ⇒ no API. Wrong pairing code ⇒ generic 401 that
    reveals nothing (not even that LAN mode is on).
 3. **No bearer tokens in web storage.** Auth is an HttpOnly, Secure,
@@ -44,8 +45,12 @@ certificate pinning, and matching values do not authenticate the connection.
 
 Do not bypass browser TLS warnings based on the app's displayed value. A
 trusted certificate/independent verification mechanism and a complete threat
-review are required before this flow can be claimed secure. Packaged-desktop
-LAN and phone pairing are not yet implemented or verified.
+review are required before this flow can be claimed secure. A packaged-desktop
+candidate now requires a CA-issued certificate for the configured host and
+relies on the phone browser's normal CA/hostname verification. XR cannot check
+whether the phone trusts that CA or whether the user bypassed a warning.
+Physical-phone and installed-package verification remain open. The separate
+CLI `--lan` self-signed flow does not gain this trust from the candidate.
 
 ## 4. Pairing
 
@@ -119,7 +124,8 @@ fonts. Production builds ship **no source maps**.
 - **LAN impersonation:** the browser app cannot bind a server-reported
   fingerprint to the TLS peer. A malicious endpoint can repeat the reported
   value and serve malicious code; the existing comparison does not prevent it.
-  This is an unresolved blocker, not an accepted mitigation.
+  The candidate desktop flow relies on browser/OS TLS validation, not this
+  comparison. Owner CA setup, device trust and real-device tests remain open.
 - **Router-level clients see metadata:** SSID, IPs, ports, TLS handshake.
   Payloads remain encrypted; approval text never appears in clear on the wire.
 - **Awake-desktop requirement:** push and chat need the daemon up. Chosen

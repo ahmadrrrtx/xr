@@ -3,9 +3,9 @@
  * dependencies (WebCrypto + a small DER writer, identical under Bun and Node);
  * ECDSA P-256/SHA-256 valid for the host's LAN IPs, hostname and `.local` mDNS
  * name, written once to ~/.xr/certs and reused. The SHA-256 fingerprint is a
- * first-class output (TOFU out-of-band compare; the phone pins it). This is NOT
- * letsencrypt and it is NOT publicly trusted: trust-on-first-use over a network
- * the user already controls.
+ * first-class diagnostic output. Browser JavaScript cannot inspect or pin the
+ * TLS peer; a server-reported value is not proof of identity. This certificate
+ * is self-signed and NOT publicly trusted.
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -32,7 +32,7 @@ const KEY_PATH = () => join(CERT_DIR(), 'lan.key');
 const CERT_PATH = () => join(CERT_DIR(), 'lan.crt');
 const FP_PATH = () => join(CERT_DIR(), 'lan.pubkey-fingerprint.sha256');
 
-const VALID_DAYS = 3650; // 10 years — it's a LAN cert, pinned by fingerprint.
+const VALID_DAYS = 3650; // legacy self-signed CLI LAN certificate.
 
 /* ------------------------------------------------------------------ network --- */
 
