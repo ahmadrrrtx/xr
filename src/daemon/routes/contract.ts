@@ -31,6 +31,7 @@ import {
   ModelsSelectRequest,
   ModelsTestRequest,
   ModelsPullRequest,
+  CustomProviderAddRequest,
   ObjectResponse,
   OkResponse,
   ProviderSetRequest,
@@ -445,6 +446,15 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     stability: "stable",
     request: ModelsTestRequest,
   },
+  "providers.custom.add": {
+    summary: "Add or replace a custom OpenAI-compatible endpoint (any base URL the SSRF guard allows).",
+    tag: "providers",
+    // New in 1.1.1: makes the README's "any OpenAI-compatible API" reachable
+    // from the desktop instead of only from `xr providers add`. Additive.
+    stability: "experimental",
+    request: CustomProviderAddRequest,
+  },
+
   "models.pull": {
     summary: "Pull a local model through the runtime, streaming its own byte-level progress (SSE).",
     tag: "models",

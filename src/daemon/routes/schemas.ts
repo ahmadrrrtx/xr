@@ -430,6 +430,36 @@ export const ModelsPullRequest = z.looseObject({
   model: z.string().min(1),
 });
 
+/**
+ * XR-REL-06 — "any OpenAI-compatible API" made real over the daemon API.
+ *
+ * The engine could already hold custom endpoints (`xr providers add` →
+ * ProviderService.addCustomProvider, which SSRF-guards the URL), but there was
+ * no HTTP route, so the desktop had no way to offer it and the promise in the
+ * README only held for CLI users. `id` is derived by the engine when omitted.
+ */
+export const CustomProviderAddRequest = z.looseObject({
+  id: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9][a-z0-9._-]*$/, "id must be lowercase letters, digits, '.' '_' or '-'")
+    .optional(),
+  label: z.string().min(1).max(120).optional(),
+  baseUrl: z.string().min(1).max(2048),
+  defaultModel: z.string().min(1).max(200),
+  apiKey: z.string().min(1).max(8192).optional(),
+  apiKeyEnv: z
+    .string()
+    .regex(/^[A-Z][A-Z0-9_]*$/, "apiKeyEnv must look like AN_ENV_VAR")
+    .optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+});
+
+export const CustomProviderRemoveRequest = z.looseObject({
+  id: z.string().min(1).max(64),
+});
+
 export const ControlApproveRequest = z.looseObject({
   id: z.string().min(1),
   approved: z.boolean(),

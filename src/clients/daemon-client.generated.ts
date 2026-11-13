@@ -836,6 +836,11 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/workspaces/create", body);
   }
 
+  /** Add or replace a custom OpenAI-compatible endpoint (any base URL the SSRF guard allows). */
+  async providersCustomAdd(body: z.infer<typeof S.CustomProviderAddRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/providers/custom", body);
+  }
+
   /** Switch the active workspace. */
   async workspacesSwitch(body: z.infer<typeof S.WorkspaceSwitchRequest>): Promise<z.infer<typeof S.OkResponse>> {
     return await this.call("POST", "/api/v1/workspaces/switch", body);

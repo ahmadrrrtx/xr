@@ -288,6 +288,10 @@ export function enginePost<T>(path: string, body: unknown): Promise<T> {
   return engineJson<T>(path, { method: 'POST', body: JSON.stringify(body) });
 }
 
+export function engineGet<T>(path: string): Promise<T> {
+  return engineJson<T>(path, { method: 'GET' });
+}
+
 /* ── XR-P01 contract handshake ──────────────────────────────────────────────
  * Once per endpoint link, after the session exists and BEFORE any surface
  * may call the engine "ready", the desktop asks the session-gated
