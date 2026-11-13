@@ -1,0 +1,9 @@
+T71.c — desktop mobile security implementation in progress
+
+A browser page cannot inspect the actual TLS peer certificate, and an attacker
+can forge a self-reported fingerprint. The intended path relies on the phone's
+browser/OS certificate validation, not JavaScript pinning. No certificates are
+installed or trusted on a phone by the application. Users must configure a
+CA-issued certificate for a host trusted by the phone, and must not bypass TLS
+warnings. This task remains open pending listener/control implementation,
+adversarial tests, native packaging CI and an actual phone journey.

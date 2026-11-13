@@ -48,3 +48,8 @@ test("historical diagnostic cannot become current-tip installer evidence", () =>
   expect(workflow).toContain("windows-88d-installer-diagnostic");
   expect(workflow).toContain("needs: [installer-artifact]");
 });
+test("MSI COM query suppresses non-value output before returning ProductCode", () => {
+  expect(lifecycle).toContain('[void]$view.Execute(); $row = $view.Fetch()');
+  expect(lifecycle).toContain('$entry.PSChildName -ieq $productCode');
+  expect(lifecycle).toContain("Assert ($id -match '^\\{[0-9A-Fa-f-]{36}\\}$')");
+});

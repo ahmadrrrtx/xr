@@ -81,3 +81,12 @@ Added opt-in, isolated Windows diagnostic workflow job to reproduce the
 recorded 88d MSI failure against its original artifact using GUID-only mismatch
 diagnostics. It is explicitly historical, does not satisfy the exact-head
 gate, and preserves all existing lifecycle assertions. Result pending.
+
+Root cause reproduced on isolated Windows diagnostic 43397927545, job
+131793323819, artifact 14023024509. Registry ProductCode and MSI ProductCode
+were identical: {B192803F-43A5-4799-B536-5FEC5E74D925}; the package value
+was preceded by an extra empty PowerShell pipeline output from the COM view's
+Execute() call. Suppressing that method output with [void] keeps the strict
+GUID shape and exact registry-vs-package assertion. Candidate is NOT a native
+pass until the full lifecycle re-runs successfully, including MSI launch,
+authentication, shutdown, uninstall and sentinel retention.

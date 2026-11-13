@@ -43,7 +43,7 @@ function MsiProductCode([string]$path) {
   $installer = New-Object -ComObject WindowsInstaller.Installer
   $database = $installer.OpenDatabase($path, 0)
   $view = $database.OpenView('SELECT `Value` FROM `Property` WHERE `Property` = ''ProductCode''')
-  $view.Execute(); $row = $view.Fetch()
+  [void]$view.Execute(); $row = $view.Fetch()
   Assert ($null -ne $row) 'MSI ProductCode missing'
   $id = $row.StringData(1)
   Assert ($id -match '^\{[0-9A-Fa-f-]{36}\}$') 'MSI ProductCode malformed'
