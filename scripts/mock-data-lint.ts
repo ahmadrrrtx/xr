@@ -82,15 +82,22 @@ export const SOURCE_RULES: readonly Rule[] = [
     id: "unlabelled-demo-trace",
     re: /startMockRun\(|seedMockHistory\(|materialize\(/,
     scope: ["desktop/src"],
-    // The Brain's scripted-trace engine is a dev-only capability. It is
-    // allowed to exist; the guard that keeps it out of release builds lives at
-    // the call site (brainStore.loadRun) and is pinned by its own test.
+    // The Brain's scripted-trace engine is a dev-only fixture. It may exist —
+    // it is what makes the UI testable without a provider — but every path
+    // that could reach it in a release build must be guarded by
+    // `import.meta.env.DEV`. Those guards live at the call sites
+    // (brainStore.loadRun / restartRun / startMockRun, brain/demo, runsStore,
+    // the Brain and Runs screens) and are pinned by
+    // test/desktop/no-fabricated-runs.test.ts.
     allow: [
       "desktop/src/stores/brainStore.ts",
       "desktop/src/brain/mock.ts",
       "desktop/src/brain/demo.ts",
       "desktop/src/runs/seed.ts",
       "desktop/src/runs/registry.ts",
+      "desktop/src/stores/runsStore.ts",
+      "desktop/src/screens/Brain/index.tsx",
+      "desktop/src/screens/Chat/components/ToolCallCard.tsx",
     ],
     why: "a scripted trace must never be reachable as if it were a real run",
   },

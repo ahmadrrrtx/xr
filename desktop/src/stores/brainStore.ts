@@ -789,9 +789,50 @@ export const useBrainStore = create<BrainState>()(
             return;
           }
 
-          // Phase 11: a Control Room row this window never streamed (seeded
-          // history or another window's run) — keep ITS metadata, rebuild
-          // the trace from the deterministic script for its flavour.
+          // XR-REL-03 — the scripted trace is a DEVELOPMENT fixture.
+          //
+          // Before this guard, ANY unknown id reached the mock script below and
+          // `/brain/<anything>` rendered a fully populated trace — spans, token
+          // counts, dollar costs, tool calls and log lines — for a run that never
+          // happened. A release build must answer "no trace" instead.
+          if (!import.meta.env.DEV) {
+            const run: Run = persisted ?? {
+              id,
+              shortId: `#${id.replace(/[^a-z0-9]/gi, '').slice(-4).toLowerCase()}`,
+              title: 'Run not found',
+              agent: '—',
+              model: '—',
+              status: 'failed',
+              startedAt: Date.now(),
+              endedAt: Date.now(),
+              tokensIn: 0,
+              tokensOut: 0,
+              costUsd: 0,
+              rootSpanId: `${id}:root`,
+              source: 'engine',
+            };
+            const d = emptyRunData();
+            pushLog(
+              d,
+              null,
+              'system',
+              'XR has no record of this run in this session. Nothing is shown, because a trace that was not recorded cannot be displayed honestly.'
+            );
+            set((s) => ({
+              runs: persisted ? s.runs : { ...s.runs, [id]: run },
+              data: { ...s.data, [id]: d },
+              runOrder: s.runOrder.includes(id) ? s.runOrder : [id, ...s.runOrder].slice(0, 32),
+              selectedSpanId: null,
+              search: '',
+              ganttZoom: 1,
+              ganttPanMs: 0,
+            }));
+            return;
+          }
+
+          // Phase 11 (dev only): a Control Room row this window never streamed
+          // (seeded history or another window's run) — keep ITS metadata,
+          // rebuild the trace from the deterministic script for its flavour.
           const summary = persisted ? undefined : lookupRunSummary(id);
           const flavor = flavorFromId(id);
           const script = buildScript(flavor, id);
@@ -961,6 +1002,14 @@ export const useBrainStore = create<BrainState>()(
         },
 
         startMockRun: (title, opts) => {
+          // XR-REL-03 — a release build never fabricates a run. Callers that
+          // want a demo must gate it themselves; `@/brain/demo` routes to
+          // Settings → Models when there is no provider.
+          if (!import.meta.env.DEV) {
+            throw new Error(
+              'Demo runs are not available in a release build. Configure a provider to start a real run.'
+            );
+          }
           const st = get();
           // `-short` routes flavorFromId to the short script; the shortId is
           // still the trailing digits, so "#12" either way.
@@ -1029,6 +1078,17 @@ export const useBrainStore = create<BrainState>()(
                   description: 'Send the message again in Chat; this trace stays as it is.',
                 });
               }
+            });
+            return;
+          }
+          // XR-REL-03: re-running a SCRIPTED trace is a dev fixture. A release
+          // build has no script to re-run, so it says so instead of minting a
+          // fresh fake trace with new timestamps.
+          if (!import.meta.env.DEV) {
+            void import('sonner').then(({ toast }) => {
+              toast('This run cannot be restarted', {
+                description: 'Its original execution is not stored. Send the task again to start a new run.',
+              });
             });
             return;
           }

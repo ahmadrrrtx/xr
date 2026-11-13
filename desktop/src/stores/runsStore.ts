@@ -41,7 +41,7 @@ import {
   type StatusFilter,
 } from '@/runs/core';
 import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
-import { startDemoRun } from '@/brain/demo';
+import { startDemoRun, type DemoOutcome } from '@/brain/demo';
 import { isEngineRunId, useBrainStore } from '@/stores/brainStore';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -115,7 +115,7 @@ export interface RunsState {
   archive: (id: string) => void;
   unarchive: (id: string) => void;
   copyId: (id: string) => Promise<void>;
-  startDemoRun: (title?: string) => string;
+  startDemoRun: (title?: string) => DemoOutcome;
 
   exportCsv: () => Promise<void>;
   exportJson: () => Promise<void>;
@@ -323,6 +323,9 @@ export const useRunsStore = create<RunsState>()((set, get) => {
         import.meta.env.DEV &&
         (mode === 'stress' || (mode === 'default' && !engineUp))
       ) {
+        // XR-REL-03: the guard is the STATIC `import.meta.env.DEV` literal, so
+        // Vite drops this whole branch (and the seed module with it) from a
+        // release bundle. The dynamic import stays inside it on purpose.
         const seed = await import('@/runs/seed');
         seeded =
           mode === 'stress' ? seed.seedStress(now) : seed.seedMockHistory(now);
@@ -334,7 +337,10 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       for (const r of Object.values(get().runs)) {
         if (
           inProgress(r.status) ||
-          r.id.startsWith('mock-latest') ||
+          // XR-REL-03 — a dev build may have persisted a scripted row; a
+          // release build never creates one, so it must not carry the id
+          // pattern either (the marker would otherwise ship).
+          (import.meta.env.DEV && r.id.startsWith('mock-latest')) ||
           isEngineRunId(r.id)
         )
           keep[r.id] = r;
@@ -622,10 +628,20 @@ export const useRunsStore = create<RunsState>()((set, get) => {
     },
 
     startDemoRun: (title) => {
-      // Real engine run when a provider answers (same path as Brain's button);
-      // a titled request is always the local mock (used by seeds/tests).
-      if (title) return useBrainStore.getState().startMockRun(title);
-      return startDemoRun().id;
+      // XR-REL-03 — same outcomes as `@/brain/demo`, never a synthesised run
+      // in a release build. A titled request is a DEV seed helper; outside dev
+      // it is refused by the store rather than quietly mocked.
+      if (title) {
+        if (!import.meta.env.DEV)
+          return { kind: 'no-provider' } as const;
+        return {
+          kind: 'started',
+          id: useBrainStore.getState().startMockRun(title),
+          real: false,
+          title,
+        } as const;
+      }
+      return startDemoRun();
     },
 
     exportCsv: async () => {

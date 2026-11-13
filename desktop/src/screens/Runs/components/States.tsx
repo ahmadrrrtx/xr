@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 
 import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
-import { demoRunIsReal } from '@/brain/demo';
 import { useRunsStore } from '@/stores/runsStore';
 
 import { GRID, ROW_HEIGHT, TableHeader } from './RunsTable';
@@ -112,14 +111,26 @@ export function EmptyFresh() {
                 type="button"
                 data-testid="runs-demo"
                 onClick={() => {
-                  const id = useRunsStore.getState().startDemoRun();
-                  toast(demoRunIsReal() ? 'Run started' : 'Demo run started', {
-                    description: demoRunIsReal()
+                  // XR-REL-03 — never fabricate a run to fill an empty state.
+                  const outcome = useRunsStore.getState().startDemoRun();
+                  if (outcome.kind === 'no-provider') {
+                    toast('No model configured yet', {
+                      description:
+                        'A run needs a provider. Add a cloud key or start a local runtime first.',
+                      action: {
+                        label: 'Set up a model',
+                        onClick: () => navigate('/settings?tab=models'),
+                      },
+                    });
+                    return;
+                  }
+                  toast(outcome.real ? 'Run started' : 'Demo run started', {
+                    description: outcome.real
                       ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
-                      : 'No model configured — this is a canned trace. Watch it live here, or open it.',
+                      : 'Development build: this is a scripted trace, not a real run.',
                     action: {
                       label: 'View trace',
-                      onClick: () => navigate(`/brain/${id}`),
+                      onClick: () => navigate(`/brain/${outcome.id}`),
                     },
                   });
                 }}

@@ -79,7 +79,13 @@ export default function BrainScreen() {
  * Index (/brain) — brief §5
  * ══════════════════════════════════════════════════════════════════════ */
 
-const RECENT_FLAVORS: {
+/**
+ * XR-REL-03 — the canned "Recent runs" rows. A release build must not carry
+ * them at all: an empty list plus the honest empty state is the correct UI on
+ * a fresh install. `import.meta.env.DEV` folds to `false`, so the block below
+ * is removed from the production bundle.
+ */
+const DEV_RECENT_FLAVORS: {
   id: string;
   shortId: string;
   title: string;
@@ -158,6 +164,10 @@ const RECENT_FLAVORS: {
   },
 ];
 
+const RECENT_FLAVORS: typeof DEV_RECENT_FLAVORS = import.meta.env.DEV
+  ? DEV_RECENT_FLAVORS
+  : [];
+
 // The index table is a snapshot (not a live view) — capture "now" once so
 // render stays pure (same convention as SessionList's MOUNT_NOW).
 const MOUNT_NOW = Date.now();
@@ -181,13 +191,25 @@ function BrainIndex() {
   }, []);
 
   const startDemo = (): void => {
-    // Real agent-mode turn when a provider answers; honest mock otherwise.
-    const { id } = startDemoRun();
-    navigate(`/brain/${id}`);
+    // XR-REL-03 — a release build never fabricates a run. With no provider the
+    // button says so and points at the screen that fixes it.
+    const outcome = startDemoRun();
+    if (outcome.kind === 'no-provider') {
+      void import('sonner').then(({ toast }) => {
+        toast('No model configured yet', {
+          description:
+            'A run needs a provider. Add a cloud key or start a local runtime, then try again.',
+          action: { label: 'Set up a model', onClick: () => navigate('/settings?tab=models') },
+        });
+      });
+      return;
+    }
+    navigate(`/brain/${outcome.id}`);
   };
 
-  // Recent runs = this session's real store entries, then the canned mocks
-  // (which seed the list until the user has their own history).
+  // Recent runs = this session's real store entries, then (DEV ONLY) the
+  // scripted flavours, which seed the list until the user has their own
+  // history. A release build shows only runs that actually happened.
   const recent = useMemo(() => {
     const seen = new Set<string>();
     const out: typeof RECENT_FLAVORS = [];
@@ -209,10 +231,15 @@ function BrainIndex() {
         cost: r.costUsd,
       });
     }
-    for (const c of RECENT_FLAVORS) {
-      if (seen.has(c.shortId) || out.length >= 10) continue;
-      seen.add(c.shortId);
-      out.push(c);
+    // XR-REL-03 — the canned list is a DEV fixture. In a release build this
+    // loop is dead code, so the screen shows only runs that really ran (and an
+    // honest empty state when there are none).
+    if (import.meta.env.DEV) {
+      for (const c of RECENT_FLAVORS) {
+        if (seen.has(c.shortId) || out.length >= 10) continue;
+        seen.add(c.shortId);
+        out.push(c);
+      }
     }
     return out.slice(0, 10);
   }, [runOrder, runs]);
