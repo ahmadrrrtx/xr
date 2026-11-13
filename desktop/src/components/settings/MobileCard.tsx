@@ -236,7 +236,7 @@ export function MobileCard({
               <IconButton onClick={() => void copy(fingerprintPretty ?? '', 'fp')} done={copied === 'fp'} label="Copy fingerprint" />
             </div>
             <p className="mt-1 text-[11.5px] leading-[1.45]" style={{ color: 'var(--text-tertiary)' }}>
-              Your phone shows this same fingerprint before you pair. If they differ, don’t connect.
+              The phone app displays a server-reported value, not the actual TLS certificate. Verify the connection independently; a matching value is not proof.
             </p>
           </div>
 

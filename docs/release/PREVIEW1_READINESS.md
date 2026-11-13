@@ -20,6 +20,13 @@
 
 **Current PR checks:** on `9e3f703a`, CI and desktop PR packaging passed; Supply Chain failed on newly reported `rustix` RUSTSEC-2026-0486. A candidate lock bump passes local OSV with the 23 pre-existing policy-filtered findings still present, but requires Cargo `--locked` CI. Cross-Platform failed one PowerShell negative-control subprocess timeout and has been rerun; no product installer assertion was relaxed. Full dispatch and current Windows lifecycle remain pending. The `9e3f703a` Linux deb was provided for trusted local testing, not as a final release, and predates the rustix candidate.
 
+**Mobile TLS identity blocker — OPEN:** the PWA reads a server-reported fingerprint, not
+its actual TLS peer certificate. A malicious endpoint can reproduce that value and serve
+altered app code, so the existing comparison is not certificate pinning or proof of server
+identity. UI and security documentation were corrected, but independent TLS trust, packaged
+desktop opt-in LAN controls and an actual phone journey remain unimplemented. Do not bypass
+TLS warnings based on the PWA display; no secure mobile release is claimed.
+
 **Owner scope decision:** cloud stays out; Telegram bot and mobile PWA remain in scope. Telegram tests and the mobile production build/daemon tests pass locally, but live Telegram/phone checks were not run. The downloaded Linux deb contains no mobile PWA assets; installed-desktop-to-phone operation is not established. Enterprise satellite and Firecracker tier decisions remain open.
 
 **Windows installer FAIL, candidate fix pending:** Windows Preview run `42917963976`, job `130193707541`, acquired an exact-head artifact from desktop dispatch `42917971949`. Verified evidence artifact `13811731189` records NSIS package PASS and NSIS install FAIL: “installer did not provide a valid install directory.” MSI, launch/authentication and uninstall were not reached. Tauri’s matching NSIS template stores `InstallLocation` with surrounding quotes, consistent with the failure, though the actual registry value was not captured; a tested quote-normalization candidate retains the file, auth and uninstall assertions and needs native rerun. Job logs returned HTTP 502 during a GitHub Actions outage. No installer lifecycle pass is claimed.

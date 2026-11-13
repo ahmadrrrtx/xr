@@ -23,3 +23,13 @@ test('native and offline Flatpak builds stage the mobile app from its lockfile',
   const journey = read('scripts/journey/desktop-journey.ts');
   expect(journey).toContain('installed mobile PWA assets missing');
 });
+
+test("mobile trust copy does not describe a server-reported hash as certificate pinning", () => {
+  const pin = readFileSync(resolve(root, "mobile/src/lib/certpin.ts"), "utf8");
+  const ui = readFileSync(resolve(root, "mobile/src/screens/PairingScreen.tsx"), "utf8");
+  const model = readFileSync(resolve(root, "docs/mobile/SECURITY.md"), "utf8");
+  expect(pin).toContain("NOT TLS pinning");
+  expect(ui).toContain("cannot inspect or pin the actual TLS certificate");
+  expect(model).toMatch(/not\s+certificate pinning/);
+  expect(ui).not.toContain('tap “Visit Website”');
+});

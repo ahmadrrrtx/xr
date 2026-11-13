@@ -4,7 +4,7 @@
  * Boots `serve({ lan })` with a genuine self-signed TLS listener on an
  * ephemeral port (isolated HOME/XR_HOME so the cert + device registry land in
  * tmp) and pins the slice end-to-end:
- *   1. the public cert-fingerprint operation answers WITHOUT a session (TOFU
+ *   1. the public cert-fingerprint operation answers WITHOUT a session (reported
  *      trust root) and matches the served certificate's shape;
  *   2. a valid pairing code issues an HttpOnly+Secure+SameSite=Strict device
  *      cookie, and the 6-digit code is single-use;
@@ -66,7 +66,7 @@ afterAll(() => {
 });
 
 describe("Phase 2.4 · P1-1 — mobile LAN control path (real TLS serve())", () => {
-  test("public cert-fingerprint answers without a session (TOFU root)", async () => {
+  test("public cert-fingerprint answers without a session (server-reported only)", async () => {
     const res = await fetch(`${base}/api/mobile/cert-fingerprint`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { fingerprint?: string };
