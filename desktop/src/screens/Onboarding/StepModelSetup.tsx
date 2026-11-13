@@ -13,7 +13,7 @@ import { OptionCard, Reveal, StepHeader } from './parts';
  * catalog (every hosted preset it supports), not a hardcoded five.
  */
 export function StepModelSetup() {
-  const { systemInfo, ollama, modelChoice, setModelChoice } =
+  const { systemInfo, ollama, modelChoice, setModelChoice, detectFailures } =
     useOnboardingStore();
   const engineProviders = useEngineStore(
     (state) => state.providers?.providers ?? null
@@ -49,10 +49,16 @@ export function StepModelSetup() {
     : cloudProviders[0]?.id ?? 'openai';
 
   const ram = systemInfo?.totalMemoryGb ?? null;
-  const rec = recommendModel(ram ?? 0);
+  // XR-REL-01 — no recommendation without a MEASURED machine. The old code
+  // called recommendModel(ram ?? 0), which answers "0.5B" for an unknown
+  // system and then offers to download it. Unknown hardware means: no card.
+  const rec = ram && ram > 0 ? recommendModel(ram) : null;
+  const hardwareUnknown = ram === null || !(ram > 0);
 
   const localSelected =
-    modelChoice.source === 'local' && modelChoice.model === rec.model;
+    rec !== null &&
+    modelChoice.source === 'local' &&
+    modelChoice.model === rec.model;
 
   return (
     <div>
@@ -63,27 +69,47 @@ export function StepModelSetup() {
 
       <div className="space-y-3">
         <Reveal>
-          <OptionCard
-            selected={localSelected}
-            onClick={() =>
-              setModelChoice({
-                source: 'local',
-                model: rec.model,
-                label: rec.label,
-              })
-            }
-            badge="Local candidate"
-            title={`${rec.label} · ${rec.model}`}
-            desc={`${ram === null ? 'RAM not measured' : `${ram} GB RAM detected`} · ~${rec.sizeGb} GB download only if selected. Runtime/tool compatibility not yet verified.`}
-            right={
-              <Download
-                aria-hidden="true"
-                className="text-accent size-4 shrink-0"
-                strokeWidth={1.5}
-              />
-            }
-            ariaLabel={`Recommended local model ${rec.label}`}
-          />
+          {rec ? (
+            <OptionCard
+              selected={localSelected}
+              onClick={() =>
+                setModelChoice({
+                  source: 'local',
+                  model: rec.model,
+                  label: rec.label,
+                })
+              }
+              badge="Local candidate"
+              title={`${rec.label} · ${rec.model}`}
+              desc={`${ram} GB RAM detected · ~${rec.sizeGb} GB download only if selected. Runtime/tool compatibility not yet verified.`}
+              right={
+                <Download
+                  aria-hidden="true"
+                  className="text-accent size-4 shrink-0"
+                  strokeWidth={1.5}
+                />
+              }
+              ariaLabel={`Recommended local model ${rec.label}`}
+            />
+          ) : (
+            <div className="border-border-subtle bg-bg-raised/40 rounded-xl border p-3.5">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-text-primary block text-[14px] font-medium">
+                    Local model — not recommended yet
+                  </span>
+                  <span className="text-text-tertiary mt-0.5 block text-[12.5px] leading-relaxed">
+                    {hardwareUnknown
+                      ? (detectFailures.system ??
+                        'Your RAM could not be measured, so XR will not guess a model size.')
+                      : 'RAM reading was not usable, so XR will not guess a model size.'}{' '}
+                    Pick a model later in Settings → Models, or connect a cloud
+                    key now.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </Reveal>
 
         <Reveal delay={0.07}>
@@ -178,6 +204,20 @@ export function StepModelSetup() {
           />
         </Reveal>
       </div>
+
+      {ollama === null && detectFailures.ollama && (
+        <Reveal delay={0.2}>
+          <p className="text-text-tertiary mt-4 flex items-center gap-2 text-[12.5px]">
+            <ChevronDown
+              aria-hidden="true"
+              className="size-3.5 shrink-0"
+              strokeWidth={1.5}
+            />
+            {detectFailures.ollama} Local mode needs Ollama; you can connect a
+            cloud key or continue as a guest instead.
+          </p>
+        </Reveal>
+      )}
 
       {ollama && !ollama.installed && (
         <Reveal delay={0.2}>

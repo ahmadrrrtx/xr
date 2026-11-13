@@ -9,7 +9,13 @@ import { create } from 'zustand';
 import { toast } from 'sonner';
 import { prepareModelSetup, type SetupChoice } from '@/engine/setup';
 
-import type { GpuInfo, MicInfo, OllamaInfo, SystemInfo } from '@/lib/detect';
+import type {
+  DetectionProbe,
+  GpuInfo,
+  MicInfo,
+  OllamaInfo,
+  SystemInfo,
+} from '@/lib/detect';
 import { applyTheme, type ThemeId } from '@/stores/theme';
 import {
   purgeLegacyCredentialSettings,
@@ -40,6 +46,12 @@ interface OnboardingState {
   gpu: GpuInfo | null;
   mics: MicInfo | null;
   ollama: OllamaInfo | null;
+  /**
+   * XR-REL-01 — why a probe returned nothing. `null` value = the probe has not
+   * resolved yet; a key present = it resolved to "unknown" and the UI MUST say
+   * so instead of rendering a number. There is no fabricated fallback.
+   */
+  detectFailures: Partial<Record<DetectionProbe, string>>;
   checking: boolean;
   // selections
   modelChoice: ModelChoice;
@@ -63,7 +75,7 @@ interface OnboardingState {
     d: Partial<
       Pick<
         OnboardingState,
-        'systemInfo' | 'gpu' | 'mics' | 'ollama' | 'checking'
+        'systemInfo' | 'gpu' | 'mics' | 'ollama' | 'checking' | 'detectFailures'
       >
     >
   ) => void;
@@ -114,6 +126,7 @@ const initial = {
   gpu: null,
   mics: null,
   ollama: null,
+  detectFailures: {},
   checking: true,
   modelChoice: { source: 'skip' } as ModelChoice,
   micSelected: null,

@@ -124,21 +124,40 @@ export function ModelsTab() {
   const refreshOllama = useCallback((): void => {
     if (!isTauri()) return;
     setOllamaBusy(true);
-    void ollamaDetect().then((info) => {
-      setOllamaModels(info.models);
-      setOllamaBusy(false);
-    });
+    void ollamaDetect()
+      .then((info) => {
+        setOllamaModels(info.models);
+        setOllamaBusy(false);
+      })
+      .catch((error: unknown) => {
+        setOllamaModels(null);
+        setOllamaBusy(false);
+        console.warn('[xr] ollamaDetect failed', error);
+      });
   }, []);
 
   useEffect(() => {
     if (!isTauri()) return;
     // initial probes resolve asynchronously — no spinner state to set here
-    void detectSystem().then((info) => {
-      setTotalRam(info?.totalMemoryGb ?? 0);
-    });
-    void ollamaDetect().then((info) => {
-      setOllamaModels(info.models);
-    });
+    // XR-REL-01 — a failed probe leaves the value UNKNOWN (0 = not measured),
+    // never a substituted number. The RAM line then says so instead of tuning
+    // recommendations to a machine we never read.
+    void detectSystem()
+      .then((info) => {
+        setTotalRam(info?.totalMemoryGb ?? 0);
+      })
+      .catch((error: unknown) => {
+        setTotalRam(0);
+        console.warn('[xr] detectSystem failed', error);
+      });
+    void ollamaDetect()
+      .then((info) => {
+        setOllamaModels(info.models);
+      })
+      .catch((error: unknown) => {
+        setOllamaModels(null);
+        console.warn('[xr] ollamaDetect failed', error);
+      });
   }, []);
 
   const providers = models.providers;

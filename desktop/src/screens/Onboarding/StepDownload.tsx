@@ -174,9 +174,19 @@ function RecheckTrigger({ retries }: { retries: number }) {
   useEffect(() => {
     if (retries === 0) return;
     void (async () => {
-      const { detectOllama } = await import('@/lib/detect');
-      const o = await detectOllama();
-      setDetections({ ollama: o });
+      const { detectOllama, probeDetection } = await import('@/lib/detect');
+      const r = await probeDetection('ollama', detectOllama);
+      setDetections(
+        r.value
+          ? { ollama: r.value }
+          : {
+              ollama: null,
+              detectFailures: {
+                ...useOnboardingStore.getState().detectFailures,
+                ollama: r.failure,
+              },
+            }
+      );
     })();
   }, [retries, setDetections]);
   return null;
