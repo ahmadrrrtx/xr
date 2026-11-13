@@ -19,8 +19,11 @@
  *                fabrication markers. This is the one that catches "it was
  *                guarded but the string still shipped".
  *
- *   bun run scripts/mock-data-lint.ts            # source + bundle if present
- *   bun run scripts/mock-data-lint.ts --source   # source only (fast, CI-lint)
+ *   bun run scripts/mock-data-lint.ts                      # source + desktop/dist
+ *   bun run scripts/mock-data-lint.ts --source             # source only (fast)
+ *   bun run scripts/mock-data-lint.ts --bundle <distDir>   # a bundle built
+ *                                                          # elsewhere (CI builds
+ *                                                          # into $RUNNER_TEMP)
  *
  * Exit 1 on any unallowed hit. An unreadable file fails closed.
  */
@@ -177,12 +180,23 @@ export const BUNDLE_MARKERS: readonly string[] = [
 ];
 
 export function scanBundle(
-  distRoot = DESKTOP_DIST
+  distRoot = DESKTOP_DIST,
+  /** true when the caller NAMED a directory: then an absent build is a failure,
+   *  not a silent pass. The default `desktop/dist` may legitimately not exist
+   *  (no build yet), but an explicit `--bundle <dir>` means "scan this". */
+  required = false
 ): { findings: Finding[]; scanned: number } {
   const findings: Finding[] = [];
   let scanned = 0;
   const assets = join(distRoot, "assets");
-  if (!existsSync(assets)) return { findings, scanned };
+  if (!existsSync(assets)) {
+    if (required) {
+      throw new Error(
+        `mock-data-lint: --bundle ${distRoot} has no assets/ — refusing to report a clean scan of a bundle that is not there`
+      );
+    }
+    return { findings, scanned };
+  }
 
   for (const name of readdirSync(assets)) {
     if (!name.endsWith(".js")) continue;
@@ -212,9 +226,15 @@ export function scanBundle(
 
 if (import.meta.main) {
   const sourceOnly = process.argv.includes("--source");
+  const bundleIdx = process.argv.indexOf("--bundle");
+  const bundleDir = bundleIdx > -1 ? process.argv[bundleIdx + 1] : undefined;
   try {
     const source = scanSource();
-    const bundle = sourceOnly ? { findings: [], scanned: 0 } : scanBundle();
+    const bundle = sourceOnly
+      ? { findings: [], scanned: 0 }
+      : bundleDir
+        ? scanBundle(bundleDir, true)
+        : scanBundle();
     const findings = [...source.findings, ...bundle.findings];
 
     if (findings.length > 0) {
