@@ -980,3 +980,24 @@ merge and deferred unresolved items to next week. Cloud remains excluded; Telegr
   Windows lifecycle PASS does not cover a later tip.
 - PR #210 merge is BLOCKED by rules requiring Quality Gate, Cross-Platform, Supply Chain and npm
   Pack Smoke checks. Do not bypass. No public release is authorized.
+
+### CI remediation — owner requested careful green merge
+
+- On 3e5bd5e0 the Architecture, DX, core and Linux/macOS/Windows parity failures all
+  reported the same generated-client size assertion; Quality Gate and Cross-Platform gate
+  aggregate those failures. The separate core tree ceiling also failed. The generated client
+  now uses typed declarations plus one registry-derived dispatch implementation instead of
+  hundreds of repeated method bodies. No threshold or waiver was raised. Local `size-gate`
+  PASS (client 977 lines; core 175,070), `bun test test/architecture` 74/0,
+  `bun run unit-tier` 271/0 in 1755ms, and `bun test test/api` 116/0 including registry-wide
+  method/path/body/SSE parity. Client drift, schema/compat, typecheck and boundaries pass.
+  Final-tip CI remains required. <!-- xr:numeric-history -->
+- Windows 3e5bd5e0 runner 43402316355: NSIS lifecycle passed, MSI installed but desktop exited
+  before authenticated launch. A same-SHA rerun reproduced the MSI failure; no MSI lifecycle
+  pass is claimed. Instrumenting exit code and limited OS fault metadata retains the hard
+  failure and collects no raw logs or tokens; root cause and final-tip retest remain open.
+- The 88d diagnostic job is intentionally skipped outside manual diagnostic-only dispatch;
+  the public-channel install job is intentionally skipped on PRs, not a failing result.
+- PR #211 is a separate Dependabot GitHub Actions update against main. It has its own blocked
+  Supply Chain gate and old retired-macOS runner outcomes; it is not proof for PR #210. Review
+  and reconcile it separately, rather than merging untested dependency changes into this fix.

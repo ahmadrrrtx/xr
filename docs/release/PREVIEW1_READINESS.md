@@ -273,3 +273,18 @@ not publishing a release. **NO-GO remains**, and merge must not bypass repositor
   actual final tip, review results and merge only through the normal PR path when allowed.
   Recheck full native dispatch and Windows results against that same tip after changes. A merge
   does not grant permission to publish.
+
+### Subsequent CI remediation checkpoint
+
+The 3e5bd5e0 CI/core, architecture/DX and three cross-platform parity failures shared the
+size assertion; their aggregate gates also failed. A registry-derived shared client dispatcher
+removes duplicated operation implementations while keeping typed signatures. Local size gate,
+architecture tests, unit tier, 116 API tests (including every generated operation), client drift,
+API schema/compat and typecheck passed. No ceilings or waivers were changed; final-tip CI must
+still confirm the candidate. The previous next-week size item is therefore **in progress**, not
+closed on CI evidence yet.
+
+Windows runner 43402316355 on 3e5bd5e0 passed NSIS, but the MSI app exited before engine
+readiness. The same-SHA rerun reproduced it. Restricted startup-fault diagnostics have been
+added without relaxing lifecycle assertions; MSI root cause remains **FAIL / OPEN**, and native
+final-tip rerun is required. The old 88d diagnostic job's ordinary PR skip is intentional.
