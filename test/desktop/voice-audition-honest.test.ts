@@ -81,3 +81,38 @@ describe('S-1 · the route contract the wizard relies on', () => {
     expect(sections.slice(idx, idx + 400)).toContain('if (!res.wav)');
   });
 });
+
+describe('S-2 · a missing voice model is a state with a fix', () => {
+  const step = read('screens/Onboarding/StepVoice.tsx');
+  const onboarding = read('stores/onboarding.ts');
+
+  test('the wizard offers a sized download for the missing voice', () => {
+    expect(step).toContain('voiceApi.download');
+    expect(step).toMatch(/Download voice \(\{?\(?missing\.bytes/);
+    // Progress comes from the engine's own byte counters, not a timer.
+    expect(step).toContain('bundleReceived');
+    expect(step).toContain('bundleTotal');
+  });
+
+  test('the download re-auditions with the engine once the model lands', () => {
+    const start = step.indexOf('const downloadVoice');
+    expect(start).toBeGreaterThan(-1);
+    expect(step.slice(start, start + 1200)).toContain('previewWithEngine(id)');
+  });
+
+  test('finishing onboarding pushes the choice into the ENGINE, not just a local key', () => {
+    // `xr.voice` is read by nothing; /voice/settings is what synthesis reads.
+    const finish = onboarding.slice(onboarding.indexOf('finishOnboarding'));
+    expect(finish).toContain('applyOnboardingVoice');
+    expect(onboarding).toContain('voiceApi.settingsSet({ ttsVoice: s.ttsVoice');
+  });
+
+  test('an unreachable engine keeps the choice instead of dropping it', () => {
+    expect(onboarding).toContain('it will be applied when the engine starts');
+  });
+
+  test('voice-not-installed is surfaced at finish, never swallowed', () => {
+    expect(onboarding).toContain("err.body?.error !== 'voice-not-installed'");
+    expect(onboarding).toContain('Settings → Voice → Download');
+  });
+});

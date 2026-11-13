@@ -33,6 +33,12 @@ const SAMPLE: Record<string, string> = {
 
 type PreviewMode = 'engine' | 'stand-in';
 
+/** What `/voice/test-tts` 409s about, kept so the step can offer the fix. */
+interface MissingVoice {
+  id: string;
+  bytes: number;
+}
+
 /**
  * Step 7 — pick XR's voice. Every card is auditioned with the engine's own
  * synthesis (`/voice/test-tts`), so the id saved in `ttsVoice` is the voice
@@ -43,6 +49,9 @@ export function StepVoice() {
   const [playing, setPlaying] = useState<string | null>(null);
   const [mode, setMode] = useState<PreviewMode | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [missing, setMissing] = useState<MissingVoice | null>(null);
+  const [downloading, setDownloading] = useState<number | null>(null);
+  const aliveRef = useRef(true);
   const [speed, setSpeed] = useState(1);
   // Feature-detect once — the speech engine can't appear mid-session.
   const speechOk = typeof speechSynthesis !== 'undefined';
@@ -57,11 +66,44 @@ export function StepVoice() {
     load();
     speechSynthesis.addEventListener('voiceschanged', load);
     return () => {
+      aliveRef.current = false;
       speechSynthesis.removeEventListener('voiceschanged', load);
       speechSynthesis.cancel();
       audioRef.current?.pause();
     };
   }, []);
+
+  /**
+   * Start the engine download for the missing voice and audition it the moment
+   * the model lands. Progress is the engine's own byte count — the desktop does
+   * not invent a percentage.
+   */
+  const downloadVoice = async (id: string) => {
+    setNote(null);
+    setDownloading(0);
+    try {
+      await voiceApi.download({ id, firstRun: true });
+      for (let i = 0; i < 600 && aliveRef.current; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const st = await voiceApi.status().catch(() => null);
+        if (!st) break;
+        if (!st.download) break;
+        const total = st.download.bundleTotal ?? 0;
+        setDownloading(
+          total > 0 ? Math.round(((st.download.bundleReceived ?? st.download.received) / total) * 100) : st.download.percent,
+        );
+      }
+      if (!aliveRef.current) return;
+      setDownloading(null);
+      setMissing(null);
+      void previewWithEngine(id);
+    } catch {
+      if (aliveRef.current) {
+        setDownloading(null);
+        setNote('The download could not start — retry from Settings → Voice.');
+      }
+    }
+  };
 
   const stop = () => {
     audioRef.current?.pause();
@@ -114,10 +156,9 @@ export function StepVoice() {
     } catch (err) {
       const body = err instanceof EngineHttpError ? err.body : null;
       if (body?.error === 'voice-not-installed') {
-        setNote(
-          `This voice's model is not downloaded yet (${Math.round(Number(body.bytes ?? 0) / 1e6)} MB) — ` +
-            'below is your system voice reading the same line, not XR.',
-        );
+        // S-2: a missing model is a state with a fix, not a dead button.
+        setMissing({ id, bytes: Number(body.bytes ?? 0) });
+        setNote('This voice is not downloaded yet — below is your system voice, not XR.');
         previewWithOsVoice(id);
         return;
       }
@@ -182,10 +223,22 @@ export function StepVoice() {
         ))}
       </div>
 
-      {note ? (
-        <p role="status" className="text-text-tertiary mt-3 text-[12px]">
-          {note}
-        </p>
+      {note || missing || downloading !== null ? (
+        <div role="status" className="mt-3 flex flex-wrap items-center gap-3">
+          {note ? <p className="text-text-tertiary text-[12px]">{note}</p> : null}
+          {missing && downloading === null ? (
+            <button
+              type="button"
+              onClick={() => void downloadVoice(missing.id)}
+              className="border-border-subtle bg-bg-raised text-text-secondary hover:text-accent rounded-full border px-3 py-1 text-[12px] font-medium"
+            >
+              Download voice ({(missing.bytes / 1e6).toFixed(0)} MB)
+            </button>
+          ) : null}
+          {downloading !== null ? (
+            <span className="text-text-tertiary font-mono text-[12px]">Downloading… {downloading}%</span>
+          ) : null}
+        </div>
       ) : null}
 
       <Reveal delay={0.25}>
