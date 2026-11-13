@@ -19,6 +19,18 @@ export interface ModelFact {
   maxOutputTokens?: number;
   tools: boolean;
   reasoning?: boolean;
+  /**
+   * XR-REL-07 — has an XR agent run end-to-end against this model (tools,
+   * approvals, audit) and been recorded as passing? Documentation facts do not
+   * imply this, and a model id is NOT evidence — the flag is.
+   */
+  agentValidated?: boolean;
+  /**
+   * XR-REL-07 — the path of the test that exercises this exact model id through
+   * a real XR adapter, or absent. A path is evidence; a boolean is an opinion
+   * (and the shipped boolean was wrong for 2 of its 3 ids).
+   */
+  contractTest?: string;
   /** Standard text-token base rate only; not a provider invoice ceiling. */
   price?: {
     input: number;

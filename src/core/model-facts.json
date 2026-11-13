@@ -1,7 +1,7 @@
 {
-  "version": "2026-10-26.1",
-  "verifiedAt": "2026-10-26",
-  "staleAt": "2027-01-24T00:00:00Z",
+  "version": "2026-11-13.1",
+  "verifiedAt": "2026-11-13",
+  "staleAt": "2027-02-11T00:00:00Z",
   "models": [
     {
       "providerId": "openai",
@@ -13,15 +13,16 @@
       "maxOutputTokens": 128000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "notes": [
+        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
+        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
+      ],
       "price": {
         "input": 10,
         "output": 50,
         "source": "https://developers.openai.com/api/docs/models/gpt-6-astra"
-      },
-      "notes": [
-        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
-        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
-      ]
+      }
     },
     {
       "providerId": "openai",
@@ -33,15 +34,17 @@
       "maxOutputTokens": 128000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "contractTest": "test/providers/governed-attempts.test.ts",
+      "notes": [
+        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
+        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
+      ],
       "price": {
         "input": 2,
         "output": 10,
         "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
-      },
-      "notes": [
-        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
-        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
-      ]
+      }
     },
     {
       "providerId": "openai",
@@ -53,15 +56,16 @@
       "maxOutputTokens": 128000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "notes": [
+        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
+        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
+      ],
       "price": {
         "input": 0.1,
         "output": 0.5,
         "source": "https://developers.openai.com/api/docs/models/gpt-6-luna"
-      },
-      "notes": [
-        "XR uses Responses for tools; Chat Completions tool/reasoning restrictions vary by model.",
-        "Standard rates exclude service tiers, tools and regional premiums; long-context rates may differ."
-      ]
+      }
     },
     {
       "providerId": "openai",
@@ -72,14 +76,15 @@
       "contextWindow": 128000,
       "maxOutputTokens": 16384,
       "tools": true,
+      "agentValidated": false,
+      "notes": [
+        "Official page labels this deprecated; manual compatibility only, not an Auto default."
+      ],
       "price": {
         "input": 0.15,
         "output": 0.6,
         "source": "https://developers.openai.com/api/docs/models/gpt-4o-mini"
-      },
-      "notes": [
-        "Official page labels this deprecated; manual compatibility only, not an Auto default."
-      ]
+      }
     },
     {
       "providerId": "anthropic",
@@ -91,15 +96,16 @@
       "maxOutputTokens": 128000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "notes": [
+        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
+        "Model listing is not live credential, compatibility or agent benchmark evidence."
+      ],
       "price": {
         "input": 10,
         "output": 50,
         "source": "https://platform.claude.com/docs/en/models/overview"
-      },
-      "notes": [
-        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
-        "Model listing is not live credential, compatibility or agent benchmark evidence."
-      ]
+      }
     },
     {
       "providerId": "anthropic",
@@ -111,15 +117,16 @@
       "maxOutputTokens": 128000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "notes": [
+        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
+        "Model listing is not live credential, compatibility or agent benchmark evidence."
+      ],
       "price": {
         "input": 4,
         "output": 20,
         "source": "https://platform.claude.com/docs/en/models/overview"
-      },
-      "notes": [
-        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
-        "Model listing is not live credential, compatibility or agent benchmark evidence."
-      ]
+      }
     },
     {
       "providerId": "anthropic",
@@ -131,15 +138,16 @@
       "maxOutputTokens": 128000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "notes": [
+        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
+        "Model listing is not live credential, compatibility or agent benchmark evidence."
+      ],
       "price": {
         "input": 2,
         "output": 10,
         "source": "https://platform.claude.com/docs/en/models/overview"
-      },
-      "notes": [
-        "Adaptive thinking; preserve signed thinking/tool-use blocks on continuation.",
-        "Model listing is not live credential, compatibility or agent benchmark evidence."
-      ]
+      }
     },
     {
       "providerId": "anthropic",
@@ -151,6 +159,7 @@
       "maxOutputTokens": 128000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
       "notes": [
         "Published pricing is 'from' $0.10/$0.50; exact applicable rate unavailable. Do not assume the minimum."
       ]
@@ -165,6 +174,11 @@
       "maxOutputTokens": 65536,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "notes": [
+        "Synchronous output limit; long-decode modes not implemented by XR.",
+        "Thinking tokens are billable; implicit cache only; no Live API/audio generation."
+      ],
       "price": {
         "input": 2,
         "output": 10,
@@ -174,11 +188,7 @@
           "input": 4,
           "output": 20
         }
-      },
-      "notes": [
-        "Synchronous output limit; long-decode modes not implemented by XR.",
-        "Thinking tokens are billable; implicit cache only; no Live API/audio generation."
-      ]
+      }
     },
     {
       "providerId": "google",
@@ -190,6 +200,11 @@
       "maxOutputTokens": 65536,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
+      "notes": [
+        "Free-tier eligibility is account-dependent; paid standard base rates are used for estimates.",
+        "Preserve thought signatures when returning function results."
+      ],
       "price": {
         "input": 0.75,
         "output": 3.75,
@@ -199,11 +214,7 @@
           "input": 1.5,
           "output": 7.5
         }
-      },
-      "notes": [
-        "Free-tier eligibility is account-dependent; paid standard base rates are used for estimates.",
-        "Preserve thought signatures when returning function results."
-      ]
+      }
     },
     {
       "providerId": "ollama",
@@ -214,6 +225,7 @@
       "contextWindow": 256000,
       "tools": true,
       "reasoning": true,
+      "agentValidated": false,
       "notes": [
         "Library tags are not proof of installed/reachable runtime or agent validation.",
         "9b weights are multiple GB; do not download or infer on this 2 GB audit host.",

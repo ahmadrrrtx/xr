@@ -264,7 +264,7 @@ export function modelsFromPreset(
       capabilities: caps,
       context: fact ? { contextWindow: fact.contextWindow, maxOutputTokens: fact.maxOutputTokens } : contextHintFor(modelId),
       cost: { ...costProfileFor(preset.tier, preset.kind), known: pricingAvailable(price), source: price.source, verifiedAt: price.verifiedAt, ...(pricingAvailable(price) ? { inPerMTok: price.inPerMTok, outPerMTok: price.outPerMTok } : {}) },
-      evidence: { registryVersion: MODEL_REGISTRY_VERSION, source: fact?.source ?? preset.docsUrl ?? "legacy-preset", verifiedAt: fact ? MODEL_FACTS_VERIFIED_AT : "", lifecycle: fact?.lifecycle ?? "unknown", configured: false, reachable: "unknown", compatible: fact && ["gpt-6.1-sol", "claude-sonnet-5-5", "gemini-3.8-flash"].includes(modelId) ? "contract-tested" : "unknown", agentValidated: false, recommended: false, stale: !modelFactsFresh() },
+      evidence: { registryVersion: MODEL_REGISTRY_VERSION, source: fact?.source ?? preset.docsUrl ?? "legacy-preset", verifiedAt: fact ? MODEL_FACTS_VERIFIED_AT : "", lifecycle: fact?.lifecycle ?? "unknown", configured: false, reachable: "unknown", compatible: fact?.contractTest ? "contract-tested" : "unknown", agentValidated: fact?.agentValidated === true, recommended: false, stale: !modelFactsFresh() },
       latency: {
         class: preset.kind === "local" ? "standard" : preset.tier === "free" ? "fast" : "standard",
       },
