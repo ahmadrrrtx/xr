@@ -5,8 +5,6 @@
 import { loadConfig, saveConfig } from "../../config/config.ts";
 import { getHardwareSpecs, formatHardwareSummary } from "../../local/hardware.ts";
 import { providerGateway } from "../../providers/gateway.ts";
-import { validateProviderUrl } from "../../providers/provider-url-guard.ts";
-import { ProviderService } from "../../services/provider-service.ts";
 import { recommendLocalAI } from "../../local/recommend.ts";
 import { detectAllRuntimes, detectRuntime, testLocalModel } from "../../local/runtimes.ts";
 import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "../../local/registry.ts";
@@ -18,7 +16,6 @@ import { BehavioralStore, behavioralView } from "../../intelligence/behavioral.t
 import { RoutingHealth, healthView } from "../../intelligence/health.ts";
 import { RoutingSlo } from "../../intelligence/slo.ts";
 import { route, type DaemonRoute, type DaemonState } from "./router.ts";
-import type { XRApp } from "../../core/app.ts";
 import { sseResponse } from "./builder-shared.ts";
 import type { ModelClass } from "../../intelligence/types.ts";
 
@@ -279,166 +276,6 @@ export function providersRoutes(): DaemonRoute[] {
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
-      },
-    }),
-    /*
-     * XR-REL-06 — "any OpenAI-compatible API" over the daemon API.
-     *
-     * The engine has held custom endpoints since `xr providers add`
-     * (ProviderService.addCustomProvider, SSRF-guarded), but there was no HTTP
-     * route, so the desktop could not offer it and the README's promise held
-     * only for CLI users. These three routes are that missing surface. They
-     * resolve the canonical XRApp (same composition root as every other route)
-     * so config writes, provider sync and catalog invalidation all go through
-     * one path.
-     */
-    route({
-      id: "providers.custom.list",
-      path: "/api/providers/custom",
-      method: "GET",
-      handle: async ({ json, state }) => {
-        const config = (await requireApp(state)).registry.resolve(Tokens.Config).get() as any;
-        const list = (config.providerEngine?.customProviders ?? []) as Array<Record<string, any>>;
-        return json({
-          // Never echo a credential: custom providers reference their key by
-          // env-var name, and a header could carry one.
-          providers: list.map((c) => ({
-            id: c.id,
-            label: c.label ?? c.id,
-            baseUrl: c.baseUrl,
-            defaultModel: c.defaultModel,
-            apiKeyEnv: c.apiKeyEnv ?? null,
-            hasHeaders: Object.keys(c.headers ?? {}).length > 0,
-          })),
-        });
-      },
-    }),
-    route({
-      id: "providers.custom.add",
-      path: "/api/providers/custom",
-      method: "POST",
-      handle: async ({ req, json, state }) => {
-        let body: {
-          id?: string;
-          label?: string;
-          baseUrl?: string;
-          defaultModel?: string;
-          apiKey?: string;
-          apiKeyEnv?: string;
-          headers?: Record<string, string>;
-        };
-        try {
-          body = await req.json() as typeof body;
-        } catch {
-          return json({ error: "a JSON body is required" }, 400);
-        }
-        const baseUrl = (body.baseUrl ?? "").trim();
-        const defaultModel = (body.defaultModel ?? "").trim();
-        if (!baseUrl) return json({ error: "baseUrl is required" }, 400);
-        if (!defaultModel) return json({ error: "defaultModel is required" }, 400);
-        if (body.headers && typeof body.headers !== "object")
-          return json({ error: "headers must be an object of string values" }, 400);
-
-        // A5 — refuse a URL that could reach loopback/link-local/metadata hosts
-        // BEFORE anything is persisted or fetched. addCustomProvider re-checks
-        // with DNS-rebinding protection; checking here lets the API answer 400
-        // with the reason instead of a generic failure.
-        const guard = await validateProviderUrl(baseUrl);
-        if (!guard.ok) {
-          const store = (await requireApp(state)).registry.resolve(Tokens.Store);
-          store.audit("providers.custom.refused", { baseUrl, reason: guard.reason });
-          return json({ error: `Custom provider URL refused: ${guard.reason}` }, 400);
-        }
-
-        let id = sanitiseProviderId(body.id ?? deriveProviderId(baseUrl) ?? "");
-        if (!id)
-          return json({ error: "could not derive a provider id — pass `id` (lowercase letters, digits, '.', '_', '-')" }, 400);
-
-        // A custom endpoint must never shadow a BUILT-IN preset. Deriving
-        // `groq` from api.groq.com would otherwise silently replace the
-        // built-in Groq entry and, worse, reuse its GROQ_API_KEY — so a key
-        // meant for one service would be sent to another host. Suffix instead.
-        if (providerGateway.getPreset(id)) id = `${id}-compatible`.slice(0, 64);
-
-        // Similarly, never let a NEW custom endpoint adopt the env-var name of a
-        // DIFFERENT existing custom provider: that would point two endpoints at
-        // one secret.
-        const existing = ((await requireApp(state)).registry.resolve(Tokens.Config).get() as any)
-          .providerEngine?.customProviders ?? [];
-        const clash = existing.find(
-          (c: any) => c.id !== id && c.apiKeyEnv === (body.apiKeyEnv ?? `${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY`)
-        );
-        const apiKeyEnv =
-          body.apiKeyEnv ?? `${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY`;
-        if (!/^[A-Z][A-Z0-9_]*$/.test(apiKeyEnv))
-          return json({ error: "apiKeyEnv must look like AN_ENV_VAR" }, 400);
-        if (clash)
-          return json(
-            { error: `apiKeyEnv ${apiKeyEnv} already belongs to custom provider "${clash.id}" — pass a different apiKeyEnv` },
-            400
-          );
-
-        const registry = (await requireApp(state)).registry;
-        const service = new ProviderService(registry);
-        try {
-          await service.addCustomProvider({
-            id,
-            label: (body.label ?? "").trim() || id,
-            baseUrl: baseUrl.replace(/\/+$/, ""),
-            defaultModel,
-            apiKeyEnv,
-            headers: body.headers,
-            capabilities: { chat: true },
-          });
-          if (body.apiKey) await service.storeKey(apiKeyEnv, body.apiKey);
-        } catch (e) {
-          return json({ error: (e as Error).message }, 400);
-        }
-
-        registry.resolve(Tokens.Store).audit("providers.custom.added", {
-          id,
-          baseUrl,
-          defaultModel,
-          keyed: Boolean(body.apiKey),
-        });
-        return json({
-          ok: true,
-          provider: {
-            id,
-            label: (body.label ?? "").trim() || id,
-            baseUrl,
-            defaultModel,
-            apiKeyEnv,
-            keyed: Boolean(body.apiKey),
-          },
-        });
-      },
-    }),
-    route({
-      id: "providers.custom.remove",
-      path: "/api/providers/custom/remove",
-      method: "POST",
-      handle: async ({ req, json, state }) => {
-        let body: { id?: string };
-        try {
-          body = await req.json() as typeof body;
-        } catch {
-          return json({ error: "a JSON body is required" }, 400);
-        }
-        const id = (body.id ?? "").trim();
-        if (!id) return json({ error: "id is required" }, 400);
-
-        const registry = (await requireApp(state)).registry;
-        try {
-          await new ProviderService(registry).removeCustomProvider(id);
-        } catch (e) {
-          return json({ error: (e as Error).message }, 404);
-        }
-        // The stored secret is deliberately NOT deleted: another provider may
-        // reference the same env var, and silently dropping a credential the
-        // user cannot see is worse than leaving an unused one in the keychain.
-        registry.resolve(Tokens.Store).audit("providers.custom.removed", { id });
-        return json({ ok: true });
       },
     }),
     route({
@@ -758,43 +595,4 @@ export function providersRoutes(): DaemonRoute[] {
       },
     }),
   ];
-}
-
-/**
- * XR-REL-06 — derive a readable provider id from the endpoint host, e.g.
- * `https://api.together.xyz/v1` → `together`. Co-located with its only caller
- * so it cannot drift from the engine's id rules.
- */
-function deriveProviderId(raw: string): string | null {
-  try {
-    const host = new URL(raw).hostname.toLowerCase();
-    const parts = host.split(".").filter((p) => p && p !== "www" && p !== "api");
-    if (parts.length === 0) return null;
-    return parts.length > 1 ? parts[parts.length - 2] : parts[0];
-  } catch {
-    return null;
-  }
-}
-
-function sanitiseProviderId(raw: string): string | null {
-  const id = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, "-")
-    .replace(/^[^a-z0-9]+/, "")
-    .slice(0, 64);
-  return id || null;
-}
-
-/**
- * XR-REL-06 — the canonical XRApp (composition root) for a route handler.
- *
- * Every other route resolves services through `state.agentExecutor`, which
- * boots the kernel on first use. Custom-provider writes must go through the
- * SAME registry, otherwise `ProviderService` would sync a private instance and
- * the running agent loop would not see the new endpoint.
- */
-async function requireApp(state: DaemonState): Promise<XRApp> {
-  const executor = state.agentExecutor;
-  if (!executor) throw new Error("agent executor unavailable — the engine is still starting");
-  return executor.ensureApp();
 }

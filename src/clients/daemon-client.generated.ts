@@ -338,8 +338,6 @@ export interface XRDaemonClient {
   workspacesList(): Promise<Record<string, unknown>>;
   /** Create a workspace. */
   workspacesCreate(body: z.infer<typeof S.WorkspaceCreateRequest>): Promise<Record<string, unknown>>;
-  /** Add or replace a custom OpenAI-compatible endpoint (any base URL the SSRF guard allows). */
-  providersCustomAdd(body: z.infer<typeof S.CustomProviderAddRequest>): Promise<Record<string, unknown>>;
   /** Switch the active workspace. */
   workspacesSwitch(body: z.infer<typeof S.WorkspaceSwitchRequest>): Promise<z.infer<typeof S.OkResponse>>;
   /** Local model runtimes: detection status and installed models. */
@@ -350,6 +348,8 @@ export interface XRDaemonClient {
   modelsPull(body: z.infer<typeof S.ModelsPullRequest>): Promise<Record<string, unknown>>;
   /** Smoke-test a local runtime+model round-trip. */
   modelsTest(body: z.infer<typeof S.ModelsTestRequest>): Promise<Record<string, unknown>>;
+  /** Add or replace a custom OpenAI-compatible endpoint (any base URL the SSRF guard allows). */
+  providersCustomAdd(body: z.infer<typeof S.CustomProviderAddRequest>): Promise<Record<string, unknown>>;
   /** List registered MCP servers (live registry, CLI parity). */
   mcpList(): Promise<Record<string, unknown>>;
   /** Register an MCP server (stdio command or http url). */
@@ -780,12 +780,12 @@ const OPERATIONS: ReadonlyArray<readonly [string, string, string, number, boolea
   ["providersFallback","GET","/api/v1/providers/fallback",0,false,false],
   ["workspacesList","GET","/api/v1/workspaces",0,false,false],
   ["workspacesCreate","POST","/api/v1/workspaces/create",0,true,false],
-  ["providersCustomAdd","POST","/api/v1/providers/custom",0,true,false],
   ["workspacesSwitch","POST","/api/v1/workspaces/switch",0,true,false],
   ["modelsList","GET","/api/v1/models",0,false,false],
   ["modelsSelect","POST","/api/v1/models/select",0,true,false],
   ["modelsPull","POST","/api/v1/models/pull",0,true,false],
   ["modelsTest","POST","/api/v1/models/test",0,true,false],
+  ["providersCustomAdd","POST","/api/v1/providers/custom",0,true,false],
   ["mcpList","GET","/api/v1/mcp",0,false,false],
   ["mcpAdd","POST","/api/v1/mcp/add",0,false,false],
   ["mcpRemove","POST","/api/v1/mcp/remove",0,false,false],
