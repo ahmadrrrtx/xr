@@ -4,7 +4,7 @@
  * recent stderr. Everything here is read from the engine or the shell; no
  * figure is invented when the link is down.
  */
-import { RefreshCw } from 'lucide-react';
+import { Plug, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { SettingRow, SettingsSection } from '@/components/settings/primitives';
 import { isTauri } from '@/lib/tauri';
 import { copyEngineDiagnostics } from '@/engine/diagnostics';
+import { crashDetachExternal } from '@/lib/shellApi';
 import { engineVersion, isEngineUsable, useEngineStore } from '@/stores/engineStore';
 
 function fmtUptime(since: number | null, now: number): string {
@@ -44,6 +45,7 @@ export function DiagnosticsTab() {
   const failureReason = useEngineStore((s) => s.failureReason);
   const handshake = useEngineStore((s) => s.handshake);
   const [now, setNow] = useState(() => Date.now());
+  const [detaching, setDetaching] = useState(false);
   const [logs, setLogs] = useState<string[] | null>(null);
   const [logsError, setLogsError] = useState<string | null>(null);
 
@@ -91,6 +93,39 @@ export function DiagnosticsTab() {
     if (r.ok) toast(r.message);
     else toast.error(r.message);
   };
+
+  /**
+   * XR-REL-04 — the way back.
+   *
+   * An attached external engine holds its token in memory only, and "start
+   * without the local engine" used to be persisted forever — so the app could
+   * report "engine not connected" on every launch with no control to fix it.
+   * This detaches (dropping the external link) and spawns our own sidecar now.
+   */
+  const useLocalEngine = async (): Promise<void> => {
+    setDetaching(true);
+    try {
+      const info = await crashDetachExternal();
+      if (!info) {
+        toast.error('Could not switch to the local engine', {
+          description: 'The desktop shell did not answer. Try restarting XR.',
+        });
+        return;
+      }
+      const up = await useEngineStore.getState().refresh();
+      if (up) {
+        await useEngineStore.getState().loadCatalog({ force: true });
+        toast('Using the local engine');
+      } else {
+        toast('Switched to the local engine, but it has not answered yet', {
+          description: 'Give it a few seconds, then press Restart.',
+        });
+      }
+    } finally {
+      setDetaching(false);
+    }
+  };
+
 
   const version = engineVersion();
   const healthy = providers?.providers.filter((p) => p.healthy && (p.kind === 'local' || p.hasKey)) ?? [];
@@ -151,6 +186,23 @@ export function DiagnosticsTab() {
             {lastError ?? 'none'}
           </span>
         </SettingRow>
+        {isTauri() && (
+          <SettingRow
+            label="Use the local engine"
+            description="Switches off an attached external engine (or a previous 'start without the local engine' choice) and starts XR's own engine now. The choice is not remembered past this launch."
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void useLocalEngine()}
+              disabled={detaching || restarting}
+              data-testid="diag-engine-use-local"
+            >
+              <Plug size={13} strokeWidth={1.75} aria-hidden="true" />
+              {detaching ? 'Switching…' : 'Switch to local'}
+            </Button>
+          </SettingRow>
+        )}
         {isTauri() || !isEngineUsable(status) ? (
           <SettingRow
             label={isTauri() ? 'Restart engine' : 'Start engine'}

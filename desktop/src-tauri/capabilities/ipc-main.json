@@ -36,6 +36,7 @@
     "allow-clone-git-workspace",
     "allow-close-window",
     "allow-crash-attach-external",
+    "allow-crash-detach-external",
     "allow-crash-report",
     "allow-crash-resolve",
     "allow-crash-simulate",
