@@ -52,6 +52,24 @@ describe("runs store — production empty state (XR-LAUNCH-009)", () => {
     expect(Boolean((import.meta as { env?: Record<string, unknown> }).env?.DEV)).toBe(false);
   });
 
+  test("persisted demo runs and cross-window demo events do not enter production history", () => {
+    const demo = {
+      id: "mock-latest-848", shortId: "#848", title: "Old fake run", agent: "Main", model: "demo",
+      status: "completed", startedAt: 1, endedAt: 2, tokensIn: 0, tokensOut: 0,
+      costUsd: 0, rootSpanId: "root",
+    } as const;
+    useRunsStore.getState().upsertFromBrain(demo);
+    useRunsStore.getState().applyBrainUpdate({ kind: "run-start", runId: demo.id, run: demo });
+    expect(useRunsStore.getState().runs[demo.id]).toBeUndefined();
+  });
+
+  test("starting a run without an engine never fabricates a demo", () => {
+    useEngineStore.setState({ status: "disconnected", providers: null });
+    const before = Object.keys(useBrainStore.getState().runs);
+    expect(useRunsStore.getState().startDemoRun()).toBeNull();
+    expect(Object.keys(useBrainStore.getState().runs)).toEqual(before);
+  });
+
   test("real engine runs from the brain store are listed, nothing else", async () => {
     useEngineStore.setState({ status: "ready" });
     const run = {

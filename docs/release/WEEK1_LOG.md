@@ -909,3 +909,20 @@ handshake, which must pass on actual new Linux/Windows packages. Evidence and
 remaining gaps: `preview1/evidence/T14b-owner-connectivity-and-history.log`.
 Do not claim all fake UI removed; owner has not identified the affected screen.
 No fixed installer, final native proof, owner retest, merge or release yet.
+
+### Current installer and old demo history follow-up
+
+Desktop dispatch `43111084223` and PR `43111087327` pass on `88d381a3`.
+The installed Ubuntu 22/24 webview authenticated health and contract test
+passed; the same-SHA deb was supplied for owner retest. Windows lifecycle
+`43111168844` passed NSIS package/install/launch-auth/uninstall with isolated
+sentinel retained, but failed MSI at ProductCode registration mismatch. MSI
+launch and uninstall remain unverified. Supply-chain, cross-platform, CI and
+clean-machine checks passed on that SHA; 23 existing OSV-policy-filtered
+findings remain disclosed. The rustix lock candidate passed Cargo --locked.
+
+Removed production scripted-demo fallback and prevented persisted demo records
+and cross-window demo events from being projected as real Runs history; the
+UI now asks for a working engine/provider. Desktop 509 tests pass, lint has
+only two existing warnings, typecheck and build pass. Owner has not identified
+every affected screen; this is not a proof that all fake UI is gone.

@@ -21,3 +21,10 @@ were added. Current delivered test installer was built before this fix and must
 not be misrepresented as a remediated build.
 Follow-up: bun test test/supply-chain => 19 pass / 0 fail; root tsc --noEmit
 exit 0. claim-lint, CI policy and strict ledger check also pass locally.
+
+Follow-up on commit 88d381a32e00862728cb224587055aab0206e087:
+Supply Chain PR run 43111086885 passed. Desktop packaging run 43111084223
+passed locked cargo check, clippy and shell tests; all bundled native legs and
+journeys succeeded. The lock candidate is now validated by Cargo --locked in
+CI (not locally). Local OSV scan conclusion remains unchanged: 23 pre-existing
+policy-filtered advisories remain; no claim of zero underlying findings.

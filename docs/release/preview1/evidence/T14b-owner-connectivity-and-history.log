@@ -6,3 +6,21 @@ Candidate: loopback sidecar opt-in exact Linux/macOS or Windows native origin on
 UI: remove fabricated Brain index rows, project source=engine only, prevent Chat trace from spawning a demo when id missing, production unknown non-demo ids no longer materialize scripts; show trace unavailable. Explicit Start demo remains; historical intentional demo traces and unrelated screens require further audit. Desktop version reads release-stamped core identity.
 Evidence: desktop typecheck pass; root typecheck pass; desktop lint 0 errors / 2 existing fast-refresh warnings; desktop build pass (chunk warnings); desktop suite 507 pass/0 fail; daemon suite 335 pass/0 fail; security 412 pass/1 native skip/0 fail; journey suite 14 pass/0 fail; targeted audit 22 pass/0 fail; size gate, claim lint, IPC ACL, strict ledger pass. ACL regenerated descriptions only; permissions unchanged.
 New installed Linux/Windows WebDriver journey exercises engine_link and authenticated fetch from the actual webview; runner only reports statuses and contract, never token. Test mocks verify failure behavior but do not prove an installed webview. Native rebuild, CI journeys and owner retest NOT RUN at this point. macOS has no webview driver. No release/merge authorized on this evidence.
+
+CI follow-up: commit 88d381a32e00862728cb224587055aab0206e087,
+desktop full run 43111084223 and PR run 43111087327 both succeeded.
+Ubuntu 22.04 and 24.04 installed deb journeys actually invoked engine_link
+and authenticated health + contract fetch inside the packaged webview, and
+confirmed explicit quit stops the sidecar. Windows x64 journey also succeeded.
+Delivered new deb SHA256 f3e6453972ce6708a9df24a3f308fb56b2ede1217065a70c0bbdd3c1c9e3805a.
+Human install/retest and all other fake-data screens remain unverified.
+Separate Windows Preview 43111168844: NSIS lifecycle passed; MSI install failed
+at registration ProductCode comparison. MSI launch and uninstall did not run.
+
+Further production UI change: remove scripted demo fallback from Brain and
+Runs; when the engine or provider is unavailable, the action reports that
+instead. Prevent persisted demo runs and cross-window demo events appearing as
+real Runs history; dev fixtures remain dev-only. Existing demo data is not
+rewritten. Desktop typecheck/build/lint pass (two pre-existing lint warnings),
+desktop suite 509 pass/0 fail; focused tests cover offline action and persisted
+mock event filtering. This does not establish every UI is free of fake data.

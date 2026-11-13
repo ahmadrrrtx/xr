@@ -1,13 +1,13 @@
 /*
  * Brain — the proof-of-trust screen (Phase 9, brief §4–§5).
  *
- *   /brain          → hero + recent runs + "Start a demo run"
+ *   /brain          → hero + recent observed engine runs
  *   /brain/:runId   → header (id/title/status/tokens/cost/actions) + tabs
  *                     (Trace / Timeline / Events / Cost / Logs) + resizable
  *                     split: virtualized tree | Gantt + detail panel.
  *
- * Recent history contains observed engine runs only. The optional demo is
- * explicitly labelled and never inserted as fabricated recent history.
+ * Recent history contains observed engine runs only. Starting a run requires
+ * a working engine and configured provider; it never falls back to a script.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -103,9 +103,12 @@ function BrainIndex() {
   }, []);
 
   const startDemo = (): void => {
-    // Real agent-mode turn when a provider answers; honest mock otherwise.
-    const { id } = startDemoRun();
-    navigate(`/brain/${id}`);
+    const run = startDemoRun();
+    if (!run) {
+      toast.error('Connect the engine and configure a provider to start a run.');
+      return;
+    }
+    navigate(`/brain/${run.id}`);
   };
 
   const recent = useMemo(() => realRecentRuns(runOrder, runs, MOUNT_NOW), [runOrder, runs]);
@@ -134,17 +137,17 @@ function BrainIndex() {
         <div className="mt-5 flex items-center gap-3">
           <Button
             onClick={startDemo}
-            aria-label={providerReady ? `Start a run with ${defaultModel}` : 'Start a demo run'}
+            aria-label={providerReady ? `Start a run with ${defaultModel}` : 'Start a run — provider unavailable'}
             title={
               providerReady
                 ? `Runs one agent turn through the engine (${defaultModel}).`
-                : 'No model is configured — this plays a scripted demo trace.'
+                : 'Connect the engine and configure a provider to start a real run.'
             }
             className="h-9 gap-2 px-4 text-[13px]"
             data-testid="brain-start-run"
           >
             <Play size={14} strokeWidth={1.5} aria-hidden="true" />
-            {providerReady ? 'Start a run' : 'Start a demo run'}
+            Start a run
           </Button>
           <button
             type="button"
@@ -552,7 +555,7 @@ function BrainRun({ runId }: { runId: string }) {
   }, [split]);
 
   /* ── Render ────────────────────────────────────────────────────────── */
-  if (!run) {
+  if (!run || (!import.meta.env.DEV && run.source !== 'engine')) {
     if (loadedId !== runId) return <RunLoading />;
     return <div className="text-text-secondary p-6" role="status">No trace is available for this run in this window.</div>;
   }
