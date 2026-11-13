@@ -41,3 +41,10 @@ describe("Windows Preview evidence is fail closed", () => {
     expect(workflow).toContain("bun test test/security/desktop-control-policy.test.ts test/trust/canonical-shell-isolation.test.ts");
   });
 });
+test("historical diagnostic cannot become current-tip installer evidence", () => {
+  expect(workflow).toContain("github.event_name == 'workflow_dispatch' && inputs.diagnostic_only");
+  expect(workflow).toContain("Diagnostic only, NOT current-tip evidence");
+  expect(workflow).toContain("gh run download 43111084223");
+  expect(workflow).toContain("windows-88d-installer-diagnostic");
+  expect(workflow).toContain("needs: [installer-artifact]");
+});

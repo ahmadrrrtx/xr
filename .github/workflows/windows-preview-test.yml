@@ -24,6 +24,11 @@ name: Windows Preview Test
 
 on:
   workflow_dispatch:
+    inputs:
+      diagnostic_only:
+        description: "Reproduce the recorded 88d MSI failure only; not current-tip release evidence"
+        type: boolean
+        default: false
   push:
     branches: [release/preview-1]
 
@@ -32,12 +37,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: win-preview-${{ github.ref }}
+  group: win-preview-${{ github.ref }}-${{ inputs.diagnostic_only && 'diagnostic' || 'release' }}
   cancel-in-progress: false
 
 jobs:
   # ── 1-4. CLI truth, path escapes, sandbox policy ───────────────────────────
   cli:
+    if: ${{ !inputs.diagnostic_only }}
     name: Windows CLI (x64)
     runs-on: windows-latest
     timeout-minutes: 45
@@ -166,6 +172,7 @@ jobs:
 
   # ── 5. The repo's own Windows-only Rust tests ──────────────────────────────
   rust-windows:
+    if: ${{ !inputs.diagnostic_only }}
     name: Rust Windows tests (shell-test-windows)
     runs-on: windows-latest
     timeout-minutes: 60
@@ -216,6 +223,7 @@ jobs:
   # Wait on a Linux runner, not a billed Windows runner, while the same-commit
   # desktop bundle builds. A timeout or API failure is BLOCKED, never a pass.
   installer-artifact:
+    if: ${{ !inputs.diagnostic_only }}
     name: Wait for same-commit Windows bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 65
@@ -238,8 +246,38 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # Historical diagnostic only. It cannot satisfy the exact-head release gate.
+  diagnose-88d:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic_only }}
+    name: Diagnose recorded 88d Windows installer mismatch (not release evidence)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download known historical installer artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p evidence bundles
+          gh run download 43111084223 --repo "$GITHUB_REPOSITORY" --name xr-desktop-windows-x64 --dir bundles
+          printf 'Historical SHA 88d381a32e00862728cb224587055aab0206e087; run 43111084223. Diagnostic only, NOT current-tip evidence.\n' > evidence/artifact-status.txt
+      - name: Reproduce installed registry and package comparison
+        shell: pwsh
+        run: ./scripts/journey/windows-installers.ps1 -Bundles bundles -EvidenceDir evidence
+      - name: Upload historical diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-88d-installer-diagnostic
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
   # ── 6-7. Actual installer lifecycle, exact-head artifact only ──────────────
   installers:
+    if: ${{ !inputs.diagnostic_only }}
     needs: [installer-artifact]
     name: Windows MSI and NSIS installer lifecycle
     runs-on: windows-latest
