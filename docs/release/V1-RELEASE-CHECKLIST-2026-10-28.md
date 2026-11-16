@@ -25,7 +25,7 @@
 | Rust shell `cargo test` | **PASS — 170 tests / 0 failed** (single-job; first attempt ENOSPC, freed + retried) | §7 #36, `evidence/…/cargo-test.log` |
 | Sidecar compile (bun → xr-engine-x86_64-unknown-linux-gnu) | PASS (116 MB, smoke-gated by the script) | Phase 4 log |
 | Linux bundle (AppImage + .deb) | **BUILT + INSTALL-VERIFIED** (AppImage 172.65 MiB, deb 76.52 MiB; dpkg -i + Xvfb launch + sidecar `--version` all pass) | §7 #34, `evidence/v1-2026-10-28/linux-artifacts.json` |
-| Size gate | PASS at TREE_CEILING <!-- XR:TREE-CEILING -->175,500<!-- /XR:TREE-CEILING --> (dated raises per ADR-0028 + D-6) | §5/D-6 |
+| Size gate | PASS at TREE_CEILING 175,500 (dated raises per ADR-0028 + D-6) | §5/D-6 | <!-- xr:numeric-history -->
 
 ## 2. What V1 fixed (defect ledger dispositions)
 
