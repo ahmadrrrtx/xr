@@ -1,4 +1,5 @@
 /** Drive registration -> desktop preparation -> engine default through real handlers. */
+import { customSecretName } from "../../src/providers/header-secrets.ts";
 import { afterAll, expect, spyOn, test } from 'bun:test';
 import { ProviderService } from '../../src/services/provider-service.ts';
 import { join } from 'node:path';
@@ -56,7 +57,7 @@ test('editing a registered custom id preserves identity and its credential refer
   await call('/providers'); // sync runtime registry, as the desktop catalog refresh does
   const edited = await call('/providers/custom', { ...input, defaultModel: 'm2' });
   expect(edited.provider.id).toBe('audit-edit');
-  expect(edited.provider.apiKeyEnv).toBe('AUDIT_EDIT_API_KEY');
+  expect(edited.provider.apiKeyEnv).toBe(customSecretName('audit-edit', input.baseUrl, 'api-key'));
   const list = await call('/providers/custom');
   expect(list.providers.filter((p: any) => p.id === 'audit-edit')).toHaveLength(1);
   expect(list.providers.some((p: any) => p.id === 'audit-edit-compatible')).toBe(false);
@@ -71,4 +72,18 @@ test('a refused secret write cannot publish a half-configured endpoint', async (
     const list = await call('/providers/custom');
     expect(list.providers.some((p: any) => p.id === 'audit-refused')).toBe(false);
   } finally { secret.mockRestore(); }
+});
+
+test('a broker-acknowledged but unpublished binding is retryable without borrowing another endpoint key', async () => {
+  const input = { id: 'bound.retry', baseUrl: 'http://93.184.216.37/v1', defaultModel: 'owner/retry', apiKey: 'fixture-retry-secret' };
+  const publish = spyOn(ProviderService.prototype, 'addCustomProvider').mockRejectedValueOnce(new Error('config publication refused'));
+  try { await expect(call('/providers/custom', input)).rejects.toThrow('config publication refused'); }
+  finally { publish.mockRestore(); }
+  const retry = await call('/providers/custom', input);
+  expect(retry.provider.apiKeyEnv).toBe(customSecretName(input.id, input.baseUrl, 'api-key'));
+  await call('/providers/set', { provider: input.id, model: input.defaultModel });
+  expect((await call('/providers')).primary).toBe(input.id); // dotted IDs survive the same engine schema
+  await expect(call('/providers/custom', { ...input, baseUrl: 'http://93.184.216.38/v1', apiKey: undefined })).rejects.toThrow('fresh credential');
+  const changed = await call('/providers/custom', { ...input, baseUrl: 'http://93.184.216.38/v1', apiKey: 'fixture-new-endpoint-key' });
+  expect(changed.provider.apiKeyEnv).not.toBe(retry.provider.apiKeyEnv);
 });

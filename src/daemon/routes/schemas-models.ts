@@ -30,7 +30,8 @@ export const CustomProviderAddRequest = z.looseObject({
     .optional(),
   label: z.string().min(1).max(120).optional(),
   baseUrl: z.string().min(1).max(2048),
-  defaultModel: z.string().min(1).max(200),
+  defaultModel: z.string().min(1).max(200).optional(),
+  draft: z.boolean().optional().describe("Explicit discovery-only registration; no model/default is fabricated or selected."),
   apiKey: z.string().min(1).max(8192).optional(),
   apiKeyEnv: z
     .string()
@@ -46,3 +47,11 @@ export const ProviderProbeRequest = z.object({
   providerId: z.string().min(1).max(64),
   model: z.string().min(1).max(200).optional(),
 });
+
+/** No implicit discovery during listing/startup, and no unconsented spending. */
+export const ProviderDiscoverRequest = z.object({ providerId: z.string().min(1).max(64), optIn: z.literal(true) });
+export const ProviderValidateRequest = z.object({ providerId: z.string().min(1).max(64), model: z.string().min(1).max(200),
+  capability: z.enum(['chat', 'streaming', 'toolUse', 'jsonMode', 'usage']), optIn: z.literal(true), allowBillable: z.literal(true) });
+export const ProviderDiscoveryResponse = z.looseObject({ providerId: z.string(), source: z.string(), discoveredAt: z.string(),
+  status: z.string(), authState: z.string(), complete: z.boolean(), pages: z.number(), detail: z.string(),
+  models: z.array(z.looseObject({ providerId: z.string(), modelId: z.string(), source: z.string(), discoveredAt: z.string(), authState: z.string(), capabilities: z.looseObject({}), validation: z.looseObject({}) })) });

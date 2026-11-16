@@ -29,6 +29,7 @@
 import type { ChatOptions, Message, ModelTurn, Provider, Tool, ProviderStreamChunk, ProviderCapabilitiesFlags, ToolCall } from "../core/types.ts";
 import { sseData } from "./sse.ts";
 import { assistantCalls, assistantText, nativeBlocks, outputLimit, usagePair } from "./native/history.ts";
+import { discoverCompatibleModels, validateCompatibleModel, type ValidationCapability } from "./observations.ts";
 import { guardedRequest } from "./request-guard.ts";
 import { secretBrokerSync } from "../security/secret-broker.ts";
 import { buildEnvelopeGBNF } from "../reliability/grammar.ts";
@@ -175,6 +176,7 @@ export class OpenAICompatProvider implements Provider {
   }
 
   protected buildChatBody(messages: Message[], tools: Tool[], stream: boolean): Record<string, unknown> {
+    if (!this.model) throw new Error("Choose an explicit model before inference.");
     const mapped = messages.map((m) => ({
       role: m.role === "tool" ? "user" : m.role,
       content:
@@ -388,19 +390,14 @@ export class OpenAICompatProvider implements Provider {
     } catch (e) { throw normalizeProviderError(e, this.id, this.model); }
   }
 
-  async listModels(): Promise<string[]> {
-    try {
-      const res = await guardedRequest(this.id, { timeoutMs: 8000 }, signal => fetch(`${this.baseUrl}/models`, { headers: this.headers(), signal, redirect: "error" }));
-      if (!res.ok) return [];
-      const json: any = await res.json();
-      if (Array.isArray(json.data)) {
-        return json.data.map((m: any) => String(m.id ?? m.name ?? "")).filter(Boolean);
-      }
-      return [];
-    } catch {
-      return [];
-    }
+  protected observationRequest(url: string, init: RequestInit): Promise<Response> { return fetch(url, init); }
+  private observationTransport() {
+    return { id: this.id, baseUrl: this.baseUrl, model: this.model,
+      headers: () => this.headers(), request: (url: string, init: RequestInit) => this.observationRequest(url, init) };
   }
+  discoverModels(options?: ChatOptions) { return discoverCompatibleModels(this.observationTransport(), options); }
+  validateModel(capability: ValidationCapability, options?: ChatOptions) { return validateCompatibleModel(this.observationTransport(), capability, options); }
+  async listModels(): Promise<string[]> { return (await this.discoverModels()).models.map(m => m.modelId); }
 
   async health(): Promise<{
     ok: boolean;
@@ -423,6 +420,7 @@ export class OpenAICompatProvider implements Provider {
       // Fall through to probe 2
     }
 
+    if (!this.model) return { ok: false, detail: "Choose an explicit model before inference." };
     // Probe 2: minimal chat completion (covers LM Studio, vLLM, etc.)
     try {
       const res = await fetch(`${this.baseUrl}/chat/completions`, {

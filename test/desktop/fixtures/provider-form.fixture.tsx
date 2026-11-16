@@ -12,13 +12,16 @@ mock.module('../../../desktop/src/components/ui/dialog', () => ({ Dialog: box, D
 mock.module('../../../desktop/src/components/ui/button', () => ({ Button: ({ children, ...p }: any) => React.createElement('button', p, children) }));
 mock.module('../../../desktop/src/components/ui/input', () => ({ Input: (p: any) => React.createElement('input', p) }));
 mock.module('sonner', () => ({ toast: Object.assign(() => {}, { warning() {}, success() {}, error() {} }) }));
-const calls: { register: any[]; defaults: any[]; probe: any[]; legacy: any[]; saves: any[] } = { register: [], defaults: [], probe: [], legacy: [], saves: [] };
+const calls = { register: [] as any[], drafts: [] as any[], discover: [] as any[], validate: [] as any[], defaults: [] as any[], probe: [] as any[], legacy: [] as any[], saves: [] as any[] };
 const scenario = process.argv[2];
-const edit = scenario === 'edit' || scenario === 'rotate';
+const edit = scenario === 'edit' || scenario === 'rotate' || scenario === 'capability-through-engine';
 const { useEngineStore } = await import('../../../desktop/src/stores/engineStore');
 const { requireEngineReady } = await import('../../../desktop/src/engine/providers');
 mock.module('../../../desktop/src/engine/providers', () => ({
   requireEngineReady,
+  registerCustomProviderDraft: async (input: any) => { calls.drafts.push(input); return { id: 'ack-provider', baseUrl: input.baseUrl, defaultModel: null }; },
+  discoverEngineModels: async (...args: any[]) => { calls.discover.push(args); return { providerId: 'ack-provider', status: scenario === 'discovery-failure-preserves-model' ? 'http_error' : 'ok', models: scenario === 'discovery-failure-preserves-model' ? [] : [{ modelId: 'owner/discovered' }], complete: true, authState: 'not_rejected', source: 'engine-adapter/models', discoveredAt: 'fixture-time', detail: 'capabilities not tested' }; },
+  validateEngineModel: async (...args: any[]) => { calls.validate.push(args); return { capability: 'chat', status: 'passed', detail: 'isolated capability only', checkedAt: 'fixture-time' }; },
   engineKnowsProvider: () => true,
   sampleExchangeUsd: () => null,
   saveProviderKeyToEngine: async () => { throw new Error('custom endpoints must not use preset credential saving'); },
@@ -40,12 +43,38 @@ let view: ReturnType<typeof create>;
 await act(async () => { view = create(React.createElement(ProviderConfigModal, { entry, existing: edit ? { id: 'my-api', name: 'My endpoint', kind: 'custom', baseUrl: 'https://example.com/v1', model: 'owner/model', keyStorage: 'engine', addedAt: 1 } as any : null, open: true, onOpenChange() {}, onSave: (v: any) => calls.saves.push(v), onRemove: async () => {} })); });
 const input = (id: string, value: string) => act(() => view.root.findByProps({ id }).props.onChange({ target: { value } }));
 input('xr-provider-base', scenario === 'invalid-url' ? 'javascript:alert(1)' : 'https://example.com/v1');
-input('xr-provider-model', 'owner/model');
+if (scenario !== 'discover-from-draft') input('xr-provider-model', 'owner/model');
 if (!['keyless', 'edit'].includes(scenario)) input('xr-provider-key', 'fixture-provider-secret');
 if (scenario === 'selection-failure') {
   const checkbox = view.root.findAllByType('input').find(n => n.props.type === 'checkbox');
   assert.ok(checkbox, 'custom form must offer engine-default selection');
   act(() => checkbox.props.onChange({ target: { checked: true } }));
+}
+if (scenario === 'capability-through-engine') {
+  const run = view.root.findAllByType('button').find(n => n.props.children === 'Run potentially billable capability test')!;
+  assert.equal(calls.validate.length, 0);
+  await act(async () => { run.props.onClick(); await new Promise(r => setTimeout(r, 0)); });
+  assert.deepEqual(calls.validate[0].slice(0, 3), ['my-api', 'owner/model', 'chat']);
+  assert.equal(calls.register.length, 0); assert.equal(calls.drafts.length, 0);
+  assert.ok(!JSON.stringify(calls.validate).includes('fixture-provider-secret'));
+  await act(async () => { view.unmount(); }); console.log(JSON.stringify({ scenario, ok: true })); process.exit(0);
+}
+if (['discover-from-draft', 'discovery-failure-preserves-model', 'no-auto-discovery'].includes(scenario)) {
+  assert.equal(calls.discover.length, 0); assert.equal(calls.drafts.length, 0);
+  if (scenario !== 'no-auto-discovery') {
+    const discover = view.root.findAllByType('button').find(n => n.props.children === 'Register endpoint & discover models')!;
+    await act(async () => { discover.props.onClick(); await new Promise(r => setTimeout(r, 0)); });
+    assert.equal(calls.discover.length, 1); assert.equal(calls.discover[0][0], 'ack-provider'); assert.equal(calls.drafts[0].apiKey, 'fixture-provider-secret');
+    assert.equal(view.root.findByProps({ id: 'xr-provider-key' }).props.value, '');
+    assert.equal(view.root.findByProps({ id: 'xr-provider-model' }).props.value, scenario === 'discover-from-draft' ? '' : 'owner/model');
+    if (scenario === 'discover-from-draft') {
+      act(() => view.root.findByProps({ 'aria-label': 'Discovered model' }).props.onChange({ target: { value: 'owner/discovered' } }));
+      const save = view.root.findAllByType('button').find(n => n.props.children === 'Save')!;
+      await act(async () => { save.props.onClick(); await new Promise(r => setTimeout(r, 0)); });
+      assert.equal(calls.register[0].id, 'ack-provider'); assert.equal(calls.register[0].defaultModel, 'owner/discovered'); assert.equal(calls.register[0].apiKey, undefined);
+    }
+  }
+  await act(async () => { view.unmount(); }); console.log(JSON.stringify({ scenario, ok: true })); process.exit(0);
 }
 const button = view.root.findAllByType('button').find(n => n.props.children === (scenario === 'test-through-engine' ? 'Save & test endpoint' : 'Save'));
 assert.ok(button, 'expected an explicitly labelled engine action');

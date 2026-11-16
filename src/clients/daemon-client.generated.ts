@@ -322,6 +322,10 @@ export interface XRDaemonClient {
   capabilitiesRollback(body: z.infer<typeof S.CapabilityIdRequest>): Promise<Record<string, unknown>>;
   /** Explicit adapter endpoint probe (may send a minimal billable request; not capability verification). */
   providersProbe(body: z.infer<typeof S.ProviderProbeRequest>): Promise<Record<string, unknown>>;
+  /** Opt-in bounded model enumeration; not inference/capability verification. */
+  providersDiscover(body: z.infer<typeof S.ProviderDiscoverRequest>): Promise<z.infer<typeof S.ProviderDiscoveryResponse>>;
+  /** Consented, potentially billable, isolated capability round trip; never executes a tool or certifies agent/billing behavior. */
+  providersValidate(body: z.infer<typeof S.ProviderValidateRequest>): Promise<Record<string, unknown>>;
   /** Provider status (keys present, health, defaults). */
   providersList(): Promise<Record<string, unknown>>;
   /** Select default provider/model (+ optional fallback). */
@@ -778,6 +782,8 @@ const OPERATIONS: ReadonlyArray<readonly [string, string, string, number, boolea
   ["capabilitiesQuarantine","POST","/api/v1/capabilities/quarantine",0,true,false],
   ["capabilitiesRollback","POST","/api/v1/capabilities/rollback",0,true,false],
   ["providersProbe","POST","/api/v1/providers/probe",0,true,false],
+  ["providersDiscover","POST","/api/v1/providers/discover",0,true,false],
+  ["providersValidate","POST","/api/v1/providers/validate",0,true,false],
   ["providersList","GET","/api/v1/providers",0,false,false],
   ["providersSet","POST","/api/v1/providers/set",0,true,false],
   ["providersRoute","GET","/api/v1/providers/route",0,false,false],

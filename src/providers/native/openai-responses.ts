@@ -2,6 +2,7 @@
  * Encrypted reasoning items/function-call ids survive exact-model continuations.
  * No built-in remote tools are enabled: every XR tool still passes the shared policy gate.
  */
+import { discoverCompatibleModels } from "../observations.ts";
 import type {
   ChatOptions,
   Message,
@@ -56,6 +57,10 @@ export class OpenAIResponsesProvider implements Provider {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
     };
+  }
+  discoverModels(options?: ChatOptions) {
+    return discoverCompatibleModels({ id: this.id, model: this.modelId, baseUrl: this.baseUrl,
+      headers: () => this.headers(), request: (url, init) => fetch(url, init) }, options);
   }
   async chat(
     messages: Message[],

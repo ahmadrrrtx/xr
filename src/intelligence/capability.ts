@@ -236,7 +236,7 @@ export function modelsFromPreset(
   credentialAvailable: boolean,
 ): ModelDescriptor[] {
   const provider = descriptorFromPreset(preset, credentialAvailable);
-  const ids = new Set<string>([preset.defaultModel, ...(preset.knownModels ?? [])]);
+  const ids = new Set<string>([preset.defaultModel, ...(preset.knownModels ?? [])].filter(Boolean));
   const models: ModelDescriptor[] = [];
   for (const modelId of ids) {
     if (!modelId) continue;

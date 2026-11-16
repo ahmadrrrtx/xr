@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { ProviderObservations } from './ProviderObservations';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,6 +24,7 @@ import {
 } from '@/lib/settingsApi';
 import {
   addCustomProviderToEngine,
+  registerCustomProviderDraft,
   engineKnowsProvider,
   probeEngineProvider,
   requireEngineReady,
@@ -114,7 +116,7 @@ function ProviderForm({
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const [revealed, setRevealed] = useState(false);
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? entry.baseUrl);
-  const [model, setModel] = useState(existing?.model ?? '');
+  const [model, setModel] = useState(existing?.model ?? useEngineStore.getState().providers?.providers.find(p => p.id === entry.id)?.defaultModel ?? '');
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const [saving, setSaving] = useState(false);
   const [setDefault, setSetDefault] = useState(false);
@@ -163,6 +165,16 @@ function ProviderForm({
       busy.current = false;
       if (alive.current) setSaving(false);
     }
+  };
+
+  const discoverCustom = async (signal: AbortSignal): Promise<string> => {
+    if (busy.current) throw new Error('An endpoint operation is already running.');
+    busy.current = true; setSaving(true);
+    try {
+      const saved = await registerCustomProviderDraft({ id: registeredId, label: entry.name, baseUrl: baseUrl.trim(), apiKey: apiKey.trim() || undefined }, signal);
+      if (alive.current) { setRegisteredId(saved.id); setApiKey(''); }
+      return saved.id;
+    } finally { busy.current = false; if (alive.current) setSaving(false); }
   };
 
   const runTest = (): void => {
@@ -280,6 +292,10 @@ function ProviderForm({
           return;
         }
       }
+      if (setDefault && !key && model.trim()) {
+        try { await setEngineDefault(entry.id, model.trim()); }
+        catch (e) { setEngineNote({ tone: 'error', text: e instanceof Error ? e.message : 'Selection failed.' }); setSaving(false); return; }
+      }
       const keyStorage: ProviderConfig['keyStorage'] = key
         ? 'engine'
         : (existing?.keyStorage ?? 'none');
@@ -288,7 +304,7 @@ function ProviderForm({
         kind: entry.kind,
         name: entry.name,
         baseUrl: isOllama || isCustom ? baseUrl.trim() || null : null,
-        model: isCustom && model.trim() ? model.trim() : null,
+        model: !isOllama && model.trim() ? model.trim() : null,
         apiKey: null, // Parent receives metadata only, never a raw credential.
         keyStorage,
         test: test.status === 'done' && test.result.ok ? test.result : null,
@@ -445,6 +461,9 @@ function ProviderForm({
           {engineNote.text}
         </div>
       ) : null}
+
+      <ProviderObservations key={isCustom ? baseUrl : entry.id} providerId={registeredId} model={model}
+        onModel={setModel} ensureRegistered={isCustom ? discoverCustom : undefined} disabled={saving || !engineUp} />
 
       {test.status === 'done' ? (
         <div

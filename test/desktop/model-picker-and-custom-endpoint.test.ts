@@ -55,7 +55,8 @@ describe('XR-REL-06 · custom endpoints are reachable from the app', () => {
     expect(providers).toContain("'/providers/custom'");
     expect(providers).toContain("'/providers/custom/remove'");
     // A successful add must refresh the catalog, or the new models never appear.
-    const add = providers.slice(providers.indexOf('addCustomProviderToEngine'));
-    expect(add.slice(0, 900)).toContain('loadCatalog({ force: true })');
+    const start = providers.indexOf('export async function addCustomProviderToEngine');
+    const add = providers.slice(start, providers.indexOf('export async function listCustomProviders', start));
+    expect(add).toContain('loadCatalog({ force: true, signal })');
   });
 });

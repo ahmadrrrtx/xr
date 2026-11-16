@@ -38,9 +38,9 @@ const ConfigSchema = z.object({
   defaults: z
     .object({
       mode: z.enum(["agent", "plan", "ask"]).prefault("agent"),
-      provider: z.string().regex(/^[a-z0-9_-]+$/i).prefault("ollama"),
+      provider: z.string().regex(/^[a-z0-9._-]+$/i).prefault("ollama"),
       model: z.string().min(1).max(200).prefault("qwen2.5:7b"),
-      fallbackProvider: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
+      fallbackProvider: z.string().regex(/^[a-z0-9._-]+$/i).optional(),
       fallbackModel: z.string().min(1).max(200).optional(),
     })
     .prefault({}),
@@ -118,7 +118,7 @@ const ConfigSchema = z.object({
       customProviders: z
         .array(
           z.object({
-            id: z.string().regex(/^[a-z0-9_-]+$/i),
+            id: z.string().regex(/^[a-z0-9._-]+$/i),
             label: z.string(),
             baseUrl: z.string().url(),
             apiKeyEnv: z.string().optional(),
@@ -220,7 +220,7 @@ const ConfigSchema = z.object({
   localModels: z
     .object({
       runtime: z.enum(["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang", "custom-openai"]).prefault("ollama"),
-      provider: z.string().regex(/^[a-z0-9_-]+$/i).prefault("ollama"),
+      provider: z.string().regex(/^[a-z0-9._-]+$/i).prefault("ollama"),
       enabled: z.boolean().prefault(false),
       selected: z.string().min(1).max(200).optional(),
       recommended: z.string().min(1).max(200).optional(),

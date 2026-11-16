@@ -22,3 +22,15 @@ test('a custom endpoint URL cannot smuggle a credential into ordinary configurat
     await expect(addCustomProviderToEngine({ baseUrl, defaultModel: 'm' })).rejects.toThrow();
   expect(calls).toBe(0);
 });
+
+test('a credential acknowledgement from a replaced engine generation cannot publish as current', async () => {
+  useEngineStore.setState({ status: 'ready', generation: 900 });
+  let release!: (res: Response) => void;
+  globalThis.fetch = (() => new Promise<Response>(r => { release = r; })) as typeof fetch;
+  const result = saveProviderKeyToEngine({ providerId: 'openai', apiKey: 'fixture' });
+  // Let endpoint acquisition reach fetch, without replacing the fetch implementation.
+  for (let i = 0; i < 20 && !release; i++) await new Promise(r => setTimeout(r, 1));
+  useEngineStore.setState({ generation: 901 });
+  release(Response.json({ ok: true, model: 'm', secretBackend: 'fixture' }));
+  await expect(result).rejects.toThrow('Engine changed');
+});

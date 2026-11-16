@@ -14,7 +14,7 @@ are separate artifacts and do not inherit fixes merely because main changes.
 | 2 | Endpoint observation uses registered engine adapter | Real handler + loopback adapter receives selected model and broker key; no capability certification |
 | 3 | Voice audition/download/mic lifetime | 19 real React scenarios, including late permission/playback, failure/timeout and verified install; 698 combined desktop/voice tests pass; TypeScript passes |
 | 4 | Startup generations/deadlines and settings revisions | 7 supervisor/store scenarios, 5 voice race/conflict scenarios, real-handler concurrent revision conflict tests; 713 combined desktop/voice tests pass; TypeScript passes |
-| 5 | Explicit bounded model discovery and header-credential ownership | Pending |
+| 5 | Explicit bounded model discovery and header-credential ownership | 19 discovery/round-trip handler and adapter tests; 14 real form scenarios; 810 combined desktop/provider tests pass; TypeScript passes |
 | 6 | Full regression/security/build review and upstream delivery | Pending |
 
 ## Deliberate size budget
@@ -76,3 +76,24 @@ endpoints requires re-entry. URLs with userinfo/query/fragment are rejected
 before persistence, including rejection audits. Three new real-handler/migration
 regressions plus the existing custom route suite pass (16 tests); TypeScript
 passes. Actual OS keychain/upgrade qualification is still outstanding.
+
+## Phase 5 observation boundary
+
+Discovery-only drafts can register an endpoint and its broker credential without
+inventing or selecting a model. Explicit discovery is bounded to 8 seconds,
+3 pages, 200 identifiers and 256 KiB per response, never follows pagination
+URLs, and distinguishes empty/malformed/HTTP/auth/timeout/partial results.
+Settings and onboarding expose the same engine path; failed discovery does
+not erase the typed/configured choice. Model lists carry source/time/auth state,
+unknown capabilities and untested validation. Separate, explicitly billable
+chat/streaming/tool-call/JSON/usage round trips report only the requested wire
+capability; no tool is executed and no result certifies agent execution or
+billing accuracy. Compatible adapters support these checks; Responses supports
+model enumeration, and other adapters explicitly report unsupported rather
+than fabricating an empty success. No source-list/startup path makes a vendor
+request. New bearer references are endpoint-bound too; an unpublished binding
+can be retried safely and an endpoint change cannot silently inherit its key.
+
+Measured core tree after this phase: 175,895 / 176,500. Native qualification,
+physical audio, vendor credentials, installer signatures and live channel
+corrections remain distinct from these hermetic source tests.

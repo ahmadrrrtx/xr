@@ -5,7 +5,7 @@
 
 import { assertHeaderReferences, resolveCustomHeaders } from "./header-secrets.ts";
 import { OpenAICompatProvider } from "./openai-compat.ts";
-import { validateProviderUrlSync } from "./provider-url-guard.ts";
+import { validateProviderUrlSync, validateProviderUrl } from "./provider-url-guard.ts";
 import type { ProviderCapabilitiesFlags } from "../core/types.ts";
 
 export interface CustomProviderOptions {
@@ -43,6 +43,12 @@ export class CustomProvider extends OpenAICompatProvider {
       capabilities: opts.capabilities,
     });
     this.headerReferences = opts.extraHeaders ?? {};
+  }
+  protected override async observationRequest(url: string, init: RequestInit): Promise<Response> {
+    const check = await validateProviderUrl(this.baseUrl);
+    if (!check.ok) throw new Error("Custom provider URL refused by runtime guard");
+    init.signal?.throwIfAborted();
+    return super.observationRequest(url, init);
   }
   protected override headers(): Record<string, string> {
     const headers = new Headers(super.headers());

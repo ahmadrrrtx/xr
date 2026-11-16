@@ -8,6 +8,7 @@
  * assert what a user would observe — including that the SSRF guard is applied
  * BEFORE anything is persisted.
  */
+import { customSecretName } from "../../src/providers/header-secrets.ts";
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -163,7 +164,7 @@ describe('XR-REL-06 · a real endpoint end to end', () => {
     expect(added.status).toBe(200);
     // The id is honoured verbatim; the key is referenced only by env-var name.
     expect(added.json.provider.id).toBe('mygateway');
-    expect(added.json.provider.apiKeyEnv).toBe('MYGATEWAY_API_KEY');
+    expect(added.json.provider.apiKeyEnv).toBe(customSecretName('mygateway', 'http://93.184.216.34/v1', 'api-key'));
     expect(added.json.provider.keyed).toBe(true);
     expect(added.text).not.toContain('sk-averyrealisticlookingkey123');
 
@@ -194,7 +195,7 @@ describe('XR-REL-06 · a real endpoint end to end', () => {
     });
     expect(r.status).toBe(200);
     expect(r.json.provider.id).toBe('groq-compatible');
-    expect(r.json.provider.apiKeyEnv).toBe('GROQ_COMPATIBLE_API_KEY');
+    expect(r.json.provider.apiKeyEnv).toBe(customSecretName('groq-compatible', 'https://api.groq.com/openai/v1', 'api-key'));
   });
 
   test('two custom providers may not share one secret env var', async () => {

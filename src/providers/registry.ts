@@ -202,6 +202,7 @@ export class ProviderRegistry {
       try { assertHeaderReferences(custom.id, custom.baseUrl, custom.headers); }
       catch { headerError = "Unsealed or differently scoped custom header credentials; re-enter and rotate them."; }
       if (custom.apiKeyEnv && Object.values(PRESETS).some(p => p.apiKeyEnv === custom.apiKeyEnv)) headerError = "Custom credential references must not reuse built-in provider credentials.";
+      if (custom.apiKeyEnv && config.providerEngine.customProviders.some(c => c.id !== custom.id && c.apiKeyEnv === custom.apiKeyEnv)) headerError = "Custom endpoints must not share a credential reference.";
       const check = headerError ? { ok: false, reason: headerError } : validateProviderUrlSync(String((custom as any).baseUrl ?? ""));
       if (!check.ok) {
         blocked.push({ id: String((custom as any).id), reason: check.reason ?? "blocked" });
@@ -230,7 +231,7 @@ export class ProviderRegistry {
         authType: custom.apiKeyEnv ? "bearer" : Object.keys(custom.headers ?? {}).length ? "apiKey" : "none",
         headers: custom.headers,
         defaultModel: custom.defaultModel,
-        knownModels: [custom.defaultModel],
+        knownModels: custom.defaultModel ? [custom.defaultModel] : [],
         capabilities: custom.capabilities ?? { chat: true },
       };
 

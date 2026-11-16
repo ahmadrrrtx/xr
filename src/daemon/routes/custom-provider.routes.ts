@@ -24,7 +24,7 @@ export function customProviderRoutes(): DaemonRoute[] {
         // Never echo a credential — only the env-var NAME and a headers flag.
         return json({
           providers: list.map((c) => ({
-            id: c.id, label: c.label ?? c.id, baseUrl: c.baseUrl, defaultModel: c.defaultModel,
+            id: c.id, label: c.label ?? c.id, baseUrl: c.baseUrl, defaultModel: c.defaultModel || null,
             apiKeyEnv: c.apiKeyEnv ?? null, hasHeaders: Object.keys(c.headers ?? {}).length > 0,
           })),
         });
@@ -37,13 +37,13 @@ export function customProviderRoutes(): DaemonRoute[] {
       handle: async ({ req, json, state }) => {
         const body = (await req.json().catch(() => null)) as {
           id?: string; label?: string; baseUrl?: string; defaultModel?: string;
-          apiKey?: string; apiKeyEnv?: string; headers?: Record<string, string>;
+          apiKey?: string; apiKeyEnv?: string; headers?: Record<string, string>; draft?: boolean;
         } | null;
         if (!body) return json({ error: "a JSON body is required" }, 400);
         const baseUrl = (body.baseUrl ?? "").trim();
-        const defaultModel = (body.defaultModel ?? "").trim();
+        let defaultModel = (body.defaultModel ?? "").trim();
         if (!baseUrl) return json({ error: "baseUrl is required" }, 400);
-        if (!defaultModel) return json({ error: "defaultModel is required" }, 400);
+        if (!defaultModel && body.draft !== true) return json({ error: "defaultModel is required (or explicitly register a discovery draft)" }, 400);
 
         // A5 — refuse a URL that could reach loopback/link-local/metadata hosts
         // BEFORE anything is persisted or fetched (addCustomProvider re-checks
@@ -66,15 +66,16 @@ export function customProviderRoutes(): DaemonRoute[] {
         const existing = (registry.resolve(Tokens.Config).get() as any)
           .providerEngine?.customProviders ?? [];
         const previous = existing.find((c: any) => c.id === id);
+        if (body.draft === true) defaultModel ||= previous?.defaultModel ?? "";
         // No key supplied for a NEW endpoint means auth:none. Inventing an
         // env name here makes the catalog disable a deliberately keyless API.
         // On edit, retain the original secret reference when the key is blank.
         const endpointChanged = previous && previous.baseUrl.replace(/\/+$/, "") !== baseUrl.replace(/\/+$/, "");
         if (endpointChanged && previous.apiKeyEnv && !body.apiKey) return json({ error: "Changing a keyed endpoint requires a fresh credential; the old credential is not copied." }, 400);
         const apiKeyEnv: string | undefined = endpointChanged && body.apiKey ? customSecretName(id, baseUrl, "api-key") : body.apiKeyEnv ?? previous?.apiKeyEnv ??
-          (body.apiKey ? `${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY` : undefined);
+          (body.apiKey ? customSecretName(id, baseUrl, "api-key") : undefined);
         if (apiKeyEnv && (Object.values(PRESETS).some(p => p.apiKeyEnv === apiKeyEnv) ||
-            (apiKeyEnv !== previous?.apiKeyEnv && secretBrokerSync(apiKeyEnv))))
+            (apiKeyEnv !== previous?.apiKeyEnv && secretBrokerSync(apiKeyEnv) && !(body.apiKey && apiKeyEnv === customSecretName(id, baseUrl, "api-key")))))
           return json({ error: "This credential reference is already owned; re-enter the key under a new endpoint-specific reference." }, 400);
         const clash = apiKeyEnv && existing.find((c: any) => c.id !== id && c.apiKeyEnv === apiKeyEnv);
         if (clash)
@@ -100,7 +101,7 @@ export function customProviderRoutes(): DaemonRoute[] {
         });
         return json({
           ok: true,
-          provider: { id, label, baseUrl, defaultModel, apiKeyEnv: apiKeyEnv ?? null, keyed: Boolean(apiKeyEnv || Object.keys(body.headers ?? previous?.headers ?? {}).length) },
+          provider: { id, label, baseUrl, defaultModel: defaultModel || null, draft: !defaultModel, apiKeyEnv: apiKeyEnv ?? null, keyed: Boolean(apiKeyEnv || Object.keys(body.headers ?? previous?.headers ?? {}).length) },
         });
       },
     }),

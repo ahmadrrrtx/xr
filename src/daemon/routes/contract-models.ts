@@ -8,12 +8,14 @@
  */
 import type { ApiOperationMeta } from "./contract.ts";
 import {
-  ProviderProbeRequest, ModelsPullRequest, ModelsSelectRequest, ModelsTestRequest, CustomProviderAddRequest,
+  ProviderDiscoverRequest, ProviderValidateRequest, ProviderDiscoveryResponse, ProviderProbeRequest, ModelsPullRequest, ModelsSelectRequest, ModelsTestRequest, CustomProviderAddRequest,
   CustomProviderRemoveRequest, ProviderSetRequest, WorkspaceCreateRequest,
   WorkspaceSwitchRequest, OkResponse,
 } from "./schemas.ts";
 
 export const MODELS_CONTRACT: Record<string, ApiOperationMeta> = {
+  "providers.discover": { summary: "Opt-in bounded model enumeration; not inference/capability verification.", tag: "providers", stability: "experimental", request: ProviderDiscoverRequest, response: ProviderDiscoveryResponse },
+  "providers.validate": { summary: "Consented, potentially billable, isolated capability round trip; never executes a tool or certifies agent/billing behavior.", tag: "providers", stability: "experimental", request: ProviderValidateRequest },
   "providers.probe": {
     summary: "Explicit adapter endpoint probe (may send a minimal billable request; not capability verification).",
     tag: "providers", stability: "experimental", request: ProviderProbeRequest,
