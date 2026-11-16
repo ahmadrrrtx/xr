@@ -97,3 +97,14 @@ can be retried safely and an endpoint change cannot silently inherit its key.
 Measured core tree after this phase: 175,895 / 176,500. Native qualification,
 physical audio, vendor credentials, installer signatures and live channel
 corrections remain distinct from these hermetic source tests.
+
+## Media lifetime follow-up
+
+The same cancellation owner is applied to the Voice Settings meter, STT sample
+recorder and debounced TTS preview, not just the onboarding copy. A late
+permission grant, engine response or audio decode cannot capture/play after
+Stop, teardown, a device change or engine replacement. STT uses the selected
+input, and all graph/error paths release their tracks. Nine additional failing
+renderer cases were reproduced; 13 Settings media cases now pass, including
+engine replacement, with TypeScript passing. Physical audio/WebView behavior
+remains a separate qualification requirement.

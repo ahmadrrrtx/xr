@@ -177,10 +177,10 @@ export const voiceApi = {
         speed,
       }, options,
     ),
-  transcribe: (pcm: string) =>
+  transcribe: (pcm: string, options: Pick<RequestInit, 'signal'> = {}) =>
     enginePost<{ ok: boolean; text: string; backend: string; detail: string; ms: number }>(
       '/voice/transcribe',
-      { pcm },
+      { pcm }, options,
     ),
   session: (action: 'start' | 'stop') =>
     enginePost<{ state: VoiceSessionState }>('/voice/session', { action }),
