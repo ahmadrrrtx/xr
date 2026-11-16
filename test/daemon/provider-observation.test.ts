@@ -36,3 +36,13 @@ test('endpoint probes are authenticated and reject unknown provider identities w
   expect((await call('/providers/probe', { providerId: 'not-registered' })).status).toBe(404);
   expect(seen.length).toBe(before);
 });
+
+test('an explicit endpoint test always makes a fresh request after credential rotation', async () => {
+  const input = { id: 'probe-fixture', baseUrl: `http://127.0.0.1:${upstream.port}/v1`, defaultModel: 'owner/probe-model' };
+  expect((await call('/providers/probe', { providerId: input.id, model: 'owner/selected-model' })).status).toBe(200);
+  const before = seen.length;
+  expect((await call('/providers/custom', { ...input, apiKey: 'fixture-rotated-secret' })).status).toBe(200);
+  expect((await call('/providers/probe', { providerId: input.id, model: 'owner/selected-model' })).status).toBe(200);
+  expect(seen.length).toBe(before + 1);
+  expect(seen.at(-1)?.auth).toBe('Bearer fixture-rotated-secret');
+});

@@ -1,6 +1,6 @@
 # Engine/model/voice repair ledger — 2026-11-16
 
-Owner/reviewer: ahmadrrrtx. Base: `be319c378f79fc5d5ce48b83fad7031159c08fe6`.
+Repository owner: ahmadrrrtx; human merge review remains pending. Base: `be319c378f79fc5d5ce48b83fad7031159c08fe6`.
 This is a source-repair ledger, **not a release approval**. Published installers
 are separate artifacts and do not inherit fixes merely because main changes.
 
@@ -15,7 +15,7 @@ are separate artifacts and do not inherit fixes merely because main changes.
 | 3 | Voice audition/download/mic lifetime | 19 real React scenarios, including late permission/playback, failure/timeout and verified install; 698 combined desktop/voice tests pass; TypeScript passes |
 | 4 | Startup generations/deadlines and settings revisions | 7 supervisor/store scenarios, 5 voice race/conflict scenarios, real-handler concurrent revision conflict tests; 713 combined desktop/voice tests pass; TypeScript passes |
 | 5 | Explicit bounded model discovery and header-credential ownership | 19 discovery/round-trip handler and adapter tests; 14 real form scenarios; 810 combined desktop/provider tests pass; TypeScript passes |
-| 6 | Full regression/security/build review and upstream delivery | Pending |
+| 6 | Full regression/security/build review and upstream delivery | Review branch pushed; validation uses 57 partitions, 23 source/build gates plus behavioral security/dependency audit. Final per-SHA evidence accompanies delivery; native and live-channel qualification remain separate |
 
 ## Deliberate size budget
 
@@ -108,3 +108,25 @@ input, and all graph/error paths release their tracks. Nine additional failing
 renderer cases were reproduced; 13 Settings media cases now pass, including
 engine replacement, with TypeScript passing. Physical audio/WebView behavior
 remains a separate qualification requirement.
+
+## Explicit probe/cache follow-up
+
+Final review reproduced a rotated-credential endpoint test reusing an earlier
+health cache entry. Explicit tests now bypass cached/deduplicated health.
+Credential/config changes invalidate health evidence; pending-only cache keys
+are visible to targeted invalidation, and invalidated success/failure/SWR writers
+cannot repopulate or erase a newer cache flight. Four failing regressions were
+reproduced and are fixed. This does not promote health to inference validation.
+
+## Release qualification still pending
+
+Source checks are not a signed-binary or physical audio approval. Native/cross-OS
+CI has been requested on the review branch. Real microphone/WebView playback,
+keychain persistence, clean install/upgrade and signing/attestation still need
+OS-appropriate evidence. The read-only live-channel checker still fails for
+withdrawn GitHub v1.1.0 Latest metadata and old npm higher-major deprecations.
+No release, npm channel, tag, signing key or protected-main change was made.
+
+Final cache-follow-up core measurement: 175,891 / 176,500; per-module limits
+and all pre-existing waivers remain enforced. The size-policy change is explicit,
+not a silently disabled gate.

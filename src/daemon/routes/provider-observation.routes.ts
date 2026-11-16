@@ -14,7 +14,7 @@ export function providerObservationRoutes(): DaemonRoute[] {
       const cred = providerGateway.credentialStatus(preset.id);
       // Uses the same adapter/broker as inference. Some health adapters send a
       // minimal completion: the initiating UI must disclose possible charges.
-      const report = await providerGateway.health(config, preset.id, model);
+      const report = await providerGateway.health(config, preset.id, model, { fresh: true });
       state.store.audit('providers.probe', { providerId: preset.id, model, ok: report.ok });
       return json({
         ok: report.ok, providerId: preset.id, model, source: 'engine-adapter',

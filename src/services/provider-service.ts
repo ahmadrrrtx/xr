@@ -21,7 +21,7 @@ import {
   type ResolveOptions,
 } from "../intelligence/routing-service.ts";
 import {
-  ProviderHealthChecker,
+  ProviderHealthChecker, invalidateProviderHealthCache,
   type ProviderHealthReport,
 } from "../providers/health.ts";
 import {
@@ -276,6 +276,7 @@ export class ProviderService implements LifecycleHook {
     };
 
     await configService.update(patch);
+    invalidateProviderHealthCache(def.id);
     registry.syncCustom({
       ...config,
       providerEngine: patch.providerEngine,
@@ -302,6 +303,7 @@ export class ProviderService implements LifecycleHook {
     };
 
     await configService.update(patch);
+    invalidateProviderHealthCache(id);
     registry.syncCustom({
       ...config,
       providerEngine: patch.providerEngine,
@@ -312,6 +314,7 @@ export class ProviderService implements LifecycleHook {
   async storeKey(envName: string, value: string): Promise<string> {
     // XR-LAUNCH-015: keychain-first write without blocking the daemon's event loop.
     const backend = await setSecretAsync(envName, value);
+    invalidateProviderHealthCache();
     // Phase 8 — ambient hydration is gated (default OFF). Durable write
     // always happens; process.env is mirrored only when compat is on.
     hydrateProviderEnv(envName, value);

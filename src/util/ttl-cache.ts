@@ -199,15 +199,17 @@ export class TtlCache<V> {
     this.onStats?.("miss");
     const promise = work().then((value) => {
       // Success: cache and clear the pending slot.
-      this.pending.delete(key);
-      this.set(key, value, { ttlMs: opts?.ttlMs?.(value) });
+      if (this.pending.get(key)?.promise === promise) {
+        this.pending.delete(key);
+        this.set(key, value, { ttlMs: opts?.ttlMs?.(value) });
+      }
       return { value, fromCache: false, stale: false } as CacheGetResult<V>;
     });
     this.pending.set(key, { promise, at: Date.now() });
     // On rejection: remove the pending slot so the NEXT caller retries; the
     // error propagates to everyone awaiting this promise (no poison).
     promise.catch(() => {
-      this.pending.delete(key);
+      if (this.pending.get(key)?.promise === promise) this.pending.delete(key);
     });
     return promise;
   }
@@ -219,7 +221,7 @@ export class TtlCache<V> {
 
   /** Live keys (for targeted invalidation). */
   keys(): string[] {
-    return [...this.entries.keys()];
+    return [...new Set([...this.entries.keys(), ...this.pending.keys()])];
   }
 
   private backgroundRefresh(
@@ -237,12 +239,13 @@ export class TtlCache<V> {
     this.onStats?.("refresh");
     const promise = work()
       .then((value) => {
+        if (this.pending.get(key)?.promise !== promise) return;
         this.pending.delete(key);
         this.set(key, value, { ttlMs: opts?.ttlMs?.(value) });
       })
       .catch(() => {
         // Background refresh failed: keep the stale value; next caller retries.
-        this.pending.delete(key);
+        if (this.pending.get(key)?.promise === promise) this.pending.delete(key);
       });
     this.pending.set(key, { promise, at: Date.now() });
   }

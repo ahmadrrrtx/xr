@@ -244,19 +244,8 @@ export class ProviderGateway {
     return inspectProviderHealth(config, id, model);
   }
 
-  async health(config: XRConfig, id: string, model?: string): Promise<CachedProviderHealth> {
-    if (!gatewayEnabled()) {
-      const checker = new (await import("./health.ts")).ProviderHealthChecker(config);
-      const report = await checker.check(id, model);
-      return {
-        ...report,
-        cached: false,
-        stale: false,
-        deduped: false,
-        probeMs: report.latencyMs ?? 0,
-      };
-    }
-    return checkProviderHealthCached(config, id, model);
+  async health(config: XRConfig, id: string, model?: string, opts?: { fresh?: boolean }): Promise<CachedProviderHealth> {
+    return checkProviderHealthCached(config, id, model, { fresh: opts?.fresh || !gatewayEnabled() });
   }
 
   async healthAll(config: XRConfig): Promise<CachedProviderHealth[]> {
