@@ -1,13 +1,13 @@
 /** One media owner per component. Abort is advisory; current() also rejects
  * late permission/network responses and callbacks that ignore cancellation. */
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 export function useMediaOperation(cleanup: () => void, valid: () => boolean = () => true) {
   const mounted = useRef(false);
   const active = useRef<AbortController | null>(null);
   const release = useRef(cleanup);
-  release.current = cleanup;
-  const validity = useRef(valid); validity.current = valid;
+  const validity = useRef(valid);
+  useLayoutEffect(() => { release.current = cleanup; validity.current = valid; });
   const cancel = useCallback(() => {
     active.current?.abort();
     active.current = null;

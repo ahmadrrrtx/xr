@@ -12,6 +12,10 @@ import { Reveal, StepHeader, Toggle } from './parts';
  * noise-suppression + wake-word preferences (applied to the engine at finish).
  */
 export function StepMicSetup() {
+  const context = useOnboardingStore(s => `${s.micSelected ?? ''}:${s.noiseSuppression}`);
+  return <MicSetupMeter key={context} />;
+}
+function MicSetupMeter() {
   const { mics, micSelected, noiseSuppression, wakeWordEnabled, setDetections, setMic, setVoicePrefs } =
     useOnboardingStore();
   const [testing, setTesting] = useState(false);
@@ -51,8 +55,7 @@ export function StepMicSetup() {
     ctxRef.current = null;
   });
   const stopMeter = useCallback(() => { cancel(); setTesting(false); setBars(0); }, [cancel]);
-  // Device/noise changes invalidate an in-flight permission prompt too.
-  useEffect(() => { stopMeter(); }, [micSelected, noiseSuppression, stopMeter]);
+  // The keyed owner resets capture and UI together on device/noise changes.
 
   const startMeter = async () => {
     const op = begin();

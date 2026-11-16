@@ -41,6 +41,11 @@ function useApply(): (patch: VoiceSettingsPatch) => void {
 /* ── Microphone ─────────────────────────────────────────────────────────── */
 
 export function MicrophoneSection() {
+  const context = useVoiceStore(s => `${s.settings?.desktop.micDeviceId}:${s.settings?.noiseSuppression}`);
+  const generation = useEngineStore(s => s.generation);
+  return <MicrophoneOwner key={`${generation}:${context}`} />;
+}
+function MicrophoneOwner() {
   const settings = useVoiceStore((s) => s.settings);
   const devices = useVoiceStore((s) => s.devices);
   const permission = useVoiceStore((s) => s.micPermission);
@@ -63,7 +68,6 @@ export function MicrophoneSection() {
     streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null;
   }, () => useEngineStore.getState().generation === generation);
   const stopMeter = useCallback(() => { cancel(); setTesting(false); setLeft(METER_SECONDS); setLevel({ rms: 0, peak: 0, clipped: false }); }, [cancel]);
-  useEffect(() => { stopMeter(); }, [generation, settings?.desktop.micDeviceId, settings?.noiseSuppression, stopMeter]);
   const startMeter = (): void => {
     const op = begin(); setTesting(true); setLeft(METER_SECONDS);
     void (async () => {
@@ -259,6 +263,11 @@ export function WakeWordSection() {
 /* ── Speech to text ─────────────────────────────────────────────────────── */
 
 export function SttSection() {
+  const context = useVoiceStore(s => `${s.settings?.desktop.micDeviceId}:${s.settings?.sttBackend}:${s.settings?.sttModel}`);
+  const generation = useEngineStore(s => s.generation);
+  return <TranscriptionOwner key={`${generation}:${context}`} />;
+}
+function TranscriptionOwner() {
   const settings = useVoiceStore((s) => s.settings);
   const models = useVoiceStore((s) => s.models);
   const status = useVoiceStore((s) => s.status);
@@ -289,8 +298,7 @@ export function SttSection() {
     nodesRef.current = [];
     streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null;
   }, []);
-  const { begin, cancel } = useMediaOperation(releaseCapture, () => useEngineStore.getState().generation === generation);
-  useEffect(() => { cancel(); setTesting('idle'); }, [generation, settings?.desktop.micDeviceId, settings?.sttBackend, settings?.sttModel, cancel]);
+  const { begin } = useMediaOperation(releaseCapture, () => useEngineStore.getState().generation === generation);
   const testTranscription = (): void => {
     const op = begin(); setTesting('opening'); setHeard(null);
     void (async () => {
@@ -390,6 +398,11 @@ export function SttSection() {
 /* ── Text to speech ─────────────────────────────────────────────────────── */
 
 export function TtsSection() {
+  const context = useVoiceStore(s => s.settings?.ttsVoice ?? '');
+  const generation = useEngineStore(s => s.generation);
+  return <PreviewOwner key={`${generation}:${context}`} />;
+}
+function PreviewOwner() {
   const settings = useVoiceStore((s) => s.settings);
   const voices = useVoiceStore((s) => s.voices);
   const sample = useVoiceStore((s) => s.sampleText);
@@ -410,7 +423,6 @@ export function TtsSection() {
     if (node) { node.onended = null; try { node.stop(); } catch { /* not started */ } node.disconnect(); }
   }, () => useEngineStore.getState().generation === generation);
   const stopPreview = useCallback(() => { cancel(); setPreviewing(false); }, [cancel]);
-  useEffect(() => { stopPreview(); }, [generation, settings?.ttsVoice, stopPreview]);
   const preview = useCallback((speed?: number, pitch?: number): void => {
     const op = begin(); setPreviewing(true);
     previewTimer.current = window.setTimeout(() => {

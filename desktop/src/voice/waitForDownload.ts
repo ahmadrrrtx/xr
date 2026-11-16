@@ -28,7 +28,7 @@ export async function waitForVoiceDownload(id: string, caller: AbortSignal, prog
       }
     }, 600_000, caller);
   } catch (e) {
-    if (e instanceof RequestDeadlineExpired) throw new Error('Voice download timed out. Check Settings → Voice before retrying.');
+    if (e instanceof RequestDeadlineExpired) throw new Error('Voice download timed out. Check Settings → Voice before retrying.', { cause: e });
     throw e;
   }
 }

@@ -15,7 +15,7 @@ are separate artifacts and do not inherit fixes merely because main changes.
 | 3 | Voice audition/download/mic lifetime | 19 real React scenarios, including late permission/playback, failure/timeout and verified install; 698 combined desktop/voice tests pass; TypeScript passes |
 | 4 | Startup generations/deadlines and settings revisions | 7 supervisor/store scenarios, 5 voice race/conflict scenarios, real-handler concurrent revision conflict tests; 713 combined desktop/voice tests pass; TypeScript passes |
 | 5 | Explicit bounded model discovery and header-credential ownership | 19 discovery/round-trip handler and adapter tests; 14 real form scenarios; 810 combined desktop/provider tests pass; TypeScript passes |
-| 6 | Full regression/security/build review and upstream delivery | Review branch pushed; validation uses 57 partitions, 23 source/build gates plus behavioral security/dependency audit. Final per-SHA evidence accompanies delivery; native and live-channel qualification remain separate |
+| 6 | Full regression/security/build review and upstream delivery | Review branch pushed; validation uses 57 partitions, 24 source/build/lint gates plus behavioral security/dependency audit. Final per-SHA evidence accompanies delivery; native and live-channel qualification remain separate |
 
 ## Deliberate size budget
 
@@ -130,3 +130,16 @@ No release, npm channel, tag, signing key or protected-main change was made.
 Final cache-follow-up core measurement: 175,891 / 176,500; per-module limits
 and all pre-existing waivers remain enforced. The size-policy change is explicit,
 not a silently disabled gate.
+
+## Native-job renderer follow-up
+
+The native workflow at source `2ae2cb7` completed Linux cargo check, clippy and
+shell unit tests, but its renderer-lint step rejected synchronous effect resets
+and render-time ref writes. Resource owners now reset through explicit React
+keys, while model-specific busy/validation state is derived from its request
+identity; refs are updated at commit time. The 46 affected renderer scenarios
+and TypeScript pass. Desktop ESLint has zero errors and two pre-existing
+fast-refresh warnings. No lint rule was suppressed; desktop ESLint is now an
+explicit local validation stage in addition to the existing native workflow.
+Native results from an earlier SHA are not represented as final-head artifact
+qualification.
