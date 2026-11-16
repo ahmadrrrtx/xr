@@ -133,6 +133,10 @@ const TAGLINE: Record<string, string> = {
 };
 
 /** Desktop modal kinds: only the protocol actually changes the form. */
+export function desktopKindFor(id: string, kind: EngineProvider['kind']): ProviderKind {
+  return desktopKind({ id, kind } as EngineProvider);
+}
+
 function desktopKind(p: EngineProvider): ProviderKind {
   if (p.id === 'anthropic') return 'anthropic';
   if (p.id === 'google') return 'gemini';

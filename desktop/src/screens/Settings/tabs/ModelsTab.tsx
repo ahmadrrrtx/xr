@@ -5,6 +5,15 @@
  * model-by-capability selects, and the local-Ollama card (detect + pull
  * with live progress).
  * Keys are held by the engine secret broker, never generic desktop settings.
+ *
+ * S-6 — WHICH providers are configured is an engine fact (hasKey on
+ * GET /providers), not a desktop opinion. This screen used to read the list
+ * from `settings.models.providers`, which initialises to `[]` and is only
+ * written when you add a provider here — so a provider configured in the
+ * onboarding wizard, by a custom endpoint, or before a reinstall rendered as
+ * "No providers configured yet." The engine's list is the list; local settings
+ * only carry the presentation bits the engine does not know (when you added it,
+ * the last connection test).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -28,6 +37,7 @@ import {
 } from 'lucide-react';
 import {
   buildProviderCatalog,
+  desktopKindFor,
   type ProviderCatalogEntryUi,
 } from '@/engine/providerCatalog';
 import { useEngineStore } from '@/stores/engineStore';
@@ -100,6 +110,8 @@ export function ModelsTab() {
   const models = useSettingsStore((state) => state.settings.models);
   const update = useSettingsStore((state) => state.update);
   const engineProviders = useEngineStore((state) => state.providers?.providers ?? null);
+  const enginePrimary = useEngineStore((state) => state.providers?.primary ?? null);
+  const engineIssue = useEngineStore((state) => state.providers === null);
 
   // The add-provider catalog comes from the ENGINE (26 presets + any custom
   // providers), merged with presentation metadata — see engine/providerCatalog.
@@ -160,7 +172,36 @@ export function ModelsTab() {
       });
   }, []);
 
-  const providers = models.providers;
+  /*
+   * One row per provider the ENGINE reports a credential for. A local runtime
+   * counts once it is selected as the model, because "configured" for Ollama
+   * means "in use", not "has a key".
+   */
+  const providers = useMemo<ProviderConfig[]>(
+    () =>
+      (engineProviders ?? [])
+        .filter((p) => p.id !== 'custom' && (p.hasKey || p.id === enginePrimary))
+        .map((p) => {
+          const meta = models.providers.find((m) => m.id === p.id);
+          const tested = meta?.lastTest ?? null;
+          return {
+            id: p.id,
+            kind: desktopKindFor(p.id, p.kind),
+            name: meta?.name ?? p.label ?? p.id,
+            baseUrl: p.baseUrl ?? meta?.baseUrl,
+            model: meta?.model,
+            addedAt: meta?.addedAt ?? 0,
+            // Where the key actually is, from the engine — not a desktop guess.
+            keyStorage: p.hasKey ? 'engine' : 'none',
+            // The engine's health/auth verdict, else the desktop's last test.
+            // Absent both: `undefined`, so the row says "saved", never "connected".
+            lastTest: p.healthState
+              ? { ok: p.healthState === 'reachable' && p.hasKey, at: Date.parse(p.checkedAt ?? '') || 0, latencyMs: p.latencyMs ?? undefined }
+              : (tested ?? undefined)
+          };
+        }),
+    [engineProviders, enginePrimary, models.providers]
+  );
   const hasProviders = providers.length > 0;
   const insecureCount = providers.filter(
     (provider) => provider.keyStorage === 'local-insecure'
@@ -298,7 +339,9 @@ export function ModelsTab() {
         {!hasProviders ? (
           <div className="px-3.5 py-6 text-center">
             <p className="text-text-secondary text-[13px]">
-              No providers configured yet.
+              {engineIssue
+                ? 'Waiting for the engine — it is the source of truth for configured providers.'
+                : 'No providers configured yet.'}
             </p>
             <p className="text-text-tertiary mt-1 text-xs">
               Add one below, or use Ollama to run models locally.
