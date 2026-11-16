@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { SettingRow, SettingsSection } from '@/components/settings/primitives';
 import { isTauri } from '@/lib/tauri';
 import { copyEngineDiagnostics } from '@/engine/diagnostics';
+import { providerIsUsable } from '@/engine/providerReadiness';
 import { crashDetachExternal } from '@/lib/shellApi';
 import { engineVersion, isEngineUsable, useEngineStore } from '@/stores/engineStore';
 
@@ -128,7 +129,9 @@ export function DiagnosticsTab() {
 
 
   const version = engineVersion();
-  const healthy = providers?.providers.filter((p) => p.healthy && (p.kind === 'local' || p.hasKey)) ?? [];
+  // S-7: the list of providers that can actually run — unprobed-but-keyed
+  // included, probed-and-unreachable excluded.
+  const healthy = providers?.providers.filter(providerIsUsable) ?? [];
   // `hasKey` is the engine's view: a stored key OR environment credentials
   // (e.g. bedrock via AWS env). Label it as credentials, not "API keys".
   const keyed = providers?.providers.filter((p) => p.kind === 'hosted' && p.hasKey) ?? [];

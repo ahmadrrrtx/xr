@@ -26,6 +26,7 @@ import { create } from 'zustand';
 import { qualifiedModelId } from '@/budget/models';
 import { modelOptions, type EngineCatalog } from '@/engine/catalog';
 export type { EngineModelOption } from '@/engine/catalog';
+import { hasUsableProvider, localRuntimeUsable } from '@/engine/providerReadiness';
 import {
   EngineDown,
   EngineIncompatible,
@@ -477,9 +478,12 @@ export function engineDefaultModel(): string | null {
 
 /** True when at least one provider can answer right now. */
 export function engineHasProvider(): boolean {
-  const p = useEngineStore.getState().providers;
-  if (!p) return false;
-  return p.providers.some((x) => x.healthy && (x.kind === 'local' || x.hasKey));
+  const s = useEngineStore.getState();
+  if (!s.providers) return false;
+  // S-7: one predicate (engine/providerReadiness) instead of a `healthy` test
+  // that is false before the first probe. A running local runtime is usable
+  // even if its provider row carried no key — it needs none.
+  return hasUsableProvider(s.providers.providers) || localRuntimeUsable(s.models?.current);
 }
 
 /** Last-known-good engine facts survive a refresh error, never synthetic rows. */
