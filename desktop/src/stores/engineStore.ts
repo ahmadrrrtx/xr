@@ -31,7 +31,6 @@ import {
   EngineDown,
   EngineIncompatible,
   engineEndpoint,
-  engineFetch,
   engineHandshake,
   engineJson,
   enginePost,
@@ -236,9 +235,7 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
         // engine call — takes the cached link and fails fast instead of parking
         // the UI for 20 s. The `starting` state is what the wait is shown as.
         const endpoint = await (freshAttempt ? bootEngineLink() : engineEndpoint());
-        const res = await engineFetch('/health');
-        if (!res.ok) throw new Error(`health ${res.status}`);
-        const health = (await res.json()) as EngineHealth;
+        const health = await engineJson<EngineHealth>('/health');
         // Identity comes ONLY from the session-gated handshake (XR-P01):
         // /health proved "something answered", nothing more.
         const handshake = await engineHandshake();

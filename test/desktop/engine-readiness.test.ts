@@ -7,7 +7,7 @@
  * no network is touched, no native surface is claimed.
  */
 import { storage, setTauri } from "./helpers/dom-shim.ts";
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   EngineDown,
@@ -88,6 +88,9 @@ const OK_META = {
   schemaVersion: 12,
   capabilities: ["health.get", "meta.version.get"],
 };
+
+const originalFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = originalFetch; });
 
 beforeEach(() => {
   storage.clear();

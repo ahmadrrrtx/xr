@@ -74,22 +74,33 @@ export async function acquireLink(
   const startedAt = now();
   let reason: string | null = null;
   for (;;) {
-    const link = await read().catch((e: unknown): null => {
+    // IPC can hang too. The outer loop's clock check cannot bound an await
+    // which never returns; race each read against the remaining BOOT budget.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = Symbol('link deadline');
+    let link: EngineLink | null;
+    try {
+      const remaining = Math.max(0, deadlineMs - (now() - startedAt));
+      const result = await Promise.race([
+        Promise.resolve().then(read),
+        new Promise<typeof expired>((r) => { timer = setTimeout(() => r(expired), remaining); }),
+      ]);
+      if (result === expired) break;
+      link = result;
+    } catch (e) {
       reason = `engine_link failed: ${e instanceof Error ? e.message : String(e)}`;
-      return null;
-    });
-    if (reason === null && link === null) {
-      // `read` threw: `reason` says why, and polling cannot improve it.
-      break;
+      break; // an IPC rejection is final, not a null/pending snapshot
+    } finally {
+      clearTimeout(timer);
     }
     if (link && isLinked(link)) return endpointFor(link);
     if (link?.spawned === false) {
-      // The shell owns the spawn and says there is none: polling cannot fix it.
       reason = link.reason ?? 'no sidecar in this build';
       break;
     }
-    if (now() - startedAt >= deadlineMs) break;
-    await sleep(intervalMs);
+    const remaining = deadlineMs - (now() - startedAt);
+    if (remaining <= 0) break;
+    await sleep(Math.min(intervalMs, remaining));
   }
   if (!reason) reason = `the sidecar did not pair within ${Math.round(deadlineMs / 1000)} s`;
   return { base: '/api/v1', token: null, via: 'dev-proxy', port: null, reason };
@@ -115,18 +126,25 @@ export function createLinkCache(
   let inflight: Promise<EngineEndpoint> | null = null;
   let last: EngineEndpoint | null = null;
   let failedAt: number | null = null;
+  let generation = 0;
 
   const start = (): Promise<EngineEndpoint> => {
-    inflight ??= resolve()
+    if (inflight) return inflight;
+    const epoch = generation;
+    const attempt = resolve()
       .then((ep) => {
-        last = ep;
-        failedAt = ep.token ? null : now();
+        // A restart invalidates writers as well as readers of the cache.
+        if (epoch === generation) {
+          last = ep;
+          failedAt = ep.token ? null : now();
+        }
         return ep;
       })
       .finally(() => {
-        inflight = null;
+        if (inflight === attempt) inflight = null;
       });
-    return inflight;
+    inflight = attempt;
+    return attempt;
   };
 
   return {
@@ -138,10 +156,16 @@ export function createLinkCache(
       const attempt = start();
       // Never let a caller ride the pairing window to completion. AWAIT the
       // timeout too: the point is to return, not to keep waiting on `attempt`.
-      const raced = await Promise.race([
-        attempt,
-        new Promise<null>((r) => setTimeout(() => r(null), callerWaitMs)),
-      ]);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let raced: EngineEndpoint | null;
+      try {
+        raced = await Promise.race([
+          attempt,
+          new Promise<null>((r) => { timer = setTimeout(() => r(null), callerWaitMs); }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
       if (raced) return raced;
       // `last` is set by the attempt's own `then`, so a just-landed endpoint is
       // the honest answer; otherwise say the link is still resolving and let the
@@ -150,6 +174,7 @@ export function createLinkCache(
     },
     boot: () => start(),
     reset: () => {
+      generation++;
       inflight = null;
       last = null;
       failedAt = null;
