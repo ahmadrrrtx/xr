@@ -44,6 +44,7 @@ const MODEL_KEY = 'xr.model.default';
  */
 async function applyOnboardingVoice(s: {
   ttsVoice: string;
+  ttsSpeed: number;
   micSelected: string | null;
   noiseSuppression: boolean;
   wakeWordEnabled: boolean;
@@ -67,7 +68,7 @@ async function applyOnboardingVoice(s: {
     // The engine accepts the id but cannot speak it until the model is on disk.
     // /voice/test-tts is the one endpoint that says so, with the byte size.
     try {
-      await voiceApi.testTts('Ready when you are.', s.ttsVoice);
+      await voiceApi.testTts('Ready when you are.', s.ttsVoice, s.ttsSpeed);
     } catch (err) {
       if (!(err instanceof EngineHttpError) || err.body?.error !== 'voice-not-installed') return;
       const bytes = Number((err as HttpError).body?.bytes ?? 0);
@@ -113,6 +114,7 @@ interface OnboardingState {
   noiseSuppression: boolean;
   wakeWordEnabled: boolean;
   ttsVoice: string;
+  ttsSpeed: number;
   userName: string;
   theme: ThemeId;
   budget: number;
@@ -139,7 +141,7 @@ interface OnboardingState {
     p: Partial<
       Pick<
         OnboardingState,
-        'noiseSuppression' | 'wakeWordEnabled' | 'ttsVoice' | 'micSelected'
+        'noiseSuppression' | 'wakeWordEnabled' | 'ttsVoice' | 'ttsSpeed' | 'micSelected'
       >
     >
   ) => void;
@@ -187,6 +189,7 @@ const initial = {
   noiseSuppression: true,
   wakeWordEnabled: false,
   ttsVoice: 'piper-kusal',
+  ttsSpeed: 1,
   userName: '',
   theme: 'xr-native' as ThemeId,
   budget: 5,

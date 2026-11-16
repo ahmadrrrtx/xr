@@ -2,6 +2,7 @@ import { Mic, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { detectMics } from '@/lib/detect';
+import { useMediaOperation } from '@/voice/useMediaOperation';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { Reveal, StepHeader, Toggle } from './parts';
 
@@ -16,20 +17,22 @@ export function StepMicSetup() {
   const [testing, setTesting] = useState(false);
   const [bars, setBars] = useState(0);
   const [denied, setDenied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number>(0);
+  const srcRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   useEffect(() => {
     if (mics) return;
     let cancelled = false;
     void (async () => {
-      const m = await detectMics(true);
+      const m = await detectMics(false);
       if (cancelled) return;
       setDetections({ mics: m });
       setDenied(m.permission === 'denied');
       if (m.devices.length > 0) {
-        setMic(micSelected ?? m.devices[0]?.id ?? null);
+        setMic(useOnboardingStore.getState().micSelected ?? m.devices[0]?.id ?? null);
       }
     })();
     return () => {
@@ -38,51 +41,57 @@ export function StepMicSetup() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load
   }, []);
 
-  const stopMeter = useCallback(() => {
+  const { begin, cancel } = useMediaOperation(() => {
     cancelAnimationFrame(rafRef.current);
+    srcRef.current?.disconnect();
+    srcRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     void ctxRef.current?.close().catch(() => {});
     ctxRef.current = null;
-    setTesting(false);
-    setBars(0);
-  }, []);
+  });
+  const stopMeter = useCallback(() => { cancel(); setTesting(false); setBars(0); }, [cancel]);
+  // Device/noise changes invalidate an in-flight permission prompt too.
+  useEffect(() => { stopMeter(); }, [micSelected, noiseSuppression, stopMeter]);
 
-  const startMeter = useCallback(async () => {
+  const startMeter = async () => {
+    const op = begin();
+    setTesting(true); // Stop works while permission is still pending.
+    setDenied(false);
+    setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          noiseSuppression: noiseSuppression,
-          echoCancellation: true,
-        },
+        audio: { ...(micSelected ? { deviceId: { exact: micSelected } } : {}), noiseSuppression, echoCancellation: true },
       });
+      if (!op.current()) { stream.getTracks().forEach(t => t.stop()); return; }
       streamRef.current = stream;
       const ctx = new AudioContext();
       ctxRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
+      srcRef.current = src;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
       src.connect(analyser);
       const buf = new Float32Array(analyser.fftSize);
       const tick = () => {
+        if (!op.current()) return;
         analyser.getFloatTimeDomainData(buf);
         let sum = 0;
         for (const v of buf) sum += v * v;
-        const rms = Math.sqrt(sum / buf.length);
-        // RMS → 1..15 bars (log-ish mapping, floor noise gated off).
-        const level = Math.min(15, Math.max(0, Math.round(rms * 60)));
-        setBars(level);
+        setBars(Math.min(15, Math.max(0, Math.round(Math.sqrt(sum / buf.length) * 60))));
         rafRef.current = requestAnimationFrame(tick);
       };
-      setTesting(true);
       rafRef.current = requestAnimationFrame(tick);
-    } catch {
-      setDenied(true);
-      setTesting(false);
+      const detected = await detectMics(false);
+      if (op.current()) setDetections({ mics: detected });
+    } catch (e) {
+      if (!op.current()) return;
+      stopMeter();
+      const refused = e instanceof DOMException && e.name === 'NotAllowedError';
+      setDenied(refused);
+      if (!refused) setError('The microphone test failed. Check the selected input and retry.');
     }
-  }, [noiseSuppression]);
-
-  useEffect(() => stopMeter, [stopMeter]);
+  };
 
   const devices = mics?.devices ?? [];
 
@@ -93,6 +102,7 @@ export function StepMicSetup() {
         sub="Microphone access starts only when you test or start a voice session. Wake-word mode keeps it open during that session."
       />
 
+      {error ? <p role="alert" className="text-danger mb-3 text-[13px]">{error}</p> : null}
       {denied ? (
         <Reveal>
           <div className="border-border-subtle bg-bg-raised/40 rounded-xl border p-4">
@@ -111,7 +121,7 @@ export function StepMicSetup() {
             </label>
             <select
               value={micSelected ?? devices[0]?.id ?? ''}
-              onChange={(e) => setMic(e.target.value)}
+              onChange={(e) => { stopMeter(); setMic(e.target.value); }}
               className="border-border-default bg-bg-void text-text-primary w-full rounded-lg border px-3 py-2 text-[13.5px] outline-none focus:border-accent"
             >
               {devices.length === 0 && <option value="">Default microphone</option>}

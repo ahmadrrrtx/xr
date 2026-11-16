@@ -18,7 +18,7 @@ beforeEach(() => {
   useEngineStore.setState({ status: 'disconnected' });
   useVoiceStore.setState({ settings: null, status: null });
   useOnboardingStore.setState({ complete: false, modelChoice: { source: 'skip' },
-    ttsVoice: 'piper-amy', micSelected: 'input-two', noiseSuppression: false, wakeWordEnabled: true });
+    ttsVoice: 'piper-amy', ttsSpeed: 1.25, micSelected: 'input-two', noiseSuppression: false, wakeWordEnabled: true });
   globalThis.fetch = (async () => Response.json({})) as typeof fetch;
   const set = spyOn(voiceApi, 'settingsSet').mockImplementation(async (patch) => {
     writes.push(patch);
@@ -32,7 +32,7 @@ beforeEach(() => {
 });
 afterEach(() => { for (const restore of restores) restore(); globalThis.fetch = realFetch; });
 
-const expected = { ttsVoice: 'piper-amy', noiseSuppression: false, mode: 'wake-word',
+const expected = { ttsVoice: 'piper-amy', ttsSpeed: 1.25, noiseSuppression: false, mode: 'wake-word',
   desktop: { micDeviceId: 'input-two', activation: 'always' } };
 
 test('offline onboarding retains intent and applies it on the first voice refresh after reconnect', async () => {

@@ -24,6 +24,7 @@
  * desktop buttons, or the TTL decides them through the SAME store every other
  * surface uses (channel "voice").
  */
+import { VoiceDownloads } from "../../voice/downloads.ts";
 import { looksIncomplete, SILENCE_TAIL_EXTENDED_MS } from "../../voice/endpointing.ts";
 import { route, sseResponse, type DaemonRoute } from "./router.ts";
 import { VoicePipeline } from "../../voice/pipeline.ts";
@@ -40,7 +41,6 @@ import {
   DEFAULT_TTS_VOICE,
   ESPEAK_ENTRY,
   STT_ENTRIES,
-  VoiceDownloader,
   clearVoiceModels,
   entryBytes,
   entryInstalled,
@@ -143,7 +143,7 @@ export class VoiceSession {
   private stt!: SpeechToText;
   private tts!: TextToSpeech;
   private settings: VoiceSettings;
-  readonly downloader = new VoiceDownloader();
+  readonly downloader = new VoiceDownloads((p) => this.emit({ type: "download", ...p }));
 
   constructor(private readonly store: Store, settings?: VoiceSettings) {
     this.settings = settings ?? safeVoiceSettings();
@@ -695,7 +695,7 @@ export function voiceRoutes(): DaemonRoute[] {
       handle: async ({ req, json, state }) => {
         const body = (await req.json().catch(() => ({}))) as { component?: string; id?: string; firstRun?: boolean };
         const s = voiceSessionFor(state.store);
-        if (s.downloader.current()) return json({ error: "download-busy", download: s.downloader.current() }, 409);
+        if (s.downloader.busy()) return json({ error: "download-busy", download: s.downloader.current() }, 409);
         const entries = body.firstRun
           ? firstRunPlan(body.id ?? (s.currentSettings().ttsVoice === "default" ? DEFAULT_TTS_VOICE : s.currentSettings().ttsVoice))
           : (() => {
@@ -704,18 +704,10 @@ export function voiceRoutes(): DaemonRoute[] {
             })();
         if (!entries) return json({ error: "unknown component/id" }, 400);
         state.store.audit("voice.models.download", { items: entries.map((e) => e.id) });
-        // Sequential, detached: progress streams over /events; the shell polls /status too.
-        const bundleTotal = entries.reduce((n, e) => n + entryBytes(e), 0);
-        void (async () => {
-          let doneBytes = 0;
-          for (const e of entries) {
-            const out = await s.downloader.download(e, (p) => s.emit({ type: "download", ...p, bundleReceived: doneBytes + p.received, bundleTotal }));
-            if (out.status !== "done") break;
-            doneBytes += entryBytes(e);
-          }
+        void s.downloader.start(entries).finally(() => {
           resetNativeVoice();
           s.reconfigure(s.currentSettings());
-        })();
+        });
         return json({ started: entries.map((e) => ({ id: e.id, component: e.component, bytes: entryBytes(e) })), bytes: entries.reduce((n, e) => n + entryBytes(e), 0) });
       },
     }),
@@ -726,8 +718,9 @@ export function voiceRoutes(): DaemonRoute[] {
       handle: ({ json, state }) => {
         const s = voiceSessionFor(state.store);
         const was = s.downloader.current();
+        const cancelled = s.downloader.busy();
         s.downloader.cancel();
-        return json({ cancelled: Boolean(was), download: was });
+        return json({ cancelled, download: was });
       },
     }),
     route({

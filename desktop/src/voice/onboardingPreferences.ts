@@ -12,12 +12,14 @@ const queue = createPreferenceQueue<VoiceSettingsPatch>({
 
 export function queueOnboardingVoice(s: {
   ttsVoice: string;
+  ttsSpeed: number;
   micSelected: string | null;
   noiseSuppression: boolean;
   wakeWordEnabled: boolean;
 }): Promise<void> {
   return queue.enqueue({
     ttsVoice: s.ttsVoice,
+    ttsSpeed: s.ttsSpeed,
     noiseSuppression: s.noiseSuppression,
     mode: s.wakeWordEnabled ? 'wake-word' : 'push-to-talk',
     // Configuring activation NEVER opens a mic. A user must still start a

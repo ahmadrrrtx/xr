@@ -282,8 +282,8 @@ export async function engineJson<T>(path: string, init: RequestInit = {}): Promi
   }
 }
 
-export function enginePost<T>(path: string, body: unknown): Promise<T> {
-  return engineJson<T>(path, { method: 'POST', body: JSON.stringify(body) });
+export function enginePost<T>(path: string, body: unknown, init: Pick<RequestInit, 'signal'> = {}): Promise<T> {
+  return engineJson<T>(path, { ...init, method: 'POST', body: JSON.stringify(body) });
 }
 
 export function engineGet<T>(path: string): Promise<T> {

@@ -154,27 +154,27 @@ export interface VoiceVoiceInfo {
 }
 
 export const voiceApi = {
-  status: () => engineJson<VoiceStatus>('/voice/status'),
-  models: () =>
+  status: (options: Pick<RequestInit, 'signal'> = {}) => engineJson<VoiceStatus>('/voice/status', options),
+  models: (options: Pick<RequestInit, 'signal'> = {}) =>
     engineJson<{ runtime: VoiceModelInfo; stt: VoiceModelInfo[]; espeak: VoiceModelInfo }>(
-      '/voice/models',
+      '/voice/models', options,
     ),
-  voices: () => engineJson<{ voices: VoiceVoiceInfo[]; sample: string }>('/voice/voices'),
+  voices: (options: Pick<RequestInit, 'signal'> = {}) => engineJson<{ voices: VoiceVoiceInfo[]; sample: string }>('/voice/voices', options),
   settingsGet: () => engineJson<{ settings: VoiceEngineSettings }>('/voice/settings'),
   settingsSet: (patch: VoiceSettingsPatch) =>
     enginePost<{ ok: boolean; settings: VoiceEngineSettings }>('/voice/settings', patch),
-  download: (body: { component?: VoiceComponent; id?: string; firstRun?: boolean }) =>
-    enginePost<{ started: VoiceFirstRunEntry[]; bytes: number }>('/voice/download', body),
+  download: (body: { component?: VoiceComponent; id?: string; firstRun?: boolean }, options: Pick<RequestInit, 'signal'> = {}) =>
+    enginePost<{ started: VoiceFirstRunEntry[]; bytes: number }>('/voice/download', body, options),
   cancelDownload: () => enginePost<{ ok: boolean }>('/voice/cancel-download', {}),
   clearModels: () => enginePost<{ ok: boolean; removed: number }>('/voice/clear-models', {}),
-  testTts: (text: string, voice?: string, speed?: number) =>
+  testTts: (text: string, voice?: string, speed?: number, options: Pick<RequestInit, 'signal'> = {}) =>
     enginePost<{ ok: boolean; wav?: string; sampleRate?: number; engine: string; detail?: string }>(
       '/voice/test-tts',
       {
         text,
         voice,
         speed,
-      },
+      }, options,
     ),
   transcribe: (pcm: string) =>
     enginePost<{ ok: boolean; text: string; backend: string; detail: string; ms: number }>(
