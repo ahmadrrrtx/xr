@@ -143,3 +143,19 @@ fast-refresh warnings. No lint rule was suppressed; desktop ESLint is now an
 explicit local validation stage in addition to the existing native workflow.
 Native results from an earlier SHA are not represented as final-head artifact
 qualification.
+
+## Live-session controller follow-up
+
+Review reproduced 19 controller races beyond the Settings/onboarding owners.
+A session now owns its pending start, mic grant/device switches, playback decode,
+audio acknowledgements and event stream. Stop/engine replacement invalidates all
+late local writers; start/stop HTTP commands are ordered so a pending start is
+followed by its requested stop before a later start. Duplicate starts coalesce.
+Selected-device failure is explicit rather than silently capturing another mic;
+partial graphs release tracks, newer decodes win, hold release stays muted, and
+old SSE callbacks cannot update a replacement connection. Microphone and playback
+resource helpers are extracted instead of growing the controller above 800 lines.
+The 23 controller scenarios and 46 affected renderer scenarios pass; desktop
+TypeScript and ESLint pass (the two existing fast-refresh warnings remain).
+These are local ownership/ordering guarantees, not a server-side rollback for an
+already accepted request or a physical microphone/WebView certification.

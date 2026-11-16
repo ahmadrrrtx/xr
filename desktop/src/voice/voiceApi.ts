@@ -184,9 +184,9 @@ export const voiceApi = {
     ),
   session: (action: 'start' | 'stop') =>
     enginePost<{ state: VoiceSessionState }>('/voice/session', { action }),
-  audio: (pcm: string) => enginePost<{ ok: boolean }>('/voice/audio', { pcm }),
-  bargeIn: () => enginePost<{ ok: boolean }>('/voice/barge-in', {}),
-  played: () => enginePost<{ ok: boolean }>('/voice/played', {}),
+  audio: (pcm: string, options: Pick<RequestInit, 'signal'> = {}) => enginePost<{ ok: boolean }>('/voice/audio', { pcm }, options),
+  bargeIn: (options: Pick<RequestInit, 'signal'> = {}) => enginePost<{ ok: boolean }>('/voice/barge-in', {}, options),
+  played: (options: Pick<RequestInit, 'signal'> = {}) => enginePost<{ ok: boolean }>('/voice/played', {}, options),
   say: (text: string) => enginePost<{ ok: boolean }>('/voice/say', { text }),
   /** Open the SSE downlink; the caller pumps it with `readSse`. */
   events: (signal: AbortSignal) =>
