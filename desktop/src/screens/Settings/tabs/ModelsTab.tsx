@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import {
   buildProviderCatalog,
+  configuredProviderRows,
   desktopKindFor,
   type ProviderCatalogEntryUi,
 } from '@/engine/providerCatalog';
@@ -173,14 +174,13 @@ export function ModelsTab() {
   }, []);
 
   /*
-   * One row per provider the ENGINE reports a credential for. A local runtime
+   * One row per registered custom endpoint or credential-bearing provider. A local runtime
    * counts once it is selected as the model, because "configured" for Ollama
    * means "in use", not "has a key".
    */
   const providers = useMemo<ProviderConfig[]>(
     () =>
-      (engineProviders ?? [])
-        .filter((p) => p.id !== 'custom' && (p.hasKey || p.id === enginePrimary))
+      configuredProviderRows(engineProviders ?? [], enginePrimary)
         .map((p) => {
           const meta = models.providers.find((m) => m.id === p.id);
           const tested = meta?.lastTest ?? null;

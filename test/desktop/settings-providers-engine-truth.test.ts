@@ -17,6 +17,7 @@
  * the component.
  */
 import { describe, expect, test } from 'bun:test';
+import { configuredProviderRows } from '../../desktop/src/engine/providerCatalog.ts';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -34,9 +35,13 @@ describe('S-6 · ModelsTab reads the engine, not a local mirror', () => {
   });
 
   test('a provider with a key is configured even with no local entry', () => {
-    expect(tab).toContain('p.hasKey');
-    // A local runtime in use counts as configured (it has no key at all).
-    expect(tab).toContain('p.id === enginePrimary');
+    expect(tab).toContain('configuredProviderRows(engineProviders ?? [], enginePrimary)');
+    const rows = configuredProviderRows([
+      { id: 'keyed', label: 'Keyed', kind: 'cloud', hasKey: true, healthy: false },
+      { id: 'local', label: 'Local', kind: 'local', hasKey: false, healthy: false },
+      { id: 'unset', label: 'Unset', kind: 'cloud', hasKey: false, healthy: false },
+    ], 'local');
+    expect(rows.map(p => p.id)).toEqual(['keyed', 'local']);
   });
 
   test('the row status comes from the engine verdict before any local note', () => {

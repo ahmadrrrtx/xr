@@ -231,3 +231,8 @@ export function buildProviderCatalog(
     counts: { hosted: hosted.length + customs.length, local: local.length },
   };
 }
+
+/** Registration is configuration even when an endpoint has no credential. */
+export function configuredProviderRows(providers: readonly EngineProvider[], primary: string | null): EngineProvider[] {
+  return providers.filter(p => p.id !== 'custom' && (p.kind === 'custom' || p.hasKey || p.id === primary));
+}
