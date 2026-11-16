@@ -2,6 +2,7 @@
  * Phase 04 — canonical provider gateway integration.
  */
 
+import { providerObservationRoutes } from './provider-observation.routes.ts';
 import { loadConfig, saveConfig } from "../../config/config.ts";
 import { getHardwareSpecs, formatHardwareSummary } from "../../local/hardware.ts";
 import { providerGateway } from "../../providers/gateway.ts";
@@ -27,6 +28,7 @@ const MODEL_CLASSES: ReadonlySet<string> = new Set<ModelClass>([
 
 export function providersRoutes(): DaemonRoute[] {
   return [
+    ...providerObservationRoutes(),
     route({
       id: "providers.list",
       path: "/api/providers",

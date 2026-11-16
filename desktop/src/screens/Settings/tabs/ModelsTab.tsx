@@ -264,7 +264,11 @@ export function ModelsTab() {
     const existing = providers.find((p) => p.id === id);
     let notice =
       'Desktop entry removed; review external credentials separately.';
-    if (existing?.keyStorage === 'engine') {
+    if (existing?.kind === 'custom') {
+      const { removeCustomProviderFromEngine } = await import('@/engine/providers');
+      await removeCustomProviderFromEngine(id);
+      notice = 'Engine endpoint removed. Its broker credential is retained for explicit review.';
+    } else if (existing?.keyStorage === 'engine') {
       const { removeProviderKeyFromEngine } =
         await import('@/engine/providers');
       notice = (await removeProviderKeyFromEngine(id)).notice;

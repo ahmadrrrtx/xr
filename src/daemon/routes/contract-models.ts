@@ -8,12 +8,16 @@
  */
 import type { ApiOperationMeta } from "./contract.ts";
 import {
-  ModelsPullRequest, ModelsSelectRequest, ModelsTestRequest, CustomProviderAddRequest,
+  ProviderProbeRequest, ModelsPullRequest, ModelsSelectRequest, ModelsTestRequest, CustomProviderAddRequest,
   CustomProviderRemoveRequest, ProviderSetRequest, WorkspaceCreateRequest,
   WorkspaceSwitchRequest, OkResponse,
 } from "./schemas.ts";
 
 export const MODELS_CONTRACT: Record<string, ApiOperationMeta> = {
+  "providers.probe": {
+    summary: "Explicit adapter endpoint probe (may send a minimal billable request; not capability verification).",
+    tag: "providers", stability: "experimental", request: ProviderProbeRequest,
+  },
   "providers.list": {
     summary: "Provider status (keys present, health, defaults).",
     tag: "providers",

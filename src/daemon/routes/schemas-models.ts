@@ -40,3 +40,9 @@ export const CustomProviderAddRequest = z.looseObject({
 });
 
 export const CustomProviderRemoveRequest = z.looseObject({ id: z.string().min(1).max(64) });
+
+/** Probe only a previously registered identity; never accept a raw key/URL here. */
+export const ProviderProbeRequest = z.object({
+  providerId: z.string().min(1).max(64),
+  model: z.string().min(1).max(200).optional(),
+});

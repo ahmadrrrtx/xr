@@ -759,4 +759,5 @@ export {
   ModelsPullRequest,
   CustomProviderAddRequest,
   CustomProviderRemoveRequest,
+  ProviderProbeRequest,
 } from "./schemas-models.ts";

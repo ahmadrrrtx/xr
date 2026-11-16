@@ -320,6 +320,8 @@ export interface XRDaemonClient {
   capabilitiesQuarantine(body: z.infer<typeof S.CapabilityIdRequest>): Promise<Record<string, unknown>>;
   /** Rollback a capability to a previous version. */
   capabilitiesRollback(body: z.infer<typeof S.CapabilityIdRequest>): Promise<Record<string, unknown>>;
+  /** Explicit adapter endpoint probe (may send a minimal billable request; not capability verification). */
+  providersProbe(body: z.infer<typeof S.ProviderProbeRequest>): Promise<Record<string, unknown>>;
   /** Provider status (keys present, health, defaults). */
   providersList(): Promise<Record<string, unknown>>;
   /** Select default provider/model (+ optional fallback). */
@@ -775,6 +777,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string, string, number, boolea
   ["capabilitiesDisable","POST","/api/v1/capabilities/disable",0,true,false],
   ["capabilitiesQuarantine","POST","/api/v1/capabilities/quarantine",0,true,false],
   ["capabilitiesRollback","POST","/api/v1/capabilities/rollback",0,true,false],
+  ["providersProbe","POST","/api/v1/providers/probe",0,true,false],
   ["providersList","GET","/api/v1/providers",0,false,false],
   ["providersSet","POST","/api/v1/providers/set",0,true,false],
   ["providersRoute","GET","/api/v1/providers/route",0,false,false],

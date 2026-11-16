@@ -35,6 +35,11 @@ export function engineKnowsProvider(providerId: string): boolean {
   return list.some((p) => p.id === providerId);
 }
 
+export function requireEngineReady(): void {
+  if (useEngineStore.getState().status !== 'ready')
+    throw new Error('Engine not ready. Start a compatible engine and retry; nothing was saved.');
+}
+
 export function saveProviderKeyToEngine(input: {
   providerId: string;
   apiKey: string;
@@ -42,6 +47,7 @@ export function saveProviderKeyToEngine(input: {
   setDefault?: boolean;
   probe?: boolean;
 }): Promise<EngineKeySaveResult> {
+  requireEngineReady();
   return enginePost<EngineKeySaveResult>('/onboarding/provider', {
     providerId: input.providerId,
     apiKey: input.apiKey,
@@ -81,11 +87,17 @@ export interface CustomProviderSummary {
 export async function addCustomProviderToEngine(
   input: CustomProviderInput
 ): Promise<{ ok: boolean; provider: CustomProviderSummary }> {
+  requireEngineReady();
+  const url = new URL(input.baseUrl);
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
+    throw new Error('Use an HTTP(S) base URL without credentials, query parameters or a fragment.');
+  if (!input.defaultModel.trim()) throw new Error('An explicit model is required.');
   const result = await enginePost<{ ok: boolean; provider: CustomProviderSummary }>(
     '/providers/custom',
     input
   );
-  if (result.ok === false) throw new Error('The engine did not add the endpoint.');
+  if (result.ok !== true || !result.provider?.id || !result.provider.defaultModel)
+    throw new Error('The engine did not acknowledge an endpoint and model.');
   // The catalog must be re-read: the new provider contributes models.
   await useEngineStore.getState().loadCatalog({ force: true });
   return result;
@@ -174,4 +186,14 @@ export function sampleExchangeUsd(model: string): {
     usd: (1000 * info.inPer1M + 500 * info.outPer1M) / 1_000_000,
     estimate: info.estimate === true,
   };
+}
+
+/** Endpoint/auth observation only: no generated text, tool or billing claim. */
+export interface EngineProviderProbe {
+  ok: boolean; providerId: string; model: string; inferenceVerified: false;
+  latencyMs: number | null; detail: string; authState: string;
+}
+export function probeEngineProvider(providerId: string, model?: string): Promise<EngineProviderProbe> {
+  requireEngineReady();
+  return enginePost('/providers/probe', { providerId, model });
 }
