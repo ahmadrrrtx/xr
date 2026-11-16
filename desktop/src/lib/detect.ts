@@ -1,12 +1,44 @@
 /*
- * Phase 3 — hardware / runtime detection, typed + graceful.
+ * Phase 3 — hardware / runtime detection, typed + honest.
  *
- * Inside Tauri the commands run in Rust (sysinfo + ureq). In a plain browser
- * (bun dev / Playwright) everything falls back to a deterministic mock so the
- * whole onboarding flow is testable without the native shell. GPU + mic are
- * probed with webview APIs in both hosts.
+ * Inside Tauri the commands run in Rust (sysinfo + ureq). GPU + mic are probed
+ * with webview APIs in both hosts.
+ *
+ * THERE IS NO MOCK. XR-REL-01: this module used to fabricate a fixed machine
+ * profile (a laptop the user does not own, with 36 GB of RAM) and an installed
+ * Ollama whenever a probe failed — including
+ * when the shell DENIED the IPC call, which is the likeliest failure in a
+ * packaged build — and a hardcoded hardware profile was then used to recommend
+ * (and download) a model. A detection that cannot run now returns `null` /
+ * `unknown` and the caller must say so. A wrong number here is worse than no
+ * number: the wizard would offer a 4.7 GB download tuned to hardware the user
+ * does not have.
  */
 import { isTauri } from '@/lib/tauri';
+
+/**
+ * Which detection could not run, and why. `cause` is for the console / the
+ * "Copy diagnostics" path — never rendered as if it were a hardware fact.
+ */
+export class DetectionUnavailable extends Error {
+  readonly probe: DetectionProbe;
+  override readonly cause: unknown;
+
+  constructor(probe: DetectionProbe, cause: unknown) {
+    super(
+      probe === 'system'
+        ? 'The XR engine could not read this machine\u2019s hardware.'
+        : probe === 'ollama'
+          ? 'Could not check whether Ollama is running.'
+          : 'GPU detection is unavailable in this build.'
+    );
+    this.name = 'DetectionUnavailable';
+    this.probe = probe;
+    this.cause = cause;
+  }
+}
+
+export type DetectionProbe = 'system' | 'gpu' | 'ollama';
 
 export interface SystemInfo {
   os: string;
@@ -29,7 +61,7 @@ export interface OllamaInfo {
 }
 
 export interface GpuInfo {
-  /** e.g. "Apple M3 Pro" or "NVIDIA GeForce RTX 4090"; null when unknown. */
+  /** e.g. "NVIDIA GeForce RTX 4090"; null when unknown. */
   name: string | null;
   /** True when the only renderer is software (SwiftShader / llvmpipe). */
   software: boolean;
@@ -40,8 +72,17 @@ export interface MicInfo {
   permission: 'granted' | 'denied' | 'prompt';
 }
 
-/** RAM-tier → recommended local model (docs/phases/03 plan §4). */
+/**
+ * RAM-tier → recommended local model (docs/phases/03 plan §4).
+ *
+ * `ramGb` is REQUIRED and must be a measured value: there is deliberately no
+ * default. `null` means "hardware not measured", which is not a RAM tier — the
+ * old `recommendModel(ram ?? 0)` silently answered "0.5B" for an unknown
+ * machine, so an unreadable system quietly got a model recommendation.
+ */
 export function recommendModel(ramGb: number): { model: string; label: string; sizeGb: number } {
+  if (!Number.isFinite(ramGb) || ramGb <= 0)
+    throw new RangeError('recommendModel requires a measured RAM value in GB');
   if (ramGb < 8) return { model: 'qwen2.5:0.5b', label: 'Qwen2.5 0.5B', sizeGb: 0.5 };
   if (ramGb < 16) return { model: 'qwen2.5:3b', label: 'Qwen2.5 3B', sizeGb: 2 };
   if (ramGb < 32) return { model: 'qwen2.5:7b', label: 'Qwen2.5 7B', sizeGb: 4.7 };
@@ -49,43 +90,47 @@ export function recommendModel(ramGb: number): { model: string; label: string; s
 }
 
 export async function detectSystem(): Promise<SystemInfo> {
-  if (isTauri()) {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke<SystemInfo>('detect_system');
-    } catch {
-      /* fall through to mock */
-    }
+  if (!isTauri())
+    throw new DetectionUnavailable(
+      'system',
+      new Error('no native shell (browser / preview build)')
+    );
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const info = await invoke<SystemInfo>('detect_system');
+    // Validate before returning: a malformed/partial payload must not become
+    // the table the wizard displays. `totalMemoryGb` drives a model download.
+    if (!info || typeof info !== 'object')
+      throw new Error('detect_system returned no payload');
+    if (!Number.isFinite(info.totalMemoryGb) || info.totalMemoryGb <= 0)
+      throw new Error('detect_system returned no usable totalMemoryGb');
+    return info;
+  } catch (cause) {
+    throw new DetectionUnavailable('system', cause);
   }
-  // Browser dev: deterministic "great machine" mock.
-  return {
-    os: 'macOS',
-    osVersion: '15 (browser dev)',
-    arch: 'arm64',
-    cpuBrand: 'Apple M3 Pro',
-    cpuCores: 11,
-    totalMemoryGb: 36,
-  };
 }
 
 export async function detectOllama(): Promise<OllamaInfo> {
-  if (isTauri()) {
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      return await invoke<OllamaInfo>('detect_ollama');
-    } catch {
-      /* fall through to mock */
-    }
+  if (!isTauri())
+    throw new DetectionUnavailable(
+      'ollama',
+      new Error('no native shell (browser / preview build)')
+    );
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const info = await invoke<OllamaInfo>('detect_ollama');
+    if (!info || typeof info.installed !== 'boolean')
+      throw new Error('detect_ollama returned no usable payload');
+    return { ...info, models: Array.isArray(info.models) ? info.models : [] };
+  } catch (cause) {
+    throw new DetectionUnavailable('ollama', cause);
   }
-  return {
-    installed: true,
-    version: '0.5.7 (mock)',
-    models: [{ name: 'qwen2.5:3b', sizeGb: 1.9 }],
-  };
 }
 
 export async function detectGpu(): Promise<GpuInfo> {
   // WebGPU adapter info (Chrome/Edge/Safari 17+), then WebGL renderer string.
+  // Unlike hardware/RAM, these are pure webview probes with no IPC and no
+  // capability gate, so a failure here is genuinely "no GPU", not "unknown".
   try {
     const gpu = (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<null | { info?: { vendor?: string; architecture?: string; device?: string; description?: string } }> } }).gpu;
     if (gpu) {
@@ -118,6 +163,7 @@ export async function detectGpu(): Promise<GpuInfo> {
   }
   return { name: null, software: false };
 }
+
 
 export async function detectMics(requestPermission: boolean): Promise<MicInfo> {
   if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
@@ -154,55 +200,138 @@ export async function detectMics(requestPermission: boolean): Promise<MicInfo> {
 }
 
 export interface PullProgressEvent {
-  id: number;
-  status: 'pulling' | 'verifying' | 'success' | 'error';
+  status: 'starting' | 'pulling' | 'verifying' | 'success' | 'error';
+  /** Real bytes reported by the runtime. Absent until the runtime says. */
   completed?: number;
   total?: number;
+  /** Only present when the runtime supplied a real total. */
+  pct?: number;
   detail?: string;
 }
 
-/** Start a pull; returns the event id + a subscribe fn. Mocks in browser. */
-export async function startOllamaPull(
+export interface PullHandle {
+  cancel: () => void;
+  /** Resolves when the stream ends (success, error, or cancel). */
+  done: Promise<void>;
+}
+
+/**
+ * XR-REL-02 — start a REAL model pull through the engine and stream its
+ * progress.
+ *
+ * The previous implementation simulated a download in the browser (a 6-second
+ * timer over a made-up 2.1 GB total) and, in the shell, bypassed the engine
+ * entirely by calling the Tauri command directly. Both are gone:
+ *
+ *   · the engine owns the pull (`POST /api/v1/models/pull`, SSE), so the
+ *     runtime, the validated model id and the audit record are the engine's;
+ *   · `completed`/`total` are the runtime's own numbers — there is no timer,
+ *     no estimated percentage, and no fabricated byte count;
+ *   · outside the app (browser dev / preview) there is no engine, so this
+ *     rejects with `DetectionUnavailable` instead of pretending to download.
+ */
+export async function startModelPull(
   model: string,
   onProgress: (e: PullProgressEvent) => void,
-): Promise<{ id: number; unsubscribe: () => void }> {
-  if (isTauri()) {
-    const { invoke } = await import('@tauri-apps/api/core');
-    const { listen } = await import('@tauri-apps/api/event');
-    const unlisten = await listen<PullProgressEvent>('ollama://pull-progress', (e) => onProgress(e.payload));
-    const id = await invoke<number>('ollama_pull', { model });
-    return { id, unsubscribe: () => void unlisten() };
+  opts: { runtime?: string; signal?: AbortSignal } = {}
+): Promise<PullHandle> {
+  const { engineFetch } = await import('@/engine/transport');
+  const controller = new AbortController();
+  const abort = (): void => controller.abort();
+  if (opts.signal) {
+    if (opts.signal.aborted) abort();
+    else opts.signal.addEventListener('abort', abort, { once: true });
   }
-  // Browser dev: simulated pull over ~6s with realistic layer phases.
-  const id = Math.floor(Math.random() * 1e6);
-  let cancelled = false;
-  const total = 2_100_000_000;
-  const started = Date.now();
-  const tick = window.setInterval(() => {
-    if (cancelled) return;
-    const elapsed = Date.now() - started;
-    if (elapsed > 6200) {
-      window.clearInterval(tick);
-      onProgress({ id, status: 'success' });
+
+  const run = async (): Promise<void> => {
+    let res: Response;
+    try {
+      res = await engineFetch('/models/pull', {
+        method: 'POST',
+        body: JSON.stringify({ runtime: opts.runtime ?? 'ollama', model }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      onProgress({
+        status: 'error',
+        detail: 'The engine is not reachable, so nothing can be downloaded.',
+      });
+      throw new DetectionUnavailable('ollama', error);
+    }
+    if (!res.ok) {
+      let detail = `The engine refused the pull (${res.status}).`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body?.error) detail = body.error;
+      } catch {
+        /* non-JSON error body */
+      }
+      onProgress({ status: 'error', detail });
       return;
     }
-    const frac = Math.min(0.97, elapsed / 6000);
-    onProgress({
-      id,
-      status: elapsed > 5600 ? 'verifying' : 'pulling',
-      completed: Math.round(total * frac),
-      total,
-      detail: 'pulling a6e87b2a...',
-    });
-  }, 250);
-  return {
-    id,
-    unsubscribe: () => {
-      cancelled = true;
-      window.clearInterval(tick);
-    },
+    if (!res.body) {
+      onProgress({ status: 'error', detail: 'The engine returned no progress stream.' });
+      return;
+    }
+
+    // SSE frames: `data: {json}\n\n`. Frames arrive in chunks, so buffer.
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const reader = res.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let sep = buffer.indexOf('\n\n');
+        while (sep !== -1) {
+          const raw = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          sep = buffer.indexOf('\n\n');
+          const dataLine = raw
+            .split('\n')
+            .filter((l) => l.startsWith('data:'))
+            .map((l) => l.slice(5).trim())
+            .join('');
+          if (!dataLine || dataLine === '[DONE]') continue;
+          let frame: Record<string, unknown>;
+          try {
+            frame = JSON.parse(dataLine) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+          const status = String(frame.status ?? '');
+          const completed =
+            typeof frame.completed === 'number' ? frame.completed : undefined;
+          const total = typeof frame.total === 'number' ? frame.total : undefined;
+          const detail = typeof frame.detail === 'string' ? frame.detail : undefined;
+          if (status === 'error') {
+            onProgress({ status: 'error', detail: detail ?? 'The pull failed.' });
+            continue;
+          }
+          if (status === 'done' || status === 'success') {
+            onProgress({ status: 'success' });
+            continue;
+          }
+          onProgress({
+            status: status === 'verifying' ? 'verifying' : status === 'starting' ? 'starting' : 'pulling',
+            completed,
+            total,
+            // No client-side interpolation: absent unless the runtime said.
+            pct: completed !== undefined && total ? completed / total : undefined,
+            detail,
+          });
+        }
+      }
+    } finally {
+      opts.signal?.removeEventListener('abort', abort);
+    }
   };
+
+  return { cancel: abort, done: run() };
 }
+
 
 /** Open a URL in the system browser (Ollama download page). */
 export async function openExternal(url: string): Promise<void> {
@@ -216,4 +345,29 @@ export async function openExternal(url: string): Promise<void> {
     }
   }
   window.open(url, '_blank', 'noopener');
+}
+
+/**
+ * XR-REL-01 — resolve a detection to `value | null`, recording WHY it failed.
+ *
+ * Every onboarding caller uses this so "unknown" is a first-class outcome with
+ * a reason attached, instead of a fabricated value or a silent `null`. The
+ * reason is a short operator-facing line; the raw cause is logged once.
+ */
+export async function probeDetection<T>(
+  probe: DetectionProbe,
+  run: () => Promise<T>
+): Promise<{ value: T; failure: null } | { value: null; failure: string }> {
+  try {
+    return { value: await run(), failure: null };
+  } catch (error) {
+    const message =
+      error instanceof DetectionUnavailable
+        ? error.message
+        : 'The probe failed for an unexpected reason.';
+    if (!(error instanceof DetectionUnavailable)) {
+      console.warn(`[xr] ${probe} probe failed`, error);
+    }
+    return { value: null, failure: message };
+  }
 }

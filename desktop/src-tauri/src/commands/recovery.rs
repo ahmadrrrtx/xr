@@ -297,22 +297,65 @@ pub fn crash_attach_external(
     }
 }
 
-/// Detach from the attached engine (start the local one again on restart).
+/// Detach from the attached engine and bring the LOCAL engine back now.
+///
+/// XR-REL-04 — "detach" used to only delete the settings key, which did
+/// nothing to the running process: the shell stayed attached (or stayed
+/// engine-less) until the next launch. Settings → Engine offers this as "Use
+/// the local engine again", so it has to actually do it.
 #[tauri::command]
-pub fn crash_detach_external(app: AppHandle) -> Result<(), String> {
+pub fn crash_detach_external(
+    app: AppHandle,
+    engine: tauri::State<'_, std::sync::Arc<EngineState>>,
+) -> Result<RecoveryInfo, String> {
     if let Some(store) = settings(&app) {
         let _ = store.delete(KEY_WITHOUT_ENGINE);
         let _ = store.save();
     }
-    Ok(())
+    if let Some(state) = app.try_state::<RecoveryState>() {
+        *state.choice.lock().map_err(|e| e.to_string())? = RecoveryChoice::Resume;
+    }
+    // Drop the external link and spawn our own sidecar on the main thread.
+    engine::detach_external(engine.inner());
+    engine::spawn_sidecar(engine.inner());
+    crash::log_shell(
+        &crash::xr_home(),
+        "engine: detached from external engine, local sidecar spawned",
+    );
+    let _ = app.emit("xr-engine-attached", 0u16);
+    Ok(info(&app, &engine))
 }
 
 /// Should this session skip the sidecar? Read once in `lib.rs` setup.
+///
+/// XR-REL-04 — this is a ONE-SHOT read. The preference is consumed (deleted)
+/// as it is honoured, which is what the module docs above already promised
+/// ("the sidecar is not spawned again until the next launch") but did not do:
+/// the flag used to persist in settings.json forever, so one click on
+/// "start without the local engine" — or one attach to a hand-started engine,
+/// whose in-memory token dies with the process — left every later launch with
+/// no engine and no way back from the UI. `engine_restart` (Settings → Engine)
+/// and `crash_detach_external` also clear it.
 pub fn started_without_engine<R: Runtime>(app: &AppHandle<R>) -> bool {
-    settings(app)
-        .and_then(|store| store.get(KEY_WITHOUT_ENGINE))
+    let Some(store) = settings(app) else {
+        return false;
+    };
+    let skip = store
+        .get(KEY_WITHOUT_ENGINE)
         .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+        .unwrap_or(false);
+    if skip {
+        // Consume it: the escape hatch covers exactly the launch it was chosen
+        // for, so a broken engine cannot crash-loop the shell twice in a row —
+        // and a working engine is never suppressed forever.
+        let _ = store.delete(KEY_WITHOUT_ENGINE);
+        let _ = store.save();
+        crash::log_shell(
+            &crash::xr_home(),
+            "recovery: honoured engine-skip for this launch (flag consumed)",
+        );
+    }
+    skip
 }
 
 /// Assemble a crash report and write it to `~/.xr/crash-reports/`.

@@ -149,6 +149,11 @@ jobs:
         run: |
           (cd desktop && bunx vite build --outDir "$RUNNER_TEMP/desktop-dist")
           bun run scripts/desktop-seed-gate.ts "$RUNNER_TEMP/desktop-dist"
+      # XR-REL-01/03 — the same production bundle, scanned for the markers the
+      # mock-data gate owns (fabricated hardware, simulated pulls, demo traces).
+      # `desktop-seed-gate` covers seed generators; this covers the rest.
+      - name: Production bundle has no fabricated data (XR-REL-01/03)
+        run: bun run scripts/mock-data-lint.ts --bundle "$RUNNER_TEMP/desktop-dist"
 
   # ── Windows runtime proof ────────────────────────────────────────────────────
   # Everything under `#[cfg(windows)]` (W-1 CREATE_NO_WINDOW, W-2 job-object

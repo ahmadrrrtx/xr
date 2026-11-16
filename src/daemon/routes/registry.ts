@@ -23,6 +23,7 @@ import { memoryRoutes } from "./memory.routes.ts";
 import { integrationRoutes } from "./integrations.routes.ts"; // Phase 22
 import { contextRoutes } from "./context.routes.ts";
 import { providersRoutes } from "./providers.routes.ts";
+import { customProviderRoutes } from "./custom-provider.routes.ts";
 import { shieldRoutes } from "./shield.routes.ts";
 import { systemRoutes } from "./system.routes.ts";
 import { onboardingRoutes } from "./onboarding.routes.ts";
@@ -84,6 +85,8 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...trustRoutes(),
     ...capabilityRoutes(),
     ...providersRoutes(),
+    // XR-REL-06 — custom OpenAI-compatible endpoints (own module: size gate).
+    ...customProviderRoutes(),
     // MCP registry management (dashboard Extensions ⇄ `xr mcp` CLI parity).
     ...mcpRoutes(),
     ...telegramRoutes(),

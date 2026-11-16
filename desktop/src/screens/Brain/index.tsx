@@ -32,6 +32,7 @@ import { useListRef } from 'react-window';
 import { startDemoRun } from '@/brain/demo';
 import { realRecentRuns } from '@/brain/recent';
 import { modelInfo } from '@/budget/models';
+import { hasUsableProvider, localRuntimeUsable } from '@/engine/providerReadiness';
 import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { resolveDefaultModel } from '@/stores/sessionsStore';
 
@@ -92,8 +93,9 @@ function BrainIndex() {
   // Phase 14: a real run needs the engine up with a provider that answers.
   const engineUp = useEngineStore((s) => isEngineUsable(s.status));
   const providers = useEngineStore((s) => s.providers);
-  const providerReady =
-    engineUp && !!providers?.providers.some((x) => x.healthy && (x.kind === 'local' || x.hasKey));
+  const current = useEngineStore((s) => s.models?.current);
+  // S-7: unprobed ≠ unusable. A saved key or a running local runtime counts.
+  const providerReady = engineUp && (hasUsableProvider(providers?.providers) || localRuntimeUsable(current));
   const defaultModel = providers?.model ?? resolveDefaultModel();
 
   useEffect(() => {

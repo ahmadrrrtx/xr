@@ -19,6 +19,10 @@ export interface ModelFact {
   maxOutputTokens?: number;
   tools: boolean;
   reasoning?: boolean;
+  /** XR-REL-07 — an XR agent run end-to-end against this model passed. Docs do not imply it. */
+  agentValidated?: boolean;
+  /** XR-REL-07 — path of the test driving this id through a real adapter. A path is evidence; a boolean is an opinion. */
+  contractTest?: string;
   /** Standard text-token base rate only; not a provider invoice ceiling. */
   price?: {
     input: number;

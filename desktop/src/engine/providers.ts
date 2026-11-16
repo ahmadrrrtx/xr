@@ -10,7 +10,7 @@
  * when the engine is down these calls reject and the caller says so.
  */
 import { modelInfo } from '@/budget/models';
-import { enginePost } from '@/engine/transport';
+import { engineGet, enginePost } from '@/engine/transport';
 import { useEngineStore } from '@/stores/engineStore';
 
 export interface EngineKeySaveResult {
@@ -49,6 +49,57 @@ export function saveProviderKeyToEngine(input: {
     probe: input.probe ?? false,
     setDefault: input.setDefault ?? false,
   });
+}
+
+/**
+ * XR-REL-06 — add a custom OpenAI-compatible endpoint.
+ *
+ * This is the promise in the README ("any OpenAI-compatible API") made
+ * reachable from the app. The engine is the one that validates: it refuses
+ * private/link-local/metadata hosts through its SSRF guard, derives or
+ * sanitises the id, and stores the key under an env var it controls.
+ */
+export interface CustomProviderInput {
+  id?: string;
+  label?: string;
+  baseUrl: string;
+  defaultModel: string;
+  apiKey?: string;
+  headers?: Record<string, string>;
+}
+
+export interface CustomProviderSummary {
+  id: string;
+  label: string;
+  baseUrl: string;
+  defaultModel: string;
+  apiKeyEnv: string | null;
+  keyed?: boolean;
+  hasHeaders?: boolean;
+}
+
+export async function addCustomProviderToEngine(
+  input: CustomProviderInput
+): Promise<{ ok: boolean; provider: CustomProviderSummary }> {
+  const result = await enginePost<{ ok: boolean; provider: CustomProviderSummary }>(
+    '/providers/custom',
+    input
+  );
+  if (result.ok === false) throw new Error('The engine did not add the endpoint.');
+  // The catalog must be re-read: the new provider contributes models.
+  await useEngineStore.getState().loadCatalog({ force: true });
+  return result;
+}
+
+export async function listCustomProviders(): Promise<CustomProviderSummary[]> {
+  const result = await engineGet<{ providers: CustomProviderSummary[] }>('/providers/custom');
+  return result.providers ?? [];
+}
+
+export async function removeCustomProviderFromEngine(id: string): Promise<void> {
+  const result = await enginePost<{ ok: boolean }>('/providers/custom/remove', { id });
+  if (result.ok === false) throw new Error('The engine did not remove the endpoint.');
+  await useEngineStore.getState().loadCatalog({ force: true });
 }
 
 export async function removeProviderKeyFromEngine(

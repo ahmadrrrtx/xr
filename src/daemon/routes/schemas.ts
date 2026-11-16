@@ -407,19 +407,6 @@ export const WorkspaceSwitchRequest = z.looseObject({
   id: z.string().optional(),
 });
 
-export const LocalRouting = z.enum(["local-only", "hybrid", "cloud-first"]);
-
-export const ModelsSelectRequest = z.looseObject({
-  runtime: z.string().optional().describe("Local runtime id (e.g. ollama, lmstudio)."),
-  model: z.string().optional(),
-  routing: LocalRouting.optional(),
-});
-
-export const ModelsTestRequest = z.looseObject({
-  runtime: z.string().optional(),
-  model: z.string().optional(),
-});
-
 export const ControlApproveRequest = z.looseObject({
   id: z.string().min(1),
   approved: z.boolean(),
@@ -759,3 +746,17 @@ export const BuilderProjectEvent = z.looseObject({
   projectId: z.string().optional(),
   paths: z.array(z.string()).optional(),
 });
+
+/**
+ * XR-REL-02 / XR-REL-06 — model + provider-endpoint schemas now live in
+ * schemas-models.ts (the file crossed the 800-line size gate). Re-exported here
+ * so `import { ModelsPullRequest } from "./schemas.ts"` keeps working.
+ */
+export {
+  LocalRouting,
+  ModelsSelectRequest,
+  ModelsTestRequest,
+  ModelsPullRequest,
+  CustomProviderAddRequest,
+  CustomProviderRemoveRequest,
+} from "./schemas-models.ts";

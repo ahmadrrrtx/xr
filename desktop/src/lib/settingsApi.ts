@@ -397,10 +397,20 @@ export interface SystemInfo {
   totalMemoryGb: number;
 }
 
+/**
+ * XR-REL-01 — resolves to `null` when the machine could not be read.
+ * The shell's own probe is `lib/detect.ts:detectSystem` (which distinguishes
+ * "unknown" from "no shell"); this thin variant exists for Settings screens
+ * that only need a number-or-nothing. Callers MUST treat `null` as unknown and
+ * say so — never substitute a default RAM size.
+ */
 export async function detectSystem(): Promise<SystemInfo | null> {
   if (!isTauri()) return null;
   try {
-    return await invoke<SystemInfo>('detect_system');
+    const info = await invoke<SystemInfo>('detect_system');
+    if (!info || !Number.isFinite(info.totalMemoryGb) || info.totalMemoryGb <= 0)
+      return null;
+    return info;
   } catch {
     return null;
   }
@@ -417,13 +427,20 @@ export interface OllamaInfo {
   models: OllamaModelInfo[];
 }
 
+/**
+ * XR-REL-01 — `installed: false` is a REAL answer ("we looked, it is not
+ * there"), so a probe that could not run must not collapse into it: this
+ * rejects instead, and the caller renders "couldn't check". Conflating
+ * "not installed" with "unknown" is how the old code ended up showing an
+ * installed Ollama that did not exist.
+ */
 export async function ollamaDetect(): Promise<OllamaInfo> {
-  if (!isTauri()) return { installed: false, version: null, models: [] };
-  try {
-    return await invoke<OllamaInfo>('detect_ollama');
-  } catch {
-    return { installed: false, version: null, models: [] };
-  }
+  if (!isTauri())
+    throw new Error('Ollama detection needs the desktop shell.');
+  const info = await invoke<OllamaInfo>('detect_ollama');
+  if (!info || typeof info.installed !== 'boolean')
+    throw new Error('detect_ollama returned no usable payload.');
+  return { ...info, models: Array.isArray(info.models) ? info.models : [] };
 }
 
 /**

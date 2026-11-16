@@ -64,6 +64,15 @@ export function crashStartWithoutEngine(): Promise<RecoveryInfo | null> {
   return invokeShell<RecoveryInfo>('crash_start_without_engine');
 }
 
+/**
+ * XR-REL-04 — detach from an attached external engine and spawn the local
+ * sidecar. Returns the refreshed recovery info (and `null` where there is no
+ * host). This is the "way back" that Settings → Diagnostics offers.
+ */
+export function crashDetachExternal(): Promise<RecoveryInfo | null> {
+  return invokeShell<RecoveryInfo>('crash_detach_external');
+}
+
 export function crashReport(): Promise<ReportTicket | null> {
   return invokeShell<ReportTicket>('crash_report');
 }

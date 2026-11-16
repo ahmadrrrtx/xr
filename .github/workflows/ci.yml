@@ -158,6 +158,12 @@ jobs:
       # here with its GATE_EXEMPTIONS entry deleted (XR-P08).
       - name: Gate placeholder-lint (XR-P00)
         run: bun run placeholder-lint
+      # XR-REL-01/03 — the mock-data gate. `--source` scans the tree on every
+      # PR; the full bundle scan runs after `vite build` on the desktop lanes,
+      # where dist/ exists. Both are wired so `scripts.ci` and the workflows
+      # agree on what runs (gate-enforcement enforces that agreement).
+      - name: Gate mock-data-lint:source (XR-REL-01/03)
+        run: bun run mock-data-lint:source
       - name: Gate desktop:sink-lint (XR-P00)
         run: bun run desktop:sink-lint
       - name: Gate ci-capability-gate (XR-P00)

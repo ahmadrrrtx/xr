@@ -94,8 +94,24 @@ export function ModelPicker({
     ? qualifiedModelId(providers.primary, providers.model)
     : null;
 
+  /**
+   * XR-REL-06 — did the engine store a credential for this provider?
+   *
+   * `hasKey` is the engine's own answer (a stored key OR environment
+   * credentials). Used only to word the row honestly; it never promotes a model
+   * to `available` — that still requires the engine to list it as registered.
+   */
+  const providerHasKey = (providerId: string): boolean =>
+    providers?.providers.find((p) => p.id === providerId)?.hasKey ?? false;
+
   useEffect(() => {
-    if (open) void useEngineStore.getState().loadCatalog();
+    // XR-REL-06 — opening the picker is an explicit request to see what can
+    // run NOW, so it discovers. Without `discoverLocal` the engine never
+    // probes its local runtimes, `modelOptions` marks every local model
+    // un-discovered, and the picker greys out a correctly configured model.
+    if (open) {
+      void useEngineStore.getState().loadCatalog({ discoverLocal: true });
+    }
   }, [open]);
 
   useEffect(() => {
@@ -199,10 +215,18 @@ export function ModelPicker({
           <span className="text-text-tertiary block text-[10px]">
             {o.detail}
           </span>
+          {/*
+            XR-REL-06 — `available` is "configured AND verified", so an
+            unverified-but-keyed provider used to read "Configure API key" even
+            though the key IS stored. Say what is actually true, and offer the
+            action that would change it.
+          */}
           {!o.available && o.kind === 'cloud' && (
             <span className="text-accent mt-0.5 flex items-center gap-1 text-[11px]">
               <KeyRound size={11} strokeWidth={1.75} aria-hidden="true" />
-              Configure API key
+              {providerHasKey(o.provider)
+                ? 'Key saved — not verified yet'
+                : 'Configure API key'}
             </span>
           )}
         </span>

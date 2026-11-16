@@ -422,6 +422,14 @@ export function TtsSection() {
             setPreviewing(true);
             const s = useVoiceStore.getState().settings;
             const res = await voiceApi.testTts(sample, s?.ttsVoice, speed ?? s?.ttsSpeed);
+            // The engine may answer `{ok:true}` with no bytes when the host
+            // spoke through its own system voice. That is a success, not an
+            // error — decodeAudioData(undefined) would have thrown.
+            if (!res.wav) {
+              stopPreview();
+              toast.info(res.detail ?? 'The engine host spoke this sample through its own system voice.');
+              return;
+            }
             const bytes = base64ToBytes(res.wav);
             const copy = new ArrayBuffer(bytes.byteLength);
             new Uint8Array(copy).set(bytes);

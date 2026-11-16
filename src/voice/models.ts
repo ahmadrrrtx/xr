@@ -121,9 +121,8 @@ function piperVoice(id: string, model: string, label: string, gender: "male" | "
  * Piper `lessac` voice "Ahmad · male", but lessac is a FEMALE voice — the
  * owner rightly rejected it. The replacements were chosen per label:
  *
- *   Ahmad  en_US-kusal   — the most youthful MALE Piper voice (a boy, not a
- *                          man); the default. There is no Pakistani-English
- *                          Piper voice.
+ *   Ahmad  en_US-kusal   — a younger, lighter MALE Piper voice; the default.
+ *                          There is no Pakistani-English Piper voice.
  *   Nova   en_US-kristin — bright, clear female.
  *   Atlas  en_US-ryan    — the deep, measured male.
  *   Sage   en_US-amy     — calm, considered female.

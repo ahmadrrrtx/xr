@@ -141,7 +141,7 @@ test("catalog quote shares long-context rates, preserves unavailable remote-loca
         "gpt-6-luna",
         2000,
         800,
-        Date.parse("2027-01-25"),
+        Date.parse("2027-02-12"),
       ),
     ),
   ).toBe(true);

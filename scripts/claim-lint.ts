@@ -29,6 +29,11 @@
  *   8. STATUS LABEL       — "Public beta" until docs/release/launch-gates.json is
  *                           all green; no stable-production wording meanwhile
  *                           (launch audit XR-LAUNCH-010, decision D2).
+ *  10. MODEL FACTS        — src/core/model-facts.json is in date, has no
+ *                           duplicate ids, and no unsourced price or
+ *                           agent-validation claim (XR-REL-07). Every model
+ *                           figure the app shows descends from this file, so it
+ *                           is a claim surface, not data.
  *   9. CHANNEL CLAIMS     — the README install table maps to claimed channels;
  *                           with `--live`, a row marked live must pass
  *                           `channel:live` against the real registries.
@@ -53,7 +58,7 @@ import { TREE_CEILING } from "./size-gate.ts";
 import { compareTableWithLive, lintChannelTable, lintStatusLabel, lintVscodeListing, parseInstallTable } from "./launch-claims.ts";
 
 export interface Violation {
-  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution" | "numeric-claim" | "doc-link" | "status-label" | "channel-claim" | "vscode-listing";
+  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution" | "numeric-claim" | "doc-link" | "status-label" | "channel-claim" | "vscode-listing" | "model-facts";
   file: string;
   line: number;
   text: string;
@@ -635,6 +640,23 @@ export function lintDocsIntegrity(root: string = ROOT): Violation[] {
   return out;
 }
 
+/**
+ * XR-REL-07 — gate 10. The register is read (not copied) so the linter and the
+ * runtime can never disagree about which facts shipped.
+ */
+async function lintModelFactsGate(): Promise<Violation[]> {
+  const { lintRepositoryModelFacts } = await import("./model-facts-lint.ts");
+  const report = await lintRepositoryModelFacts(ROOT);
+  for (const n of report.notes) console.error(`[claim-lint] note: ${n}`);
+  return report.violations.map((v) => ({
+    gate: "model-facts" as const,
+    file: v.file,
+    line: v.line,
+    text: v.text,
+    reason: v.reason,
+  }));
+}
+
 async function main(): Promise<void> {
   const json = process.argv.includes("--json");
   let manifest: ReleaseManifest;
@@ -652,6 +674,7 @@ async function main(): Promise<void> {
     ...lintStatusLabel(manifest, ROOT),
     ...lintChannelTable(manifest, ROOT),
     ...lintVscodeListing(ROOT),
+    ...(await lintModelFactsGate()),
   ];
   const notes: string[] = [];
   if (process.argv.includes("--live")) {
@@ -671,7 +694,7 @@ async function main(): Promise<void> {
   }
 
   if (violations.length === 0) {
-    console.log(`[claim-lint] ✓ no unsupported claims · ${manifest.claims.length} evidenced claims · every cited Article exists in ${CONSTITUTION_PATH} · published numbers and doc links single-sourced · v${manifest.identity.version}`);
+    console.log(`[claim-lint] ✓ no unsupported claims · ${manifest.claims.length} evidenced claims · every cited Article exists in ${CONSTITUTION_PATH} · published numbers and doc links single-sourced · model facts in date · v${manifest.identity.version}`);
     return;
   }
 
