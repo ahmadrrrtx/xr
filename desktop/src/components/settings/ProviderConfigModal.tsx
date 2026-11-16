@@ -182,7 +182,7 @@ function ProviderForm({
       if (key && !engineTakesKey) {
         setEngineNote({
           tone: 'error',
-          text: 'Register this endpoint with the engine first. A key cannot be saved in ordinary desktop settings.',
+          text: 'The engine has not listed this provider — it may be down, or the endpoint was never registered with it. Start the engine (or register a custom endpoint), then save again.',
         });
         setSaving(false);
         return;

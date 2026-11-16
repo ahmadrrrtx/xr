@@ -1,12 +1,17 @@
 /*
- * Budget › Models (Phase 13). Cloud + local card grids from the price
- * registry (`budget/models.ts`). Cloud cards: context, $/1M in/out,
- * latency/quality/strength chips, status dot, Set as default, Test model,
- * ⋯ Configure/Remove. Local cards: hardware badge (detectSystem RAM), gray
- * "local" pill, Download via Ollama pull (browser: marked installed).
+ * Budget › Models (Phase 13). Cloud + local card grids from the offline,
+ * sourced price registry (`budget/models.ts` — the dated model facts in
+ * src/core/model-facts.json plus six curated local rows). That registry is a
+ * PRICING surface, not the engine's catalogue: the engine (26 presets +
+ * custom endpoints) is the truth for what exists and what is configured, so
+ * every provider row below comes from the engine snapshot (S-6), and keys go
+ * to the engine's secret broker through the same modal as Settings.
  *
- * "Add model" opens the Phase 8 ProviderConfigModal for the provider; a
- * saved key unlocks that provider's registry models.
+ * "Test model" is a real engine round trip for local models, and an honest
+ * "not wired for hosted" for the rest — it never fabricates latency.
+ * Downloads run through the desktop's Ollama pull with the engine-side
+ * byte counts; a stream that never confirms success is an error, never a
+ * "ready" toast.
  */
 import {
   Check,
@@ -28,7 +33,6 @@ import {
   MODEL_REGISTRY,
   PROVIDER_LABEL,
   type ModelInfo,
-  type ModelProvider,
 } from '@/budget/models';
 import {
   ProviderConfigModal,
@@ -44,59 +48,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { isTauri } from '@/lib/tauri';
-import { detectSystem, ollamaPull, type SystemInfo } from '@/lib/settingsApi';
+import {
+  detectSystem,
+  ollamaPull,
+  type PullProgressPayload,
+  type SystemInfo,
+} from '@/lib/settingsApi';
 import { cn } from '@/lib/utils';
 import { useBudgetStore } from '@/stores/budgetStore';
 import { useSettingsStore, type ProviderConfig } from '@/stores/settingsStore';
+import { useEngineStore } from '@/stores/engineStore';
+import { pingEngineLocalModel } from '@/engine/providers';
+import {
+  buildProviderCatalog,
+  desktopKindFor,
+} from '@/engine/providerCatalog';
 
 import { BudgetCard, EstimatePill, LocalPill } from './shared';
-
-/* Provider → Phase 8 catalog entry (subset: the ones the registry prices). */
-const PROVIDER_ENTRIES: Record<
-  Exclude<ModelProvider, 'other'>,
-  ProviderCatalogEntry
-> = {
-  openai: {
-    id: 'openai',
-    name: 'OpenAI',
-    kind: 'openai-compatible',
-    tagline: 'GPT-5 and GPT-4o.',
-    baseUrl: 'https://api.openai.com/v1',
-    keysUrl: 'https://platform.openai.com/api-keys',
-  },
-  anthropic: {
-    id: 'anthropic',
-    name: 'Anthropic',
-    kind: 'anthropic',
-    tagline: 'Claude models.',
-    baseUrl: 'https://api.anthropic.com',
-    keysUrl: 'https://console.anthropic.com/settings/keys',
-  },
-  google: {
-    id: 'google',
-    name: 'Google Gemini',
-    kind: 'gemini',
-    tagline: 'Gemini models.',
-    baseUrl: 'https://generativelanguage.googleapis.com',
-    keysUrl: 'https://aistudio.google.com/apikey',
-  },
-  xai: {
-    id: 'xai',
-    name: 'xAI',
-    kind: 'openai-compatible',
-    tagline: 'Grok models.',
-    baseUrl: 'https://api.x.ai/v1',
-    keysUrl: 'https://console.x.ai',
-  },
-  ollama: {
-    id: 'ollama',
-    name: 'Ollama (local)',
-    kind: 'ollama',
-    tagline: 'Local models on this machine — no key needed.',
-    baseUrl: 'http://localhost:11434',
-    keyless: true,
-  },
-};
 
 const LATENCY_LABEL = {
   fast: 'Fast',
@@ -114,8 +82,10 @@ const QUALITY_LABEL = {
 export function ModelsTab() {
   const settings = useBudgetStore((s) => s.settings);
   const byModel = useBudgetStore((s) => s.byModel);
-  const providers = useSettingsStore((s) => s.settings.models.providers);
+  const localMirror = useSettingsStore((s) => s.settings.models.providers);
   const updateSettings = useSettingsStore((s) => s.update);
+  const engineProviders = useEngineStore((s) => s.providers?.providers ?? null);
+  const enginePrimary = useEngineStore((s) => s.providers?.primary ?? null);
   const [configFor, setConfigFor] = useState<ProviderCatalogEntry | null>(null);
   const [system, setSystem] = useState<SystemInfo | null>(null);
   const [pulling, setPulling] = useState<string | null>(null);
@@ -135,20 +105,60 @@ export function ModelsTab() {
     () => new Map(byModel.map((r) => [r.key, r.cost])),
     [byModel]
   );
+  /* S-6 — WHICH providers are configured is an engine fact (hasKey, or the
+   * primary local runtime with no key), not the desktop mirror. The mirror
+   * keeps only presentation the engine does not own (addedAt, last test). */
+  const providers = useMemo<ProviderConfig[]>(
+    () =>
+      (engineProviders ?? [])
+        .filter((p) => p.id !== 'custom' && (p.hasKey || p.id === enginePrimary))
+        .map((p) => {
+          const meta = localMirror.find((m) => m.id === p.id);
+          const tested = meta?.lastTest ?? null;
+          return {
+            id: p.id,
+            kind: desktopKindFor(p.id, p.kind),
+            name: meta?.name ?? p.label ?? p.id,
+            baseUrl: p.baseUrl ?? meta?.baseUrl,
+            model: meta?.model,
+            addedAt: meta?.addedAt ?? 0,
+            keyStorage: p.hasKey ? 'engine' : 'none',
+            lastTest: p.healthState
+              ? {
+                  ok: p.healthState === 'reachable' && p.hasKey,
+                  at: Date.parse(p.checkedAt ?? '') || 0,
+                  latencyMs: p.latencyMs ?? undefined,
+                }
+              : (tested ?? undefined),
+          };
+        }),
+    [engineProviders, enginePrimary, localMirror]
+  );
+  // The "Add a provider" menu derives from the engine too — 26 presets plus
+  // any custom endpoints it holds — with a flagged degraded fallback when the
+  // engine has not answered (never a silent subset).
+  const catalog = useMemo(
+    () => buildProviderCatalog(engineProviders),
+    [engineProviders]
+  );
+  const entryFor = (id: string): ProviderCatalogEntry | undefined =>
+    catalog.entries.find((e) => e.id === id);
   const cloud = MODEL_REGISTRY.filter((m) => !m.local);
   const local = MODEL_REGISTRY.filter((m) => m.local);
   const configuredProviders = new Set(providers.map((p) => p.id));
   const ramGb = system?.totalMemoryGb ?? null;
 
+  /* A cloud card is "configured" when the ENGINE reports a usable credential
+   * for its provider — not because a desktop list was appended on save. */
   const isConfigured = (m: ModelInfo): boolean =>
     m.local
       ? settings.installedLocal.includes(m.id)
-      : settings.configuredModels.includes(m.id);
+      : configuredProviders.has(m.provider);
 
   const saveProvider = (input: ProviderSaveInput): void => {
     void (async () => {
-      const prev = providers.find((p) => p.id === input.id);
-      const next: ProviderConfig[] = providers.filter((p) => p.id !== input.id);
+      const prev = localMirror.find((p) => p.id === input.id);
+      const next: ProviderConfig[] = localMirror.filter((p) => p.id !== input.id);
       next.push({
         id: input.id,
         name: input.name,
@@ -180,13 +190,15 @@ export function ModelsTab() {
   };
 
   const removeProvider = async (id: string): Promise<void> => {
-    const existing = providers.find((p) => p.id === id);
+    const existing = localMirror.find((p) => p.id === id) ?? providers.find((p) => p.id === id);
     let notice =
       'Desktop entry removed; review external credentials separately.';
     if (existing?.keyStorage === 'engine') {
       const { removeProviderKeyFromEngine } =
         await import('@/engine/providers');
       notice = (await removeProviderKeyFromEngine(id)).notice;
+    } else if (existing?.keyStorage === 'none') {
+      notice = 'No credential stored for this entry — nothing to remove.';
     } else if (existing?.keyStorage === 'keychain') {
       const { keychainDelete } = await import('@/lib/settingsApi');
       await keychainDelete('xr', id);
@@ -196,45 +208,95 @@ export function ModelsTab() {
       await purgeLegacyCredentialSettings();
     }
     updateSettings('models', {
-      providers: providers.filter((p) => p.id !== id),
+      providers: localMirror.filter((p) => p.id !== id),
     });
     setConfigFor(null);
     toast.success('Stored entry removed', { description: notice });
   };
 
   const testModel = (m: ModelInfo): void => {
-    setTesting(m.id);
-    // Mock round-trip: no real network, no real spend (Phase 14 wires providers).
-    window.setTimeout(() => {
-      setTesting(null);
-      const ms = m.local
-        ? 420 + Math.round(Math.random() * 300)
-        : 180 + Math.round(Math.random() * 400);
-      toast.success(`${m.name} responded`, {
-        description: `${ms} ms · mock round-trip, nothing was charged.`,
-      });
-    }, 650);
+    if (m.local) {
+      // A real round trip through the engine — the same path a chat turn
+      // takes. No fabricated millisecond figure, ever.
+      setTesting(m.id);
+      void pingEngineLocalModel('ollama', m.id)
+        .then((r) => {
+          if (r.result.ok) {
+            toast.success(`${m.name} answered`, {
+              description: `${r.result.latencyMs ?? '?'} ms via the engine · local inference; hardware/power not measured.`,
+            });
+          } else {
+            toast.error(`${m.name} did not answer`, {
+              description: r.result.detail ?? 'The engine could not reach this model.',
+            });
+          }
+        })
+        .catch((e: unknown) => {
+          toast.error('The engine is unreachable', {
+            description: e instanceof Error ? e.message : String(e),
+          });
+        })
+        .finally(() => setTesting(null));
+      return;
+    }
+    // Hosted providers have no cheap per-model ping the engine trusts: a
+    // "responded in N ms" toast was the fabrication this tab used to ship.
+    toast.info('No live probe for hosted models', {
+      description:
+        'Test a provider when its key is saved (Configure → Test connection). A model ping would spend tokens.',
+    });
   };
 
   const download = (m: ModelInfo): void => {
+    if (!isTauri()) {
+      // No engine and no runtime in a browser preview: say so instead of
+      // faking a pull and marking a model installed.
+      toast.error('Downloads run in the desktop app', {
+        description: 'Model pulls go through the local engine — open XR and download there.',
+      });
+      return;
+    }
     setPulling(m.id);
     void (async () => {
-      try {
-        if (isTauri()) await ollamaPull(m.id);
-        else await new Promise((r) => window.setTimeout(r, 900));
-        await useBudgetStore.getState().installLocal(m.id);
-        toast.success(`${m.name} ready`, {
-          description: 'Available offline, $0 per call.',
-        });
-      } catch (err) {
-        toast.error(`Could not download ${m.name}`, {
-          description:
-            err instanceof Error && err.message !== 'browser'
-              ? err.message
-              : 'Ollama is not reachable.',
-        });
-      } finally {
+      let unlisten: (() => void) | null = null;
+      let pullId = -1;
+      // installLocal is only ever reached on the engine-side pull reporting
+      // success — never on a timer, never on a browser stub.
+      const finish = (ok: boolean, detail?: string): void => {
+        unlisten?.();
         setPulling(null);
+        if (ok) {
+          void useBudgetStore.getState().installLocal(m.id);
+          toast.success(`${m.name} ready`, {
+            description: 'Available offline, $0 per call.',
+          });
+        } else {
+          toast.error(`Could not download ${m.name}`, {
+            description: detail ?? 'Ollama reported an error.',
+          });
+        }
+      };
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        // listen BEFORE invoking — the pull starts on a worker thread.
+        unlisten = await listen<PullProgressPayload>(
+          'ollama://pull-progress',
+          (event) => {
+            const progress = event.payload;
+            if (progress.id !== pullId) return;
+            if (progress.status === 'success') finish(true);
+            else if (progress.status === 'error')
+              finish(false, progress.detail ?? undefined);
+          }
+        );
+        pullId = await ollamaPull(m.id);
+      } catch (err) {
+        finish(
+          false,
+          err instanceof Error && err.message !== 'browser'
+            ? err.message
+            : 'Ollama is not reachable.'
+        );
       }
     })();
   };
@@ -261,22 +323,18 @@ export function ModelsTab() {
             <DropdownMenuLabel className="text-text-tertiary text-[11px]">
               Connect a provider
             </DropdownMenuLabel>
-            {(
-              Object.keys(PROVIDER_ENTRIES) as Array<
-                keyof typeof PROVIDER_ENTRIES
-              >
-            ).map((id) => (
+            {catalog.entries.map((entry) => (
               <DropdownMenuItem
-                key={id}
-                onSelect={() => setConfigFor(PROVIDER_ENTRIES[id])}
+                key={entry.id}
+                onSelect={() => setConfigFor(entry)}
               >
-                {id === 'ollama' ? (
+                {entry.engineKind === 'local' ? (
                   <Cpu size={13} aria-hidden="true" />
                 ) : (
                   <Cloud size={13} aria-hidden="true" />
                 )}
-                {PROVIDER_ENTRIES[id].name}
-                {configuredProviders.has(id) && (
+                {entry.name}
+                {configuredProviders.has(entry.id) && (
                   <Check
                     size={12}
                     aria-hidden="true"
@@ -285,6 +343,11 @@ export function ModelsTab() {
                 )}
               </DropdownMenuItem>
             ))}
+            {catalog.degraded ? (
+              <DropdownMenuLabel className="text-warning text-[11px]">
+                Engine unreachable — showing the built-in common providers.
+              </DropdownMenuLabel>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -317,8 +380,7 @@ export function ModelsTab() {
               }
               onTest={() => testModel(m)}
               onConfigure={() => {
-                const entry =
-                  PROVIDER_ENTRIES[m.provider as keyof typeof PROVIDER_ENTRIES];
+                const entry = entryFor(m.provider);
                 if (entry) setConfigFor(entry);
               }}
               onRemove={() => void useBudgetStore.getState().removeModel(m.id)}
@@ -360,7 +422,10 @@ export function ModelsTab() {
               }
               onTest={() => testModel(m)}
               onDownload={() => download(m)}
-              onConfigure={() => setConfigFor(PROVIDER_ENTRIES.ollama)}
+              onConfigure={() => {
+                const entry = catalog.entries.find((e) => e.id === 'ollama');
+                if (entry) setConfigFor(entry);
+              }}
               onRemove={() => void useBudgetStore.getState().removeModel(m.id)}
             />
           ))}
