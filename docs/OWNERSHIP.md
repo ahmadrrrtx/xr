@@ -250,6 +250,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/support-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sus.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/tag-npm-invariant.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/test-suite.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/typecheck-preflight.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/unit-tier.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/ux/` | @ahmadrrrtx | default (@ahmadrrrtx) |

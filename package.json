@@ -22,7 +22,10 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",
-    "test": "bun test",
+    "test": "bun run scripts/test-suite.ts",
+    "test:unit": "bun run scripts/test-suite.ts --lane unit",
+    "test:integration": "bun run scripts/test-suite.ts --lane integration",
+    "test:list": "bun run scripts/test-suite.ts --list",
     "typecheck": "bun run scripts/typecheck-preflight.ts && tsc --noEmit && tsc -p desktop/tsconfig.json",
     "ci": "bun run typecheck && bun test && bun run release:check && bun run channel:check && bun run claim-lint && bun run placeholder-lint && bun run mock-data-lint:source && bun run desktop:sink-lint && bun run platform:parity:check && bun run changelog:check && bun run baseline:inventory && bun run ci-capability-gate && bun run api:schema:check && bun run client:check && bun run api:compat && bun run boundaries && bun run size-gate && bun run hot-path-lint && bun run ownership:check && bun run website:marketplace:check",
     "website:marketplace:generate": "bun run website/scripts/generate-marketplace.ts",
