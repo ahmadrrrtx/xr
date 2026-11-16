@@ -159,3 +159,26 @@ The 23 controller scenarios and 46 affected renderer scenarios pass; desktop
 TypeScript and ESLint pass (the two existing fast-refresh warnings remain).
 These are local ownership/ordering guarantees, not a server-side rollback for an
 already accepted request or a physical microphone/WebView certification.
+
+## Engine voice-continuation follow-up
+
+Twelve further regressions reproduced engine work resuming after Stop or settings
+replacement. The shared session now invalidates transcriptions, semantic probes,
+state callbacks and utterance finalizers by owner/generation. Hard stop always
+aborts the execution signal, independently of optional conversational barge-in
+policy. Reconfiguration explicitly interrupts the old turn before installing its
+new pipeline. Late synthesis is discarded; old playback completion cannot clear
+a newer owner, and a cancelled spoken approval cannot become consent. Research
+keeps its abort owner until completion and receives the same cancellation signal.
+Costs already incurred are still recorded, not hidden because audio was discarded.
+The daemon session is extracted behind the existing route exports to retain the
+800-line module rule. Fourteen new engine/pipeline lifetime tests pass, as do
+root/desktop TypeScript and 453 daemon/architecture tests. Core size is now
+175,947 / 176,500 with the same 16 owned waivers. Cooperative cancellation is not
+a rollback of accepted external actions, provider billing, or already-running
+native/system-speech work; native behavior still needs OS-specific qualification.
+
+Final IPC generation refresh updates only the three reachable-module count
+descriptions for the extracted audio helper; all granted commands are unchanged.
+The full runner exposed the stale generated descriptions, not a permission or
+behavioral regression; generation and all 19 ACL tests now pass.
