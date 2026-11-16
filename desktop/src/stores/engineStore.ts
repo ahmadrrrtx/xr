@@ -34,6 +34,7 @@ import {
   engineHandshake,
   engineJson,
   enginePost,
+  bootEngineLink,
   resetEngineHandshake,
   resetEngineLink,
   type EngineEndpoint,
@@ -219,7 +220,8 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
       // Anchor the boot deadline at the first attempt of a link cycle: any
       // refresh with no observed handshake and no anchor IS that attempt.
       // (Never invent elapsed time — an unanchored attempt starts now.)
-      if (get().attemptStartedAt === null && get().handshake === null) {
+      const freshAttempt = get().attemptStartedAt === null && get().handshake === null;
+      if (freshAttempt) {
         set({ attemptStartedAt: Date.now() });
       }
       const elapsed = (): number => {
@@ -228,7 +230,11 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
       };
       const started = performance.now();
       try {
-        const endpoint = await engineEndpoint();
+        // S-4: only the FIRST probe of a link cycle may ride the pairing window
+        // (the sidecar needs ~1–3 s). Every later probe — and every ordinary
+        // engine call — takes the cached link and fails fast instead of parking
+        // the UI for 20 s. The `starting` state is what the wait is shown as.
+        const endpoint = await (freshAttempt ? bootEngineLink() : engineEndpoint());
         const res = await engineFetch('/health');
         if (!res.ok) throw new Error(`health ${res.status}`);
         const health = (await res.json()) as EngineHealth;

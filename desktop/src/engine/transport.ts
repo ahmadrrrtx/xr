@@ -14,6 +14,7 @@
  */
 import { APP_VERSION } from '@/lib/appMeta';
 import { isTauri } from '@/lib/tauri';
+import { acquireLink, createLinkCache, type EngineLink } from './link';
 
 export type EngineVia = 'sidecar' | 'dev-proxy';
 
@@ -41,13 +42,6 @@ export interface EngineEndpoint {
   reason: string | null;
 }
 
-interface EngineLink {
-  reachable?: boolean;
-  spawned?: boolean;
-  port?: number | null;
-  token?: string | null;
-  reason?: string | null;
-}
 
 /** The engine could not be reached (or refused the session). */
 export class EngineDown extends Error {
@@ -143,7 +137,7 @@ export async function pairFromUrl(): Promise<boolean> {
       /* see devSession() */
     }
     history.replaceState(null, '', window.location.pathname + window.location.search);
-    linkPromise = null;
+    linkCache.reset();
     handshakePromise = null; // XR-P01: a re-paired session re-negotiates.
     return true;
   } catch {
@@ -151,7 +145,6 @@ export async function pairFromUrl(): Promise<boolean> {
   }
 }
 
-let linkPromise: Promise<EngineEndpoint> | null = null;
 /** XR-P01: cached handshake for the current link (declared here; see below). */
 let handshakePromise: Promise<HandshakeOutcome> | null = null;
 
@@ -160,25 +153,10 @@ async function resolveEndpoint(): Promise<EngineEndpoint> {
   if (isTauri()) {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      // The sidecar handshake lands ~1–3 s after launch; poll, bounded.
-      for (let i = 0; i < 40; i++) {
-        const link = (await invoke<EngineLink>('engine_link')) ?? {};
-        if (link.reachable && link.port && link.token) {
-          return {
-            base: `http://127.0.0.1:${link.port}/api/v1`,
-            token: link.token,
-            via: 'sidecar',
-            port: link.port,
-            reason: null,
-          };
-        }
-        if (link.spawned === false) {
-          reason = link.reason ?? 'no sidecar in this build';
-          break;
-        }
-        await new Promise((r) => setTimeout(r, 500));
-      }
-      if (!reason) reason = 'the sidecar did not pair within 20 s';
+      // The sidecar handshake lands ~1–3 s after launch. acquireLink() owns the
+      // polling, the boot deadline and the "shell says never" short-circuit; it
+      // never throws, so a failed spawn arrives as an endpoint `reason`.
+      return await acquireLink(() => invoke<EngineLink>('engine_link'));
     } catch (e) {
       reason = `engine_link failed: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -186,18 +164,35 @@ async function resolveEndpoint(): Promise<EngineEndpoint> {
   return { base: '/api/v1', token: null, via: 'dev-proxy', port: null, reason };
 }
 
+/*
+ * S-4 — the link cache. Every engine call awaits this, so it must never park a
+ * caller for the length of the pairing window: `get()` caps the wait and
+ * `boot()` is the only caller that rides the full deadline (the boot probe,
+ * behind a visible `starting` state). See engine/link.ts.
+ */
+const linkCache = createLinkCache(resolveEndpoint);
+
 /** Resolve (once) where the engine lives. `force` re-runs the handshake. */
 export function engineEndpoint(force = false): Promise<EngineEndpoint> {
-  if (force || !linkPromise) {
-    linkPromise = resolveEndpoint();
+  if (force) {
+    linkCache.reset();
     handshakePromise = null; // XR-P01: a new link re-negotiates the contract.
+    return linkCache.boot();
   }
-  return linkPromise;
+  return linkCache.get();
+}
+
+/**
+ * S-4 — the boot probe's entry point: waits out the whole pairing window once,
+ * instead of making every UI-facing call wait a capped slice of it.
+ */
+export function bootEngineLink(): Promise<EngineEndpoint> {
+  return linkCache.boot();
 }
 
 /** Forget the cached link (after a sidecar restart). */
 export function resetEngineLink(): void {
-  linkPromise = null;
+  linkCache.reset();
   handshakePromise = null;
 }
 
