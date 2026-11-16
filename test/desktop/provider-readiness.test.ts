@@ -37,8 +37,8 @@ describe('S-7 · providerIsUsable', () => {
     expect(providerIsUsable(provider({ hasKey: true, healthState: 'unknown', healthy: false }))).toBe(true);
   });
 
-  test('an installed local runtime is usable with no key and no probe', () => {
-    expect(providerIsUsable(provider({ kind: 'local', hasKey: false, healthState: 'unknown' }))).toBe(true);
+  test('an unprobed local preset is not evidence of installation', () => {
+    expect(providerIsUsable(provider({ kind: 'local', hasKey: false, healthState: 'unknown' }))).toBe(false);
   });
 
   test('a probed-and-reachable provider is usable — no key needed to prove it', () => {
@@ -60,7 +60,8 @@ describe('S-7 · providerIsUsable', () => {
     // Older engines send `healthy` only; `undefined` healthState must not read
     // as "unreachable", or every legacy row would vanish.
     expect(providerIsUsable(provider({ hasKey: true, healthy: true }))).toBe(true);
-    expect(providerIsUsable(provider({ kind: 'local', healthy: false }))).toBe(true);
+    expect(providerIsUsable(provider({ kind: 'local', healthy: false }))).toBe(false);
+    expect(providerIsUsable(provider({ kind: 'local', healthy: true }))).toBe(true);
   });
 });
 
@@ -69,6 +70,7 @@ describe('S-7 · hasUsableProvider', () => {
     const list = [
       provider({ id: 'openai', hasKey: false, healthState: 'unknown' }),
       provider({ id: 'ollama', kind: 'local', healthState: 'unknown' }),
+      provider({ id: 'configured', hasKey: true, healthState: 'unknown' }),
       provider({ id: 'anthropic', hasKey: true, healthState: 'unreachable' }),
     ];
     expect(hasUsableProvider(list)).toBe(true);
@@ -83,7 +85,7 @@ describe('S-7 · hasUsableProvider', () => {
 
 describe('S-7 · localRuntimeUsable', () => {
   test('installed and running counts even when the provider row said otherwise', () => {
-    const current = { id: 'ollama', installed: true, running: true } as never;
+    const current = { id: 'ollama', installed: true, running: true, models: [{ name: 'qwen2.5:3b' }] } as never;
     expect(localRuntimeUsable(current)).toBe(true);
   });
 
