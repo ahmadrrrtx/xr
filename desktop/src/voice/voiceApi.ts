@@ -76,6 +76,7 @@ export interface VoiceEngineEvent {
 }
 
 export interface VoiceEngineSettings {
+  revision?: string;
   enabled: boolean;
   mode: VoiceMode;
   noiseSuppression: boolean;
@@ -92,7 +93,7 @@ export interface VoiceEngineSettings {
   desktop: VoiceDesktopPrefs;
 }
 
-export type VoiceSettingsPatch = Partial<Omit<VoiceEngineSettings, 'desktop'>> & {
+export type VoiceSettingsPatch = Partial<Omit<VoiceEngineSettings, 'desktop' | 'revision'>> & {
   desktop?: Partial<VoiceDesktopPrefs>;
 };
 
@@ -161,8 +162,8 @@ export const voiceApi = {
     ),
   voices: (options: Pick<RequestInit, 'signal'> = {}) => engineJson<{ voices: VoiceVoiceInfo[]; sample: string }>('/voice/voices', options),
   settingsGet: () => engineJson<{ settings: VoiceEngineSettings }>('/voice/settings'),
-  settingsSet: (patch: VoiceSettingsPatch) =>
-    enginePost<{ ok: boolean; settings: VoiceEngineSettings }>('/voice/settings', patch),
+  settingsSet: (patch: VoiceSettingsPatch, expectedRevision = 'initial') =>
+    enginePost<{ settings: VoiceEngineSettings }>('/voice/settings', { ...patch, expectedRevision }),
   download: (body: { component?: VoiceComponent; id?: string; firstRun?: boolean }, options: Pick<RequestInit, 'signal'> = {}) =>
     enginePost<{ started: VoiceFirstRunEntry[]; bytes: number }>('/voice/download', body, options),
   cancelDownload: () => enginePost<{ ok: boolean }>('/voice/cancel-download', {}),

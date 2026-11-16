@@ -13,7 +13,7 @@ are separate artifacts and do not inherit fixes merely because main changes.
 | 2 | Settings custom add/edit/rotation/keyless/default/test path | 10 real React form scenarios; 7 reproduced failures fixed |
 | 2 | Endpoint observation uses registered engine adapter | Real handler + loopback adapter receives selected model and broker key; no capability certification |
 | 3 | Voice audition/download/mic lifetime | 19 real React scenarios, including late permission/playback, failure/timeout and verified install; 698 combined desktop/voice tests pass; TypeScript passes |
-| 4 | Startup generations/deadlines and settings revisions | Pending |
+| 4 | Startup generations/deadlines and settings revisions | 7 supervisor/store scenarios, 5 voice race/conflict scenarios, real-handler concurrent revision conflict tests; 713 combined desktop/voice tests pass; TypeScript passes |
 | 5 | Explicit bounded model discovery and header-credential ownership | Pending |
 | 6 | Full regression/security/build review and upstream delivery | Pending |
 
@@ -46,3 +46,18 @@ terminal failure/cancellation, not merely while a file fetch is active. Download
 completion requires the requested voice and runtime to be installed. These
 checks use deferred media doubles; real WebView playback and physical inputs
 remain part of native qualification, not a claimed pass. IPC grants are unchanged.
+
+## Phase 4 boundary
+
+A monotonic supervisor now bounds pairing, health, identity, first catalog,
+restart IPC and failure diagnostics within one boot generation. Independent
+diagnostic export has a finite IPC budget. Restart invalidates old readers;
+last-good provider/model snapshots retain their time/source and are marked stale
+rather than certifying current readiness. Voice reads/writes are ordered and
+generation-checked. Engine-owned content revisions detect changes from other
+windows, CLI and config writers. Stale HTTP writes return 409, never auto-rebase;
+conflicted offline intent stays pending with explicit apply/discard controls.
+The in-window outbox is not advertised as a cross-process storage transaction.
+The engine revision is the conflict authority. No daemon credentials are copied
+between homes. The voice settings mutation is experimental and now requires
+expectedRevision; old clients must read and adopt that precondition.

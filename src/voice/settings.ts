@@ -1,4 +1,6 @@
 /** XR Stage 8 — voice settings helpers and transcript privacy. */
+import { voiceSettingsRevision, VoiceSettingsConflict } from "./settings-revision.ts";
+export { VoiceSettingsConflict } from "./settings-revision.ts";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
 import { XR_HOME, loadConfig, saveConfig } from "../config/config.ts";
@@ -11,12 +13,14 @@ export function getVoiceSettings(): VoiceSettings {
   const { config } = loadConfig();
   const defaults = defaultVoiceSettings();
   const stored = (config.voice ?? {}) as Partial<VoiceSettings>;
-  return {
+  const settings: VoiceSettings = {
     ...defaults,
     ...stored,
     endpointing: { ...defaults.endpointing, ...(stored.endpointing ?? {}) },
     desktop: { ...defaults.desktop!, ...(stored.desktop ?? {}) },
   };
+  settings.revision = voiceSettingsRevision(settings);
+  return settings;
 }
 
 const clamp = (v: unknown, lo: number, hi: number, fallback: number): number => {
@@ -65,17 +69,20 @@ export function sanitizeVoicePatch(input: Record<string, unknown>): Partial<Voic
 
 export function saveVoiceSettings(settings: VoiceSettings): void {
   const { config } = loadConfig();
-  config.voice = { ...(config.voice as any), ...settings } as any;
+  const { revision: _revision, ...values } = settings;
+  config.voice = { ...(config.voice as any), ...values } as any;
+  delete config.voice.revision;
   saveConfig(config);
 }
 
-export function patchVoiceSettings(patch: Partial<VoiceSettings>): VoiceSettings {
+export function patchVoiceSettings(patch: Partial<VoiceSettings>, expectedRevision?: string): VoiceSettings {
   const current = getVoiceSettings();
+  if (expectedRevision !== undefined && expectedRevision !== current.revision) throw new VoiceSettingsConflict(current.revision!);
   const next = { ...current, ...patch, endpointing: { ...current.endpointing, ...(patch.endpointing ?? {}) }, desktop: { ...current.desktop!, ...(patch.desktop ?? {}) } };
   if (next.mode !== "always-listen") next.alwaysListen = false;
   if (!next.enabled) next.mode = next.mode === "always-listen" ? "push-to-talk" : next.mode;
   saveVoiceSettings(next);
-  return next;
+  return getVoiceSettings();
 }
 
 export function recordVoiceTest(result: VoiceTestResult): void {

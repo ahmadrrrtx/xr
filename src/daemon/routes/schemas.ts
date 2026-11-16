@@ -17,6 +17,7 @@
  */
 
 import { z } from "zod/v4";
+export * from "./schemas-voice.ts";
 export * from "./schemas-research.ts";
 export * from "./schemas-agents.ts";
 export * from "./schemas-memory.ts"; // Phase 21

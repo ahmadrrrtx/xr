@@ -31,7 +31,7 @@ import { VoicePipeline } from "../../voice/pipeline.ts";
 import { SpeechToText, sttFromSettings } from "../../voice/stt.ts";
 import { TextToSpeech, ttsFromSettings } from "../../voice/tts.ts";
 import { defaultVoiceSettings, type VoiceSettings, type VoiceWakeSensitivity } from "../../voice/types.ts";
-import { getVoiceSettings, patchVoiceSettings, sanitizeVoicePatch } from "../../voice/settings.ts";
+import { getVoiceSettings, patchVoiceSettings, sanitizeVoicePatch, VoiceSettingsConflict } from "../../voice/settings.ts";
 import { pcm16Rms } from "../../voice/audio.ts";
 import { parseConfirmation } from "../../voice/wake.ts";
 import { loadNativeVoice, resetNativeVoice } from "../../voice/native.ts";
@@ -537,9 +537,12 @@ function safeVoiceSettings(): VoiceSettings {
   }
 }
 
-let session: VoiceSession | null = null;
+const sessions = new WeakMap<Store, VoiceSession>();
 export function voiceSessionFor(store: Store): VoiceSession {
-  if (!session) session = new VoiceSession(store);
+  let session = sessions.get(store);
+  const settings = safeVoiceSettings();
+  if (!session) { session = new VoiceSession(store, settings); sessions.set(store, session); }
+  else if (session.currentSettings().revision !== settings.revision) session.reconfigure(settings);
   return session;
 }
 
@@ -678,8 +681,11 @@ export function voiceRoutes(): DaemonRoute[] {
       handle: async ({ req, json, state }) => {
         const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
         if (!body || typeof body !== "object") return json({ error: "expected a settings patch" }, 400);
+        if (typeof body.expectedRevision !== "string") return json({ error: "expectedRevision is required; read voice settings first" }, 428);
         const patch = sanitizeVoicePatch(body);
-        const next = patchVoiceSettings(patch);
+        let next: VoiceSettings;
+        try { next = patchVoiceSettings(patch, body.expectedRevision); }
+        catch (e) { if (e instanceof VoiceSettingsConflict) return json({ error: e.message, revision: e.revision }, 409); throw e; }
         const s = voiceSessionFor(state.store);
         s.reconfigure(next);
         state.store.audit("voice.settings.update", { keys: Object.keys(patch) });

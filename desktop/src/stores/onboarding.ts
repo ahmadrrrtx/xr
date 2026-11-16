@@ -58,7 +58,9 @@ async function applyOnboardingVoice(s: {
       import('@/voice/onboardingPreferences'),
     ]);
     type HttpError = InstanceType<typeof EngineHttpError>;
-    await prefs.queueOnboardingVoice(s);
+    const revision = useEngineStore.getState().status === 'ready'
+      ? (await voiceApi.settingsGet().catch(() => null))?.settings?.revision : undefined;
+    await prefs.queueOnboardingVoice(s, revision ?? 'initial');
     queued = true;
     if (useEngineStore.getState().status !== 'ready') {
       toast.info('Voice saved — it will be applied when the engine starts.');

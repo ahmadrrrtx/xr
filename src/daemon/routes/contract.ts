@@ -14,7 +14,7 @@ import type { z } from "zod/v4";
 import { CLOUD_CONTRACT } from "./contract-cloud.ts";
 import { MODELS_CONTRACT } from "./contract-models.ts";
 import {
-  ApiError,
+  VoiceSettingsRequest, VoiceSettingsResponse, ApiError,
   BusinessApprovalDecisionRequest,
   BusinessJourneyStartRequest,
   CapabilityIdRequest,
@@ -29,10 +29,6 @@ import {
   ContextUndoOutcome,
   ContextUndoRequest,
   MemorySearchQuery,
-  ModelsSelectRequest,
-  ModelsTestRequest,
-  ModelsPullRequest,
-  CustomProviderAddRequest,
   ObjectResponse,
   OkResponse,
   ProviderSetRequest,
@@ -307,8 +303,8 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "voice.say": { summary: "Make the assistant speak a line through the offline TTS pipeline.", tag: "voice", stability: "experimental" },
   "voice.models": { summary: "Phase 15: STT model catalogue (offline/download, local binaries, cloud) with install state and sizes.", tag: "voice", stability: "experimental" },
   "voice.voices": { summary: "Phase 15: TTS voice catalogue (Piper offline voices + cloud) with install state and sizes.", tag: "voice", stability: "experimental" },
-  "voice.settings.get": { summary: "Phase 15: effective voice settings (engine config `voice` block).", tag: "voice", stability: "experimental" },
-  "voice.settings.set": { summary: "Phase 15: patch voice settings (validated, clamped); applies live to the session.", tag: "voice", stability: "experimental" },
+  "voice.settings.get": { summary: "Effective voice settings and engine-owned content revision.", tag: "voice", stability: "experimental", response: VoiceSettingsResponse },
+  "voice.settings.set": { summary: "Patch voice settings with expectedRevision; 409 requires review, not automatic replay.", tag: "voice", stability: "experimental", request: VoiceSettingsRequest, response: VoiceSettingsResponse },
   "voice.download": { summary: "Phase 15: start a model download (component+id, or the first-run bundle); progress streams on /events.", tag: "voice", stability: "experimental" },
   "voice.download.cancel": { summary: "Phase 15: cancel the running model download (partial files resume on retry).", tag: "voice", stability: "experimental" },
   "voice.models.clear": { summary: "Phase 15: delete every downloaded voice model and the extracted runtime.", tag: "voice", stability: "experimental" },

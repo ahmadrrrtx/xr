@@ -22,6 +22,8 @@
  * when the tab is hidden.
  */
 import { create } from 'zustand';
+import { createEngineSupervisor, type EngineGeneration } from '@/engine/supervisor';
+import { withinDeadline, requestSignal, RequestDeadlineExpired } from '@/engine/deadline';
 
 import { qualifiedModelId } from '@/budget/models';
 import { modelOptions, type EngineCatalog } from '@/engine/catalog';
@@ -138,6 +140,11 @@ export function isEngineUsable(status: EngineStatus): boolean {
 }
 
 interface EngineState {
+  generation: number;
+  catalogStale: boolean;
+  modelsStale: boolean;
+  catalogProvenance: { generation: number; observedAt: number; source: string } | null;
+  modelsProvenance: { generation: number; observedAt: number; source: string } | null;
   status: EngineStatus;
   /** Set iff status === 'failed'. */
   failureReason: EngineFailureReason | null;
@@ -167,6 +174,7 @@ interface EngineState {
   loadCatalog: (opts?: {
     force?: boolean;
     discoverLocal?: boolean;
+    signal?: AbortSignal;
   }) => Promise<void>;
   /** Set the engine's default provider/model (`POST /providers/set`). */
   setEngineDefault: (modelId: string) => Promise<void>;
@@ -182,6 +190,10 @@ const CATALOG_TTL_MS = 60_000;
 let pollTimer: number | null = null;
 let polling = 0; // ref count (several surfaces may ask)
 let inflight: Promise<boolean> | null = null;
+const supervisor = createEngineSupervisor();
+let generation: EngineGeneration | null = null;
+let catalogSequence = 0;
+let catalogAbort: AbortController | null = null;
 
 /** The shell's existing stderr tail (Rust `engine_logs_tail`); [] outside Tauri. */
 async function fetchStderrTail(): Promise<string[]> {
@@ -195,6 +207,11 @@ async function fetchStderrTail(): Promise<string[]> {
 }
 
 export const useEngineStore = create<EngineState>()((set, get) => ({
+  generation: 0,
+  catalogStale: true,
+  modelsStale: true,
+  catalogProvenance: null,
+  modelsProvenance: null,
   status: 'starting',
   failureReason: null,
   endpoint: null,
@@ -216,147 +233,100 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
 
   refresh: () => {
     if (inflight) return inflight;
-    inflight = (async () => {
-      // Anchor the boot deadline at the first attempt of a link cycle: any
-      // refresh with no observed handshake and no anchor IS that attempt.
-      // (Never invent elapsed time — an unanchored attempt starts now.)
-      const freshAttempt = get().attemptStartedAt === null && get().handshake === null;
-      if (freshAttempt) {
-        set({ attemptStartedAt: Date.now() });
+    const initial = get();
+    if (!generation || !supervisor.current(generation) || initial.generation !== generation.id ||
+        (initial.attemptStartedAt === null && initial.handshake === null)) {
+      generation = supervisor.begin(ENGINE_BOOT_DEADLINE_MS);
+      resetEngineLink();
+      catalogSequence++; catalogAbort?.abort();
+      set({ generation: generation.id, attemptStartedAt: initial.attemptStartedAt ?? Date.now(),
+        handshake: null, health: null, catalogStale: true, modelsStale: true });
+    }
+    const owner = generation;
+    const scope = supervisor.scope(owner, ENGINE_BOOT_DEADLINE_MS);
+    const current = () => scope.current() && get().generation === owner.id;
+    const elapsed = () => Date.now() - (get().attemptStartedAt ?? Date.now());
+    const started = performance.now();
+    let endpoint: EngineEndpoint | null = get().endpoint;
+    const attempt = scope.run(async (signal) => {
+      endpoint = await (owner.booted ? engineEndpoint() : bootEngineLink());
+      signal.throwIfAborted();
+      if (!current()) return false;
+      const health = await engineJson<EngineHealth>('/health', { signal });
+      signal.throwIfAborted();
+      if (!current()) return false;
+      const handshake = await engineHandshake(signal);
+      signal.throwIfAborted();
+      if (!current()) return false;
+      const next = nextEngineState({ outcome: 'ok' }, elapsed(), handshake);
+      const wasUsable = isEngineUsable(get().status);
+      set({ status: next.status, failureReason: next.failureReason, endpoint, health, handshake,
+        latencyMs: Math.round(performance.now() - started), lastChecked: Date.now(), failures: 0,
+        lastError: handshake.kind === 'legacy'
+          ? `Engine ${handshake.engineVersion ?? '(unknown version)'} does not report a contract version — running degraded. Restart with the bundled engine or update the engine.` : null,
+        stderrTail: [], upSince: wasUsable ? get().upSince : Date.now() });
+      if (!wasUsable || get().catalogStale) await get().loadCatalog({ force: true, signal });
+      signal.throwIfAborted();
+      if (!current()) return false;
+      owner.booted = true;
+      set({ attemptStartedAt: null });
+      if (next.status === 'ready')
+        void import('@/voice/onboardingPreferences').then(p => { if (current()) return p.flushOnboardingVoice(); }).catch(() => {});
+      return isEngineUsable(next.status);
+    }).catch(async (e) => {
+      if (!current()) return false;
+      let probe: EngineProbe;
+      if (e instanceof EngineIncompatible) probe = { outcome: 'incompatible', error: e.message };
+      else if (e instanceof EngineDown && e.kind === 'unauthorized') probe = { outcome: 'unauthorized', error: 'The engine rejected this session token.' };
+      else if (e instanceof RequestDeadlineExpired || (e instanceof EngineDown && e.kind === 'timeout') ||
+          (e instanceof DOMException && ['AbortError', 'TimeoutError'].includes(e.name)))
+        probe = { outcome: 'timeout', error: e.message };
+      else if (endpoint?.reason) probe = { outcome: 'crashed', error: endpoint.reason };
+      else probe = { outcome: 'unreachable', error: e instanceof Error ? e.message : 'No engine answered on the local port.' };
+      const previous = get().handshake;
+      const next = nextEngineState(probe, e instanceof RequestDeadlineExpired ? ENGINE_BOOT_DEADLINE_MS : elapsed(), previous);
+      const lost = next.status === 'disconnected' || next.status === 'failed';
+      catalogSequence++; catalogAbort?.abort();
+      if (lost) { resetEngineHandshake(); resetEngineLink(); }
+      // Publish failure BEFORE diagnostics. A hung native tail cannot hold the spinner.
+      set(st => ({ status: next.status, failureReason: next.failureReason, endpoint,
+        health: null, handshake: lost ? null : previous, catalogStale: true, modelsStale: true,
+        latencyMs: null, lastChecked: Date.now(), failures: st.failures + 1, lastError: probe.error ?? st.lastError, upSince: null }));
+      if (next.status === 'failed' && scope.remaining() > 0) {
+        const stderrTail = await scope.run(() => fetchStderrTail()).catch(() => []);
+        if (current()) set({ stderrTail });
       }
-      const elapsed = (): number => {
-        const t0 = get().attemptStartedAt;
-        return t0 === null ? 0 : Date.now() - t0;
-      };
-      const started = performance.now();
-      try {
-        // S-4: only the FIRST probe of a link cycle may ride the pairing window
-        // (the sidecar needs ~1–3 s). Every later probe — and every ordinary
-        // engine call — takes the cached link and fails fast instead of parking
-        // the UI for 20 s. The `starting` state is what the wait is shown as.
-        const endpoint = await (freshAttempt ? bootEngineLink() : engineEndpoint());
-        const health = await engineJson<EngineHealth>('/health');
-        // Identity comes ONLY from the session-gated handshake (XR-P01):
-        // /health proved "something answered", nothing more.
-        const handshake = await engineHandshake();
-        const next = nextEngineState({ outcome: 'ok' }, elapsed(), handshake);
-        const wasUsable = isEngineUsable(get().status);
-        set({
-          status: next.status,
-          failureReason: next.failureReason,
-          endpoint,
-          health,
-          handshake,
-          latencyMs: Math.round(performance.now() - started),
-          lastChecked: Date.now(),
-          failures: 0,
-          lastError:
-            handshake.kind === 'legacy'
-              ? `Engine ${handshake.engineVersion ?? '(unknown version)'} does not report a contract version — running degraded. Restart with the bundled engine or update the engine.`
-              : null,
-          stderrTail: [],
-          attemptStartedAt: null,
-          upSince: wasUsable ? get().upSince : Date.now(),
-        });
-        // A fresh link: (re)load what it offers.
-        if (!wasUsable) void get().loadCatalog({ force: true });
-        // Replay pending non-secret voice intent on EVERY successful ready
-        // probe, even if the Voice screen is never opened. Failed attempts
-        // retain the outbox for the next poll; they do not fail engine health.
-        if (next.status === 'ready')
-          void import('@/voice/onboardingPreferences')
-            .then((prefs) => prefs.flushOnboardingVoice()).catch(() => {});
-        return isEngineUsable(next.status);
-      } catch (e) {
-        const endpoint = await engineEndpoint().catch(() => null);
-        let probe: EngineProbe;
-        if (e instanceof EngineIncompatible) {
-          probe = { outcome: 'incompatible', error: e.message };
-        } else if (e instanceof EngineDown && e.kind === 'unauthorized') {
-          probe = { outcome: 'unauthorized', error: 'The engine rejected this session token.' };
-        } else if (
-          (e instanceof EngineDown && e.kind === 'timeout') ||
-          (e instanceof DOMException && (e.name === 'AbortError' || e.name === 'TimeoutError'))
-        ) {
-          probe = { outcome: 'timeout', error: e instanceof Error ? e.message : null };
-        } else if (endpoint?.reason) {
-          // The shell observed the spawn itself fail — that is a crash,
-          // not a network guess.
-          probe = { outcome: 'crashed', error: endpoint.reason };
-        } else {
-          probe = {
-            outcome: 'unreachable',
-            error:
-              e instanceof Error && e.message !== 'Engine unreachable'
-                ? e.message
-                : 'No engine answered on the local port.',
-          };
-        }
-        const prevHandshake = get().handshake;
-        const next = nextEngineState(probe, elapsed(), prevHandshake);
-        // A lost/refused link invalidates the observed contract: the next
-        // successful probe must re-negotiate before `ready` again.
-        const linkLost = next.status === 'disconnected' || next.status === 'failed';
-        if (linkLost) resetEngineHandshake();
-        const stderrTail =
-          next.status === 'failed' &&
-          (next.failureReason === 'timeout' || next.failureReason === 'crashed')
-            ? await fetchStderrTail()
-            : get().stderrTail;
-        set((st) => ({
-          status: next.status,
-          failureReason: next.failureReason,
-          endpoint,
-          handshake: linkLost ? null : prevHandshake,
-          stderrTail,
-          latencyMs: null,
-          lastChecked: Date.now(),
-          failures: st.failures + 1,
-          lastError: probe.error ?? st.lastError,
-          upSince: null,
-        }));
-        return false;
-      } finally {
-        inflight = null;
-      }
-    })();
-    return inflight;
+      if (current() && lost && !get().restarting) { supervisor.cancel(); generation = null; }
+      return false;
+    }).finally(() => { if (inflight === attempt) inflight = null; });
+    inflight = attempt;
+    return attempt;
   },
 
   loadCatalog: async (opts) => {
     const st = get();
-    if (
-      !opts?.force &&
-      !opts?.discoverLocal &&
-      st.catalogLoadedAt &&
-      Date.now() - st.catalogLoadedAt < CATALOG_TTL_MS
-    )
-      return;
+    if (!opts?.force && !opts?.discoverLocal && !st.catalogStale && st.catalogLoadedAt && Date.now() - st.catalogLoadedAt < CATALOG_TTL_MS) return;
+    const sequence = ++catalogSequence;
+    catalogAbort?.abort();
+    const controller = new AbortController();
+    catalogAbort = controller;
+    const signal = requestSignal(controller, opts?.signal);
+    const current = () => sequence === catalogSequence && get().generation === st.generation && !signal.aborted;
     try {
-      // Catalog inspection is offline, including startup. /models performs
-      // runtime probes and is ONLY called after an explicit discovery action.
-      const [providers, catalog, discovered] = await Promise.all([
-        engineJson<EngineProvidersResponse>('/providers'),
-        engineJson<EngineCatalog>('/providers/catalog'),
-        opts?.discoverLocal
-          ? engineJson<EngineModelsResponse>('/models')
-          : Promise.resolve(undefined),
-      ]);
-      set({
-        providers,
-        catalog,
-        models: discovered ?? st.models,
-        catalogLoadedAt: Date.now(),
-        catalogError: null,
-      });
+      const [providers, catalog, discovered] = await withinDeadline(async (signal) => Promise.all([
+        engineJson<EngineProvidersResponse>('/providers', { signal }),
+        engineJson<EngineCatalog>('/providers/catalog', { signal }),
+        opts?.discoverLocal ? engineJson<EngineModelsResponse>('/models', { signal }) : Promise.resolve(undefined),
+      ]), 10_000, signal);
+      if (!current()) return;
+      const observedAt = Date.now();
+      const provenance = { generation: st.generation, observedAt, source: get().endpoint?.base ?? '/api/v1' };
+      set(s => ({ providers, catalog, models: discovered ?? s.models,
+        catalogLoadedAt: observedAt, catalogError: null, catalogStale: !isEngineUsable(s.status), catalogProvenance: provenance,
+        ...(discovered ? { modelsStale: !isEngineUsable(s.status), modelsProvenance: provenance } : {}) }));
     } catch (e) {
-      set({
-        catalogError:
-          e instanceof Error
-            ? e.message
-            : 'Could not load the model catalogue.',
-      });
-    }
+      if (current()) set({ catalogStale: true, catalogError: e instanceof Error ? e.message : 'Could not load the model catalogue.' });
+    } finally { controller.abort(); if (catalogAbort === controller) catalogAbort = null; }
   },
 
   setEngineDefault: async (modelId) => {
@@ -369,57 +339,40 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   },
 
   startOrRestart: async () => {
-    // An observed operator action starts a new, deadline-bounded attempt.
-    set({ restarting: true, status: 'starting', failureReason: null, attemptStartedAt: Date.now() });
+    const owner = supervisor.begin(ENGINE_BOOT_DEADLINE_MS);
+    generation = owner;
+    inflight = null;
+    catalogSequence++; catalogAbort?.abort(); resetEngineLink();
+    set({ generation: owner.id, restarting: true, status: 'starting', failureReason: null,
+      attemptStartedAt: Date.now(), handshake: null, health: null, upSince: null, catalogStale: true, modelsStale: true });
+    const scope = supervisor.scope(owner, ENGINE_BOOT_DEADLINE_MS);
     try {
-      if (isTauri()) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        const r = await invoke<{ ok: boolean; message?: string }>(
-          'engine_restart'
-        );
+      return await scope.run(async signal => {
+        if (isTauri()) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          signal.throwIfAborted();
+          await invoke('engine_restart');
+        } else if (import.meta.env.DEV) {
+          const res = await fetch('/__xr/engine/start', { method: 'POST', signal });
+          const body = await res.json() as { started?: boolean };
+          if (!res.ok || !body.started) throw new Error('Could not start the engine from the dev server.');
+        } else throw new Error('Start the engine with `xr serve` and retry.');
+        signal.throwIfAborted();
+        if (!scope.current()) return { ok: false, message: 'A newer restart replaced this attempt.' };
         resetEngineLink();
-        const up = await waitForEngine(20_000);
-        return {
-          ok: up,
-          message: up
-            ? 'Engine restarted.'
-            : (r?.message ?? 'The engine did not come back within 20 s.'),
-        };
-      }
-      if (!import.meta.env.DEV) {
-        return {
-          ok: false,
-          message: 'Start the engine with `xr serve` and retry.',
-        };
-      }
-      const res = await fetch('/__xr/engine/start', { method: 'POST' });
-      const j = (await res.json().catch(() => ({}))) as {
-        started?: boolean;
-        reason?: string;
-      };
-      if (!res.ok || !j.started) {
-        return {
-          ok: false,
-          message:
-            j.reason ?? 'Could not start the engine from the dev server.',
-        };
-      }
-      const up = await waitForEngine(25_000);
-      return {
-        ok: up,
-        message: up
-          ? 'Engine started.'
-          : 'Started the engine, but it has not answered yet.',
-      };
+        for (;;) {
+          signal.throwIfAborted();
+          if (await get().refresh()) return { ok: true, message: 'Engine started and identified.' };
+          signal.throwIfAborted();
+          await new Promise(r => setTimeout(r, Math.min(1000, scope.remaining())));
+          signal.throwIfAborted();
+        }
+      });
     } catch (e) {
-      return {
-        ok: false,
-        message:
-          e instanceof Error ? e.message : 'Could not restart the engine.',
-      };
-    } finally {
-      set({ restarting: false });
-    }
+      if (scope.current()) set({ status: 'failed', failureReason: e instanceof RequestDeadlineExpired ? 'timeout' : 'unreachable',
+        handshake: null, health: null, lastError: e instanceof Error ? e.message : 'Could not restart the engine.' });
+      return { ok: false, message: e instanceof RequestDeadlineExpired ? 'Engine startup timed out within the 30 s boot budget.' : e instanceof Error ? e.message : 'Could not restart the engine.' };
+    } finally { if (scope.current()) set({ restarting: false }); }
   },
 
   startPolling: () => {
@@ -455,15 +408,6 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   },
 }));
 
-async function waitForEngine(timeoutMs: number): Promise<boolean> {
-  const until = Date.now() + timeoutMs;
-  while (Date.now() < until) {
-    if (await useEngineStore.getState().refresh()) return true;
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  return false;
-}
-
 /* ── Derived views ─────────────────────────────────────────────────────── */
 
 /** XR-P01: from the observed handshake — /health no longer pretends to know. */
@@ -482,11 +426,11 @@ export function engineDefaultModel(): string | null {
 /** True when at least one provider can answer right now. */
 export function engineHasProvider(): boolean {
   const s = useEngineStore.getState();
-  if (!s.providers) return false;
+  if (!s.providers || s.catalogStale || !isEngineUsable(s.status)) return false;
   // S-7: one predicate (engine/providerReadiness) instead of a `healthy` test
   // that is false before the first probe. A running local runtime is usable
   // even if its provider row carried no key — it needs none.
-  return hasUsableProvider(s.providers.providers) || localRuntimeUsable(s.models?.current);
+  return hasUsableProvider(s.providers.providers) || (!s.modelsStale && localRuntimeUsable(s.models?.current));
 }
 
 /** Last-known-good engine facts survive a refresh error, never synthetic rows. */
@@ -496,5 +440,11 @@ export function engineModelOptions(
   models: EngineModelsResponse | null = useEngineStore.getState().models,
   catalog: EngineCatalog | null = useEngineStore.getState().catalog
 ) {
-  return modelOptions(providers, models, catalog);
+  const options = modelOptions(providers, models, catalog);
+  const st = useEngineStore.getState();
+  if (providers === st.providers && (st.catalogStale || !isEngineUsable(st.status)))
+    for (const row of [...options.local, ...options.cloud]) { row.available = false; row.detail = `Stale engine snapshot · ${row.detail ?? ''}`; }
+  else if (models === st.models && st.modelsStale)
+    for (const row of options.local) { row.available = false; row.discovered = false; }
+  return options;
 }

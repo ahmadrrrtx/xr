@@ -113,6 +113,8 @@ export function ModelsTab() {
   const engineProviders = useEngineStore((state) => state.providers?.providers ?? null);
   const enginePrimary = useEngineStore((state) => state.providers?.primary ?? null);
   const engineIssue = useEngineStore((state) => state.providers === null);
+  const snapshotStale = useEngineStore(state => state.catalogStale);
+  const observedAt = useEngineStore(state => state.catalogProvenance?.observedAt);
 
   // The add-provider catalog comes from the ENGINE (26 presets + any custom
   // providers), merged with presentation metadata — see engine/providerCatalog.
@@ -338,6 +340,7 @@ export function ModelsTab() {
 
   return (
     <div>
+      {snapshotStale && engineProviders ? <p role="status" className="text-warning mb-3 text-sm">Last-known engine configuration{observedAt ? ` from ${new Date(observedAt).toLocaleString()}` : ''}; stale, not current readiness.</p> : null}
       {/* ── Providers ── */}
       <SettingsSection title="Providers">
         {!hasProviders ? (

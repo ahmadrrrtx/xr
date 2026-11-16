@@ -21,6 +21,7 @@
  * again 500 ms later, forty times, on every engine call, cannot change the
  * answer. A positive link is cached until something resets it.
  */
+import { withinDeadline, RequestDeadlineExpired } from './deadline';
 import type { EngineEndpoint } from './transport';
 
 export const LINK_POLL_INTERVAL_MS = 500;
@@ -65,33 +66,25 @@ export function endpointFor(link: EngineLink): EngineEndpoint {
  */
 export async function acquireLink(
   read: () => Promise<EngineLink | null>,
-  opts: { deadlineMs?: number; intervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void> } = {},
+  opts: { deadlineMs?: number; intervalMs?: number; now?: () => number; sleep?: (ms: number) => Promise<void>; signal?: AbortSignal } = {},
 ): Promise<EngineEndpoint> {
   const deadlineMs = opts.deadlineMs ?? LINK_BOOT_DEADLINE_MS;
   const intervalMs = opts.intervalMs ?? LINK_POLL_INTERVAL_MS;
-  const now = opts.now ?? ((): number => Date.now());
+  const now = opts.now ?? ((): number => performance.now());
   const sleep = opts.sleep ?? ((ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)));
   const startedAt = now();
   let reason: string | null = null;
   for (;;) {
     // IPC can hang too. The outer loop's clock check cannot bound an await
     // which never returns; race each read against the remaining BOOT budget.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const expired = Symbol('link deadline');
     let link: EngineLink | null;
     try {
-      const remaining = Math.max(0, deadlineMs - (now() - startedAt));
-      const result = await Promise.race([
-        Promise.resolve().then(read),
-        new Promise<typeof expired>((r) => { timer = setTimeout(() => r(expired), remaining); }),
-      ]);
-      if (result === expired) break;
-      link = result;
+      link = await withinDeadline(read, Math.max(0, deadlineMs - (now() - startedAt)), opts.signal);
     } catch (e) {
+      if (opts.signal?.aborted) throw e;
+      if (e instanceof RequestDeadlineExpired) break;
       reason = `engine_link failed: ${e instanceof Error ? e.message : String(e)}`;
-      break; // an IPC rejection is final, not a null/pending snapshot
-    } finally {
-      clearTimeout(timer);
+      break;
     }
     if (link && isLinked(link)) return endpointFor(link);
     if (link?.spawned === false) {
@@ -100,7 +93,7 @@ export async function acquireLink(
     }
     const remaining = deadlineMs - (now() - startedAt);
     if (remaining <= 0) break;
-    await sleep(Math.min(intervalMs, remaining));
+    await withinDeadline(() => sleep(Math.min(intervalMs, remaining)), remaining, opts.signal);
   }
   if (!reason) reason = `the sidecar did not pair within ${Math.round(deadlineMs / 1000)} s`;
   return { base: '/api/v1', token: null, via: 'dev-proxy', port: null, reason };
@@ -117,21 +110,23 @@ export interface LinkCache {
 }
 
 export function createLinkCache(
-  resolve: () => Promise<EngineEndpoint>,
+  resolve: (signal: AbortSignal) => Promise<EngineEndpoint>,
   opts: { callerWaitMs?: number; negativeTtlMs?: number; now?: () => number } = {},
 ): LinkCache {
   const callerWaitMs = opts.callerWaitMs ?? LINK_CALLER_WAIT_MS;
   const negativeTtlMs = opts.negativeTtlMs ?? LINK_NEGATIVE_TTL_MS;
-  const now = opts.now ?? ((): number => Date.now());
+  const now = opts.now ?? ((): number => performance.now());
   let inflight: Promise<EngineEndpoint> | null = null;
   let last: EngineEndpoint | null = null;
   let failedAt: number | null = null;
   let generation = 0;
+  let controller: AbortController | null = null;
 
   const start = (): Promise<EngineEndpoint> => {
     if (inflight) return inflight;
     const epoch = generation;
-    const attempt = resolve()
+    controller = new AbortController();
+    const attempt = resolve(controller.signal)
       .then((ep) => {
         // A restart invalidates writers as well as readers of the cache.
         if (epoch === generation) {
@@ -175,6 +170,8 @@ export function createLinkCache(
     boot: () => start(),
     reset: () => {
       generation++;
+      controller?.abort();
+      controller = null;
       inflight = null;
       last = null;
       failedAt = null;

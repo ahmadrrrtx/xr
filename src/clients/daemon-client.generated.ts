@@ -110,10 +110,10 @@ export interface XRDaemonClient {
   voiceModels(): Promise<Record<string, unknown>>;
   /** Phase 15: TTS voice catalogue (Piper offline voices + cloud) with install state and sizes. */
   voiceVoices(): Promise<Record<string, unknown>>;
-  /** Phase 15: effective voice settings (engine config `voice` block). */
-  voiceSettingsGet(): Promise<Record<string, unknown>>;
-  /** Phase 15: patch voice settings (validated, clamped); applies live to the session. */
-  voiceSettingsSet(): Promise<Record<string, unknown>>;
+  /** Effective voice settings and engine-owned content revision. */
+  voiceSettingsGet(): Promise<z.infer<typeof S.VoiceSettingsResponse>>;
+  /** Patch voice settings with expectedRevision; 409 requires review, not automatic replay. */
+  voiceSettingsSet(body: z.infer<typeof S.VoiceSettingsRequest>): Promise<z.infer<typeof S.VoiceSettingsResponse>>;
   /** Phase 15: start a model download (component+id, or the first-run bundle); progress streams on /events. */
   voiceDownload(): Promise<Record<string, unknown>>;
   /** Phase 15: cancel the running model download (partial files resume on retry). */
@@ -673,7 +673,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string, string, number, boolea
   ["voiceModels","GET","/api/v1/voice/models",0,false,false],
   ["voiceVoices","GET","/api/v1/voice/voices",0,false,false],
   ["voiceSettingsGet","GET","/api/v1/voice/settings",0,false,false],
-  ["voiceSettingsSet","POST","/api/v1/voice/settings",0,false,false],
+  ["voiceSettingsSet","POST","/api/v1/voice/settings",0,true,false],
   ["voiceDownload","POST","/api/v1/voice/download",0,false,false],
   ["voiceDownloadCancel","POST","/api/v1/voice/cancel-download",0,false,false],
   ["voiceModelsClear","POST","/api/v1/voice/clear-models",0,false,false],

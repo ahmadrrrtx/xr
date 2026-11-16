@@ -149,7 +149,7 @@ export async function pairFromUrl(): Promise<boolean> {
 /** XR-P01: cached handshake for the current link (declared here; see below). */
 let handshakePromise: Promise<HandshakeOutcome> | null = null;
 
-async function resolveEndpoint(): Promise<EngineEndpoint> {
+async function resolveEndpoint(signal?: AbortSignal): Promise<EngineEndpoint> {
   let reason: string | null = null;
   if (isTauri()) {
     try {
@@ -157,8 +157,9 @@ async function resolveEndpoint(): Promise<EngineEndpoint> {
       // The sidecar handshake lands ~1–3 s after launch. acquireLink() owns the
       // polling, the boot deadline and the "shell says never" short-circuit; it
       // never throws, so a failed spawn arrives as an endpoint `reason`.
-      return await acquireLink(() => invoke<EngineLink>('engine_link'));
+      return await acquireLink(() => invoke<EngineLink>('engine_link'), { signal });
     } catch (e) {
+      if (signal?.aborted) throw e;
       reason = `engine_link failed: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
@@ -220,7 +221,9 @@ function authHeaders(ep: EngineEndpoint): Record<string, string> {
  * callers can read the engine's JSON reason.
  */
 export async function engineFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  init.signal?.throwIfAborted();
   const ep = await engineEndpoint();
+  init.signal?.throwIfAborted();
   let res: Response;
   // Only the header timer ends on headers. The composed caller signal must
   // remain live for the body/SSE, including aborts after fetch() resolves.
@@ -403,10 +406,10 @@ export function evaluateEngineContract(payload: unknown, desktopVersion: string 
  * the transport's `EngineDown` kinds (incl. `unauthorized`, `timeout`) when
  * the engine/session itself fails. Retried only when the link resets.
  */
-export function engineHandshake(): Promise<HandshakeOutcome> {
+export function engineHandshake(signal?: AbortSignal): Promise<HandshakeOutcome> {
   if (!handshakePromise) {
     const attempt = (async () => {
-      const payload = await engineJson<unknown>('/meta/version');
+      const payload = await engineJson<unknown>('/meta/version', { signal });
       const outcome = evaluateEngineContract(payload);
       if (outcome.kind === 'incompatible') {
         throw new EngineIncompatible(outcome.reason, outcome.detail);

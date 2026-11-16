@@ -13,8 +13,9 @@
  * the other direction, so there is no loop.
  */
 import { create } from 'zustand';
-import { flushOnboardingVoice } from './onboardingPreferences';
+import { flushOnboardingVoice, discardOnboardingVoice, retryOnboardingVoice } from './onboardingPreferences';
 
+import { useEngineStore, isEngineUsable } from '@/stores/engineStore';
 import { EngineDown, EngineHttpError } from '@/engine/transport';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
@@ -66,6 +67,10 @@ export interface VoiceDevice {
 }
 
 interface VoiceStoreState {
+  stale: boolean;
+  observedAt: number | null;
+  preferenceError: string | null;
+  resolvePendingPreferences: (apply: boolean) => Promise<void>;
   status: VoiceStatus | null;
   /** The engine could not answer `/voice/status` (down, or old build). */
   statusError: 'engine-down' | 'unsupported' | null;
@@ -158,12 +163,21 @@ function mirrorToSettingsStore(s: VoiceEngineSettings): void {
   });
 }
 
-function deepMerge(base: VoiceEngineSettings, patch: VoiceSettingsPatch): VoiceEngineSettings {
-  const { desktop, ...rest } = patch;
-  return { ...base, ...rest, desktop: { ...base.desktop, ...(desktop ?? {}) } };
-}
+let statusSequence = 0;
+let voiceCatalogSequence = 0;
+let settingsMutation = 0;
+let pendingWrites = 0;
+let settingsWrites: Promise<unknown> = Promise.resolve();
 
 export const useVoiceStore = create<VoiceStoreState>((set, get) => ({
+  stale: true,
+  observedAt: null,
+  preferenceError: null,
+  resolvePendingPreferences: async (apply) => {
+    if (apply) await retryOnboardingVoice(); else await discardOnboardingVoice();
+    set({ preferenceError: null });
+    await get().refreshStatus();
+  },
   status: null,
   statusError: null,
   statusLoading: false,
@@ -192,53 +206,74 @@ export const useVoiceStore = create<VoiceStoreState>((set, get) => ({
   startedAt: null,
 
   refreshStatus: async () => {
+    const sequence = ++statusSequence;
+    const generation = useEngineStore.getState().generation;
+    const mutation = settingsMutation;
+    const current = () => sequence === statusSequence && useEngineStore.getState().generation === generation;
     set({ statusLoading: true });
     try {
-      // Replay intent BEFORE accepting the engine mirror. A failed replay
-      // stays pending, but must not hide status/diagnostics.
-      await flushOnboardingVoice().catch(() => {});
+      let preferenceError: string | null = null;
+      if (useEngineStore.getState().status === 'ready') {
+        try { await flushOnboardingVoice(); }
+        catch (e) { preferenceError = e instanceof EngineHttpError && e.status === 409
+          ? 'Pending onboarding voice choices conflict with newer engine settings. Review before applying them.'
+          : 'Onboarding voice choices are still pending; applying them failed.'; }
+      }
+      if (!current()) return null;
       const status = await voiceApi.status();
-      const settings = status.settings ?? get().settings;
-      set((s) => ({
-        status,
-        settings,
-        statusError: null,
-        statusLoading: false,
+      if (!current()) return null;
+      // A read launched before a write cannot roll the acknowledgement back.
+      const settings = mutation === settingsMutation && pendingWrites === 0 ? (status.settings ?? get().settings) : get().settings;
+      set((s) => ({ status: settings ? { ...status, settings } : status, settings,
+        statusError: null, statusLoading: false, preferenceError, observedAt: Date.now(), stale: !isEngineUsable(useEngineStore.getState().status),
         download: status.download ?? (s.download?.status === 'downloading' ? null : s.download),
         downloadBusy: status.download?.status === 'downloading' || status.download?.status === 'extracting',
         cost: { ...s.cost, ...costFor(settings, status) },
       }));
       if (settings) mirrorToSettingsStore(settings);
-      return status;
+      return settings ? { ...status, settings } : status;
     } catch (e) {
-      set({
-        statusLoading: false,
-        statusError: e instanceof EngineDown ? 'engine-down' : e instanceof EngineHttpError && e.status === 404 ? 'unsupported' : 'engine-down',
-      });
+      if (current()) set({ stale: true, statusLoading: false,
+        statusError: e instanceof EngineHttpError && e.status === 404 ? 'unsupported' : 'engine-down' });
       return null;
     }
   },
 
   loadCatalogues: async () => {
+    const sequence = ++voiceCatalogSequence;
+    const generation = useEngineStore.getState().generation;
     try {
       const [models, voices] = await Promise.all([voiceApi.models(), voiceApi.voices()]);
+      if (sequence !== voiceCatalogSequence || generation !== useEngineStore.getState().generation) return;
       set({ models, voices: voices.voices, sampleText: voices.sample || 'Ready when you are.' });
-    } catch {
-      /* status already carries the engine-down story */
-    }
+    } catch { /* retain last-known-good catalogues */ }
   },
 
-  applySettings: async (patch) => {
-    const before = get().settings;
-    if (before) set({ settings: deepMerge(before, patch), saving: true });
-    try {
-      const res = await voiceApi.settingsSet(patch);
-      set((s) => ({ settings: res.settings, saving: false, cost: { ...s.cost, ...costFor(res.settings, s.status) } }));
-      mirrorToSettingsStore(res.settings);
-    } catch (e) {
-      set({ settings: before, saving: false });
-      throw e;
-    }
+  applySettings: (patch) => {
+    const generation = useEngineStore.getState().generation;
+    const current = () => generation === useEngineStore.getState().generation;
+    settingsMutation++; pendingWrites++;
+    set({ saving: true });
+    const task = settingsWrites.catch(() => {}).then(async () => {
+      if (!current()) throw new Error('Engine changed; review voice settings and retry.');
+      const before = get().settings ?? (await voiceApi.settingsGet()).settings;
+      if (!current() || !before.revision) throw new Error('Read revision-aware engine voice settings before saving.');
+      try {
+        const res = await voiceApi.settingsSet(patch, before.revision);
+        if (!current()) return;
+        settingsMutation++;
+        set(s => ({ settings: res.settings, cost: { ...s.cost, ...costFor(res.settings, s.status) } }));
+        mirrorToSettingsStore(res.settings);
+      } catch (e) {
+        if (current() && e instanceof EngineHttpError && e.status === 409) {
+          const latest = await voiceApi.settingsGet();
+          if (current()) { settingsMutation++; set({ settings: latest.settings }); mirrorToSettingsStore(latest.settings); }
+        }
+        throw e; // NEVER rebase a stale patch automatically.
+      }
+    }).finally(() => { pendingWrites--; if (pendingWrites === 0) set({ saving: false }); });
+    settingsWrites = task;
+    return task;
   },
 
   startDownload: async (body) => {
@@ -320,3 +355,10 @@ export function applyDownloadEvent(p: VoiceDownloadProgress): void {
 if (import.meta.env.DEV && typeof window !== 'undefined') {
   (window as unknown as { __xrVoiceStore?: typeof useVoiceStore }).__xrVoiceStore = useVoiceStore;
 }
+
+useEngineStore.subscribe((next, previous) => {
+  if (next.generation !== previous.generation || (isEngineUsable(previous.status) && !isEngineUsable(next.status))) {
+    statusSequence++; voiceCatalogSequence++;
+    useVoiceStore.setState({ stale: true, statusLoading: false });
+  }
+});
