@@ -33,6 +33,7 @@
  * Feature flag: XR_PROVIDER_GATEWAY=0 disables gateway fallback to direct registry.createProvider
  */
 
+import { resolveCustomHeaders } from "./header-secrets.ts";
 import { chatAttempt, streamAttempt } from "./attempts.ts";
 import type { XRConfig } from "../config/config.ts";
 import type { Provider, Message, Tool, ChatOptions, ModelTurn } from "../core/types.ts";
@@ -383,6 +384,11 @@ export class ProviderGateway {
   credentialStatus(providerId: string): { required: boolean; available: boolean; envName?: string } {
     const preset = this.getPreset(providerId);
     if (!preset) return { required: false, available: false };
+    if (preset.kind === "custom" && Object.keys(preset.headers ?? {}).length) {
+      try { resolveCustomHeaders(preset.id, preset.baseUrl!, preset.headers); }
+      catch { return { required: true, available: false }; }
+      if (!preset.apiKeyEnv) return { required: true, available: true };
+    }
     if (!preset.apiKeyEnv) return { required: false, available: true };
     // Phase 2 · F-24 — key presence through the broker seam (env hydration
     // compat-gated; durable backend always consulted).

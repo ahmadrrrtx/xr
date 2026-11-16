@@ -10,6 +10,8 @@
  *  - Methods: register, get, list, has, resolve, etc.
  */
 
+import { assertHeaderReferences } from "./header-secrets.ts";
+import { PRESETS } from "./presets.ts";
 import type { Provider, ProviderCapabilitiesFlags } from "../core/types.ts";
 import type { XRConfig } from "../config/config.ts";
 import type { ProviderPreset } from "./presets.ts";
@@ -196,7 +198,11 @@ export class ProviderRegistry {
     const blocked: Array<{ id: string; reason: string }> = [];
     const blockedIds = new Set<string>();
     for (const custom of config.providerEngine?.customProviders ?? []) {
-      const check = validateProviderUrlSync(String((custom as any).baseUrl ?? ""));
+      let headerError: string | undefined;
+      try { assertHeaderReferences(custom.id, custom.baseUrl, custom.headers); }
+      catch { headerError = "Unsealed or differently scoped custom header credentials; re-enter and rotate them."; }
+      if (custom.apiKeyEnv && Object.values(PRESETS).some(p => p.apiKeyEnv === custom.apiKeyEnv)) headerError = "Custom credential references must not reuse built-in provider credentials.";
+      const check = headerError ? { ok: false, reason: headerError } : validateProviderUrlSync(String((custom as any).baseUrl ?? ""));
       if (!check.ok) {
         blocked.push({ id: String((custom as any).id), reason: check.reason ?? "blocked" });
         blockedIds.add(String((custom as any).id));
@@ -221,7 +227,8 @@ export class ProviderRegistry {
         tier: "custom",
         baseUrl: custom.baseUrl,
         apiKeyEnv: custom.apiKeyEnv,
-        authType: custom.apiKeyEnv ? "bearer" : "none",
+        authType: custom.apiKeyEnv ? "bearer" : Object.keys(custom.headers ?? {}).length ? "apiKey" : "none",
+        headers: custom.headers,
         defaultModel: custom.defaultModel,
         knownModels: [custom.defaultModel],
         capabilities: custom.capabilities ?? { chat: true },

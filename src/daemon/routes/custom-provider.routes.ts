@@ -3,6 +3,8 @@
  * since `xr providers add` (SSRF-guarded) but had no HTTP route, so the desktop
  * could not offer "any OpenAI-compatible API" at all. Own module: size gate.
  */
+import { customSecretName } from "../../providers/header-secrets.ts";
+import { secretBrokerSync } from "../../security/secret-broker.ts";
 import { validateProviderUrl } from "../../providers/provider-url-guard.ts";
 import { ProviderService } from "../../services/provider-service.ts";
 import { PRESETS } from "../../providers/presets.ts";
@@ -49,7 +51,7 @@ export function customProviderRoutes(): DaemonRoute[] {
         const guard = await validateProviderUrl(baseUrl);
         if (!guard.ok) {
           (await requireApp(state)).registry.resolve(Tokens.Store)
-            .audit("providers.custom.refused", { baseUrl, reason: guard.reason });
+            .audit("providers.custom.refused", { reason: guard.reason });
           return json({ error: `Custom provider URL refused: ${guard.reason}` }, 400);
         }
 
@@ -67,8 +69,13 @@ export function customProviderRoutes(): DaemonRoute[] {
         // No key supplied for a NEW endpoint means auth:none. Inventing an
         // env name here makes the catalog disable a deliberately keyless API.
         // On edit, retain the original secret reference when the key is blank.
-        const apiKeyEnv: string | undefined = body.apiKeyEnv ?? previous?.apiKeyEnv ??
+        const endpointChanged = previous && previous.baseUrl.replace(/\/+$/, "") !== baseUrl.replace(/\/+$/, "");
+        if (endpointChanged && previous.apiKeyEnv && !body.apiKey) return json({ error: "Changing a keyed endpoint requires a fresh credential; the old credential is not copied." }, 400);
+        const apiKeyEnv: string | undefined = endpointChanged && body.apiKey ? customSecretName(id, baseUrl, "api-key") : body.apiKeyEnv ?? previous?.apiKeyEnv ??
           (body.apiKey ? `${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY` : undefined);
+        if (apiKeyEnv && (Object.values(PRESETS).some(p => p.apiKeyEnv === apiKeyEnv) ||
+            (apiKeyEnv !== previous?.apiKeyEnv && secretBrokerSync(apiKeyEnv))))
+          return json({ error: "This credential reference is already owned; re-enter the key under a new endpoint-specific reference." }, 400);
         const clash = apiKeyEnv && existing.find((c: any) => c.id !== id && c.apiKeyEnv === apiKeyEnv);
         if (clash)
           return json({ error: `apiKeyEnv ${apiKeyEnv} already belongs to "${clash.id}"` }, 400);
@@ -82,7 +89,7 @@ export function customProviderRoutes(): DaemonRoute[] {
           if (body.apiKey && apiKeyEnv) await service.storeKey(apiKeyEnv, body.apiKey);
           await service.addCustomProvider({
             id, label, baseUrl: baseUrl.replace(/\/+$/, ""), defaultModel,
-            apiKeyEnv, headers: body.headers, capabilities: { chat: true },
+            apiKeyEnv, headers: body.headers ?? previous?.headers, capabilities: { chat: true },
           });
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
@@ -93,7 +100,7 @@ export function customProviderRoutes(): DaemonRoute[] {
         });
         return json({
           ok: true,
-          provider: { id, label, baseUrl, defaultModel, apiKeyEnv: apiKeyEnv ?? null, keyed: Boolean(apiKeyEnv) },
+          provider: { id, label, baseUrl, defaultModel, apiKeyEnv: apiKeyEnv ?? null, keyed: Boolean(apiKeyEnv || Object.keys(body.headers ?? previous?.headers ?? {}).length) },
         });
       },
     }),

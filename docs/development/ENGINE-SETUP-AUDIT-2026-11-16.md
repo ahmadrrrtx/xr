@@ -61,3 +61,18 @@ The in-window outbox is not advertised as a cross-process storage transaction.
 The engine revision is the conflict authority. No daemon credentials are copied
 between homes. The voice settings mutation is experimental and now requires
 expectedRevision; old clients must read and adopt that precondition.
+
+## Phase 5 credential boundary
+
+Every custom header value (not a guessed list of secret header names) is now
+stored through the broker before publishing endpoint-bound references. Request
+headers resolve lazily and fail closed on missing or differently scoped secrets.
+Config initialization migrates legacy plaintext headers only after broker
+acknowledgement and warns that old copies/backups require rotation. A migration
+failure blocks the affected provider instead of transmitting plaintext config.
+Built-in provider secret references cannot be borrowed by a custom endpoint.
+Changing a keyed endpoint requires a fresh credential binding; changing header
+endpoints requires re-entry. URLs with userinfo/query/fragment are rejected
+before persistence, including rejection audits. Three new real-handler/migration
+regressions plus the existing custom route suite pass (16 tests); TypeScript
+passes. Actual OS keychain/upgrade qualification is still outstanding.

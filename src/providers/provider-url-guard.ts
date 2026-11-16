@@ -120,6 +120,7 @@ export function validateProviderUrlSync(
     return { ok: false, reason: "provider URL is not a valid URL", warnings };
   }
   const host = url.hostname.toLowerCase();
+  if (url.username || url.password || url.search || url.hash) return { ok: false, reason: "provider URL must not contain credentials, a query or fragment", warnings };
 
   if (OFFICIAL_PROVIDER_HOSTS.has(host)) {
     if (url.protocol !== "https:") {

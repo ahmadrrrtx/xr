@@ -11,6 +11,7 @@
  * go through the gateway. Registry is still used via gateway.
  */
 
+import { sealCustomHeaders } from "../providers/header-secrets.ts";
 import { registry } from "../providers/registry.ts";
 import { providerGateway, gatewayEnabled } from "../providers/gateway.ts";
 import { streamingMetrics, withTurnMetrics, type StreamingMetricsCollector } from "../providers/stream-metrics.ts";
@@ -252,6 +253,9 @@ export class ProviderService implements LifecycleHook {
     const config = configService.get();
 
     const existing = config.providerEngine?.customProviders ?? [];
+    if (def.apiKeyEnv && (Object.values(PRESETS).some(p => p.apiKeyEnv === def.apiKeyEnv) || existing.some(c => c.id !== def.id && c.apiKeyEnv === def.apiKeyEnv)))
+      throw new Error("A custom provider must own a separate credential reference.");
+    const headers = await sealCustomHeaders(def.id, def.baseUrl, def.headers);
     const filtered = existing.filter((c: any) => c.id !== def.id);
 
     filtered.push({
@@ -260,7 +264,7 @@ export class ProviderService implements LifecycleHook {
       baseUrl: def.baseUrl,
       apiKeyEnv: def.apiKeyEnv,
       defaultModel: def.defaultModel,
-      headers: def.headers,
+      headers,
       capabilities: def.capabilities ?? { chat: true },
     });
 
