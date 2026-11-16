@@ -5,7 +5,7 @@
  */
 import { validateProviderUrl } from "../../providers/provider-url-guard.ts";
 import { ProviderService } from "../../services/provider-service.ts";
-import { providerGateway } from "../../providers/gateway.ts";
+import { PRESETS } from "../../providers/presets.ts";
 import { Tokens } from "../../core/tokens.ts";
 import { route, type DaemonRoute, type DaemonState } from "./router.ts";
 import type { XRApp } from "../../core/app.ts";
@@ -58,26 +58,32 @@ export function customProviderRoutes(): DaemonRoute[] {
         // Never shadow a BUILT-IN preset: `groq` from api.groq.com would replace
         // the built-in entry AND inherit GROQ_API_KEY — one service's key sent
         // to another host. Suffix instead.
-        if (providerGateway.getPreset(id)) id = `${id}-compatible`.slice(0, 64);
+        if (PRESETS[id]) id = `${id}-compatible`.slice(0, 64);
 
         const registry = (await requireApp(state)).registry;
-        const apiKeyEnv =
-          body.apiKeyEnv ?? `${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY`;
-        // Two endpoints must never share one secret.
         const existing = (registry.resolve(Tokens.Config).get() as any)
           .providerEngine?.customProviders ?? [];
-        const clash = existing.find((c: any) => c.id !== id && c.apiKeyEnv === apiKeyEnv);
+        const previous = existing.find((c: any) => c.id === id);
+        // No key supplied for a NEW endpoint means auth:none. Inventing an
+        // env name here makes the catalog disable a deliberately keyless API.
+        // On edit, retain the original secret reference when the key is blank.
+        const apiKeyEnv: string | undefined = body.apiKeyEnv ?? previous?.apiKeyEnv ??
+          (body.apiKey ? `${id.toUpperCase().replace(/[^A-Z0-9]/g, "_")}_API_KEY` : undefined);
+        const clash = apiKeyEnv && existing.find((c: any) => c.id !== id && c.apiKeyEnv === apiKeyEnv);
         if (clash)
           return json({ error: `apiKeyEnv ${apiKeyEnv} already belongs to "${clash.id}"` }, 400);
 
         const label = (body.label ?? "").trim() || id;
         const service = new ProviderService(registry);
         try {
+          // Never publish configuration which claims an unacknowledged secret.
+          // If configuration then fails, an unused broker entry is safer than
+          // an active half-configured provider. No plaintext rollback/copy.
+          if (body.apiKey && apiKeyEnv) await service.storeKey(apiKeyEnv, body.apiKey);
           await service.addCustomProvider({
             id, label, baseUrl: baseUrl.replace(/\/+$/, ""), defaultModel,
             apiKeyEnv, headers: body.headers, capabilities: { chat: true },
           });
-          if (body.apiKey) await service.storeKey(apiKeyEnv, body.apiKey);
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
@@ -87,7 +93,7 @@ export function customProviderRoutes(): DaemonRoute[] {
         });
         return json({
           ok: true,
-          provider: { id, label, baseUrl, defaultModel, apiKeyEnv, keyed: Boolean(body.apiKey) },
+          provider: { id, label, baseUrl, defaultModel, apiKeyEnv: apiKeyEnv ?? null, keyed: Boolean(apiKeyEnv) },
         });
       },
     }),

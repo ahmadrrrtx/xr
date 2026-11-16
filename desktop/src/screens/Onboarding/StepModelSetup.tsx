@@ -89,11 +89,14 @@ export function StepModelSetup() {
         apiKey: customKey.trim() || undefined,
       });
       setCustomDone(saved.provider.id);
+      // Registration already stored the secret. Keep only the acknowledged
+      // identity/target so finish selects it rather than re-saving a preset key.
       setModelChoice({
         source: 'cloud',
         providerId: saved.provider.id,
-        apiKey: customKey.trim() || undefined,
+        model: saved.provider.defaultModel,
       });
+      setCustomKey('');
     } catch (e) {
       // The engine's message is the truth (it names the refused host range).
       setCustomError(e instanceof Error ? e.message : String(e));

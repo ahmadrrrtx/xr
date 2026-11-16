@@ -270,8 +270,9 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         return saveProviderKeyToEngine(input);
       },
       setDefault: async (providerId, model) => {
-        if (isEngineUsable(useEngineStore.getState().status))
-          await setEngineDefault(providerId, model);
+        if (!isEngineUsable(useEngineStore.getState().status))
+          throw new Error('Engine not running; no model selected. Start it and retry, or choose guest mode.');
+        await setEngineDefault(providerId, model);
       },
     });
     if (prepared.selection)

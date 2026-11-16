@@ -190,6 +190,7 @@ describe('XR-REL-06 · a real endpoint end to end', () => {
     const r = await call('POST', '/providers/custom', {
       baseUrl: 'https://api.groq.com/openai/v1',
       defaultModel: 'llama-3.3-70b-versatile',
+      apiKey: 'fixture-groq-compatible',
     });
     expect(r.status).toBe(200);
     expect(r.json.provider.id).toBe('groq-compatible');
