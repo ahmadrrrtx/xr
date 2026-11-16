@@ -260,6 +260,12 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
         });
         // A fresh link: (re)load what it offers.
         if (!wasUsable) void get().loadCatalog({ force: true });
+        // Replay pending non-secret voice intent on EVERY successful ready
+        // probe, even if the Voice screen is never opened. Failed attempts
+        // retain the outbox for the next poll; they do not fail engine health.
+        if (next.status === 'ready')
+          void import('@/voice/onboardingPreferences')
+            .then((prefs) => prefs.flushOnboardingVoice()).catch(() => {});
         return isEngineUsable(next.status);
       } catch (e) {
         const endpoint = await engineEndpoint().catch(() => null);

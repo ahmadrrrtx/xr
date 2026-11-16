@@ -8,7 +8,7 @@ import { Reveal, StepHeader, Toggle } from './parts';
 /**
  * Step 6 — microphone. Permission + device list (labels appear only after
  * getUserMedia), live volume meter (Web Audio AnalyserNode RMS → 1–15 bars),
- * noise-suppression + wake-word toggles (wake word is visual-only until 15).
+ * noise-suppression + wake-word preferences (applied to the engine at finish).
  */
 export function StepMicSetup() {
   const { mics, micSelected, noiseSuppression, wakeWordEnabled, setDetections, setMic, setVoicePrefs } =
@@ -90,7 +90,7 @@ export function StepMicSetup() {
     <div>
       <StepHeader
         title="Set your microphone."
-        sub="XR listens only while you hold the key or tap the orb — never passively."
+        sub="Microphone access starts only when you test or start a voice session. Wake-word mode keeps it open during that session."
       />
 
       {denied ? (
@@ -181,7 +181,7 @@ export function StepMicSetup() {
                 checked={wakeWordEnabled}
                 onChange={(v) => setVoicePrefs({ wakeWordEnabled: v })}
                 label='Wake word ("Hey XR")'
-                desc="Visual toggle for now — wake-word listening arrives in Phase 15."
+                desc="Keeps the microphone open during a voice session and waits for the phrase. Does not start listening now."
               />
             </div>
           </Reveal>

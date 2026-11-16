@@ -95,6 +95,22 @@ export function writeSettingJSON(key: string, value: unknown): void {
   writeToTauriStore(key, value);
 }
 
+/** Awaited persistence for an outbox: acknowledgement must not precede the
+ * authoritative store write. Unlike cosmetic settings, storage errors surface. */
+export async function writeSettingJSONDurable(key: string, value: unknown): Promise<void> {
+  assertSafeSetting(key, value);
+  const store = await getStore();
+  if (store) {
+    await store.set(key, value);
+    await store.save();
+    writeLocalStorageRaw(key, JSON.stringify(value));
+  } else {
+    // Browser fallback is authoritative here; do not swallow quota/permission
+    // errors and then claim that an offline choice was retained.
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }
+}
+
 /** Read a raw string setting: Tauri Store first, then localStorage. */
 export async function readSettingRaw(key: string): Promise<string | null> {
   if (isSensitiveSettingKey(key)) return null;

@@ -27,7 +27,6 @@ export const ONBOARDING_KEY = 'xr.onboarding.complete';
 const ONBOARDED_AT_KEY = 'xr.onboarding.at';
 const BUDGET_KEY = 'xr.budget.default';
 const MODEL_KEY = 'xr.model.default';
-const VOICE_KEY = 'xr.voice';
 
 /*
  * S-2 · the wizard's voice choice has to reach the engine.
@@ -49,18 +48,22 @@ async function applyOnboardingVoice(s: {
   noiseSuppression: boolean;
   wakeWordEnabled: boolean;
 }): Promise<void> {
+  let queued = false;
   try {
-    const [{ EngineHttpError }, { voiceApi }, { isEngineUsable, useEngineStore }] = await Promise.all([
+    const [{ EngineHttpError }, { voiceApi }, { useEngineStore }, prefs] = await Promise.all([
       import('@/engine/transport'),
       import('@/voice/voiceApi'),
       import('@/stores/engineStore'),
+      import('@/voice/onboardingPreferences'),
     ]);
     type HttpError = InstanceType<typeof EngineHttpError>;
-    if (!isEngineUsable(useEngineStore.getState().status)) {
+    await prefs.queueOnboardingVoice(s);
+    queued = true;
+    if (useEngineStore.getState().status !== 'ready') {
       toast.info('Voice saved — it will be applied when the engine starts.');
       return;
     }
-    await voiceApi.settingsSet({ ttsVoice: s.ttsVoice, desktop: { micDeviceId: s.micSelected } });
+    await prefs.flushOnboardingVoice();
     // The engine accepts the id but cannot speak it until the model is on disk.
     // /voice/test-tts is the one endpoint that says so, with the byte size.
     try {
@@ -74,7 +77,9 @@ async function applyOnboardingVoice(s: {
       );
     }
   } catch {
-    /* the engine is the authority; a failed push is retried by the Voice screen */
+    toast.warning(queued
+      ? 'Voice saved; applying it failed and will retry on connection. Check Settings → Voice.'
+      : 'Voice preferences could not be saved. Set them again in Settings → Voice.');
   }
 }
 const INTEGRATIONS_KEY = 'xr.integrations.desired';
@@ -180,7 +185,7 @@ const initial = {
   modelChoice: { source: 'skip' } as ModelChoice,
   micSelected: null,
   noiseSuppression: true,
-  wakeWordEnabled: true,
+  wakeWordEnabled: false,
   ttsVoice: 'piper-kusal',
   userName: '',
   theme: 'xr-native' as ThemeId,
@@ -284,17 +289,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     } catch {
       /* governor not reachable yet — Budget screen defaults apply */
     }
-    await writeSettingJSON(VOICE_KEY, {
-      ttsVoice: s.ttsVoice,
-      micDevice: s.micSelected,
-      wakeWord: s.wakeWordEnabled,
-      noiseSuppression: s.noiseSuppression,
-    });
-    // S-2: the engine's voice settings are the ones that speak. The wizard used
-    // to write `xr.voice` — a key no other surface reads — so a chosen voice
-    // could finish onboarding without ever reaching the engine, and nothing
-    // noticed. Resolve it to the engine now. The engine is asked last and
-    // hard-fails nothing: the wizard must not dead-end on a voice.
+    // Persist pending intent before any network write. An acknowledged engine
+    // response clears the outbox; offline/failed writes retry on connection.
     await applyOnboardingVoice(s);
     await writeSettingJSON(INTEGRATIONS_KEY, s.desiredIntegrations);
     applyTheme(s.theme);

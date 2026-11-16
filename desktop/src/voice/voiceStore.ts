@@ -13,6 +13,7 @@
  * the other direction, so there is no loop.
  */
 import { create } from 'zustand';
+import { flushOnboardingVoice } from './onboardingPreferences';
 
 import { EngineDown, EngineHttpError } from '@/engine/transport';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -150,7 +151,7 @@ function mirrorToSettingsStore(s: VoiceEngineSettings): void {
     autoExitSilence: d.autoExitSilenceSec,
     showTranscripts: d.showTranscripts,
     pttMode: d.activation,
-    noiseSuppression: d.noiseSuppression,
+    noiseSuppression: s.noiseSuppression,
     chatMicTarget: d.chatMicTarget,
     holdGlobalHotkey: d.holdGlobalHotkey,
     profanityFilter: s.profanityFilter,
@@ -193,6 +194,9 @@ export const useVoiceStore = create<VoiceStoreState>((set, get) => ({
   refreshStatus: async () => {
     set({ statusLoading: true });
     try {
+      // Replay intent BEFORE accepting the engine mirror. A failed replay
+      // stays pending, but must not hide status/diagnostics.
+      await flushOnboardingVoice().catch(() => {});
       const status = await voiceApi.status();
       const settings = status.settings ?? get().settings;
       set((s) => ({

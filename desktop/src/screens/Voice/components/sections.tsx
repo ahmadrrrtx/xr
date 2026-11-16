@@ -73,7 +73,7 @@ export function MicrophoneSection() {
           audio: {
             ...(settings?.desktop.micDeviceId ? { deviceId: { exact: settings.desktop.micDeviceId } } : {}),
             echoCancellation: true,
-            noiseSuppression: settings?.desktop.noiseSuppression ?? true,
+            noiseSuppression: settings?.noiseSuppression ?? true,
             autoGainControl: true,
           },
         });
@@ -197,7 +197,7 @@ export function MicrophoneSection() {
         htmlFor="xr-voice-noise"
         description="Handled by the audio stack, together with echo cancellation and automatic gain."
       >
-        <Toggle id="xr-voice-noise" checked={settings?.desktop.noiseSuppression ?? true} onCheckedChange={(v) => apply({ desktop: { noiseSuppression: v } })} />
+        <Toggle id="xr-voice-noise" checked={settings?.noiseSuppression ?? true} onCheckedChange={(v) => apply({ noiseSuppression: v })} />
       </SettingRow>
     </SettingsSection>
   );

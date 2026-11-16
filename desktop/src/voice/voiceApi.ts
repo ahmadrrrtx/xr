@@ -1,3 +1,5 @@
+import type { VoiceMode, VoiceDesktopPrefs, VoiceActivation, VoiceWakeSensitivity } from '../../../src/voice/types';
+export type { VoiceDesktopPrefs, VoiceActivation, VoiceWakeSensitivity };
 /*
  * Voice engine API (Phase 15) — typed calls over the Phase 14 transport.
  *
@@ -73,25 +75,10 @@ export interface VoiceEngineEvent {
   seconds?: number;
 }
 
-export type VoiceActivation = 'hold' | 'tap' | 'always';
-export type VoiceWakeSensitivity = 'low' | 'medium' | 'high';
-
-export interface VoiceDesktopPrefs {
-  micDeviceId: string | null;
-  inputGain: number;
-  noiseSuppression: boolean;
-  activation: VoiceActivation;
-  ttsPitch: number;
-  autoExitSilenceSec: number;
-  showTranscripts: boolean;
-  theaterImmersive: boolean;
-  chatMicTarget: 'screen' | 'docked';
-  holdGlobalHotkey: boolean;
-}
-
 export interface VoiceEngineSettings {
   enabled: boolean;
-  mode: 'push-to-talk' | 'wake-word' | 'always-on' | 'disabled';
+  mode: VoiceMode;
+  noiseSuppression: boolean;
   sttBackend: string;
   sttModel: string;
   ttsBackend: string;
@@ -101,7 +88,7 @@ export interface VoiceEngineSettings {
   wakeSensitivity: VoiceWakeSensitivity;
   wakeSound: boolean;
   profanityFilter: boolean;
-  language: string;
+  sttLanguage?: string;
   desktop: VoiceDesktopPrefs;
 }
 

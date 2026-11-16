@@ -178,7 +178,7 @@ export class VoiceController {
       return false;
     }
     const settings = status.settings;
-    const micOk = await this.openMic(settings.desktop.micDeviceId, settings.desktop.noiseSuppression, settings.desktop.inputGain);
+    const micOk = await this.openMic(settings.desktop.micDeviceId, settings.noiseSuppression, settings.desktop.inputGain);
     if (!micOk) return false;
 
     try {
@@ -329,7 +329,7 @@ export class VoiceController {
     if (!this.active) return;
     const s = useVoiceStore.getState().settings;
     this.closeMic();
-    const ok = await this.openMic(deviceId, s?.desktop.noiseSuppression ?? true, s?.desktop.inputGain ?? 100);
+    const ok = await this.openMic(deviceId, s?.noiseSuppression ?? true, s?.desktop.inputGain ?? 100);
     if (!ok) await this.stop('mic-lost');
   }
 
