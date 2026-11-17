@@ -187,7 +187,16 @@ export const THRESHOLD = 800;
 // extension/CI work added nothing under src/. No waived giant grew
 // (daemon/server.ts shrank by 10). Measured 174,068 (+403). Headroom ~432.
 // Needs maintainer sign-off.
-export const TREE_CEILING = 175_500; // V1 · Phase 5 mobile companion repair · 174,500 → 175,500 (2026-10-28):
+export const TREE_CEILING = 175_600;
+// PR #213 · overview request-path correction · 175,500 → 175,600 (2026-11-16):
+// The PR tree was 175,490 LOC (10 spare). Authorized background project
+// observations add 92 LOC net: the shared yielding filesystem walk, async
+// fingerprint, bounded observation owner and cache lifetime guards. Measured 175,582.
+// The owner explicitly approved this 100-LOC allocation in the PR #213
+// follow-up session. It leaves 18 spare; the 800-LOC module limit, waiver
+// register and 500-ms overview performance assertion are unchanged.
+// Existing hardening branches retain their previously documented allocation.
+// V1 · Phase 5 mobile companion repair · 174,500 → 175,500 (2026-10-28):
 // V1-P5-001 (release ledger docs/release/V1-RELEASE-LEDGER-2026-10-28.md §5):
 // the shipped PWA spoke a companion contract that existed only in the reference
 // harness, so the production app could not function against the real daemon.
