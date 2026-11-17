@@ -122,8 +122,6 @@ export function GeneralTab() {
     });
   };
 
-  const providers = settings.models.providers;
-  const hasProviders = providers.length > 0;
 
   return (
     <div>
@@ -287,67 +285,22 @@ export function GeneralTab() {
 
       {/* ── Defaults ── */}
       <SettingsSection title="Defaults">
-        {hasProviders ? (
-          <>
-            <SettingRow label="Default model" htmlFor="xr-default-model">
-              <Select
-                value={settings.defaults.model || 'auto'}
-                onValueChange={(value) =>
-                  update('defaults', { model: value === 'auto' ? '' : value })
-                }
-              >
-                <SelectTrigger id="xr-default-model" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Auto (recommended)</SelectItem>
-                  {providers.map((provider) => (
-                    <SelectItem key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingRow>
-            <SettingRow
-              label="Fallback model"
-              htmlFor="xr-fallback-model"
-              description="Used when the default model fails."
-            >
-              <Select
-                value={settings.defaults.fallbackModel || 'none'}
-                onValueChange={(value) =>
-                  update('defaults', { fallbackModel: value === 'none' ? '' : value })
-                }
-              >
-                <SelectTrigger id="xr-fallback-model" className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {providers.map((provider) => (
-                    <SelectItem key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingRow>
-          </>
-        ) : (
-          <SettingRow
-            label="Default model"
-            description="No providers configured yet — models arrive with your first provider."
+        {/* Engine-truth (AUD-003): the model new chats use is the engine's
+            primary provider, chosen where the key is stored — a desktop-local
+            "default model" setting is not honoured anywhere (and model ids
+            were being written into it). Say so; don't render a dead control. */}
+        <SettingRow
+          label="Default model"
+          description="Configured per provider — new chats use the model the engine stores with its primary provider. Choose it where keys are saved."
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/settings#models')}
           >
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/settings#models')}
-            >
-              {t('common.addProvider')}
-            </Button>
-          </SettingRow>
-        )}
+            {t('common.addProvider')}
+          </Button>
+        </SettingRow>
         <SettingRow
           label="Default workspace"
           htmlFor="xr-default-workspace"

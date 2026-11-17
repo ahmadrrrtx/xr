@@ -247,3 +247,22 @@ provider requirement, owner approval, no credential argv/export/self-signed
 production claims, exact artifact/commit and independent signature/receipt checks.
 Actual source commit/PR/CI results will be reported after the operation, not
 invented inside a self-referential pre-push document. No release publication.
+
+## 2026-11-16 — principal-engineer audit pass (AUDIT-2026-11-16)
+
+Owner asked for a full code/logic audit of the four reported Preview-1 symptoms (engine connection, fake data,
+"only ~4 models", voice onboarding) with root causes and fixes. Result: `docs/release/AUDIT-2026-11-16.md`. Headline,
+no spin: the reported issues map onto AUD-002…AUD-005 and owner regression T14.b; most architectural remediation
+landed already (XR-REL-*, S-1…S-7, a0d0c45) and holds up on re-verification. What was genuinely missing and is fixed
+in this pass: Budget → Models shipped a fabricated "Test model" toast (Math.random latency) and a browser-mode
+download that marked models installed with zero I/O — both gone; cloud "configured" and the Add-provider menu now
+derive from the engine; `engineKnowsProvider` fails closed; two dead desktop-local default-model write paths were
+removed (settings.models.defaults / settings.defaults.model+fallbackModel had zero readers); the onboarding All-Set
+screen now renders a truthful completion summary. `test/desktop/budget-models-truth.test.ts` pins the properties
+(15 tests). Desktop suite 577→592 pass/0 fail; build, mock-data-lint source+bundle, seed-gate, size-gate (pass, tree
+at 100.0% of the ADR-0028 ceiling), claim-lint ✓. Two errors of this audit were corrected in place, not hidden: WiX
+`1.1.65535.1` is the documented `msiWixVersion('1.2.0-preview.1')` stamp (release:check 10/10 surfaces in sync
+**[verified here]**) — not skew; and the full root `bun test` never completed in this sandbox (1,700 s cap, no
+failures observed) — CI remains the bar. No version/channel/gate changes; owner retest of T14.b, D-004 consent text,
+signing/hardware evidence and the PHASE-3-REAUDIT remain open owner items. Branch `audit/2026-11-16-release-fixes`
+pushed as PR into main; no merge without owner review and green CI.

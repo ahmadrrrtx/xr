@@ -26,7 +26,7 @@
  *     not after verifiedAt.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 export interface ModelFactEntry {
   providerId: string;
@@ -199,4 +199,26 @@ export async function lintRepositoryModelFacts(root: string): Promise<ModelFacts
   const { PRESETS } = await import(pathToFileURL(join(root, 'src/providers/presets.ts')).href);
   const presets = Object.values(PRESETS as Record<string, { id: string; knownModels?: string[] }>);
   return lintModelFacts(facts, presets, Date.now(), FILE, root);
+}
+
+/* ── CLI entrypoint (AUDIT-2026-11-16 §6.7) ─────────────────────────────
+ * Enforcement lives in claim-lint gate 10 + test/scripts/model-facts-lint.test.ts;
+ * this wrapper exists so a human can ask the register directly without
+ * reading the test suite. Exit 1 on any violation, 0 with the coverage
+ * summary otherwise. Not a new gate — the same library, a loud mouth. */
+if (import.meta.main) {
+  const root = resolve(import.meta.dir, "..");
+  const report = await lintRepositoryModelFacts(root);
+  const {
+    coverage: { catalogued, documented, unpriced },
+  } = report;
+  const pct = catalogued === 0 ? "0" : ((documented / catalogued) * 100).toFixed(0);
+  console.log(
+    `model-facts: ${documented}/${catalogued} catalogued models documented (${pct}% coverage, ${unpriced} unpriced)`
+  );
+  for (const note of report.notes) console.log(`note: ${note}`);
+  for (const v of report.violations) {
+    console.error(`VIOLATION ${v.file}${v.line ? `:${v.line}` : ""} — ${v.reason} (${v.text})`);
+  }
+  process.exit(report.violations.length === 0 ? 0 : 1);
 }

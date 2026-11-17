@@ -2,7 +2,49 @@ import { useEffect, useState } from 'react';
 
 import { AnimatedAvatar } from '@/components/brand/Avatar';
 import { useOnboardingStore } from '@/stores/onboarding';
+import { isEngineUsable, useEngineStore } from '@/stores/engineStore';
 import { Reveal } from './parts';
+
+/**
+ * Truthful completion summary (AUD-004 / XR-P02). The wizard must not claim
+ * readiness it never verified: this renders what onboarding actually did —
+ * which engine state is observed, and which model selection (if any) was
+ * persisted — instead of an unconditional "ready". Guest mode is a valid
+ * outcome and is labelled as such; a dead engine is said out loud.
+ */
+function CompletionSummary() {
+  const modelChoice = useOnboardingStore((s) => s.modelChoice);
+  const engineStatus = useEngineStore((s) => s.status);
+  const usable = isEngineUsable(engineStatus);
+
+  let modelLine: string;
+  if (modelChoice.source === 'local')
+    modelLine = `Model: ${modelChoice.model} — runs locally on this machine.`;
+  else if (modelChoice.source === 'cloud')
+    modelLine = modelChoice.model
+      ? `Model: ${modelChoice.providerId}/${modelChoice.model} — cloud provider, billed per use.`
+      : 'Cloud provider chosen — the key goes to the engine when you continue.';
+  else modelLine = 'Guest mode — no model selected yet.';
+
+  const engineLine = usable
+    ? engineStatus === 'ready'
+      ? 'Engine connected and verified.'
+      : 'Engine connected (legacy engine, contract not observed).'
+    : 'Engine not reachable right now — chat will offer to start it, or open Settings to pick a provider.';
+
+  return (
+    <div
+      data-testid="onboarding-completion-summary"
+      data-engine-usable={usable}
+      className="text-text-secondary mt-5 flex flex-col items-center gap-1 text-[12px]"
+    >
+      <p>{modelLine}</p>
+      <p className={usable ? 'text-text-tertiary' : 'text-warning'}>
+        {engineLine}
+      </p>
+    </div>
+  );
+}
 
 /**
  * Step 10 — all set. Avatar idles then pulses a greeting; exact copy:
@@ -38,6 +80,9 @@ export function StepAllSet({
       </Reveal>
       <Reveal delay={0.9}>
         <p className="text-text-tertiary mt-1.5 text-[14px]">Ready when you are.</p>
+      </Reveal>
+      <Reveal delay={0.95}>
+        <CompletionSummary />
       </Reveal>
       <Reveal delay={1.05}>
         <button

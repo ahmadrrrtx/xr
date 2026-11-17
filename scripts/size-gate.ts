@@ -187,12 +187,7 @@ export const THRESHOLD = 800;
 // extension/CI work added nothing under src/. No waived giant grew
 // (daemon/server.ts shrank by 10). Measured 174,068 (+403). Headroom ~432.
 // Needs maintainer sign-off.
-// 2026-11-16 engine-setup audit (owner: ahmadrrrtx): allow at most +1,000 LOC
-// for explicit provider discovery/probes, broker-owned header credentials and
-// revision-safe voice settings. These belong to the existing engine authority,
-// not a new satellite. See docs/development/ENGINE-SETUP-AUDIT-2026-11-16.md.
-// Per-module limits, owned waivers, security checks and tests remain unchanged.
-export const TREE_CEILING = 176_500; // V1 · Phase 5 mobile companion repair · 174,500 → 175,500 (2026-10-28):
+
 // V1-P5-001 (release ledger docs/release/V1-RELEASE-LEDGER-2026-10-28.md §5):
 // the shipped PWA spoke a companion contract that existed only in the reference
 // harness, so the production app could not function against the real daemon.

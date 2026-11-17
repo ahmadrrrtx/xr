@@ -1,8 +1,7 @@
 /*
  * Settings → Models & Providers (Phase 8) — provider list with connection
  * status, the add catalog (2026-11-01: derived LIVE from the engine's
- * provider list — 26 presets + custom, not a hardcoded subset), default-
- * model-by-capability selects, and the local-Ollama card (detect + pull
+ * provider list — 26 presets + custom, not a hardcoded subset), and the local-Ollama card (detect + pull
  * with live progress).
  * Keys are held by the engine secret broker, never generic desktop settings.
  *
@@ -30,7 +29,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SettingRow, SettingsSection } from '@/components/settings/primitives';
-import { Select } from '@/components/settings/controls';
 import {
   Boxes,
   Download,
@@ -57,36 +55,6 @@ import { useSettingsStore } from '@/stores/settingsStore';
 
 /* ── Catalog (12) ─────────────────────────────────────────────── */
 
-
-const CAPABILITIES: Array<{
-  key: keyof CapabilityDefaults;
-  label: string;
-  hint?: string;
-}> = [
-  { key: 'chat', label: 'Chat', hint: 'The default for new conversations.' },
-  {
-    key: 'coding',
-    label: 'Coding',
-    hint: 'Used for code generation and review.',
-  },
-  {
-    key: 'embeddings',
-    label: 'Embeddings',
-    hint: 'Powers search over your history.',
-  },
-  { key: 'vision', label: 'Vision', hint: 'Reading images and screenshots.' },
-  { key: 'stt', label: 'Speech to text' },
-  { key: 'tts', label: 'Text to speech' },
-];
-
-type CapabilityDefaults = {
-  chat: string;
-  coding: string;
-  embeddings: string;
-  vision: string;
-  stt: string;
-  tts: string;
-};
 
 /* ── Ollama curated models ────────────────────────────────────── */
 
@@ -209,17 +177,6 @@ export function ModelsTab() {
     (provider) => provider.keyStorage === 'local-insecure'
   ).length;
 
-  const modelOptions = (): Array<{ value: string; label: string }> => [
-    ...providers.map((provider) => ({
-      value: provider.id,
-      label: provider.name,
-    })),
-    ...(ollamaModels ?? []).map((model) => ({
-      value: `ollama:${model.name}`,
-      label: `Ollama · ${model.name}`,
-    })),
-  ];
-
   const openProvider = (entry: ProviderCatalogEntryUi): void => {
     setCatalogOpen(false);
     setConfigFor(entry);
@@ -238,14 +195,17 @@ export function ModelsTab() {
     void (async () => {
       const keyStorage = input.keyStorage;
 
-      const next = providers.filter((provider) => provider.id !== input.id);
+      // Mutate the mirror, never the engine-derived list: persisting rows the
+      // engine merely reported would bake engine state into desktop settings.
+      const mirror = models.providers;
+      const next = mirror.filter((provider) => provider.id !== input.id);
       next.push({
         id: input.id,
         name: input.name,
         kind: input.kind,
         baseUrl: input.baseUrl ?? undefined,
         model: input.model ?? undefined,
-        addedAt: existingAddedAt(input.id, providers) ?? Date.now(),
+        addedAt: existingAddedAt(input.id, mirror) ?? Date.now(),
         keyStorage,
         lastTest: input.test
           ? {
@@ -263,7 +223,8 @@ export function ModelsTab() {
   };
 
   const removeProvider = async (id: string): Promise<void> => {
-    const existing = providers.find((p) => p.id === id);
+    const existing =
+      models.providers.find((p) => p.id === id) ?? providers.find((p) => p.id === id);
     let notice =
       'Desktop entry removed; review external credentials separately.';
     if (existing?.kind === 'custom') {
@@ -274,6 +235,8 @@ export function ModelsTab() {
       const { removeProviderKeyFromEngine } =
         await import('@/engine/providers');
       notice = (await removeProviderKeyFromEngine(id)).notice;
+    } else if (existing?.keyStorage === 'none') {
+      notice = 'No credential stored for this entry — nothing to remove.';
     } else if (existing?.keyStorage === 'keychain') {
       const { keychainDelete } = await import('@/lib/settingsApi');
       await keychainDelete('xr', id);
@@ -282,7 +245,9 @@ export function ModelsTab() {
         await import('@/lib/persistent-store');
       await purgeLegacyCredentialSettings();
     }
-    update('models', { providers: providers.filter((p) => p.id !== id) });
+    update('models', {
+      providers: models.providers.filter((p) => p.id !== id),
+    });
     setConfigFor(null);
     toast.success('Stored entry removed', { description: notice });
   };
@@ -448,43 +413,11 @@ export function ModelsTab() {
         )}
       </SettingsSection>
 
-      {/* ── Default models ── */}
-      <SettingsSection title="Default models">
-        {!hasProviders && (ollamaModels ?? []).length === 0 ? (
-          <div className="px-3.5 py-5 text-center">
-            <p className="text-text-secondary text-[13px]">
-              No models available yet.
-            </p>
-            <button
-              type="button"
-              className="text-accent mt-1 text-xs hover:underline"
-              onClick={() => setCatalogOpen(true)}
-            >
-              Add a provider to get started
-            </button>
-          </div>
-        ) : (
-          CAPABILITIES.map((capability) => (
-            <SettingRow
-              key={capability.key}
-              label={capability.label}
-              description={capability.hint}
-            >
-              <Select
-                ariaLabel={`${capability.label} model`}
-                value={models.defaults[capability.key] ?? ''}
-                placeholder="Default"
-                options={modelOptions()}
-                onChange={(value) =>
-                  update('models', {
-                    defaults: { ...models.defaults, [capability.key]: value },
-                  })
-                }
-              />
-            </SettingRow>
-          ))
-        )}
-      </SettingsSection>
+      {/* ── Default models: intentionally absent (AUD-003) ─────────────
+          Nothing in the app read settings.models.defaults — the selects
+          remembered a choice that invisibly did nothing. New conversations
+          run on the engine's primary provider/model, chosen where keys are
+          saved. Removing the control beats shipping a dead one. */}
 
       {/* ── Ollama (local) ── */}
       <SettingsSection title="Ollama (local)">
