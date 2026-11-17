@@ -343,7 +343,7 @@ impl WorkspaceDb {
             }
         };
         let trashed = if delete_files && exists {
-            trash::DEFAULT_TRASH_CTX.delete(&path).map(|_| true).unwrap_or(false)
+            crate::platform_trash::delete(&path).map(|_| true).unwrap_or(false)
         } else {
             false
         };
