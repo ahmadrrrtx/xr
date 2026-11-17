@@ -6,12 +6,12 @@ import { CORE_VERSION, DISPLAY_VERSION, PKG, versionInfo } from "../../core/vers
 import { isMemoryEnabled } from "../../config/config.ts";
 import { isLocal } from "../../cost/pricing.ts";
 import { runLab } from "../../security/lab.ts";
-import { fingerprint } from "../../context/memory/rag.ts";
 import { IsolatedMemoryStore } from "../../context/isolated-store.ts";
 import { inspectMemoryEngine } from "../../context/engine.ts";
 import { BRAND_ASSET_ROUTES, brandAssetBytes, dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
 import { AUTH_PAGE_SCRIPT } from "../auth-page.ts";
 import { gitSummaryCached } from "../state/cache.ts";
+import { observeProjectProfile } from "../state/project-profile.ts";
 import { assetResponse, route, type DaemonRoute, binaryAssetResponse } from "./router.ts";
 
 async function gitSummary(cwd: string): Promise<{ branch: string; dirty: boolean }> {
@@ -100,7 +100,7 @@ export function systemRoutes(): DaemonRoute[] {
           project,
           workspace: state.workspaceManager.getActiveId(),
           cwd: process.cwd(),
-          fingerprint: fingerprint(process.cwd()),
+          ...observeProjectProfile(process.cwd()),
           provider: {
             active: config.defaults.provider,
             model: config.defaults.model,

@@ -235,6 +235,7 @@ provider-health.test.ts, hardware.test.ts, daemon-routes.test.ts.
 | provider health | provider id + model | 60 s | 15 s | 15 s (failures) | key stored/cleared via auth short-circuit | stale served + background refresh |
 | internet probe | "default" | 15 s | — | same | — | never stale beyond TTL |
 | git summary | cwd | 5 s | — | — | — | never stale beyond TTL |
+| overview project profile | cwd | 5 s | — | 5 s unavailable | invalidateProjectProfiles | null + explicit state while cold/expired; never stale beyond TTL |
 
 Kill switches (env, consistent with the existing XR_* override pattern):
 `XR_RUNTIME_CACHE=0`, `XR_HARDWARE_CACHE=0`, `XR_CATALOG_CACHE=0`,
@@ -271,7 +272,60 @@ sequential behavior). TTL knobs: `XR_RUNTIME_CACHE_TTL_MS`,
 - Windows/Linux/macOS probe parity: `where`/`command` selection,
   PowerShell path, nvidia-smi/lspci parsing preserved in the async variants
   (statfsSync stays sync — a cheap <1 ms syscall).
-- API contracts unchanged; response shapes identical.
+- The original Phase 01 change kept API shapes identical. The explicit overview
+  observation change below is a later, documented exception.
+
+### 12.5 PR #213 overview request-path correction (2026-11-16)
+
+The macOS parity suite measured `/api/overview` at 509 ms and 685 ms against the
+existing 500 ms bound. The handler recursively fingerprinted the whole project
+synchronously on **every** poll. Local component profiling identified this walk
+as the dominant request cost. The performance assertion, platform exclusions,
+required gates and retry policy are unchanged.
+
+The owner explicitly approved a 100-LOC allocation for the PR branch: its
+source ceiling moves from 175,500 to 175,600 for 92 new core LOC (175,582 total).
+The per-module limit and waiver register are unchanged. Historical audit and
+release-ledger measurements retain their original numbers; current marked
+ceiling claims are regenerated with `bun run size-gate --stamp-docs`. The
+separate hardening branch retains its existing, larger source allocation.
+
+Overview now returns a cached, advisory project observation and schedules cold
+or expired work outside response construction. A single shared filesystem walk
+implementation serves synchronous indexing and cooperatively scheduled
+observations; the latter yields every 32 candidates, **including denied and
+skipped candidates**. Sensitive-path, lease, symlink, hardlink, mount, depth and
+entry-limit enforcement is not bypassed. Cancellation and lease freshness are
+checked across yields, and retained descriptors close on completion or failure.
+This is cooperative scheduling, not preemption of a blocked filesystem syscall;
+it is not a hard real-time guarantee for an unavailable/network-mounted disk.
+
+**API consumer note:** on both `/api/overview` and `/api/v1/overview`,
+`fingerprint` is now nullable until a verified observation is available.
+`fingerprintStatus` is always supplied:
+
+| State | fingerprint | observedAt (Unix ms) | Meaning |
+|---|---|---|---|
+| pending | null | null | One scan is in flight for this root; poll again. |
+| ready | Existing `{files, languages, frameworks, hasTests}` object | Number | Authorized candidates observed at this time, cached at most 5 s; not live tree authority. |
+| unavailable | null | null | Scan failed/refused; retry after 5 s or explicit invalidation. Never reported as an empty project. |
+| busy | null | null | Two other roots already have work in flight; a later poll can start this root. |
+
+The cache retains at most two observations and permits at most two simultaneous
+walks. No file bodies, raw errors, secrets or authorization decisions are cached.
+Authentication still precedes scheduling. An actual authorized empty project is
+`ready` with `files: 0`, distinguishable from unknown/unavailable. No current
+shipped dashboard or desktop consumer dereferences the overview fingerprint;
+external consumers must handle the documented null state. Other overview fields
+and the minimal unauthenticated health payload are unchanged.
+
+Regression proofs: `test/perf/overview-fingerprint.test.ts` covers cold and warm
+responses, held work, authentication, deduplication, expiry, failure recovery,
+late invalidation and root isolation/concurrency. The first regression fails on
+the old handler because it invokes the synchronous walk. Security parity and
+responsiveness proofs live in `test/security/filesystem-async.test.ts` alongside
+the existing filesystem authority suites. Native macOS/Windows execution must
+still be confirmed by the exact-commit CI runs; Linux evidence is not a substitute.
 
 ## 13. Phase 00 frozen baseline artifacts (2026-08-15)
 

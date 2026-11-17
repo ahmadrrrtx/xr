@@ -25,6 +25,7 @@ export function canonicalAbsolute(abs: string): string {
   }
 }
 import { isSecretPath } from "./guard.ts";
+import { yieldEventLoop } from "../util/concurrency.ts";
 import { anchoredOpen, anchoredMkdir, anchoredRename, anchoredUnlink, descriptorIo, writableSameObject, listFd, fdStat, fdRead, fdWrite, fdTruncate, fdClose, type FdStat, FD_FLAGS, FilesystemError } from "./fs-native.ts";
 export { FilesystemError } from "./fs-native.ts";
 
@@ -153,37 +154,59 @@ export class FilesystemAuthority {
     }
     finally { fdClose(fd); }
   }
-  list(input = ".", cap = 600): FileMetadata[] {
+  /** A checkpoint per candidate, including denied entries; every open/check stays shared. */
+  private *listSteps(input: string, cap: number): Generator<FileMetadata | undefined> {
     const p = this.path(input), fd = this.open(p, true);
     try {
       this.check(p, "list", objectId(fdStat(fd)));
       // The proc path names our own retained directory descriptor, not a user path.
       const names = listFd(fd);
       if (names.length > MAX_ENTRIES) throw new FilesystemError("limit");
-      const entries: FileMetadata[] = [];
+      let count = 0;
       for (const name of names) {
-        if (entries.length >= Math.min(cap, MAX_ENTRIES)) break;
+        if (count >= Math.min(cap, MAX_ENTRIES)) break;
         const child = p === "." ? name : `${p}/${name}`;
-        if (isSecretPath(child) || isSecretPath(resolve(this.root, child))) continue;
-        try { entries.push(this.metadata(child)); } catch { /* unsafe entries are not candidates */ }
+        let entry: FileMetadata | undefined;
+        if (!isSecretPath(child) && !isSecretPath(resolve(this.root, child))) {
+          try { entry = this.metadata(child); count++; } catch { /* unsafe entries are not candidates */ }
+        }
+        yield entry;
       }
-      return entries;
     } finally { fdClose(fd); }
   }
-  walk(input = ".", skip = new Set<string>(), cap = MAX_ENTRIES): FileMetadata[] {
+  list(input = ".", cap = 600): FileMetadata[] {
+    return [...this.listSteps(input, cap)].filter((entry): entry is FileMetadata => entry !== undefined);
+  }
+  private *walkSteps(input: string, skip: Set<string>, cap: number): Generator<FileMetadata | undefined> {
     const first = this.metadata(input);
-    if (!first.directory) { this.check(first.path, "read", first.objectId); return [first]; }
-    const queue = [first.path], out: FileMetadata[] = [];
-    let visited = 0;
-    while (queue.length && out.length < cap) {
+    if (!first.directory) { this.check(first.path, "read", first.objectId); yield first; return; }
+    const queue = [first.path];
+    let visited = 0, count = 0;
+    while (queue.length && count < cap) {
       if (++visited > MAX_ENTRIES) throw new FilesystemError("limit");
       const dir = queue.shift()!;
       if (dir.split("/").length >= MAX_DEPTH) continue;
-      for (const entry of this.list(dir, MAX_ENTRIES)) {
-        if (skip.has(entry.name)) continue;
-        if (entry.directory) queue.push(entry.path); else out.push(entry);
-        if (out.length >= Math.min(cap, MAX_ENTRIES)) break;
+      for (const entry of this.listSteps(dir, MAX_ENTRIES)) {
+        if (entry && !skip.has(entry.name)) {
+          if (entry.directory) { queue.push(entry.path); yield undefined; }
+          else { count++; yield entry; }
+        } else yield undefined;
+        if (count >= Math.min(cap, MAX_ENTRIES)) break;
       }
+    }
+  }
+  walk(input = ".", skip = new Set<string>(), cap = MAX_ENTRIES): FileMetadata[] {
+    return [...this.walkSteps(input, skip, cap)].filter((entry): entry is FileMetadata => entry !== undefined);
+  }
+  /** Same authority and limits as walk(), cooperatively scheduled for background observations. */
+  async walkAsync(input = ".", skip = new Set<string>(), cap = MAX_ENTRIES, signal?: AbortSignal): Promise<FileMetadata[]> {
+    signal?.throwIfAborted(); this.active();
+    const out: FileMetadata[] = [];
+    let steps = 0;
+    for (const entry of this.walkSteps(input, skip, cap)) {
+      signal?.throwIfAborted(); this.active();
+      if (entry) out.push(entry);
+      if (++steps % 32 === 0) { await yieldEventLoop(); signal?.throwIfAborted(); this.active(); }
     }
     return out;
   }
