@@ -94,3 +94,11 @@ eed11ea08cda99632fa79a8ac2f889503df50509:release.manifest.json:generic-api-key:1
 6a351dd4a8effaf3b8652085a0be09bc7cf02533:docs/audits/XR_FIX_TRACKER.md:generic-api-key:125
 d76aa752b6dbfde7c70a9c50e317f4e1ccaf3f0a:XR_FIX_TRACKER.md:generic-api-key:32
 d76aa752b6dbfde7c70a9c50e317f4e1ccaf3f0a:XR_FIX_TRACKER.md:generic-api-key:125
+
+# Vendored Tauri provenance: generic-api-key misreads the public SHA-256 for
+# the upstream tokens module as a credential. Verified against the official
+# crates.io archive and the unchanged source. These two commit/rule/line pins
+# cover only its already-pushed introductions on the independent audit branches.
+# No path-wide exception: any later value added at that same location is scanned.
+c27aee16b4eda489a510f340f41c6aa93776c6a2:desktop/src-tauri/vendor/tauri-utils/XR-PROVENANCE.json:generic-api-key:44
+af6eda0fa78e3e2555f36adb0a477d09858bfba6:desktop/src-tauri/vendor/tauri-utils/XR-PROVENANCE.json:generic-api-key:44
