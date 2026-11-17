@@ -18,6 +18,8 @@ mod data_safety;
 mod engine;
 mod desktop_home;
 mod legacy_credentials;
+/// Recoverable workspace deletion through the platform trash (no chrono).
+mod platform_trash;
 /// Banner parsing / bounded stderr tail / probe cache (pure std, unit-tested).
 mod engine_state;
 mod events;

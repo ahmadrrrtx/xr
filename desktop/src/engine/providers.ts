@@ -28,10 +28,18 @@ export interface EngineKeySaveResult {
   } | null;
 }
 
-/** Desktop provider ids that the engine also knows (its presets use the same ids). */
+/**
+ * Desktop provider ids that the engine also knows (its presets use the same
+ * ids). FAIL-CLOSED (AUD-003 / S-6): when the engine has not answered, we do
+ * not know whether it knows the provider, and "the engine will take this key"
+ * must never be asserted on uncertainty — the caller keeps the key out and
+ * asks the user to start the engine first. A missing list vouches for no id,
+ * custom included — the engine is the only party that can say a custom
+ * endpoint exists.
+ */
 export function engineKnowsProvider(providerId: string): boolean {
   const list = useEngineStore.getState().providers?.providers;
-  if (!list) return providerId !== 'custom';
+  if (!list) return false;
   return list.some((p) => p.id === providerId);
 }
 

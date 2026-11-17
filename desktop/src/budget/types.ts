@@ -66,7 +66,7 @@ export interface BudgetSettings {
   configuredModels: string[];
   /** Local (Ollama) models present on this machine (mock until Phase 14). */
   installedLocal: string[];
-  /** The user's default chat model (mirrors settings.defaults.model). */
+  /** Default chat model for the Budget UI (desktop-local; new sessions read the engine's primary provider via sessionsStore). */
   defaultModel: string;
 }
 

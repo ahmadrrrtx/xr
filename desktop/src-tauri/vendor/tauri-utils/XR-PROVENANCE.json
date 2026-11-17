@@ -1,0 +1,46 @@
+{
+  "package": "tauri-utils",
+  "version": "2.10.0",
+  "crateUrl": "https://static.crates.io/crates/tauri-utils/tauri-utils-2.10.0.crate",
+  "crateSha256": "4dd257082deff79550de3409ed146104aeaf86fe38649615b04a304144939677",
+  "upstreamVcs": {
+    "git": {
+      "sha1": "447fa9f3f993fe77724189e355078b38ce20baea"
+    },
+    "path_in_vcs": "crates/tauri-utils"
+  },
+  "files": {
+    "Cargo.toml": "bcfd22a950828dcc3a14a121163f346013292e7890c511fb0398a37c89743ca6",
+    "Cargo.toml.orig": "a9c82eb37f4c733c9024987f84a0b1e10e763fc61c319877952eda20243fe240",
+    "LICENSE-APACHE-2.0": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "LICENSE-MIT": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+    "README.md": "7c833cd45debf201be76289fe1fef84704199a5a2cf83c12ac906bf81c83f5a6",
+    "src/acl/build.rs": "d198900aea6f34e6f29382fdf741ed51bff7502715f2d0a7ec7b07a45a59d256",
+    "src/acl/capability.rs": "61e892b8e324beedbf87badb75abfd8f8d1614afc21be22ceadf505469e5c3f8",
+    "src/acl/identifier.rs": "e9a8be13fc0fdbca73acdabfa435eb9f2890fc015c03f39eb3f81a5e0d7322c3",
+    "src/acl/manifest.rs": "b82624d437b753a37c121f5b2c89fd5c20a52cd1af7a01f3a2a0602b95f0e69e",
+    "src/acl/mod.rs": "535f7a66bcb229c22c726e1014dfb877118eff707fbf150ef4295d494232c29b",
+    "src/acl/resolved.rs": "a835722ed330b662e0a717114b5db4c8c70df879f70fc625f764e1e58a120eba",
+    "src/acl/schema.rs": "2bc89cbf6df40e89743f5d8979ff9ffa23422afd198d530b5b377f6fece57195",
+    "src/acl/value.rs": "0d78b6e730fa1f8b00a3eaab02fbdccb49e1f4897e2bef9a839ce699e9e03562",
+    "src/assets.rs": "28c4ff677014d6be90067dbe78228d6c8d0a7344962dbaad39ce6ded9e01957f",
+    "src/build.rs": "027893e0ed13a5479e2fbeaf585ce60a060f244a2701f76d7a71ec18814582d2",
+    "src/config.rs": "6aa11a4e1696b1d4a934a537e2f98e546d4c0f215999fccfff676fd534bcd171",
+    "src/config/parse.rs": "568f9ca5fab70d08e719bece126b82d24b577c0f15bbcc684e1cf12eac3fd97b",
+    "src/config_v1/mod.rs": "429965b30d83e5b5b7cb6e23f0d28f4da0ab5c78970554649ef994e717314f73",
+    "src/config_v1/parse.rs": "c73b5df511aa504fc81cae8ff25013ee931eb48836ef34179921b11242b8850d",
+    "src/html.rs": "37d0097131d8125a0f1cf258e8d75cd68587c3fd9447ef2c4650a5df59ec3404",
+    "src/html2.rs": "00a6f7885390873f26c3eb678645aca7a2f22ce94d425cdf5e1eca2a0701f91d",
+    "src/io.rs": "47766afc93e1d726c23c567a9773095f0953f07d617ec252d601818d0225ec9e",
+    "src/lib.rs": "047c42b2fedff29f598bc3baac1d0aa5590f439a6adfd15cef2d9e75df194304",
+    "src/mime_type.rs": "0a449edf62fa072732396366bafbc284b23512cdb712c509f6629744b12ed1ed",
+    "src/pattern/isolation.js": "de0f027c5ae314b1a9c03da8fa1c0cb7e961fe1b076d0dd763e10f277e5f14a9",
+    "src/pattern/isolation.rs": "dfacc53f76aa3248cd2438863620a0c4a5c36630af4dd62189feff34f5048ad9",
+    "src/pattern/mod.rs": "bb42446314423bf5832a2f780bda595b5fbfc55474bc72e3a62256bd2be84ab5",
+    "src/platform.rs": "5e12803d943b7728147c6223fe3e49ba532a0485b122fc47537398160f4092bc",
+    "src/platform/starting_binary.rs": "efdb6d24e3efce0bea10a22fb57c656ee090da153e0940b25028d522ae09f012",
+    "src/plugin.rs": "e1a797162d0efaee139d691b5821d1ed0320b85dfb175cd1a7c71a4e426afeae",
+    "src/resources.rs": "7738bbea8d0c962fed0a1699044ccee4e49da1102ccc41c1572a46a456d0076a",
+    "src/tokens.rs": "04e90e03181f4aee91fc1e0a054b541b755420b5c34638f2d9d4bd60d7d0492b"
+  }
+}

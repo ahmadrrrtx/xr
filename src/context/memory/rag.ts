@@ -4,7 +4,7 @@
  * the relevant pieces — 10x larger effective codebase at the same token cost.
  * All local, all private. (Block 4.)
  */
-import { withFilesystem, readWorkspaceText } from "../../security/filesystem.ts";
+import { FilesystemAuthority, withFilesystem, readWorkspaceText } from "../../security/filesystem.ts";
 import { isSecretPath } from "../../security/guard.ts";
 import { join, relative, extname } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -51,10 +51,26 @@ export interface Fingerprint {
   hasTests: boolean;
 }
 
-/** Build a quick project profile (fingerprint). */
+/** Build a project profile (synchronous CLI/indexing callers only). */
 export function fingerprint(root: string): Fingerprint {
   const files: string[] = [];
   walk(root, root, files);
+  return describeProject(root, files);
+}
+
+/** Same authorized profile, yielding between candidate batches so HTTP can keep serving. */
+export async function fingerprintAsync(root: string, signal?: AbortSignal): Promise<Fingerprint> {
+  const fs = new FilesystemAuthority(root, "index");
+  try {
+    const entries = await fs.walkAsync(".", SKIP_DIRS, 10_000, signal);
+    const files = entries.filter(entry => TEXT_EXT.has(extname(entry.name)) && entry.size <= MAX_FILE_BYTES)
+      .map(entry => join(root, entry.path));
+    signal?.throwIfAborted();
+    return describeProject(root, files);
+  } finally { fs.close(); }
+}
+
+function describeProject(root: string, files: string[]): Fingerprint {
   const languages: Record<string, number> = {};
   let hasTests = false;
   for (const f of files) {

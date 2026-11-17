@@ -37,7 +37,6 @@ tauri-plugin-fs = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
-trash = "5"
 tauri-plugin-os = "2"
 tauri-plugin-shell = "2"
 # XR-LAUNCH-013: `deep-link` forwards an xr:// URL from the second process
@@ -79,6 +78,22 @@ libc = "0.2"
 # `tauri::generate_context!` requires serde/serde_json as direct dependencies.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# GIO already ships with Tauri's Linux GTK stack. Its trash API retains
+# freedesktop Path/DeletionDate metadata without the unmaintained chrono.
+[target.'cfg(target_os = "linux")'.dependencies]
+gio = "0.18"
+
+# Keep the native Windows/macOS backends and the existing Windows COM mode;
+# chrono is only used by trash-rs's freedesktop backend, replaced above.
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+trash = { version = "5", default-features = false, features = ["coinit_apartmentthreaded"] }
+
+# Tauri uses only skip_serializing_none. Keep its upstream source byte-for-byte
+# and enable serde_with's macros alone: std/alloc lock disabled chrono anyway
+# (rust-lang/cargo#10801). Provenance and the two-line patch live with the copy.
+[patch.crates-io]
+tauri-utils = { path = "vendor/tauri-utils" }
 
 [profile.release]
 # Phase 31 · A7 — release builds strip symbols and never ship debug info
