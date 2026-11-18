@@ -6,8 +6,9 @@ export const NODE_STARTUP_DEADLINE_MS = 1500;
 export const NODE_WORK_DEADLINE_MS = 500;
 const PREFIX = 'XR_NODE_PROBE ';
 
-type Phase = 'startup' | 'work' | 'complete';
+type Phase = 'startup' | 'module-load' | 'work' | 'complete';
 export interface NodeProbeResult {
+  nodeExecutable: string;
   exitCode: number | null;
   signal: string | null;
   timedOut: boolean;
@@ -35,14 +36,15 @@ export function realNodeProbe(options: {
   const source = `
     const assert = require('node:assert/strict');
     assert(process.versions.node && !process.versions.bun, 'security probe must execute real Node');
+    console.log(${JSON.stringify(PREFIX)} + JSON.stringify({kind:'boot', node:process.versions.node,
+      v8:process.versions.v8, executable:process.execPath, platform:process.platform, arch:process.arch}));
     ${options.bootstrap ?? ''}
     process.stdin.once('data', () => {
       const started = performance.now();
       ${options.work}
       console.log(${JSON.stringify(PREFIX)} + JSON.stringify({kind:'complete', workMs:performance.now()-started}));
     });
-    console.log(${JSON.stringify(PREFIX)} + JSON.stringify({kind:'ready', node:process.versions.node,
-      v8:process.versions.v8, executable:process.execPath, platform:process.platform, arch:process.arch}));
+    console.log(${JSON.stringify(PREFIX)} + JSON.stringify({kind:'ready'}));
   `;
   return new Promise((resolve) => {
     const started = performance.now();
@@ -59,7 +61,7 @@ export function realNodeProbe(options: {
       if (finished) return;
       finished = true; clearTimeout(watchdog);
       const wallMs = performance.now() - started;
-      resolve({ exitCode, signal, timedOut, deadlinePhase, error, phase, runtime, events, stdout, stderr,
+      resolve({ nodeExecutable:node, exitCode, signal, timedOut, deadlinePhase, error, phase, runtime, events, stdout, stderr,
         wallMs, readyWallMs, workWallMs: readyWallMs === undefined ? undefined : wallMs - readyWallMs });
     };
     child.on('error', (reason) => { error = reason.message; finish(null, null); });
@@ -76,9 +78,12 @@ export function realNodeProbe(options: {
         try { event = JSON.parse(line.slice(PREFIX.length)); }
         catch { stop('invalid Node probe protocol'); return; }
         events.push(event);
-        if (event.kind === 'ready') {
-          if (phase !== 'startup') { stop('duplicate Node readiness event'); return; }
+        if (event.kind === 'boot') {
+          if (phase !== 'startup') { stop('duplicate Node boot event'); return; }
           runtime = event as unknown as NonNullable<NodeProbeResult['runtime']>;
+          phase = 'module-load';
+        } else if (event.kind === 'ready') {
+          if (phase !== 'module-load' || !runtime) { stop('Node readiness without attested boot'); return; }
           readyWallMs = performance.now() - started; phase = 'work'; clearTimeout(watchdog);
           watchdog = setTimeout(() => {
             timedOut = true; deadlinePhase = phase; stop('real Node compile/match/exit deadline exceeded');

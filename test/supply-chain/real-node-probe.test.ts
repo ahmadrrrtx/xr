@@ -8,15 +8,19 @@ test('real Node security watchdog attests the runtime and does not substitute Bu
   expect(result.runtime?.node).toMatch(/^\d+\./);
   expect(result.phase).toBe('complete');
   expect(result.stdout).toContain('real-node-control-passed');
+  expect(result.nodeExecutable.length).toBeGreaterThan(0);
+  expect(result.events.map(event => event.kind)).toEqual(['boot', 'ready', 'complete']);
   expect(NODE_STARTUP_DEADLINE_MS).toBe(1500);
   expect(NODE_WORK_DEADLINE_MS).toBe(500);
+  console.log(JSON.stringify({proof:'real-node-runtime-attested', executable:result.nodeExecutable, runtime:result.runtime}));
 });
 
-test('seeded startup hang is killed and cannot masquerade as a regex failure or pass', async () => {
-  const result = await realNodeProbe({ bootstrap: 'while (true) {}', work: '', startupMs: 100 });
-  expect(result.timedOut).toBe(true);
-  expect(result.deadlinePhase).toBe('startup');
-  expect(result.runtime).toBeUndefined();
+test('seeded module-load hang is killed before security work is released', async () => {
+  const result = await realNodeProbe({ bootstrap: 'while (true) {}', work: '' });
+  expect(result.timedOut, JSON.stringify(result)).toBe(true);
+  expect(result.deadlinePhase).toBe('module-load');
+  expect(result.runtime?.node).toBeDefined();
+  expect(result.events.map(event => event.kind)).toEqual(['boot']);
   expect(result.exitCode).not.toBe(0);
 });
 

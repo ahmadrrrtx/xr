@@ -96,6 +96,24 @@ failures. No input, parser guard or expectation was removed, and the private r2
 source, tarball identity, nine lock hashes and 66 compatibility differences are
 unchanged. Fresh exact-head local and hosted requalification remains required.
 
+On follow-up `25a09239dec81fa126cbdd0dc77d37841853b53e`, local requalification
+passed 5,941 core tests and all 175 native Linux Rust tests. Hosted Supply Chain
+run `44326864979`, job `134880382696`, refused readiness within 1,500 ms with
+no child output/events: **compile/match work was never released**. This narrows
+the phase but does not distinguish process bootstrap from vendor module load or
+identify a scheduling/runtime cause. The same head's CI/core and Linux/macOS
+parity probes did pass (Node 22.23.4 Linux, Node 24.22.2 macOS; roughly 7–8 ms
+matching), including all seeded watchdog controls. Those passes do not replace
+the failed Supply Chain check.
+
+The next focused repair explicitly provisions checksum-supported Node 22.23.5
+in that job instead of relying on an unmanaged image executable; watchdog
+controls are their own mandatory step. The child now emits its runtime before
+vendor-module loading, so a future failure distinguishes pre-boot from module
+load. The selected executable is also retained if no child output arrives.
+Neither external deadline is raised (startup/module I/O 1,500 ms; complete
+compile/match/exit 500 ms), and no parser, payload, input or assertion is removed.
+
 ## Outstanding acceptance (not represented as complete)
 
 Fresh current-head unit/integration/E2E, behavioral security with real Linux isolation,
