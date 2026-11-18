@@ -262,9 +262,13 @@
     "highlight.js": "^11.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "typescript": "~5.6.3"
+    "typescript": "~5.6.3",
+    "picomatch": "file:../../vendor/picomatch-security-4.0.7-xr.2.tgz"
   },
   "dependencies": {
     "markdown-it": "^14.3.3"
+  },
+  "overrides": {
+    "picomatch": "$picomatch"
   }
 }

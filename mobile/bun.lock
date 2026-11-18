@@ -22,12 +22,16 @@
         "@types/react": "^18.3.17",
         "@types/react-dom": "^18.3.5",
         "@vitejs/plugin-react": "^4.3.4",
+        "picomatch": "file:../vendor/picomatch-security-4.0.7-xr.2.tgz",
         "tailwindcss": "^4.0.0",
         "typescript": "^5.7.2",
         "vite": "^6.4.4",
         "vite-plugin-pwa": "^0.21.1",
       },
     },
+  },
+  "overrides": {
+    "picomatch": "file:../vendor/picomatch-security-4.0.7-xr.2.tgz",
   },
   "packages": {
     "@apideck/better-ajv-errors": ["@apideck/better-ajv-errors@0.3.7", "", { "dependencies": { "jsonpointer": "^5.0.1", "leven": "^3.1.0" }, "peerDependencies": { "ajv": ">=8" } }, "sha512-TajUJwGWbDwkCx/CZi7tRE8PVB7simCvKJfHUsSdvps+aTM/PDPP4gkLmKnc+x3CE//y9i/nj74GqdL/hwk7Iw=="],
@@ -866,7 +870,7 @@
 
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 
-    "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
+    "picomatch": ["@xr/picomatch-security@../vendor/picomatch-security-4.0.7-xr.2.tgz", {}, "sha512-eiHoF1DfcDMsq6h7kt50Mg8fDiqjMTYIWUMZu/ooREvCsQo0QXOkW8jXIINY+x4VRHpT+YsgEfGFcFOMyxmL0A=="],
 
     "possible-typed-array-names": ["possible-typed-array-names@1.1.0", "", {}, "sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg=="],
 

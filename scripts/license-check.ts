@@ -15,6 +15,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { vendoredDependency } from "./vendored-dependencies";
 
 /** Copyleft / source-available / non-commercial licenses block the MIT
  * release pipeline unless explicitly waived in the allowlist below. */
@@ -89,7 +90,9 @@ export function runLicenseCheck(options: { root?: string; target?: Target } = {}
     if (!Array.isArray(entry) || entry.length < 2) continue;
     const spec = String(entry[0]);
     const at = spec.lastIndexOf("@");
-    const version = at > 0 ? spec.slice(at + 1) : "";
+    const sri = entry.find(x => typeof x === "string" && /^sha(256|384|512)-/.test(x));
+    const local = vendoredDependency(spec, join(root, "bun.lock"), typeof sri === "string" ? sri : undefined);
+    const version = local?.version ?? (at > 0 ? spec.slice(at + 1) : "");
     if (/^@oven\/bun-(?:darwin|linux|windows)-(?:x64|aarch64)(?:-musl)?$/.test(name)) bunVersions.add(version);
     const pkgDir = join(root, "node_modules", name);
     const license = licenseOf(pkgDir);
@@ -104,7 +107,7 @@ export function runLicenseCheck(options: { root?: string; target?: Target } = {}
     } else if (license === "UNKNOWN" || /^(see|view)/i.test(license)) {
       status = ALLOWLIST[key] ? "ok" : "unknown";
     }
-    results.push({ name, version, license: license || "(none)", status });
+    results.push({ name: local?.name ?? name, version, license: license || "(none)", status });
   }
   for (const version of bunVersions) {
     // Owner acknowledgement of the LGPL embedded components — fail closed:

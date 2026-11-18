@@ -1,0 +1,353 @@
+{
+  "upstreamTestsUnchanged": true,
+  "parserSha256": "cd7b769ab2192902e2882c16f439f614da11e13db029999beb34945ca3ab0163",
+  "stats": {
+    "suites": 131,
+    "tests": 1983,
+    "passes": 1917,
+    "pending": 0,
+    "failures": 66,
+    "start": "2026-11-18T13:24:42.619Z",
+    "end": "2026-11-18T13:24:43.532Z",
+    "duration": 913
+  },
+  "exitCode": 66,
+  "failures": [
+    {
+      "fullTitle": "extglobs (bash) \"bar\" should match \"*(!(foo))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(foo))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(foo))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:1565:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"baz\" should match \"*(!(foo))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('baz', '*(!(foo))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('baz', '*(!(foo))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:1577:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"egzefffgzbcdij\" should match \"*(b+(c)d|e*(f)g?|?(h)i@(j|k))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('egzefffgzbcdij', '*(b+(c)d|e*(f)g?|?(h)i@(j|k))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('egzefffgzbcdij', '*(b+(c)d|e*(f)g?|?(h)i@(j|k))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:1901:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"fff\" should match \"*(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '*(!(f))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '*(!(f))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:1973:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"fff\" should match \"+(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '+(!(f))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '+(!(f))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:1977:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ffo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ffo', '*(f*(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ffo', '*(f*(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:1985:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"fofo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fofo', '*(f*(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fofo', '*(f*(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2013:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foo\" should match \"*(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '*(!(f))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '*(!(f))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2065:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foo\" should match \"+(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '+(!(f))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '+(!(f))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2105:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foobar\" should match \"*(!(foo))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foobar', '*(!(foo))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foobar', '*(!(foo))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2269:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foofoofo\" should match \"@(foo|f|fo)*(f|of+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2293:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foofoofo\" should match \"@(foo|f|fo)*(f|of+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2297:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"fooofoofofooo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fooofoofofooo', '*(f*(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fooofoofofooo', '*(f*(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2301:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foooofo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofo', '*(f*(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofo', '*(f*(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2305:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foooofof\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofof', '*(f*(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofof', '*(f*(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2309:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foooxfooxfoxfooox\" should match \"*(f*(o)x)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfoxfooox', '*(f*(o)x)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfoxfooox', '*(f*(o)x)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2321:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"foooxfooxfxfooox\" should match \"*(f*(o)x)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfxfooox', '*(f*(o)x)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfxfooox', '*(f*(o)x)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2325:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ofoofo\" should match \"*(of+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2409:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ofoofo\" should match \"*(of+(o)|f)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o)|f)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o)|f)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2413:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ofoooxoofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2421:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ofoooxoofxoofoooxoofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2425:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ofoooxoofxoofoooxoofxoo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxoo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxoo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2433:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ofoooxoofxoofoooxoofxooofxofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxooofxofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxooofxofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2437:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ofxoofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofxoofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofxoofxo', '*(*(of*(o)x)o)', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2441:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"oofooofo\" should match \"*(of|oof+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('oofooofo', '*(of|oof+(o))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('oofooofo', '*(of|oof+(o))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2445:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ooo\" should match \"*(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '*(!(f))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '*(!(f))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2453:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"ooo\" should match \"+(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '+(!(f))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '+(!(f))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2457:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (bash) \"oxfoxoxfox\" should match \"*(oxf+(ox))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('oxfoxoxfox', '*(oxf+(ox))', { bash: true, windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('oxfoxoxfox', '*(oxf+(ox))', { bash: true, windows: true }))\n\n    at Context.<anonymous> (test/extglobs-bash.js:2465:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"bar\" should match \"*(!(foo))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(foo))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(foo))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:1552:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"baz\" should match \"*(!(foo))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('baz', '*(!(foo))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('baz', '*(!(foo))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:1564:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"egzefffgzbcdij\" should match \"*(b+(c)d|e*(f)g?|?(h)i@(j|k))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('egzefffgzbcdij', '*(b+(c)d|e*(f)g?|?(h)i@(j|k))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('egzefffgzbcdij', '*(b+(c)d|e*(f)g?|?(h)i@(j|k))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:1888:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"fff\" should match \"*(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '*(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '*(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:1960:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"fff\" should match \"+(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '+(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '+(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:1964:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ffo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ffo', '*(f*(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ffo', '*(f*(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:1972:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"fofo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fofo', '*(f*(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fofo', '*(f*(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2000:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foo\" should match \"*(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '*(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '*(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2052:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foo\" should match \"+(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '+(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foo', '+(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2092:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foobar\" should match \"*(!(foo))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foobar', '*(!(foo))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foobar', '*(!(foo))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2252:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foofoofo\" should match \"@(foo|f|fo)*(f|of+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2276:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foofoofo\" should match \"@(foo|f|fo)*(f|of+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foofoofo', '@(foo|f|fo)*(f|of+(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2280:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"fooofoofofooo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fooofoofofooo', '*(f*(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fooofoofofooo', '*(f*(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2284:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foooofo\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofo', '*(f*(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofo', '*(f*(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2288:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foooofof\" should match \"*(f*(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofof', '*(f*(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooofof', '*(f*(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2292:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foooxfooxfoxfooox\" should match \"*(f*(o)x)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfoxfooox', '*(f*(o)x)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfoxfooox', '*(f*(o)x)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2304:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"foooxfooxfxfooox\" should match \"*(f*(o)x)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfxfooox', '*(f*(o)x)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('foooxfooxfxfooox', '*(f*(o)x)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2308:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ofoofo\" should match \"*(of+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2388:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ofoofo\" should match \"*(of+(o)|f)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o)|f)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoofo', '*(of+(o)|f)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2392:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ofoooxoofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxo', '*(*(of*(o)x)o)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxo', '*(*(of*(o)x)o)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2400:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ofoooxoofxoofoooxoofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxo', '*(*(of*(o)x)o)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxo', '*(*(of*(o)x)o)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2404:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ofoooxoofxoofoooxoofxoo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxoo', '*(*(of*(o)x)o)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxoo', '*(*(of*(o)x)o)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2412:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ofoooxoofxoofoooxoofxooofxofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxooofxofxo', '*(*(of*(o)x)o)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofoooxoofxoofoooxoofxooofxofxo', '*(*(of*(o)x)o)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2416:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ofxoofxo\" should match \"*(*(of*(o)x)o)\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ofxoofxo', '*(*(of*(o)x)o)', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ofxoofxo', '*(*(of*(o)x)o)', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2420:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"oofooofo\" should match \"*(of|oof+(o))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('oofooofo', '*(of|oof+(o))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('oofooofo', '*(of|oof+(o))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2424:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ooo\" should match \"*(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '*(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '*(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2432:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"ooo\" should match \"+(!(f))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '+(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ooo', '+(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2436:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs (minimatch) \"oxfoxoxfox\" should match \"*(oxf+(ox))\"",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('oxfoxoxfox', '*(oxf+(ox))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('oxfoxoxfox', '*(oxf+(ox))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-minimatch.js:2444:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs bash should match extended globs from the bash spec:",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-temp.js:262:7)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs other should support exclusions",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(foo))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('bar', '*(!(foo))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-temp.js:832:7)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs other should pass extglob2 tests",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('egzefffgzbcdij', '*(b+(c)d|e*(f)g?|?(h)i@(j|k))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('egzefffgzbcdij', '*(b+(c)d|e*(f)g?|?(h)i@(j|k))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-temp.js:1167:7)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs other should support exclusions",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '*(!(f))', { windows: true }))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('fff', '*(!(f))', { windows: true }))\n\n    at Context.<anonymous> (test/extglobs-temp.js:1198:7)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs tests derived from the pd-ksh test suite",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('abcx', '+(a|b[)*'))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('abcx', '+(a|b[)*'))\n\n    at Context.<anonymous> (test/extglobs.js:513:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "extglobs statechar should support *(...) extglobs ending with statechar",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('ax', '*(a*|b)'))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('ax', '*(a*|b)'))\n\n    at Context.<anonymous> (test/extglobs.js:322:7)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "options.maxExtglobRecursion should preserve non-risky extglobs by default",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('abc', '+(*)c'))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('abc', '+(*)c'))\n\n    at Context.<anonymous> (test/options.maxExtglobRecursion.js:34:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "options.maxExtglobRecursion should allow limited nested repeated extglobs when configured",
+      "message": "Expected values to be strictly equal:\n+ actual - expected\n\n+ '^(?:\\\\+\\\\(\\\\+\\\\(a\\\\)\\\\))$'\n- '^(?:(?=.)(?:(?:a)+)+)$'\n       ^",
+      "stack": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ '^(?:\\\\+\\\\(\\\\+\\\\(a\\\\)\\\\))$'\n- '^(?:(?=.)(?:(?:a)+)+)$'\n       ^\n    at Context.<anonymous> (test/options.maxExtglobRecursion.js:38:12)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "options.maxExtglobRecursion should disable the safeguard when maxExtglobRecursion is false",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(\n    /\\(\\?:a\\|aa\\)\\+/.test(\n      makeRe('+(a|aa)', { maxExtglobRecursion: false }).source\n    )\n  )\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(\n    /\\(\\?:a\\|aa\\)\\+/.test(\n      makeRe('+(a|aa)', { maxExtglobRecursion: false }).source\n    )\n  )\n\n    at Context.<anonymous> (test/options.maxExtglobRecursion.js:146:5)\n    at process.processImmediate (node:internal/timers:483:21)"
+    },
+    {
+      "fullTitle": "special characters parentheses () should match literal parentheses in the input string",
+      "message": "The expression evaluated to a falsy value:\n\n  assert(isMatch('my/folder (Work, Accts)', '*/*(W*, *)*'))\n",
+      "stack": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(isMatch('my/folder (Work, Accts)', '*/*(W*, *)*'))\n\n    at Context.<anonymous> (test/special-characters.js:223:7)\n    at process.processImmediate (node:internal/timers:483:21)"
+    }
+  ],
+  "scope": "Unchanged upstream Mocha compatibility run, not a passing release gate. Conservative syntax restrictions include known-safe patterns. Consumer builds and all normal gates remain mandatory.",
+  "upstreamCommit": "6bb40679c218cefba5d4e9662408c5fdf699a8bb",
+  "upstreamSourceSha256": "e279e77320873e51b444f121081e717444732250a8ab316ff7545017ce15813a",
+  "node": "20.20.2",
+  "mocha": "10.8.2",
+  "fillRange": "7.1.1"
+}

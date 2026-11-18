@@ -78,6 +78,12 @@ jobs:
           bun-version-file: .bun-version
       - name: Install (ignore-scripts, frozen)
         run: bun install --frozen-lockfile --ignore-scripts
+      # Registry scanners cannot certify an unpublished local security patch.
+      # This independent source/integrity/behavior gate must pass as well.
+      - name: Private dependency provenance + adversarial security regressions
+        run: |
+          bun scripts/vendor-picomatch.ts
+          bun test test/supply-chain/picomatch-provenance.test.ts test/supply-chain/picomatch-redos.test.ts
       - name: OSV scanner (locked deps, checksum-pinned binary)
         run: |
           curl -fsSL -o /tmp/osv-scanner \

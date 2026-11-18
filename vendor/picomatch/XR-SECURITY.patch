@@ -1,0 +1,228 @@
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -139,28 +139,6 @@
+   return value.replace(/\\(.)/g, '$1');
+ };
+ 
+-const hasRepeatedCharPrefixOverlap = branches => {
+-  const values = branches.map(normalizeSimpleBranch).filter(Boolean);
+-
+-  for (let i = 0; i < values.length; i++) {
+-    for (let j = i + 1; j < values.length; j++) {
+-      const a = values[i];
+-      const b = values[j];
+-      const char = a[0];
+-
+-      if (!char || a !== char.repeat(a.length) || b !== char.repeat(b.length)) {
+-        continue;
+-      }
+-
+-      if (a === b || a.startsWith(b) || b.startsWith(a)) {
+-        return true;
+-      }
+-    }
+-  }
+-
+-  return false;
+-};
+-
+ const parseRepeatedExtglob = (pattern, requireEnd = true) => {
+   if ((pattern[0] !== '+' && pattern[0] !== '*') || pattern[1] !== '(') {
+     return;
+@@ -270,80 +248,122 @@
+   return chars;
+ };
+ 
+-const repeatedExtglobRecursion = pattern => {
+-  let depth = 0;
+-  let value = pattern.trim();
+-  let match = parseRepeatedExtglob(value);
+-
+-  while (match) {
+-    depth++;
+-    value = match.body.trim();
+-    match = parseRepeatedExtglob(value);
+-  }
+-
+-  return depth;
++// XR / GHSA-fc5q-39xc-vjpf: one branch containing a wildcard is enough
++// to nest an unbounded quantifier. Do not rely on the number of alternatives.
++// Preserve escaped/quoted stars and the existing safe *(a) sequence rewrite.
++// Stars in character classes are conservatively rejected too: this guard is
++// deliberately not a second, potentially divergent bracket-expression parser.
++const hasWildcardStar = body => {
++  let escaped = false;
++  let quoted = false;
++  for (let i = 0; i < body.length; i++) {
++    const ch = body[i];
++    if (escaped) { escaped = false; continue; }
++    if (ch === '\\') { escaped = true; continue; }
++    if (ch === '"') { quoted = !quoted; continue; }
++    if (!quoted && ch === '*' && body[i + 1] !== '(') return true;
++  }
++  return false;
+ };
+ 
++// Decode only a deliberately small, finite literal language. In particular,
++// regex escapes, bracket/brace expressions and nested groups are NOT evidence
++// of safety. Quotes follow the parser's keepQuotes option; case-insensitive
++// matching is checked on folded ASCII words, not their source spellings.
++const repeatedLiteral = (branch, options) => {
++  let quoted = false;
++  let value = '';
++  for (let i = 0; i < branch.length; i++) {
++    const ch = branch[i];
++    if (ch === '\\') {
++      const next = branch[++i];
++      if (!next || options.unescape === true || !/[*?+@!()[\]{}|.\\/"^$-]/.test(next)) return;
++      value += next;
++    } else if (ch === '"') {
++      quoted = !quoted;
++      if (options.keepQuotes === true) value += ch;
++    } else {
++      if (ch.charCodeAt(0) < 32 || ch.charCodeAt(0) > 126 || (!quoted && /[?*+@!()[\]{}|^$]/.test(ch))) return;
++      value += ch;
++    }
++  }
++  if (quoted || value.length === 0) return;
++  return options.nocase === true || String(options.flags || '').includes('i') ? value.toLowerCase() : value;
++};
++
++// Bounded Sardinas-Patterson decision procedure for finite literal codewords.
++// Pairwise prefix/commuting checks miss e.g. a|ab|ba: aba = a.ba = ab.a.
++// An empty residual proves ambiguous factorization. Uncertainty/budget
++// exhaustion rejects, rather than emitting a potentially exponential regexp.
++const uniquelyDecodable = words => {
++  if (words.some(word => word === undefined) || new Set(words).size !== words.length) return false;
++  const seen = new Set();
++  const queue = [];
++  const add = value => {
++    if (value.length && !seen.has(value)) { seen.add(value); queue.push(value); }
++  };
++  for (const a of words) for (const b of words) {
++    if (a !== b && a.startsWith(b)) add(a.slice(b.length));
++  }
++  let operations = 0;
++  for (let index = 0; index < queue.length; index++) {
++    const suffix = queue[index];
++    for (const word of words) {
++      if (++operations > 32768 || suffix === word) return false;
++      if (suffix.startsWith(word)) add(suffix.slice(word.length));
++      if (word.startsWith(suffix)) add(word.slice(suffix.length));
++    }
++  }
++  return true;
++};
++
++// An exact @(...)-only wrapper is a finite union, not an unbounded repeat.
++// Expand at most 64 alternatives/eight wrappers, then prove the complete code;
++// looking at each nested alternative separately would miss @(a|aa).
++const repeatedWords = (body, options, depth = 0) => {
++  if (depth > 8) return;
++  const words = [];
++  for (const branch of splitTopLevel(body)) {
++    const group = branch.startsWith('@(') && parseRepeatedExtglob('*' + branch.slice(1));
++    const values = group ? repeatedWords(group.body, options, depth + 1) : [repeatedLiteral(branch, options)];
++    if (!values || values.some(word => word === undefined)) return;
++    words.push(...values);
++    if (words.length > 64) return;
++  }
++  return words;
++};
++
+ const analyzeRepeatedExtglob = (body, options) => {
+-  if (options.maxExtglobRecursion === false) {
+-    return { risky: false };
+-  }
+-
+-  const max =
+-    typeof options.maxExtglobRecursion === 'number'
+-      ? options.maxExtglobRecursion
+-      : constants.DEFAULT_MAX_EXTGLOB_RECURSION;
+-
+-  const branches = splitTopLevel(body).map(branch => branch.trim());
+-
+-  if (branches.length > 1) {
+-    if (
+-      branches.some(branch => branch === '') ||
+-      branches.some(branch => /^[*?]+$/.test(branch)) ||
+-      hasRepeatedCharPrefixOverlap(branches)
+-    ) {
+-      return { risky: true };
+-    }
+-  }
+-
+-  // A repeated extglob is "risky" (prone to catastrophic backtracking) when a
+-  // branch is itself a `*(...)` sequence, since that nests an unbounded quantifier
+-  // inside the outer `+(...)`/`*(...)`. When *every* branch reduces to single
+-  // characters we can emit one flat, ReDoS-safe character class that preserves the
+-  // meaning of ALL branches (e.g. `+(*(a)|*(b))` -> `[ab]*`), rather than dropping
+-  // every branch but the first.
++  // These security checks cannot be opted out of by recursion settings.
++  // Bound compile work as well as match work. Unsupported syntax is literal,
++  // not a second speculative implementation of the entire glob grammar.
++  if (body.length > 2048 || hasWildcardStar(body)) return { risky: true };
++  const branches = splitTopLevel(body);
++  if (branches.length > 64) return { risky: true };
++  // Exactly one character class (including a POSIX class) consumes exactly
++  // one code unit per iteration. No concatenation or nested quantifier can
++  // hide inside this recognizer; malformed/multiple classes are not accepted.
++  if (/^\[(?:\\.|[^\\\[\]]|\[:[a-z]+:\])+\]$/.test(body)) return { risky: false };
++
++  // Retain upstream's algebraically safe star-only character-class rewrite:
++  // (a*b*)* = [ab]*. Every branch must be representable, none may be dropped.
+   const safeChars = [];
+   let sawStarSequence = false;
+   let combinable = true;
+-
+   for (const branch of branches) {
+     const chars = getStarExtglobSequenceChars(branch);
+-    if (chars) {
+-      sawStarSequence = true;
+-      safeChars.push(...chars);
+-      continue;
+-    }
+-
++    if (chars) { sawStarSequence = true; safeChars.push(...chars); continue; }
+     const literal = normalizeSimpleBranch(branch);
+-    if (literal && literal.length === 1) {
+-      safeChars.push(literal);
+-      continue;
+-    }
+-
++    if (literal && literal.length === 1) { safeChars.push(literal); continue; }
+     combinable = false;
+-
+-    if (repeatedExtglobRecursion(branch) > max) {
+-      return { risky: true };
+-    }
+-  }
+-
++  }
+   if (sawStarSequence) {
+     return combinable
+       ? { risky: true, safeOutput: buildCharClassStar([...new Set(safeChars)]) }
+       : { risky: true };
+   }
+-
+-  return { risky: false };
++  const words = repeatedWords(body, options);
++  return { risky: !words || !uniquelyDecodable(words) };
+ };
+ 
+ /**
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,9 @@
+ {
+-  "name": "picomatch",
+-  "description": "Blazing fast and accurate glob matcher written in JavaScript, with no dependencies and full support for standard and extended Bash glob features, including braces, extglobs, POSIX brackets, and regular expressions.",
+-  "version": "4.0.7",
++  "name": "@xr/picomatch-security",
++  "description": "XR private security-patched fork of picomatch 4.0.7. Not an upstream release. See XR-PATCH.md.",
++  "version": "4.0.7-xr.2",
++  "private": true,
++  "xrPatch": "GHSA-fc5q-39xc-vjpf.2; bounded repeated-extglob language; provenance: vendor/picomatch/XR-PROVENANCE.json in the XR source repository",
+   "homepage": "https://github.com/micromatch/picomatch",
+   "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+   "funding": "https://github.com/sponsors/jonschlinkert",
