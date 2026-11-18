@@ -156,3 +156,25 @@ store below its waiver without increasing thresholds/waivers. Targeted crypto
 plus architecture passed 86/0; size and ownership checks pass (176,055 total LOC,
 176,500 ceiling, 16 existing waivers, 251 owned areas). All-source requalification
 is restarted on the resulting immutable commit; the failed report is retained.
+
+## Complete independent-Node provisioning across invoking jobs
+
+On `c2f9cefd`, fresh hosted Supply Chain run `44405971914` passed all eight
+jobs. Vulnerability job `135161156934` attested Node 22.23.5 and completed the
+unchanged adversarial work in 5.767241 ms (startup 26.784162 ms, work limit
+500 ms). Windows native Rust job `135161704055` also passed; the old Git Bash
+fork failure did not recur in this run. That does not prove its original cause.
+
+CI run `44405972028` Truth job `135161159342` exposed another unprovisioned
+invoker: its independent probe selected `/usr/local/bin/node` and exceeded the
+unchanged 1,500 ms pre-boot watchdog (1,541.848389 ms, events empty, no output).
+A later control in the same job attested the image's Node 22.23.4; the failed
+child itself never attested a runtime. This is not evidence that matching took
+more than 500 ms or that a particular Node version caused the failure.
+
+Extend pinned Node 22.23.5 provisioning to CI Truth, CI core and each native
+cross-platform parity job, all of which run supply-chain regressions. No test,
+assertion, input or timeout is removed, and no failed workflow is retried or
+waived. Fresh all-applicable hosted success is still required before merging.
+The local release build was intentionally interrupted while compiling GTK on
+the 2 GB/no-swap host to keep heavy work serial; it yielded no installer.
