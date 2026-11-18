@@ -11,6 +11,7 @@
  * go through the gateway. Registry is still used via gateway.
  */
 
+import { sealCustomHeaders } from "../providers/header-secrets.ts";
 import { registry } from "../providers/registry.ts";
 import { providerGateway, gatewayEnabled } from "../providers/gateway.ts";
 import { streamingMetrics, withTurnMetrics, type StreamingMetricsCollector } from "../providers/stream-metrics.ts";
@@ -20,7 +21,7 @@ import {
   type ResolveOptions,
 } from "../intelligence/routing-service.ts";
 import {
-  ProviderHealthChecker,
+  ProviderHealthChecker, invalidateProviderHealthCache,
   type ProviderHealthReport,
 } from "../providers/health.ts";
 import {
@@ -34,7 +35,8 @@ import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import { setSecretAsync, getSecret } from "../security/secrets.ts";
 import { validateProviderUrl } from "../providers/provider-url-guard.ts";
-import { hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
+import { hydrateProviderEnv } from "../security/secret-broker.ts";
+import { configuredCredentialStatus } from "../providers/credential-presence.ts";
 import type {
   RouteRequest,
   RouteResult,
@@ -252,6 +254,9 @@ export class ProviderService implements LifecycleHook {
     const config = configService.get();
 
     const existing = config.providerEngine?.customProviders ?? [];
+    if (def.apiKeyEnv && (Object.values(PRESETS).some(p => p.apiKeyEnv === def.apiKeyEnv) || existing.some(c => c.id !== def.id && c.apiKeyEnv === def.apiKeyEnv)))
+      throw new Error("A custom provider must own a separate credential reference.");
+    const headers = await sealCustomHeaders(def.id, def.baseUrl, def.headers);
     const filtered = existing.filter((c: any) => c.id !== def.id);
 
     filtered.push({
@@ -260,7 +265,7 @@ export class ProviderService implements LifecycleHook {
       baseUrl: def.baseUrl,
       apiKeyEnv: def.apiKeyEnv,
       defaultModel: def.defaultModel,
-      headers: def.headers,
+      headers,
       capabilities: def.capabilities ?? { chat: true },
     });
 
@@ -272,6 +277,7 @@ export class ProviderService implements LifecycleHook {
     };
 
     await configService.update(patch);
+    invalidateProviderHealthCache(def.id);
     registry.syncCustom({
       ...config,
       providerEngine: patch.providerEngine,
@@ -298,6 +304,7 @@ export class ProviderService implements LifecycleHook {
     };
 
     await configService.update(patch);
+    invalidateProviderHealthCache(id);
     registry.syncCustom({
       ...config,
       providerEngine: patch.providerEngine,
@@ -308,6 +315,7 @@ export class ProviderService implements LifecycleHook {
   async storeKey(envName: string, value: string): Promise<string> {
     // XR-LAUNCH-015: keychain-first write without blocking the daemon's event loop.
     const backend = await setSecretAsync(envName, value);
+    invalidateProviderHealthCache();
     // Phase 8 — ambient hydration is gated (default OFF). Durable write
     // always happens; process.env is mirrored only when compat is on.
     hydrateProviderEnv(envName, value);
@@ -328,13 +336,8 @@ export class ProviderService implements LifecycleHook {
         envName: status.envName,
       };
     }
-    const preset = registry.getPreset(id) ?? PRESETS[id];
-    if (!preset) return { required: false, set: false };
-    if (!preset.apiKeyEnv) return { required: false, set: true };
-    // Phase 2 · F-24 — key presence through the broker seam (env hydration
-    // compat-gated; durable backend always consulted).
-    const set = Boolean(secretBrokerSync(preset.apiKeyEnv));
-    return { required: true, set, envName: preset.apiKeyEnv };
+    const status = configuredCredentialStatus(registry.getPreset(id) ?? PRESETS[id]);
+    return { required: status.required, set: status.available, envName: status.envName };
   }
 
   getProviderList(): string {

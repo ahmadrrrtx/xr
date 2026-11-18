@@ -22,6 +22,8 @@ WORKDIR /app
 
 # Install deps first (layer cache)
 COPY package.json bun.lock* ./
+# The locked private security patch must exist even for production-only installs.
+COPY vendor/picomatch-security-4.0.7-xr.2.tgz ./vendor/picomatch-security-4.0.7-xr.2.tgz
 RUN bun install --frozen-lockfile --production --ignore-scripts
 
 # App source. scripts/ is required for the nightly golden-path container

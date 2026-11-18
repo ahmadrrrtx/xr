@@ -29,7 +29,7 @@
  * Failing to distinguish them is what makes a runtime lie about why it stopped.
  */
 
-import { ProviderAbortError, isCancellation, isTimeout, type AbortKind } from "../core/provider-abort.ts";
+import { ProviderAbortError } from "../core/provider-abort.ts";
 export { ProviderAbortError, isCancellation, isTimeout, type AbortKind } from "../core/provider-abort.ts";
 
 /**

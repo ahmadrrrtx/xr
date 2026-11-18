@@ -129,7 +129,7 @@ describe("Phase 15 · settings helpers", () => {
   test("activation × wake word → engine mode", () => {
     expect(engineModeFor("hold", true)).toBe("push-to-talk");
     expect(engineModeFor("tap", false)).toBe("push-to-talk");
-    expect(engineModeFor("always", false)).toBe("always-on");
+    expect(engineModeFor("always", false)).toBe("always-listen");
     expect(engineModeFor("always", true)).toBe("wake-word");
   });
 });

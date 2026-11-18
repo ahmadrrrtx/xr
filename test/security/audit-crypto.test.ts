@@ -26,6 +26,8 @@ import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { clearSecretMemo } from "../../src/security/secrets.ts";
 import {
   generateAuditIdentity,
+  publicIdentityFromPrivate,
+  storeAuditSigningKey,
   checkpointMessage,
 } from "../../src/security/audit-signer.ts";
 
@@ -49,6 +51,39 @@ function freshStore(label: string): { store: WorkspaceStore; dbPath: string; dir
 }
 
 describe("Phase 4 · signed audit — keying and signing", () => {
+  test("token-shaped public key survives keying, reopen and re-key without bypassing actor redaction", () => {
+    // Publicly reproducible TEST seed, never a production credential.
+    const seed = createHash("sha256").update("xr-public-redaction-regression-2394").digest();
+    const privateKey = Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]).toString("base64");
+    const identity = publicIdentityFromPrivate(privateKey);
+    expect(identity.publicKeyB64).toContain("+skUqsGp5LBjrpBySfDJVjU");
+    storeAuditSigningKey(privateKey);
+    const { store, dbPath, dir } = freshStore("public-token");
+    try {
+      store.ensureAuditKeying("Bearer actorsecret123456");
+      expect(store.verifyCrypto().signaturesValid).toBe(true);
+      store.close();
+      const reopened = new WorkspaceStore("t", dbPath);
+      try {
+        expect(reopened.verifyCrypto().signaturesValid).toBe(true);
+        expect(reopened.rekeyAudit("Bearer actorsecret123456").ok).toBe(true);
+        reopened.audit("after.rotation", {});
+        expect(reopened.verifyCrypto().signaturesValid).toBe(true);
+        expect(reopened.verifyCrypto().chainValid).toBe(true);
+      } finally { reopened.close(); }
+      const raw = new Database(dbPath, { readonly: true });
+      try {
+        const rows = raw.query("SELECT detail FROM audit_log WHERE event IN ('audit.keyed','audit.rekey') ORDER BY id").all() as { detail: string }[];
+        expect(JSON.parse(rows[0]!.detail).pubkey).toBe(identity.publicKeyB64);
+        expect(JSON.parse(rows[1]!.detail).previousPubkey).toBe(identity.publicKeyB64);
+        for (const row of rows) expect(row.detail).not.toContain("actorsecret123456");
+      } finally { raw.close(); }
+      const final = new WorkspaceStore("t", dbPath);
+      try { expect(final.verifyCrypto().signaturesValid).toBe(true); }
+      finally { final.close(); }
+    } finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
   test("ensureAuditKeying is idempotent and publishes pubkey into the chain", () => {
     const { store, dir } = freshStore("key");
     try {

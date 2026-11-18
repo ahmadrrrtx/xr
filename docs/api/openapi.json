@@ -22315,6 +22315,10 @@
                     "minLength": 1,
                     "maxLength": 200
                   },
+                  "draft": {
+                    "description": "Explicit discovery-only registration; no model/default is fabricated or selected.",
+                    "type": "boolean"
+                  },
                   "apiKey": {
                     "type": "string",
                     "minLength": 1,
@@ -22335,8 +22339,7 @@
                   }
                 },
                 "required": [
-                  "baseUrl",
-                  "defaultModel"
+                  "baseUrl"
                 ],
                 "additionalProperties": {}
               }
@@ -22536,6 +22539,203 @@
         ]
       }
     },
+    "/api/v1/providers/discover": {
+      "post": {
+        "operationId": "providers.discover",
+        "summary": "Opt-in bounded model enumeration; not inference/capability verification.",
+        "tags": [
+          "providers"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "optIn": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                },
+                "required": [
+                  "providerId",
+                  "optIn"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "discoveredAt": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "authState": {
+                      "type": "string"
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "pages": {
+                      "type": "number"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "providerId": {
+                            "type": "string"
+                          },
+                          "modelId": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "discoveredAt": {
+                            "type": "string"
+                          },
+                          "authState": {
+                            "type": "string"
+                          },
+                          "capabilities": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {}
+                          },
+                          "validation": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "providerId",
+                          "modelId",
+                          "source",
+                          "discoveredAt",
+                          "authState",
+                          "capabilities",
+                          "validation"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "providerId",
+                    "source",
+                    "discoveredAt",
+                    "status",
+                    "authState",
+                    "complete",
+                    "pages",
+                    "detail",
+                    "models"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/providers/fallback": {
       "get": {
         "operationId": "providers.fallback",
@@ -22544,6 +22744,122 @@
           "providers"
         ],
         "x-xr-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/providers/probe": {
+      "post": {
+        "operationId": "providers.probe",
+        "summary": "Explicit adapter endpoint probe (may send a minimal billable request; not capability verification).",
+        "tags": [
+          "providers"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "providerId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success.",
@@ -22854,6 +23170,144 @@
           "providers"
         ],
         "x-xr-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/providers/validate": {
+      "post": {
+        "operationId": "providers.validate",
+        "summary": "Consented, potentially billable, isolated capability round trip; never executes a tool or certifies agent/billing behavior.",
+        "tags": [
+          "providers"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "providerId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "model": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "capability": {
+                    "type": "string",
+                    "enum": [
+                      "chat",
+                      "streaming",
+                      "toolUse",
+                      "jsonMode",
+                      "usage"
+                    ]
+                  },
+                  "optIn": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "allowBillable": {
+                    "type": "boolean",
+                    "const": true
+                  }
+                },
+                "required": [
+                  "providerId",
+                  "model",
+                  "capability",
+                  "optIn",
+                  "allowBillable"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success.",
@@ -31624,7 +32078,7 @@
     "/api/v1/voice/settings": {
       "get": {
         "operationId": "voice.settings.get",
-        "summary": "Phase 15: effective voice settings (engine config `voice` block).",
+        "summary": "Effective voice settings and engine-owned content revision.",
         "tags": [
           "voice"
         ],
@@ -31635,7 +32089,25 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "revision"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "settings"
+                  ],
+                  "additionalProperties": {}
                 }
               }
             }
@@ -31712,18 +32184,175 @@
       },
       "post": {
         "operationId": "voice.settings.set",
-        "summary": "Phase 15: patch voice settings (validated, clamped); applies live to the session.",
+        "summary": "Patch voice settings with expectedRevision; 409 requires review, not automatic replay.",
         "tags": [
           "voice"
         ],
         "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "push-to-talk",
+                      "wake-word",
+                      "always-listen"
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "noiseSuppression": {
+                    "type": "boolean"
+                  },
+                  "sttBackend": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "sttModel": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "sttLanguage": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "ttsBackend": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "ttsVoice": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "ttsSpeed": {
+                    "type": "number"
+                  },
+                  "wakeWord": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "wakeSensitivity": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high"
+                    ]
+                  },
+                  "wakeSound": {
+                    "type": "boolean"
+                  },
+                  "profanityFilter": {
+                    "type": "boolean"
+                  },
+                  "allowCloudStt": {
+                    "type": "boolean"
+                  },
+                  "allowCloudTts": {
+                    "type": "boolean"
+                  },
+                  "sentenceTts": {
+                    "type": "boolean"
+                  },
+                  "spokenStatus": {
+                    "type": "boolean"
+                  },
+                  "desktop": {
+                    "type": "object",
+                    "properties": {
+                      "micDeviceId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "inputGain": {
+                        "type": "number"
+                      },
+                      "activation": {
+                        "type": "string",
+                        "enum": [
+                          "hold",
+                          "tap",
+                          "always"
+                        ]
+                      },
+                      "ttsPitch": {
+                        "type": "number"
+                      },
+                      "autoExitSilenceSec": {
+                        "type": "number"
+                      },
+                      "showTranscripts": {
+                        "type": "boolean"
+                      },
+                      "theaterImmersive": {
+                        "type": "boolean"
+                      },
+                      "chatMicTarget": {
+                        "type": "string",
+                        "enum": [
+                          "screen",
+                          "docked"
+                        ]
+                      },
+                      "holdGlobalHotkey": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "revision"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "settings"
+                  ],
+                  "additionalProperties": {}
                 }
               }
             }

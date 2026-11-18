@@ -133,6 +133,7 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
       const port = await waitForEngineHealth(60_000);
       const webview = await webviewEngineSmoke(wd, sid);
+      await webviewOnboardingSmoke(wd, sid);
       const acl = await ipcAclSmoke(wd, sid);
       // Session deletion closes a window, but XR intentionally hides it and keeps
       // the engine alive. Request the same explicit quit as the user menu, then
@@ -154,10 +155,34 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
   }
 }
 
+/** Fresh-home install must reach onboarding, not just render a splash/recovery.
+ * Never sets completion flags, hides a modal or fabricates a recovery choice. */
+export async function webviewOnboardingSmoke(
+  wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string, timeoutMs = 20_000,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let result: { welcome?: boolean; splash?: boolean; recovery?: boolean } = {};
+  do {
+    result = await wd("POST", `/session/${sid}/execute/sync`, {
+      script: `return {
+        welcome: !!document.querySelector('[role="dialog"][aria-label="Onboarding — Welcome"]') && (document.body.innerText || '').includes('Welcome to XR.'),
+        splash: !!document.querySelector('[role="status"][aria-label^="XR is starting"]'),
+        recovery: (document.body.innerText || '').includes('XR did not shut down cleanly last time')
+      };`, args: [],
+    }) as typeof result;
+    if (result.welcome && !result.splash && !result.recovery) return "fresh-home onboarding rendered after splash; no false crash recovery";
+    if (Date.now() >= deadline) break;
+    await sleep(250);
+  } while (true);
+  throw new Error(`fresh-home onboarding failed: ${JSON.stringify(result)}`);
+}
+
 /** Prove the packaged webview, not a privileged runner curl, can reach its
  * app-spawned daemon. Return only statuses/contract; never return the token. */
 export async function webviewEngineSmoke(wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string): Promise<string> {
-  let result: { linked?: boolean; health?: number; meta?: number; contract?: number; error?: string } = {};
+  let result: { linked?: boolean; health?: number; meta?: number; contract?: number; error?: string;
+    anonymousMeta?: number; wrongSessionMeta?: number; providers?: number; catalog?: number;
+    providerCount?: number; modelCount?: number; mappedProviders?: boolean; configuredChoiceIncluded?: boolean } = {};
   for (let i = 0; i < 30; i++) {
     result = await wd("POST", `/session/${sid}/execute/async`, {
       script: `const done = arguments[arguments.length - 1];
@@ -169,7 +194,19 @@ export async function webviewEngineSmoke(wd: (method: string, path: string, body
           const h = await fetch(base + '/health', {headers});
           const m = await fetch(base + '/meta/version', {headers});
           const v = m.ok ? await m.json() : {};
-          return {linked:true, health:h.status, meta:m.status, contract:v.contractVersion};
+          const anonymous = await fetch(base + '/meta/version');
+          const wrong = await fetch(base + '/meta/version', {headers:{Authorization:'Bearer invalid-qualification-session'}});
+          const providers = await fetch(base + '/providers', {headers});
+          const catalog = await fetch(base + '/providers/catalog', {headers});
+          const p = providers.ok ? await providers.json() : {};
+          const c = catalog.ok ? await catalog.json() : {};
+          const ids = new Set((Array.isArray(p.providers) ? p.providers : []).map(row => row.id));
+          const models = Array.isArray(c.models) ? c.models : [];
+          return {linked:true, health:h.status, meta:m.status, contract:v.contractVersion,
+            anonymousMeta:anonymous.status, wrongSessionMeta:wrong.status,
+            providers:providers.status, catalog:catalog.status, providerCount:ids.size, modelCount:models.length,
+            mappedProviders:models.every(row => ids.has(row.providerId) && typeof row.modelId === 'string' && row.modelId.length > 0),
+            configuredChoiceIncluded:models.some(row => row.providerId === p.primary && row.modelId === p.model)};
         })().then(done, () => done({error:'webview request failed'}));`,
       args: [],
     }) as typeof result;
@@ -178,7 +215,10 @@ export async function webviewEngineSmoke(wd: (method: string, path: string, body
   }
   if (result.health !== 200 || result.meta !== 200 || result.contract !== 1)
     throw new Error(`webview-to-engine handshake failed: ${JSON.stringify(result)}`);
-  return "webview authenticated health + contract handshake passed";
+  if (result.anonymousMeta !== 401 || result.wrongSessionMeta !== 401 || result.providers !== 200 || result.catalog !== 200 ||
+      (result.providerCount ?? 0) <= 4 || (result.modelCount ?? 0) < 27 || !result.mappedProviders || !result.configuredChoiceIncluded)
+    throw new Error(`webview full catalog/auth/configuration proof failed: ${JSON.stringify(result)}`);
+  return `webview authenticated health + contract handshake + full catalog passed (${result.providerCount} providers, ${result.modelCount} model configurations; anonymous/wrong sessions refused)`;
 }
 
 /**

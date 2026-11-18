@@ -15,6 +15,7 @@
 import { APP_VERSION } from '@/lib/appMeta';
 import { isTauri } from '@/lib/tauri';
 import { acquireLink, createLinkCache, type EngineLink } from './link';
+import { requestSignal, withinDeadline, RequestDeadlineExpired } from './deadline';
 
 export type EngineVia = 'sidecar' | 'dev-proxy';
 
@@ -148,7 +149,7 @@ export async function pairFromUrl(): Promise<boolean> {
 /** XR-P01: cached handshake for the current link (declared here; see below). */
 let handshakePromise: Promise<HandshakeOutcome> | null = null;
 
-async function resolveEndpoint(): Promise<EngineEndpoint> {
+async function resolveEndpoint(signal?: AbortSignal): Promise<EngineEndpoint> {
   let reason: string | null = null;
   if (isTauri()) {
     try {
@@ -156,8 +157,9 @@ async function resolveEndpoint(): Promise<EngineEndpoint> {
       // The sidecar handshake lands ~1–3 s after launch. acquireLink() owns the
       // polling, the boot deadline and the "shell says never" short-circuit; it
       // never throws, so a failed spawn arrives as an endpoint `reason`.
-      return await acquireLink(() => invoke<EngineLink>('engine_link'));
+      return await acquireLink(() => invoke<EngineLink>('engine_link'), { signal });
     } catch (e) {
+      if (signal?.aborted) throw e;
       reason = `engine_link failed: ${e instanceof Error ? e.message : String(e)}`;
     }
   }
@@ -219,19 +221,16 @@ function authHeaders(ep: EngineEndpoint): Record<string, string> {
  * callers can read the engine's JSON reason.
  */
 export async function engineFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  init.signal?.throwIfAborted();
   const ep = await engineEndpoint();
+  init.signal?.throwIfAborted();
   let res: Response;
-  // Combine the caller's signal with our header-wait bound. Manual
-  // AbortController (not AbortSignal.any) so the timeout can be cancelled
-  // once headers land — SSE bodies then stream under the caller's signal.
+  // Only the header timer ends on headers. The composed caller signal must
+  // remain live for the body/SSE, including aborts after fetch() resolves.
   const callerSignal = init.signal ?? null;
   const controller = new AbortController();
   let timedOut = false;
-  const onCallerAbort = (): void => controller.abort(callerSignal?.reason);
-  if (callerSignal) {
-    if (callerSignal.aborted) controller.abort(callerSignal.reason);
-    else callerSignal.addEventListener('abort', onCallerAbort, { once: true });
-  }
+  const signal = requestSignal(controller, callerSignal);
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort(new DOMException('engine request timed out', 'TimeoutError'));
@@ -239,7 +238,7 @@ export async function engineFetch(path: string, init: RequestInit = {}): Promise
   try {
     res = await fetch(`${ep.base}${path}`, {
       ...init,
-      signal: controller.signal,
+      signal,
       headers: {
         Accept: 'application/json',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
@@ -249,13 +248,12 @@ export async function engineFetch(path: string, init: RequestInit = {}): Promise
     });
   } catch (e) {
     clearTimeout(timer);
-    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
+    if (callerSignal?.aborted) throw callerSignal.reason;
     if (timedOut) throw new EngineDown('timeout');
     if (e instanceof DOMException && e.name === 'AbortError') throw e;
     throw new EngineDown('unreachable');
   }
   clearTimeout(timer);
-  if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
   if (res.status === 401) throw new EngineDown('unauthorized');
   // The Vite proxy answers 503 + x-xr-proxy when the daemon itself is down.
   if (res.status === 503 && res.headers.get('x-xr-proxy') === 'engine-unreachable') {
@@ -266,21 +264,29 @@ export async function engineFetch(path: string, init: RequestInit = {}): Promise
 
 /** JSON helper: 2xx → body, otherwise `EngineHttpError` with the engine's reason. */
 export async function engineJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await engineFetch(path, init);
-  if (!res.ok) {
-    let body: Record<string, unknown> | null = null;
-    try {
-      body = (await res.json()) as Record<string, unknown>;
-    } catch {
-      /* non-JSON error body */
-    }
-    throw new EngineHttpError(res.status, path, body);
+  try {
+    return await withinDeadline(async (signal) => {
+      const res = await engineFetch(path, { ...init, signal });
+      if (!res.ok) {
+        let body: Record<string, unknown> | null = null;
+        try {
+          body = (await res.json()) as Record<string, unknown>;
+        } catch (e) {
+          if (signal.aborted) throw e;
+          // A non-JSON error body still carries its HTTP status.
+        }
+        throw new EngineHttpError(res.status, path, body);
+      }
+      return (await res.json()) as T;
+    }, ENGINE_REQUEST_TIMEOUT_MS, init.signal);
+  } catch (e) {
+    if (e instanceof RequestDeadlineExpired) throw new EngineDown('timeout');
+    throw e;
   }
-  return (await res.json()) as T;
 }
 
-export function enginePost<T>(path: string, body: unknown): Promise<T> {
-  return engineJson<T>(path, { method: 'POST', body: JSON.stringify(body) });
+export function enginePost<T>(path: string, body: unknown, init: Pick<RequestInit, 'signal'> = {}): Promise<T> {
+  return engineJson<T>(path, { ...init, method: 'POST', body: JSON.stringify(body) });
 }
 
 export function engineGet<T>(path: string): Promise<T> {
@@ -400,10 +406,10 @@ export function evaluateEngineContract(payload: unknown, desktopVersion: string 
  * the transport's `EngineDown` kinds (incl. `unauthorized`, `timeout`) when
  * the engine/session itself fails. Retried only when the link resets.
  */
-export function engineHandshake(): Promise<HandshakeOutcome> {
+export function engineHandshake(signal?: AbortSignal): Promise<HandshakeOutcome> {
   if (!handshakePromise) {
-    handshakePromise = (async () => {
-      const payload = await engineJson<unknown>('/meta/version');
+    const attempt = (async () => {
+      const payload = await engineJson<unknown>('/meta/version', { signal });
       const outcome = evaluateEngineContract(payload);
       if (outcome.kind === 'incompatible') {
         throw new EngineIncompatible(outcome.reason, outcome.detail);
@@ -412,8 +418,9 @@ export function engineHandshake(): Promise<HandshakeOutcome> {
     })();
     // A failed handshake must not poison the cache forever: the next poll
     // (after e.g. a re-pair) re-asks. Successful outcomes stay cached.
-    handshakePromise.catch(() => {
-      handshakePromise = null;
+    handshakePromise = attempt;
+    attempt.catch(() => {
+      if (handshakePromise === attempt) handshakePromise = null;
     });
   }
   return handshakePromise;

@@ -104,7 +104,9 @@ describe('S-2 · a missing voice model is a state with a fix', () => {
     // `xr.voice` is read by nothing; /voice/settings is what synthesis reads.
     const finish = onboarding.slice(onboarding.indexOf('finishOnboarding'));
     expect(finish).toContain('applyOnboardingVoice');
-    expect(onboarding).toContain('voiceApi.settingsSet({ ttsVoice: s.ttsVoice');
+    expect(onboarding).toContain("prefs.queueOnboardingVoice(s, revision ?? 'initial')");
+    expect(onboarding).toContain('prefs.flushOnboardingVoice()');
+    expect(read('voice/onboardingPreferences.ts')).toContain("apply: (patch, revision) => voiceApi.settingsSet(patch, revision ?? 'initial')");
   });
 
   test('an unreachable engine keeps the choice instead of dropping it', () => {

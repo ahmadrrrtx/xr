@@ -1,6 +1,9 @@
 import { ChevronDown, Cloud, Download, Server, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { ProviderObservations } from '@/components/settings/ProviderObservations';
+import { useMediaOperation } from '@/voice/useMediaOperation';
+import { registerCustomProviderDraft } from '@/engine/providers';
 import { Button } from '@/components/ui/button';
 import { recommendModel } from '@/lib/detect';
 import { useEngineStore } from '@/stores/engineStore';
@@ -21,6 +24,7 @@ export function StepModelSetup() {
   );
   const engineStatus = useEngineStore((state) => state.status);
   const startupError = useEngineStore((state) => state.lastError);
+  const { begin } = useMediaOperation(() => {});
   const [cloudOpen, setCloudOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState('');
@@ -29,6 +33,7 @@ export function StepModelSetup() {
   const [customBusy, setCustomBusy] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
   const [customDone, setCustomDone] = useState<string | null>(null);
+  const [customRegisteredId, setCustomRegisteredId] = useState<string | undefined>();
   const [apiKey, setApiKey] = useState('');
   const [providerId, setProviderId] = useState('openai');
 
@@ -68,6 +73,8 @@ export function StepModelSetup() {
    * endpoint to the engine, which SSRF-guards the URL and stores the key.
    */
   const connectCustomEndpoint = async (): Promise<void> => {
+    if (customBusy) return;
+    const op = begin();
     setCustomError(null);
     setCustomDone(null);
     const baseUrl = customBaseUrl.trim();
@@ -84,21 +91,28 @@ export function StepModelSetup() {
     try {
       const { addCustomProviderToEngine } = await import('@/engine/providers');
       const saved = await addCustomProviderToEngine({
+        id: customRegisteredId,
         baseUrl,
         defaultModel: model,
         apiKey: customKey.trim() || undefined,
-      });
+      }, op.signal);
+      if (!op.current()) return;
       setCustomDone(saved.provider.id);
+      setCustomRegisteredId(saved.provider.id);
+      // Registration already stored the secret. Keep only the acknowledged
+      // identity/target so finish selects it rather than re-saving a preset key.
       setModelChoice({
         source: 'cloud',
         providerId: saved.provider.id,
-        apiKey: customKey.trim() || undefined,
+        model: saved.provider.defaultModel,
       });
+      setCustomKey('');
     } catch (e) {
+      if (!op.current()) return;
       // The engine's message is the truth (it names the refused host range).
       setCustomError(e instanceof Error ? e.message : String(e));
     } finally {
-      setCustomBusy(false);
+      if (op.current()) setCustomBusy(false);
     }
   };
 
@@ -336,6 +350,14 @@ export function StepModelSetup() {
                 autoComplete="off"
                 className="border-border-default bg-bg-void text-text-primary placeholder:text-text-tertiary/60 focus:border-accent w-full rounded-lg border px-3 py-2 font-mono text-[13px] outline-none"
               />
+              <ProviderObservations key={customBaseUrl} providerId={customRegisteredId} model={customModel} onModel={setCustomModel}
+                disabled={customBusy || engineStatus !== 'ready'} ensureRegistered={async (signal) => {
+                  setCustomBusy(true);
+                  try {
+                    const saved = await registerCustomProviderDraft({ id: customRegisteredId, baseUrl: customBaseUrl.trim(), apiKey: customKey.trim() || undefined }, signal);
+                    setCustomRegisteredId(saved.id); setCustomKey(''); return saved.id;
+                  } finally { setCustomBusy(false); }
+                }} />
               <div className="mt-3 flex items-center gap-2">
                 <Button
                   size="sm"

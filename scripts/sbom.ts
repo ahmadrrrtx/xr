@@ -3,12 +3,15 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import { vendoredDependency } from "./vendored-dependencies";
 export interface LockPackage {
   name: string;
   version: string;
   integrity?: string;
   ecosystem?: "npm" | "cargo";
   scope?: string;
+  localPatch?: string;
+  upstream?: string;
 }
 function parseLockJson(text: string): unknown {
   return JSON.parse(text.replace(/,([\t\r\n ]*[}\]])/g, "$1"));
@@ -30,10 +33,10 @@ export function lockedDependencies(lockPath = "bun.lock"): LockPackage[] {
         (x, i) =>
           i > 1 && typeof x === "string" && /^sha(256|384|512)-/.test(x),
       );
+      const sri = typeof integrity === "string" ? integrity : undefined;
+      const local = vendoredDependency(spec, lockPath, sri);
       return {
-        name: spec.slice(0, at),
-        version: spec.slice(at + 1),
-        integrity: typeof integrity === "string" ? integrity : undefined,
+        ...(local ?? { name: spec.slice(0, at), version: spec.slice(at + 1), integrity: sri }),
         ecosystem: "npm" as const,
         scope: lockPath,
       };
@@ -110,6 +113,9 @@ export function renderCycloneDx(input: SbomInput): Record<string, unknown> {
     ...(d.integrity ? { hashes: [sriHash(d.integrity)] } : {}),
     properties: [
       { name: "xr:lock-source", value: d.scope ?? "bun.lock" },
+      ...(d.localPatch ? [{ name: "xr:local-security-patch", value: d.localPatch },
+        { name: "xr:upstream", value: d.upstream ?? "unknown" },
+        { name: "xr:registry-scan-scope", value: "private unpublished fork; mandatory local provenance/adversarial gate, not registry certification" }] : []),
       ...(!d.integrity
         ? [
             {

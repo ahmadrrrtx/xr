@@ -27,7 +27,6 @@ export const ONBOARDING_KEY = 'xr.onboarding.complete';
 const ONBOARDED_AT_KEY = 'xr.onboarding.at';
 const BUDGET_KEY = 'xr.budget.default';
 const MODEL_KEY = 'xr.model.default';
-const VOICE_KEY = 'xr.voice';
 
 /*
  * S-2 · the wizard's voice choice has to reach the engine.
@@ -45,26 +44,33 @@ const VOICE_KEY = 'xr.voice';
  */
 async function applyOnboardingVoice(s: {
   ttsVoice: string;
+  ttsSpeed: number;
   micSelected: string | null;
   noiseSuppression: boolean;
   wakeWordEnabled: boolean;
 }): Promise<void> {
+  let queued = false;
   try {
-    const [{ EngineHttpError }, { voiceApi }, { isEngineUsable, useEngineStore }] = await Promise.all([
+    const [{ EngineHttpError }, { voiceApi }, { useEngineStore }, prefs] = await Promise.all([
       import('@/engine/transport'),
       import('@/voice/voiceApi'),
       import('@/stores/engineStore'),
+      import('@/voice/onboardingPreferences'),
     ]);
     type HttpError = InstanceType<typeof EngineHttpError>;
-    if (!isEngineUsable(useEngineStore.getState().status)) {
+    const revision = useEngineStore.getState().status === 'ready'
+      ? (await voiceApi.settingsGet().catch(() => null))?.settings?.revision : undefined;
+    await prefs.queueOnboardingVoice(s, revision ?? 'initial');
+    queued = true;
+    if (useEngineStore.getState().status !== 'ready') {
       toast.info('Voice saved — it will be applied when the engine starts.');
       return;
     }
-    await voiceApi.settingsSet({ ttsVoice: s.ttsVoice, desktop: { micDeviceId: s.micSelected } });
+    await prefs.flushOnboardingVoice();
     // The engine accepts the id but cannot speak it until the model is on disk.
     // /voice/test-tts is the one endpoint that says so, with the byte size.
     try {
-      await voiceApi.testTts('Ready when you are.', s.ttsVoice);
+      await voiceApi.testTts('Ready when you are.', s.ttsVoice, s.ttsSpeed);
     } catch (err) {
       if (!(err instanceof EngineHttpError) || err.body?.error !== 'voice-not-installed') return;
       const bytes = Number((err as HttpError).body?.bytes ?? 0);
@@ -74,7 +80,9 @@ async function applyOnboardingVoice(s: {
       );
     }
   } catch {
-    /* the engine is the authority; a failed push is retried by the Voice screen */
+    toast.warning(queued
+      ? 'Voice saved; applying it failed and will retry on connection. Check Settings → Voice.'
+      : 'Voice preferences could not be saved. Set them again in Settings → Voice.');
   }
 }
 const INTEGRATIONS_KEY = 'xr.integrations.desired';
@@ -108,6 +116,7 @@ interface OnboardingState {
   noiseSuppression: boolean;
   wakeWordEnabled: boolean;
   ttsVoice: string;
+  ttsSpeed: number;
   userName: string;
   theme: ThemeId;
   budget: number;
@@ -134,7 +143,7 @@ interface OnboardingState {
     p: Partial<
       Pick<
         OnboardingState,
-        'noiseSuppression' | 'wakeWordEnabled' | 'ttsVoice' | 'micSelected'
+        'noiseSuppression' | 'wakeWordEnabled' | 'ttsVoice' | 'ttsSpeed' | 'micSelected'
       >
     >
   ) => void;
@@ -180,8 +189,9 @@ const initial = {
   modelChoice: { source: 'skip' } as ModelChoice,
   micSelected: null,
   noiseSuppression: true,
-  wakeWordEnabled: true,
+  wakeWordEnabled: false,
   ttsVoice: 'piper-kusal',
+  ttsSpeed: 1,
   userName: '',
   theme: 'xr-native' as ThemeId,
   budget: 5,
@@ -270,8 +280,9 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
         return saveProviderKeyToEngine(input);
       },
       setDefault: async (providerId, model) => {
-        if (isEngineUsable(useEngineStore.getState().status))
-          await setEngineDefault(providerId, model);
+        if (!isEngineUsable(useEngineStore.getState().status))
+          throw new Error('Engine not running; no model selected. Start it and retry, or choose guest mode.');
+        await setEngineDefault(providerId, model);
       },
     });
     if (prepared.selection)
@@ -283,17 +294,8 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     } catch {
       /* governor not reachable yet — Budget screen defaults apply */
     }
-    await writeSettingJSON(VOICE_KEY, {
-      ttsVoice: s.ttsVoice,
-      micDevice: s.micSelected,
-      wakeWord: s.wakeWordEnabled,
-      noiseSuppression: s.noiseSuppression,
-    });
-    // S-2: the engine's voice settings are the ones that speak. The wizard used
-    // to write `xr.voice` — a key no other surface reads — so a chosen voice
-    // could finish onboarding without ever reaching the engine, and nothing
-    // noticed. Resolve it to the engine now. The engine is asked last and
-    // hard-fails nothing: the wizard must not dead-end on a voice.
+    // Persist pending intent before any network write. An acknowledged engine
+    // response clears the outbox; offline/failed writes retry on connection.
     await applyOnboardingVoice(s);
     await writeSettingJSON(INTEGRATIONS_KEY, s.desiredIntegrations);
     applyTheme(s.theme);

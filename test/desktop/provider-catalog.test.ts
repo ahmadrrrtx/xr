@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildProviderCatalog,
+  configuredProviderRows,
   CUSTOM_ENDPOINT_ENTRY,
 } from "../../desktop/src/engine/providerCatalog.ts";
 import type { EngineProvider } from "../../desktop/src/engine/types.ts";
@@ -105,4 +106,13 @@ describe("buildProviderCatalog", () => {
     expect(CUSTOM_ENDPOINT_ENTRY.id).toBe("custom");
     expect(CUSTOM_ENDPOINT_ENTRY.keyless).toBeUndefined();
   });
+});
+
+test("Settings retains an unselected, keyless registered custom endpoint", () => {
+  const rows = configuredProviderRows([
+    ep("openai", { hasKey: true }), ep("no-key-gateway", { kind: "custom", keyless: true }),
+    ep("groq"), ep("custom", { kind: "custom" }),
+  ], "openai");
+  expect(rows.map(p => p.id)).toEqual(["openai", "no-key-gateway"]);
+  expect(rows[1].hasKey).toBe(false); expect(rows[1].healthy).toBe(false);
 });

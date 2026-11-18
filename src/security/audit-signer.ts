@@ -38,6 +38,23 @@ import {
   type KeyObject,
 } from "node:crypto";
 import { getSecretSyncCached, isSecretIndexed, setSecret } from "./secrets.ts";
+import { redactAuditDetail } from "../observability/redaction.ts";
+
+/** Internal signing boundary: public identity bytes are protocol data, not text.
+ * Random base64 can match credential/PII heuristics. Preserve only the supplied
+ * public identity; actors, notes and all other detail still pass redaction.
+ * Never pass caller-supplied key material or private identity fields here. */
+export function auditIdentityDetail(
+  detail: Record<string, unknown>,
+  identity: { publicKeyB64: string; publicKeyFingerprint: string },
+  previousPubkey?: string | null,
+): Record<string, unknown> {
+  const safe = redactAuditDetail(detail);
+  safe.pubkey = identity.publicKeyB64;
+  safe.fingerprint = identity.publicKeyFingerprint;
+  if (previousPubkey !== undefined) safe.previousPubkey = previousPubkey;
+  return safe;
+}
 
 /** Secret name in the XR secret store (must match secrets' UPPER_SNAKE rule). */
 export const AUDIT_SIGNING_KEY_NAME = "XR_AUDIT_SIGN_KEY";

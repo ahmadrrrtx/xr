@@ -125,7 +125,7 @@ export function pitchToCents(pitch: number): number {
 export function engineModeFor(
   activation: 'hold' | 'tap' | 'always',
   wakeEnabled: boolean,
-): 'push-to-talk' | 'wake-word' | 'always-on' {
+): 'push-to-talk' | 'wake-word' | 'always-listen' {
   if (activation !== 'always') return 'push-to-talk';
-  return wakeEnabled ? 'wake-word' : 'always-on';
+  return wakeEnabled ? 'wake-word' : 'always-listen';
 }

@@ -33,6 +33,7 @@
  * Feature flag: XR_PROVIDER_GATEWAY=0 disables gateway fallback to direct registry.createProvider
  */
 
+import { configuredCredentialStatus } from "./credential-presence.ts";
 import { chatAttempt, streamAttempt } from "./attempts.ts";
 import type { XRConfig } from "../config/config.ts";
 import type { Provider, Message, Tool, ChatOptions, ModelTurn } from "../core/types.ts";
@@ -243,19 +244,8 @@ export class ProviderGateway {
     return inspectProviderHealth(config, id, model);
   }
 
-  async health(config: XRConfig, id: string, model?: string): Promise<CachedProviderHealth> {
-    if (!gatewayEnabled()) {
-      const checker = new (await import("./health.ts")).ProviderHealthChecker(config);
-      const report = await checker.check(id, model);
-      return {
-        ...report,
-        cached: false,
-        stale: false,
-        deduped: false,
-        probeMs: report.latencyMs ?? 0,
-      };
-    }
-    return checkProviderHealthCached(config, id, model);
+  async health(config: XRConfig, id: string, model?: string, opts?: { fresh?: boolean }): Promise<CachedProviderHealth> {
+    return checkProviderHealthCached(config, id, model, { fresh: opts?.fresh || !gatewayEnabled() });
   }
 
   async healthAll(config: XRConfig): Promise<CachedProviderHealth[]> {
@@ -381,13 +371,7 @@ export class ProviderGateway {
    * Returns presence boolean, never the secret itself.
    */
   credentialStatus(providerId: string): { required: boolean; available: boolean; envName?: string } {
-    const preset = this.getPreset(providerId);
-    if (!preset) return { required: false, available: false };
-    if (!preset.apiKeyEnv) return { required: false, available: true };
-    // Phase 2 · F-24 — key presence through the broker seam (env hydration
-    // compat-gated; durable backend always consulted).
-    const available = Boolean(secretBrokerSync(preset.apiKeyEnv));
-    return { required: true, available, envName: preset.apiKeyEnv };
+    return configuredCredentialStatus(this.getPreset(providerId));
   }
 
   /**

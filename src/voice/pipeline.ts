@@ -37,7 +37,7 @@ export interface VoiceDeps {
    */
   approve?: (req: ApprovalRequest) => Promise<boolean>;
   /** Phase 15 · tts failures surface as events instead of silence. */
-  onTtsResult?: (r: { ok: boolean; engine: string; detail?: string; hasAudio: boolean; estimatedUsd?: number }) => void;
+  onTtsResult?: (r: { ok: boolean; engine: string; detail?: string; hasAudio: boolean; estimatedUsd?: number; discarded?: boolean }) => void;
 }
 
 export class VoicePipeline {
@@ -47,6 +47,9 @@ export class VoicePipeline {
   private settings: VoiceSettings;
   /** A-19 abort for the in-flight run (barge-in cancels the RUN when flagged). */
   private runAbort: AbortController | null = null;
+  private closed = false;
+  private speechEpoch = 0;
+  private intentEpoch = 0;
   spoken: string[] = [];
 
   constructor(private deps: VoiceDeps) {
@@ -55,18 +58,25 @@ export class VoicePipeline {
 
   /** Stop TTS. Pass `cancelRun` to abort the in-flight envelope (A-19). */
   bargeIn(cancelRun = false): void {
+    this.speechEpoch++;
     if (this.speaking) {
       this.speaking.stop();
       this.speaking = null;
       this.deps.store.audit("voice.bargein", {});
     }
-    if (cancelRun && this.settings.bargeInCancelsRun && this.runAbort) {
-      this.runAbort.abort();
-      this.deps.store.audit("voice.bargein.cancel_run", {});
+    if (cancelRun && this.settings.bargeInCancelsRun) {
+      this.intentEpoch++;
+      if (this.runAbort) { this.runAbort.abort(); this.deps.store.audit("voice.bargein.cancel_run", {}); }
     }
   }
 
+  /** Hard teardown is independent of the optional conversational barge-in policy. */
+  cancel(): void {
+    this.closed = true; this.intentEpoch++; this.bargeIn(); this.runAbort?.abort();
+  }
+
   async say(text: string): Promise<string> {
+    if (this.closed) return "";
     if (this.settings.interruptionPolicy === "barge-in") this.bargeIn();
     const trimmed = text.replace(/\s+/g, " ").trim();
     if (!trimmed) return "";
@@ -74,17 +84,23 @@ export class VoicePipeline {
     this.deps.onText?.({ role: "assistant", text: trimmed });
     appendTranscript({ at: new Date().toISOString(), role: "assistant", text: trimmed, mode: this.settings.mode, ttsBackend: this.settings.ttsBackend }, this.settings);
     if (this.muted || this.settings.ttsBackend === "disabled") return trimmed;
+    const speech = this.speechEpoch;
     const r = await this.deps.tts.speak(trimmed);
-    this.deps.onTtsResult?.({ ok: r.ok, engine: r.engine, detail: r.detail, hasAudio: Boolean(r.audio), estimatedUsd: r.estimatedUsd });
+    const discarded = this.closed || speech !== this.speechEpoch;
+    this.deps.onTtsResult?.({ ok: r.ok, engine: r.engine, detail: r.detail, hasAudio: Boolean(r.audio), estimatedUsd: r.estimatedUsd, discarded });
+    if (discarded) return "";
     if (r.ok && r.audio && this.deps.play) {
-      this.speaking = this.deps.play(r.audio);
-      this.speaking.done?.finally(() => { if (this.speaking) this.speaking = null; });
+      const playing = this.deps.play(r.audio); this.speaking = playing;
+      const release = () => { if (this.speaking === playing) this.speaking = null; };
+      void playing.done?.then(release, release);
     }
     return r.spokenText;
   }
 
   voiceApprover(): (req: ApprovalRequest) => Promise<boolean> {
     return async (req: ApprovalRequest): Promise<boolean> => {
+      const turn = this.intentEpoch, current = () => !this.closed && turn === this.intentEpoch;
+      if (!current()) return false;
       const policy = this.settings.confirmationPolicy;
       if (policy === "never-execute-risky") {
         await this.say("For safety, I cannot execute that action from voice. Please confirm in text mode.");
@@ -93,9 +109,12 @@ export class VoicePipeline {
       this.deps.store.audit("voice.confirm.request", { tool: req.tool });
       await this.say(`I'm about to ${req.reason}. Say confirm or cancel.`);
       for (let attempt = 0; attempt < 3; attempt++) {
+        if (!current()) return false;
         if (!this.deps.listen) return false;
         const audio = await this.deps.listen();
+        if (!current()) return false;
         const t = await this.deps.stt.transcribe(audio);
+        if (!current()) return false;
         const decision = parseConfirmation(t.text);
         if (decision === "confirm") {
           this.deps.store.audit("voice.confirm.approved", { tool: req.tool });
@@ -113,6 +132,8 @@ export class VoicePipeline {
   }
 
   async processText(text: string): Promise<{ handled: boolean; reply: string }> {
+    const turn = this.intentEpoch, current = () => !this.closed && turn === this.intentEpoch;
+    if (!current()) return { handled: false, reply: "" };
     markVoiceUsed();
     let command = text.replace(/\s+/g, " ").trim();
     if (!command) return { handled: false, reply: "" };
@@ -145,86 +166,94 @@ export class VoicePipeline {
       return { handled: true, reply: "unmuted" };
     }
 
-    this.deps.onText?.({ role: "user", text: command });
-    appendTranscript({ at: new Date().toISOString(), role: "user", text: command, mode: this.settings.mode, sttBackend: this.settings.sttBackend }, this.settings);
-    this.deps.store.audit("voice.command", { length: command.length, intent: parseVoiceIntent(command).kind });
+    const run = new AbortController(); this.runAbort = run;
+    try {
+      this.deps.onText?.({ role: "user", text: command });
+      appendTranscript({ at: new Date().toISOString(), role: "user", text: command, mode: this.settings.mode, sttBackend: this.settings.sttBackend }, this.settings);
+      this.deps.store.audit("voice.command", { length: command.length, intent: parseVoiceIntent(command).kind });
 
-    if (await handleDeterministicVoiceIntent(this.deps.store, command, async (line) => { await this.say(line); })) {
-      return { handled: true, reply: this.lastAssistantText };
-    }
+      const handled = await handleDeterministicVoiceIntent(this.deps.store, command, async (line) => { if (current()) await this.say(line); });
+      if (!current()) return { handled: false, reply: "" };
+      if (handled) {
+        return { handled: true, reply: this.lastAssistantText };
+      }
 
-    const routed = parseVoiceIntent(command);
-    if (routed.kind === "research") return this.runVoiceResearch(routed.args || command);
-    if (routed.kind === "doctor") {
-      const reply = "Run xr doctor in the terminal for the full health report. Voice health is included there.";
-      await this.say(reply);
+      const routed = parseVoiceIntent(command);
+      if (routed.kind === "research") return await this.runVoiceResearch(routed.args || command, run.signal, current);
+      if (routed.kind === "doctor") {
+        const reply = "Run xr doctor in the terminal for the full health report. Voice health is included there.";
+        await this.say(reply);
+        return { handled: true, reply };
+      }
+
+      const { config } = loadConfig();
+      const providerId = config.defaults.provider;
+      const model = config.defaults.model;
+      const provider = buildProvider(config, {});
+      const memoryEngine = new MemoryStore(this.deps.store);
+      const memEnabled = isMemoryEnabled();
+
+      /**
+       * Phase 2 · T1 — Voice runs through the canonical execution envelope
+       * (Phase 0 · T8 had bridged only its tool set).
+       */
+      this.deps.onPhase?.("planning");
+      const { splitSentences, spokenStatusLine } = await import("./v2.ts");
+      if (!current()) return { handled: false, reply: "" };
+      const result = await executeOnSurface({
+        task: command,
+        mode: "agent",
+        surface: "voice",
+        store: this.deps.store,
+        provider,
+        modelId: model,
+        cwd: process.cwd(),
+        say: () => {},
+        approve: this.deps.approve ?? this.voiceApprover(),
+        signal: run.signal,
+        onStreamEvent: (ev) => {
+          if (!current()) return;
+          if (ev.type === "tool_call") this.deps.onPhase?.("tool");
+          if (!this.settings.spokenStatus) return;
+          const line = spokenStatusLine(ev);
+          if (line) {
+            this.spoken.push(line);
+            void this.say(line);
+          }
+        },
+        budget: {
+          maxUsd: isLocal(providerId) ? undefined : config.budget.perTaskUsd,
+          maxTokens: config.budget.perTaskTokens,
+        },
+        pricing: priceFor(providerId, model),
+        egressAllowlist: config.security.egressAllowlist,
+        memory: {
+          enabled: memEnabled && config.memory.injectInChat,
+          recallLimit: config.memory.recallLimit,
+          semantic: config.memory.semanticRecall,
+        },
+        memoryStore: memoryEngine,
+        sessionSummary: {
+          enabled: memEnabled && config.memory.saveSessionSummaries,
+          minTurns: config.memory.sessionSummaryMinTurns,
+        },
+      });
+
+      if (!current()) return { handled: false, reply: "" };
+      const reply = result.finalMessage || `Done. ${result.meter ?? ""}`;
+      if (this.settings.sentenceTts) {
+        for (const sentence of splitSentences(reply)) await this.say(sentence);
+      } else {
+        await this.say(reply);
+      }
+      if (!current()) return { handled: false, reply: "" };
       return { handled: true, reply };
-    }
-
-    const { config } = loadConfig();
-    const providerId = config.defaults.provider;
-    const model = config.defaults.model;
-    const provider = buildProvider(config, {});
-    const memoryEngine = new MemoryStore(this.deps.store);
-    const memEnabled = isMemoryEnabled();
-
-    /**
-     * Phase 2 · T1 — Voice runs through the canonical execution envelope
-     * (Phase 0 · T8 had bridged only its tool set).
-     */
-    this.runAbort = new AbortController();
-    this.deps.onPhase?.("planning");
-    const { splitSentences, spokenStatusLine } = await import("./v2.ts");
-    const result = await executeOnSurface({
-      task: command,
-      mode: "agent",
-      surface: "voice",
-      store: this.deps.store,
-      provider,
-      modelId: model,
-      cwd: process.cwd(),
-      say: () => {},
-      approve: this.deps.approve ?? this.voiceApprover(),
-      signal: this.runAbort.signal,
-      onStreamEvent: (ev) => {
-        if (ev.type === "tool_call") this.deps.onPhase?.("tool");
-        if (!this.settings.spokenStatus) return;
-        const line = spokenStatusLine(ev);
-        if (line) {
-          this.spoken.push(line);
-          void this.say(line);
-        }
-      },
-      budget: {
-        maxUsd: isLocal(providerId) ? undefined : config.budget.perTaskUsd,
-        maxTokens: config.budget.perTaskTokens,
-      },
-      pricing: priceFor(providerId, model),
-      egressAllowlist: config.security.egressAllowlist,
-      memory: {
-        enabled: memEnabled && config.memory.injectInChat,
-        recallLimit: config.memory.recallLimit,
-        semantic: config.memory.semanticRecall,
-      },
-      memoryStore: memoryEngine,
-      sessionSummary: {
-        enabled: memEnabled && config.memory.saveSessionSummaries,
-        minTurns: config.memory.sessionSummaryMinTurns,
-      },
-    });
-
-    const reply = result.finalMessage || `Done. ${result.meter ?? ""}`;
-    if (this.settings.sentenceTts) {
-      for (const sentence of splitSentences(reply)) await this.say(sentence);
-    } else {
-      await this.say(reply);
-    }
-    this.runAbort = null;
-    return { handled: true, reply };
+    } finally { if (this.runAbort === run) this.runAbort = null; }
   }
 
-  private async runVoiceResearch(topic: string): Promise<{ handled: boolean; reply: string }> {
+  private async runVoiceResearch(topic: string, signal: AbortSignal, current: () => boolean): Promise<{ handled: boolean; reply: string }> {
     await this.say(`Researching ${topic}. Let me gather sources.`);
+    if (!current()) return { handled: false, reply: "" };
     try {
       const { config } = loadConfig();
       const providerId = config.defaults.provider;
@@ -243,7 +272,9 @@ export class VoicePipeline {
       const budget: import("../research/engine.ts").ResearchBudgetGuard = isLocal(providerId)
         ? new LocalResearchBudget()
         : new GovernedResearchBudget(this.deps.store, { maxUsd: config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens }, priceFor(providerId, model));
+      if (!current()) return { handled: false, reply: "" };
       const session = await runResearch({
+        signal,
         provider,
         store: this.deps.store,
         search: new WebSearchCapability(toolCtx),
@@ -251,12 +282,14 @@ export class VoicePipeline {
         say: () => {},
         audit: (event: string, detail: Record<string, unknown>) => this.deps.store.audit(event, detail),
       }, { topic, depth: "quick" });
+      if (!current()) return { handled: false, reply: "" };
       const reply = session.synthesis
         ? `${session.synthesis.shortAnswer} I checked ${session.sources.length} sources.`
         : `I couldn't gather enough verified sources on ${topic}.`;
       await this.say(reply);
       return { handled: true, reply };
     } catch (e) {
+      if (!current()) return { handled: false, reply: "" };
       const reply = `Research failed: ${(e as Error).message}`;
       await this.say(reply);
       return { handled: true, reply };
@@ -265,7 +298,10 @@ export class VoicePipeline {
 
   async processUtterance(audio: Uint8Array): Promise<{ handled: boolean; reply: string }> {
     if (this.settings.interruptionPolicy === "barge-in") this.bargeIn();
+    const turn = this.intentEpoch;
+    if (this.closed) return { handled: false, reply: "" };
     const stt = await this.deps.stt.transcribe(audio);
+    if (this.closed || turn !== this.intentEpoch) return { handled: false, reply: "" };
     if (!stt.ok || !stt.text) return { handled: false, reply: stt.detail ?? "" };
     return this.processText(stt.text);
   }

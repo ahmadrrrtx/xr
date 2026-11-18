@@ -81,6 +81,8 @@ export interface VoiceTestResult {
 }
 
 export interface VoiceSettings {
+  /** Engine-owned content revision; never supplied as a settings value. */
+  revision?: string;
   enabled: boolean;
   mode: VoiceMode;
   inputDevice?: string;

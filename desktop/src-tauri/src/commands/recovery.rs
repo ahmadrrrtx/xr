@@ -64,9 +64,37 @@ pub enum RecoveryChoice {
 }
 
 /// Managed state for the recovery flow.
-#[derive(Default)]
 pub struct RecoveryState {
     pub choice: Mutex<RecoveryChoice>,
+    /// Captured before setup writes THIS session's marker. Never re-read the
+    /// live marker as evidence that the previous process crashed.
+    startup: CrashState,
+}
+
+impl Default for RecoveryState {
+    fn default() -> Self {
+        Self::from_home(&crash::xr_home())
+    }
+}
+
+impl RecoveryState {
+    fn from_home(home: &std::path::Path) -> Self {
+        Self { choice: Mutex::new(RecoveryChoice::Pending), startup: crash::state_at_startup(home) }
+    }
+
+    fn visible_startup(&self) -> CrashState {
+        let mut state = self.startup.clone();
+        // Acknowledging a prior interruption must not erase the live marker:
+        // a subsequent crash in THIS session still needs next-launch recovery.
+        if self.choice.lock().map(|c| *c != RecoveryChoice::Pending).unwrap_or(false) {
+            state.interrupted = false;
+        }
+        state
+    }
+}
+
+fn startup_state<R: Runtime>(app: &AppHandle<R>) -> CrashState {
+    app.state::<RecoveryState>().visible_startup()
 }
 
 /// Everything the recovery screen renders.
@@ -156,7 +184,7 @@ pub fn verify_external_token(port: u16, token: &str) -> Result<(), String> {
 
 fn info<R: Runtime>(app: &AppHandle<R>, engine_state: &EngineState) -> RecoveryInfo {
     let home = crash::xr_home();
-    let state: CrashState = crash::state_at_startup(&home);
+    let state: CrashState = startup_state(app);
     let snapshot = engine::snapshot(engine_state);
     let logs = crash::log_files(&home);
     let shell_log_bytes = std::fs::metadata(crash::shell_log_path(&home)).ok().map(|m| m.len());
@@ -188,15 +216,14 @@ fn info<R: Runtime>(app: &AppHandle<R>, engine_state: &EngineState) -> RecoveryI
 // ─── Commands ───────────────────────────────────────────────────────────────
 
 /// What the recovery screen (or the router, when there was nothing to recover)
-/// needs on mount. Cheap: no network, one flag read.
+/// needs on mount. Previous-run evidence was captured before marker creation.
 #[tauri::command]
 pub fn crash_state(app: AppHandle, engine: tauri::State<'_, std::sync::Arc<EngineState>>) -> RecoveryInfo {
     info(&app, &engine)
 }
 
-/// Answer the screen: resume / start fresh. Either way the flag is cleared —
-/// the user has now seen the interruption, and leaving it set would show the
-/// screen forever.
+/// Answer the previous interruption without clearing THIS session's marker.
+/// The in-memory choice hides recovery; clean exit alone clears the marker.
 #[tauri::command]
 pub fn crash_resolve(
     app: AppHandle,
@@ -211,7 +238,6 @@ pub fn crash_resolve(
 
     let home = crash::xr_home();
     crash::log_shell(&home, &format!("recovery: user chose {action}"));
-    crash::clear_flag(&home);
 
     if let Some(state) = app.try_state::<RecoveryState>() {
         *state.choice.lock().map_err(|e| e.to_string())? = choice;
@@ -249,7 +275,6 @@ pub fn crash_start_without_engine(
     if let Some(state) = app.try_state::<std::sync::Arc<EngineState>>() {
         engine::stop_sidecar(state.inner(), Duration::from_millis(1_500));
     }
-    crash::clear_flag(&home);
     let _ = app.emit("xr-crash-resolved", RecoveryChoice::WithoutEngine);
     Ok(info(&app, &engine))
 }
@@ -383,7 +408,7 @@ pub fn crash_report(
     engine: tauri::State<'_, std::sync::Arc<EngineState>>,
 ) -> Result<ReportTicket, String> {
     let home = crash::xr_home();
-    let state = crash::state_at_startup(&home);
+    let state = startup_state(&app);
     let snapshot = engine::snapshot(&engine);
     let report: CrashReport = crash::build_report(
         &home,
@@ -475,8 +500,9 @@ pub fn crash_simulate(app: AppHandle) -> Result<(), String> {
 /// the webview has already dropped its interrupted runs).
 #[tauri::command]
 pub fn crash_forget(app: AppHandle, engine: tauri::State<'_, std::sync::Arc<EngineState>>) -> RecoveryInfo {
-    let home = crash::xr_home();
-    crash::clear_flag(&home);
+    if let Some(state) = app.try_state::<RecoveryState>() {
+        if let Ok(mut choice) = state.choice.lock() { *choice = RecoveryChoice::Resume; }
+    }
     info(&app, &engine)
 }
 
@@ -489,6 +515,38 @@ pub fn crash_report_dir() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fresh_session_marker_is_not_a_previous_crash() {
+        let home = std::env::temp_dir().join(format!("xr-recovery-fresh-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let state = RecoveryState::from_home(&home);
+        crash::write_flag(&home, "current-test", 1, false).unwrap();
+        assert!(!state.visible_startup().interrupted);
+        assert!(state.visible_startup().previous.is_none());
+        assert!(crash::read_flag(&home).is_some(), "live crash evidence stays armed");
+        std::fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn previous_crash_survives_marker_replacement_and_ack_keeps_current_marker() {
+        let home = std::env::temp_dir().join(format!("xr-recovery-prior-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        crash::write_flag(&home, "previous-test", 2, true).unwrap();
+        let state = RecoveryState::from_home(&home);
+        crash::write_flag(&home, "current-test", 3, false).unwrap();
+        let prior = state.visible_startup();
+        assert!(prior.interrupted && prior.engine_spawn_failed);
+        assert_eq!(prior.previous.unwrap().version, "previous-test");
+        *state.choice.lock().unwrap() = RecoveryChoice::Resume;
+        assert!(!state.visible_startup().interrupted);
+        assert_eq!(crash::read_flag(&home).unwrap().version, "current-test");
+        // A new process after another crash still sees the current marker.
+        assert!(RecoveryState::from_home(&home).visible_startup().interrupted);
+        crash::clear_flag(&home);
+        assert!(!RecoveryState::from_home(&home).visible_startup().interrupted);
+        std::fs::remove_dir_all(home).unwrap();
+    }
 
     #[test]
     fn loopback_probe_is_false_for_a_port_nobody_owns() {

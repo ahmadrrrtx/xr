@@ -168,6 +168,7 @@ export async function checkProviderHealthCached(
   config: XRConfig,
   id: string,
   model?: string,
+  opts?: { fresh?: boolean },
 ): Promise<CachedProviderHealth> {
   const boundMs = resolveHealthBoundMs(config);
   const key = cacheKey(config, id, model);
@@ -180,7 +181,7 @@ export async function checkProviderHealthCached(
     return report;
   };
 
-  if (!healthCacheEnabled()) {
+  if (opts?.fresh || !healthCacheEnabled()) {
     const report = await probe();
     return { ...report, cached: false, stale: false, deduped: false, probeMs: Date.now() - started };
   }

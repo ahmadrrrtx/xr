@@ -3,8 +3,9 @@
  * Any OpenAI-compatible endpoint the user configures. First-class feature.
  */
 
+import { assertHeaderReferences, resolveCustomHeaders } from "./header-secrets.ts";
 import { OpenAICompatProvider } from "./openai-compat.ts";
-import { validateProviderUrlSync } from "./provider-url-guard.ts";
+import { validateProviderUrlSync, validateProviderUrl } from "./provider-url-guard.ts";
 import type { ProviderCapabilitiesFlags } from "../core/types.ts";
 
 export interface CustomProviderOptions {
@@ -20,6 +21,7 @@ export interface CustomProviderOptions {
 }
 
 export class CustomProvider extends OpenAICompatProvider {
+  private headerReferences: Record<string, string>;
   constructor(opts: CustomProviderOptions) {
     // A5 — fail closed at construction, even if a caller bypassed the
     // registry and the add path: a custom baseUrl that fails the SSRF
@@ -29,15 +31,28 @@ export class CustomProvider extends OpenAICompatProvider {
     if (!check.ok) {
       throw new Error(`Custom provider "${opts.id}" refused: ${check.reason}`);
     }
+    assertHeaderReferences(opts.id, opts.baseUrl, opts.extraHeaders);
     super({
       id: opts.id,
       label: opts.label,
       baseUrl: opts.baseUrl,
       model: opts.model,
       apiKeyEnv: opts.apiKeyEnv,
-      extraHeaders: opts.extraHeaders,
+      extraHeaders: {},
       apiKey: opts.apiKey,
       capabilities: opts.capabilities,
     });
+    this.headerReferences = opts.extraHeaders ?? {};
+  }
+  protected override async observationRequest(url: string, init: RequestInit): Promise<Response> {
+    const check = await validateProviderUrl(this.baseUrl);
+    if (!check.ok) throw new Error("Custom provider URL refused by runtime guard");
+    init.signal?.throwIfAborted();
+    return super.observationRequest(url, init);
+  }
+  protected override headers(): Record<string, string> {
+    const headers = new Headers(super.headers());
+    for (const [name, value] of Object.entries(resolveCustomHeaders(this.id, this.baseUrl, this.headerReferences))) headers.set(name, value);
+    return Object.fromEntries(headers.entries());
   }
 }

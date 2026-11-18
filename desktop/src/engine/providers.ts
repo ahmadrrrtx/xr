@@ -43,6 +43,16 @@ export function engineKnowsProvider(providerId: string): boolean {
   return list.some((p) => p.id === providerId);
 }
 
+export function requireEngineReady(): void {
+  if (useEngineStore.getState().status !== 'ready')
+    throw new Error('Engine not ready. Start a compatible engine and retry; nothing was saved.');
+}
+
+function sameEngine(generation: number): void {
+  const state = useEngineStore.getState();
+  if (state.generation !== generation || state.status !== 'ready') throw new Error('Engine changed during the operation. Review its current configuration before retrying.');
+}
+
 export function saveProviderKeyToEngine(input: {
   providerId: string;
   apiKey: string;
@@ -50,13 +60,15 @@ export function saveProviderKeyToEngine(input: {
   setDefault?: boolean;
   probe?: boolean;
 }): Promise<EngineKeySaveResult> {
+  requireEngineReady();
+  const generation = useEngineStore.getState().generation;
   return enginePost<EngineKeySaveResult>('/onboarding/provider', {
     providerId: input.providerId,
     apiKey: input.apiKey,
     model: input.model ?? undefined,
     probe: input.probe ?? false,
     setDefault: input.setDefault ?? false,
-  });
+  }).then(result => { sameEngine(generation); return result; });
 }
 
 /**
@@ -80,23 +92,33 @@ export interface CustomProviderSummary {
   id: string;
   label: string;
   baseUrl: string;
-  defaultModel: string;
+  defaultModel: string | null;
   apiKeyEnv: string | null;
   keyed?: boolean;
   hasHeaders?: boolean;
 }
 
 export async function addCustomProviderToEngine(
-  input: CustomProviderInput
-): Promise<{ ok: boolean; provider: CustomProviderSummary }> {
+  input: CustomProviderInput, signal?: AbortSignal
+): Promise<{ ok: boolean; provider: CustomProviderSummary & { defaultModel: string } }> {
+  requireEngineReady();
+  const generation = useEngineStore.getState().generation;
+  const url = new URL(input.baseUrl);
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
+    throw new Error('Use an HTTP(S) base URL without credentials, query parameters or a fragment.');
+  if (!input.defaultModel.trim()) throw new Error('An explicit model is required.');
   const result = await enginePost<{ ok: boolean; provider: CustomProviderSummary }>(
     '/providers/custom',
-    input
+    input, { signal }
   );
-  if (result.ok === false) throw new Error('The engine did not add the endpoint.');
+  sameEngine(generation);
+  if (result.ok !== true || !result.provider?.id || !result.provider.defaultModel)
+    throw new Error('The engine did not acknowledge an endpoint and model.');
   // The catalog must be re-read: the new provider contributes models.
-  await useEngineStore.getState().loadCatalog({ force: true });
-  return result;
+  await useEngineStore.getState().loadCatalog({ force: true, signal });
+  signal?.throwIfAborted();
+  sameEngine(generation);
+  return { ...result, provider: { ...result.provider, defaultModel: result.provider.defaultModel } };
 }
 
 export async function listCustomProviders(): Promise<CustomProviderSummary[]> {
@@ -105,6 +127,7 @@ export async function listCustomProviders(): Promise<CustomProviderSummary[]> {
 }
 
 export async function removeCustomProviderFromEngine(id: string): Promise<void> {
+  requireEngineReady();
   const result = await enginePost<{ ok: boolean }>('/providers/custom/remove', { id });
   if (result.ok === false) throw new Error('The engine did not remove the endpoint.');
   await useEngineStore.getState().loadCatalog({ force: true });
@@ -113,6 +136,7 @@ export async function removeCustomProviderFromEngine(id: string): Promise<void> 
 export async function removeProviderKeyFromEngine(
   providerId: string
 ): Promise<{ ok: boolean; notice: string }> {
+  requireEngineReady();
   const result = await enginePost<{ ok: boolean; notice: string }>(
     '/onboarding/provider/remove',
     { providerId }
@@ -130,8 +154,11 @@ export async function setEngineDefault(
   provider: string,
   model?: string | null
 ): Promise<void> {
+  requireEngineReady();
+  const generation = useEngineStore.getState().generation;
   await enginePost('/providers/set', { provider, model: model ?? undefined });
-  await useEngineStore.getState().loadCatalog();
+  sameEngine(generation);
+  await useEngineStore.getState().loadCatalog({ force: true });
 }
 
 export interface EngineModelPing {
@@ -182,4 +209,46 @@ export function sampleExchangeUsd(model: string): {
     usd: (1000 * info.inPer1M + 500 * info.outPer1M) / 1_000_000,
     estimate: info.estimate === true,
   };
+}
+
+/** Endpoint/auth observation only: no generated text, tool or billing claim. */
+export interface EngineProviderProbe {
+  ok: boolean; providerId: string; model: string; inferenceVerified: false;
+  latencyMs: number | null; detail: string; authState: string;
+}
+export function probeEngineProvider(providerId: string, model?: string): Promise<EngineProviderProbe> {
+  requireEngineReady();
+  return enginePost('/providers/probe', { providerId, model });
+}
+
+export type { DiscoveryObservation, ValidationCapability } from '../../../src/providers/observations';
+import type { DiscoveryObservation, ValidationCapability } from '../../../src/providers/observations';
+
+/** A discovery draft is a real engine registration, but names NO model and
+ * never selects a default. Its acknowledged identity survives the later save. */
+export async function registerCustomProviderDraft(input: Omit<CustomProviderInput, 'defaultModel'>, signal?: AbortSignal): Promise<CustomProviderSummary> {
+  requireEngineReady();
+  const generation = useEngineStore.getState().generation;
+  const url = new URL(input.baseUrl);
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash)
+    throw new Error('Use an HTTP(S) base URL without credentials/query/fragment.');
+  const result = await enginePost<{ ok: boolean; provider: CustomProviderSummary }>('/providers/custom', { ...input, draft: true }, { signal });
+  sameEngine(generation);
+  if (!result.ok || !result.provider?.id) throw new Error('Engine did not acknowledge the endpoint registration.');
+  await useEngineStore.getState().loadCatalog({ force: true, signal });
+  signal?.throwIfAborted();
+  sameEngine(generation);
+  return result.provider;
+}
+export function discoverEngineModels(providerId: string, signal?: AbortSignal): Promise<DiscoveryObservation> {
+  requireEngineReady();
+  return enginePost('/providers/discover', { providerId, optIn: true }, { signal });
+}
+export interface ModelValidationObservation {
+  providerId: string; modelId: string; capability: ValidationCapability; checkedAt: string;
+  status: string; detail: string; agentValidated: false; billingVerified: false; validation?: Record<string, string>;
+}
+export function validateEngineModel(providerId: string, model: string, capability: ValidationCapability, signal?: AbortSignal): Promise<ModelValidationObservation> {
+  requireEngineReady();
+  return enginePost('/providers/validate', { providerId, model, capability, optIn: true, allowBillable: true }, { signal });
 }

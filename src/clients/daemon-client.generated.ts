@@ -110,10 +110,10 @@ export interface XRDaemonClient {
   voiceModels(): Promise<Record<string, unknown>>;
   /** Phase 15: TTS voice catalogue (Piper offline voices + cloud) with install state and sizes. */
   voiceVoices(): Promise<Record<string, unknown>>;
-  /** Phase 15: effective voice settings (engine config `voice` block). */
-  voiceSettingsGet(): Promise<Record<string, unknown>>;
-  /** Phase 15: patch voice settings (validated, clamped); applies live to the session. */
-  voiceSettingsSet(): Promise<Record<string, unknown>>;
+  /** Effective voice settings and engine-owned content revision. */
+  voiceSettingsGet(): Promise<z.infer<typeof S.VoiceSettingsResponse>>;
+  /** Patch voice settings with expectedRevision; 409 requires review, not automatic replay. */
+  voiceSettingsSet(body: z.infer<typeof S.VoiceSettingsRequest>): Promise<z.infer<typeof S.VoiceSettingsResponse>>;
   /** Phase 15: start a model download (component+id, or the first-run bundle); progress streams on /events. */
   voiceDownload(): Promise<Record<string, unknown>>;
   /** Phase 15: cancel the running model download (partial files resume on retry). */
@@ -320,6 +320,12 @@ export interface XRDaemonClient {
   capabilitiesQuarantine(body: z.infer<typeof S.CapabilityIdRequest>): Promise<Record<string, unknown>>;
   /** Rollback a capability to a previous version. */
   capabilitiesRollback(body: z.infer<typeof S.CapabilityIdRequest>): Promise<Record<string, unknown>>;
+  /** Explicit adapter endpoint probe (may send a minimal billable request; not capability verification). */
+  providersProbe(body: z.infer<typeof S.ProviderProbeRequest>): Promise<Record<string, unknown>>;
+  /** Opt-in bounded model enumeration; not inference/capability verification. */
+  providersDiscover(body: z.infer<typeof S.ProviderDiscoverRequest>): Promise<z.infer<typeof S.ProviderDiscoveryResponse>>;
+  /** Consented, potentially billable, isolated capability round trip; never executes a tool or certifies agent/billing behavior. */
+  providersValidate(body: z.infer<typeof S.ProviderValidateRequest>): Promise<Record<string, unknown>>;
   /** Provider status (keys present, health, defaults). */
   providersList(): Promise<Record<string, unknown>>;
   /** Select default provider/model (+ optional fallback). */
@@ -671,7 +677,7 @@ const OPERATIONS: ReadonlyArray<readonly [string, string, string, number, boolea
   ["voiceModels","GET","/api/v1/voice/models",0,false,false],
   ["voiceVoices","GET","/api/v1/voice/voices",0,false,false],
   ["voiceSettingsGet","GET","/api/v1/voice/settings",0,false,false],
-  ["voiceSettingsSet","POST","/api/v1/voice/settings",0,false,false],
+  ["voiceSettingsSet","POST","/api/v1/voice/settings",0,true,false],
   ["voiceDownload","POST","/api/v1/voice/download",0,false,false],
   ["voiceDownloadCancel","POST","/api/v1/voice/cancel-download",0,false,false],
   ["voiceModelsClear","POST","/api/v1/voice/clear-models",0,false,false],
@@ -775,6 +781,9 @@ const OPERATIONS: ReadonlyArray<readonly [string, string, string, number, boolea
   ["capabilitiesDisable","POST","/api/v1/capabilities/disable",0,true,false],
   ["capabilitiesQuarantine","POST","/api/v1/capabilities/quarantine",0,true,false],
   ["capabilitiesRollback","POST","/api/v1/capabilities/rollback",0,true,false],
+  ["providersProbe","POST","/api/v1/providers/probe",0,true,false],
+  ["providersDiscover","POST","/api/v1/providers/discover",0,true,false],
+  ["providersValidate","POST","/api/v1/providers/validate",0,true,false],
   ["providersList","GET","/api/v1/providers",0,false,false],
   ["providersSet","POST","/api/v1/providers/set",0,true,false],
   ["providersRoute","GET","/api/v1/providers/route",0,false,false],

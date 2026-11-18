@@ -31,14 +31,22 @@ export async function prepareModelSetup(
   }
   if (choice.source === 'cloud') {
     const providerId = choice.providerId;
-    if (!choice.apiKey?.trim())
+    if (!choice.apiKey?.trim()) {
+      // A custom endpoint was already registered (and its optional key stored)
+      // in step 4. Selecting it is NOT another preset credential transaction.
+      if (providerId && choice.model?.trim()) {
+        const model = choice.model.trim();
+        await ports.setDefault(providerId, model);
+        return {
+          selection: `${providerId}/${model}`,
+          durableChoice: { source: 'cloud', providerId, model },
+        };
+      }
       return {
         selection: null,
-        durableChoice: {
-          source: 'cloud',
-          ...(providerId ? { providerId } : {}),
-        },
+        durableChoice: { source: 'cloud', ...(providerId ? { providerId } : {}) },
       };
+    }
     if (!providerId)
       throw new Error(
         'Choose the provider that issued this key. No key was saved.'

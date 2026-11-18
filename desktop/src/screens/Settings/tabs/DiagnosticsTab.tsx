@@ -176,7 +176,7 @@ export function DiagnosticsTab() {
           label="Providers"
           description={
             providers
-              ? `${healthy.length} ready${keyed.length ? ` · ${keyed.length} cloud with credentials` : ''} · default ${providers.primary}${providers.model ? ` / ${providers.model}` : ''}`
+              ? `${healthy.length} configured to try (not inference-verified)${keyed.length ? ` · ${keyed.length} cloud with credentials` : ''} · default ${providers.primary}${providers.model ? ` / ${providers.model}` : ''}`
               : 'Loads when the engine is up.'
           }
         >

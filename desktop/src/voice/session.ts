@@ -29,18 +29,18 @@ import { isTauri } from '@/lib/tauri';
 import { emitTheater } from '@/lib/theater';
 import { THEATER_IN } from '@/lib/theaterCore';
 import { useApprovalStore } from '@/stores/approvalStore';
+import { useEngineStore } from '@/stores/engineStore';
 
 import {
-  base64ToBytes,
   bytesToBase64,
   concatPcm16,
   floatToPcm16,
-  pitchToCents,
   resampleTo16k,
   TARGET_RATE,
 } from './audio';
 import { voiceApi, type VoiceEngineEvent, type VoiceSessionState } from './voiceApi';
 import { applyDownloadEvent, useVoiceStore, type MicPermission } from './voiceStore';
+import { closeMicrophone, openMicrophone, SessionPlayback, type MicGraph, type PlaybackEvent } from './sessionAudio';
 
 const FLUSH_MS = 150;
 const SPEECH_RMS = 0.02;
@@ -52,7 +52,7 @@ const SEND_FAILURES_BEFORE_ERROR = 4;
 export type VoiceOrigin = 'screen' | 'docked' | 'hotkey' | 'orb' | 'chat' | 'theater';
 
 /** Playback observer (Phase 16 karaoke): one utterance started / stopped. */
-export type TtsEvent = { kind: 'start'; text: string; durationMs: number } | { kind: 'stop' };
+export type TtsEvent = PlaybackEvent;
 
 export interface VoiceLevels {
   /** Mic RMS after gain (0..1). */
@@ -102,22 +102,14 @@ export const STATE_COPY: Record<VoiceSessionState, string> = {
   offline: 'Engine offline',
 };
 
-interface MicGraph {
-  stream: MediaStream;
-  source: MediaStreamAudioSourceNode;
-  gain: GainNode;
-  analyser: AnalyserNode;
-  processor: ScriptProcessorNode;
-  sink: GainNode;
-}
+interface SessionRun { generation: number; abort: AbortController; engineRequested: boolean }
 
-interface Playback {
-  src: AudioBufferSourceNode;
-  analyser: AnalyserNode;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); };
+    const timer = setTimeout(done, ms);
+    if (signal.aborted) done(); else signal.addEventListener('abort', done, { once: true });
+  });
 }
 
 export class VoiceController {
@@ -125,7 +117,6 @@ export class VoiceController {
 
   private ctx: AudioContext | null = null;
   private mic: MicGraph | null = null;
-  private playing: Playback | null = null;
   private ttsObservers = new Set<(ev: TtsEvent) => void>();
   private pending: Int16Array[] = [];
   private flushTimer: number | null = null;
@@ -134,12 +125,48 @@ export class VoiceController {
   private lastActivityAt = 0;
   private exitTimer: number | null = null;
   private sseAbort: AbortController | null = null;
-  private sseWanted = false;
-  private sseBackoff = 1000;
   private retains = 0;
-  private stopping = false;
+  private run: SessionRun | null = null;
+  private starting: { run: SessionRun; task: Promise<boolean> } | null = null;
+  private stopping: Promise<void> | null = null;
+  private sessionCommands: Promise<unknown> = Promise.resolve();
+  private micAttempt = 0;
+  private readonly playback = new SessionPlayback({
+    context: () => this.ensureContext(), pitch: () => useVoiceStore.getState().settings?.desktop.ttsPitch ?? 0,
+    levels: this.levels, notify: ev => this.notifyTts(ev), touch: () => this.touch(),
+    fail: () => this.fail('tts-decode', 'The reply audio could not be played.'),
+    played: () => { const run = this.run; if (run && this.current(run)) void voiceApi.played({ signal: run.abort.signal }).catch(() => {}); },
+  });
   private readonly approvalAbort = new Map<string, AbortController>();
   private readonly scratch = new Float32Array(new ArrayBuffer(1024 * 4));
+
+  constructor() {
+    // A replaced engine cannot own old mic grants, decodes, requests or streams.
+    useEngineStore.subscribe((next, previous) => {
+      if (next.generation !== previous.generation || next.status !== 'ready') {
+        void this.stop('engine'); this.releaseEvents();
+        if (next.generation !== previous.generation) this.sessionCommands = Promise.resolve();
+      }
+      if (this.retains > 0 && next.status === 'ready') this.ensureEvents();
+    });
+  }
+
+  private current(run: SessionRun): boolean {
+    const engine = useEngineStore.getState();
+    return this.run === run && !run.abort.signal.aborted && run.generation === engine.generation && engine.status === 'ready';
+  }
+
+  private sessionCommand(action: 'start' | 'stop', run: SessionRun): Promise<void> {
+    const command = this.sessionCommands.catch(() => {}).then(async () => {
+      if (run.generation !== useEngineStore.getState().generation || (action === 'start' && !this.current(run))) return;
+      if (action === 'start') run.engineRequested = true;
+      // Do not abort a start acknowledgement: a queued stop must follow it,
+      // never race ahead of a start the engine has not committed yet.
+      await voiceApi.session(action);
+    });
+    this.sessionCommands = command;
+    return command;
+  }
 
   /* ── lifecycle ─────────────────────────────────────────────────────── */
 
@@ -161,91 +188,81 @@ export class VoiceController {
   }
 
   /** The user gesture entry point — mic, engine session, SSE, chime. */
-  async start(origin: VoiceOrigin = 'screen'): Promise<boolean> {
-    const store = useVoiceStore.getState();
-    if (store.active) return true;
-    this.stopping = false;
-    const ctx = this.ensureContext();
-    if (ctx.state === 'suspended') await ctx.resume().catch(() => undefined);
-
-    const status = await store.refreshStatus();
-    if (!status) {
-      this.fail('engine-disconnected', 'The engine is not reachable. Voice needs it running.');
-      return false;
+  start(origin: VoiceOrigin = 'screen'): Promise<boolean> {
+    if (this.run && this.current(this.run)) {
+      if (this.active) return Promise.resolve(true);
+      if (this.starting?.run === this.run) return this.starting.task;
     }
-    if (!status.stt.loaded) {
-      this.fail('stt-model-missing', 'Speech recognition is not installed yet.', { silent: true });
-      return false;
-    }
-    const settings = status.settings;
-    const micOk = await this.openMic(settings.desktop.micDeviceId, settings.desktop.noiseSuppression, settings.desktop.inputGain);
-    if (!micOk) return false;
+    const run: SessionRun = { generation: useEngineStore.getState().generation, abort: new AbortController(), engineRequested: false };
+    this.run = run;
+    const task = this.startRun(run, origin).finally(() => {
+      if (this.starting?.run === run) this.starting = null;
+      if (this.run === run && !this.active) { this.run = null; run.abort.abort(); this.closeMic(); this.maybeReleaseEvents(); }
+    });
+    this.starting = { run, task };
+    return task;
+  }
 
+  private async startRun(run: SessionRun, origin: VoiceOrigin): Promise<boolean> {
     try {
-      await voiceApi.session('start');
+      const ctx = this.ensureContext(); // Created synchronously on the user gesture.
+      if (ctx.state === 'suspended') await ctx.resume();
+      if (!this.current(run)) return false;
+      const status = await useVoiceStore.getState().refreshStatus();
+      if (!this.current(run)) return false;
+      if (!status) { this.fail('engine-disconnected', 'The engine is not reachable. Voice needs it running.'); return false; }
+      if (!status.stt.loaded) { this.fail('stt-model-missing', 'Speech recognition is not installed yet.', { silent: true }); return false; }
+      const settings = status.settings;
+      if (!await this.openMic(run, settings.desktop.micDeviceId, settings.noiseSuppression, settings.desktop.inputGain)) return false;
+      if (!this.current(run)) return false;
+      await this.sessionCommand('start', run);
+      if (!this.current(run)) return false;
+      useVoiceStore.getState()._session({
+        active: true, origin, startedAt: Date.now(),
+        muted: settings.desktop.activation === 'hold' && !useVoiceStore.getState().pressed,
+        error: null, approval: null, sessionState: 'listening',
+      });
+      useVoiceStore.getState()._clearCaptions();
+      useVoiceStore.setState(s => ({ cost: { ...s.cost, sessionUsd: 0 } }));
+      this.sendFailures = 0;
+      // Begin with this session's fresh state, not buffered events from a prior run.
+      this.releaseEvents(); this.ensureEvents(); this.startFlusher(); this.touch(); this.startExitWatch();
+      if (settings.wakeSound) this.chime('start');
+      this.broadcastState('listening');
+      if (origin === 'hotkey') void this.bringForward();
+      return true;
     } catch (e) {
-      this.closeMic();
+      if (!this.current(run)) return false;
       if (e instanceof EngineHttpError && e.status === 409) {
         this.fail(String(e.body?.error ?? 'stt-model-missing'), String(e.body?.detail ?? e.message), { silent: true });
       } else if (e instanceof EngineDown) {
         this.fail('engine-disconnected', 'The engine is not reachable. Voice needs it running.');
-      } else {
-        this.fail('session-failed', e instanceof Error ? e.message : 'Could not start the session.');
-      }
+      } else this.fail('session-failed', e instanceof Error ? e.message : 'Could not start the session.');
+      void this.stop('error');
       return false;
     }
-
-    const hold = settings.desktop.activation === 'hold';
-    useVoiceStore.getState()._session({
-      active: true,
-      origin,
-      startedAt: Date.now(),
-      muted: hold && !useVoiceStore.getState().pressed,
-      error: null,
-      approval: null,
-      sessionState: 'listening',
-    });
-    useVoiceStore.getState()._clearCaptions();
-    useVoiceStore.setState((s) => ({ cost: { ...s.cost, sessionUsd: 0 } }));
-    this.ensureEvents();
-    this.startFlusher();
-    this.lastActivityAt = Date.now();
-    this.startExitWatch();
-    if (settings.wakeSound) this.chime('start');
-    this.broadcastState('listening');
-    if (origin === 'hotkey') void this.bringForward();
-    return true;
   }
 
-  async stop(reason: 'user' | 'silence' | 'mic-lost' | 'engine' | 'error' = 'user'): Promise<void> {
-    if (this.stopping) return;
-    this.stopping = true;
+  stop(reason: 'user' | 'silence' | 'mic-lost' | 'engine' | 'error' = 'user'): Promise<void> {
+    const run = this.run;
+    if (!run) return this.stopping ?? Promise.resolve();
+    this.run = null; run.abort.abort();
     const wasActive = useVoiceStore.getState().active;
-    this.stopExitWatch();
-    this.stopFlusher();
-    this.stopPlayback();
-    this.closeMic();
+    this.stopExitWatch(); this.stopFlusher(); this.stopPlayback(); this.closeMic();
     for (const ac of this.approvalAbort.values()) ac.abort();
     this.approvalAbort.clear();
     useVoiceStore.getState()._session({ active: false, pressed: false, muted: false, origin: null, approval: null, sessionState: 'idle' });
     useVoiceStore.getState().setDocked(false);
-    if (wasActive && reason !== 'engine') {
-      try {
-        await voiceApi.session('stop');
-      } catch {
-        /* the engine is gone or already idle — nothing to undo */
-      }
-    }
     if (wasActive && reason === 'silence') {
-      this.chime('bye');
-      toast('Voice session ended', { description: 'Quiet for a while — tap the mic when you need me.' });
+      this.chime('bye'); toast('Voice session ended', { description: 'Quiet for a while — tap the mic when you need me.' });
     }
-    if (wasActive && reason === 'mic-lost') {
-      toast.warning('Microphone disconnected', { description: 'The session stopped cleanly. Plug a mic back in and start again.' });
-    }
-    this.broadcastState('idle');
-    this.maybeReleaseEvents();
-    this.stopping = false;
+    if (wasActive && reason === 'mic-lost') toast.warning('Microphone disconnected', { description: 'The session stopped cleanly. Plug a mic back in and start again.' });
+    this.broadcastState('idle'); this.maybeReleaseEvents();
+    const previous = this.stopping;
+    const command = run.engineRequested && reason !== 'engine' ? this.sessionCommand('stop', run).catch(() => {}) : Promise.resolve();
+    const task = Promise.all([previous, command]).then(() => {}).finally(() => { if (this.stopping === task) this.stopping = null; });
+    this.stopping = task;
+    return task;
   }
 
   private lastToggleAt = 0;
@@ -255,7 +272,7 @@ export class VoiceController {
     const now = Date.now();
     if (now - this.lastToggleAt < 400) return;
     this.lastToggleAt = now;
-    if (this.active) await this.stop('user');
+    if (this.run) await this.stop('user');
     else await this.start(origin);
   }
 
@@ -263,14 +280,16 @@ export class VoiceController {
 
   async pressStart(origin: VoiceOrigin = 'screen'): Promise<void> {
     useVoiceStore.getState()._session({ pressed: true });
-    if (!this.active) {
-      const ok = await this.start(origin);
-      if (!ok) {
-        useVoiceStore.getState()._session({ pressed: false });
-        return;
-      }
+    const task = this.start(origin), run = this.run;
+    const ok = await task;
+    if (!ok) {
+      if (!this.run || this.run === run) useVoiceStore.getState()._session({ pressed: false });
+      return;
     }
-    useVoiceStore.getState()._session({ muted: false });
+    if (!run || !this.current(run)) return;
+    // A release while permission/start was pending must remain muted in hold mode.
+    const store = useVoiceStore.getState();
+    if (store.settings?.desktop.activation !== 'hold' || store.pressed) store._session({ muted: false });
     this.touch();
   }
 
@@ -296,15 +315,16 @@ export class VoiceController {
   }
 
   bargeIn(): void {
-    if (!this.playing) return;
+    if (!this.playback.playing) return;
     this.stopPlayback();
-    void voiceApi.bargeIn().catch(() => undefined);
+    const run = this.run;
+    if (run && this.current(run)) void voiceApi.bargeIn({ signal: run.abort.signal }).catch(() => undefined);
     this.touch();
   }
 
   /** Mic is open → push the live mic waveform; speaking → playback waveform. */
   waveform(target: Float32Array<ArrayBuffer>): boolean {
-    const a = this.playing?.analyser ?? this.mic?.analyser;
+    const a = this.playback.playing?.analyser ?? this.mic?.analyser;
     if (!a) {
       target.fill(0);
       return false;
@@ -326,11 +346,13 @@ export class VoiceController {
   }
 
   async switchDevice(deviceId: string | null): Promise<void> {
-    if (!this.active) return;
+    const run = this.run;
+    if (!run || !this.current(run) || !this.active) return;
     const s = useVoiceStore.getState().settings;
     this.closeMic();
-    const ok = await this.openMic(deviceId, s?.desktop.noiseSuppression ?? true, s?.desktop.inputGain ?? 100);
-    if (!ok) await this.stop('mic-lost');
+    const attempt = this.micAttempt + 1;
+    const ok = await this.openMic(run, deviceId, s?.noiseSuppression ?? true, s?.desktop.inputGain ?? 100);
+    if (!ok && this.current(run) && attempt === this.micAttempt) await this.stop('mic-lost');
   }
 
   /* ── audio context / mic graph ───────────────────────────────────────── */
@@ -340,92 +362,34 @@ export class VoiceController {
     return this.ctx;
   }
 
-  private async openMic(deviceId: string | null, noise: boolean, gainPercent: number): Promise<boolean> {
+  private async openMic(run: SessionRun, deviceId: string | null, noise: boolean, gainPercent: number): Promise<boolean> {
+    const attempt = ++this.micAttempt;
+    const current = () => this.current(run) && attempt === this.micAttempt;
     if (!navigator.mediaDevices?.getUserMedia) {
-      useVoiceStore.getState().setMicPermission('unsupported');
-      this.fail('no-mic', 'This environment has no microphone access.');
+      useVoiceStore.getState().setMicPermission('unsupported'); this.fail('no-mic', 'This environment has no microphone access.'); return false;
+    }
+    try {
+      const graph = await openMicrophone({ deviceId, noise, gainPercent, current,
+        context: () => this.ensureContext(), onFrame: (input, rate) => this.onFrame(input, rate), onLost: () => { void this.stop('mic-lost'); } });
+      if (!graph) return false;
+      if (!current()) { closeMicrophone(graph); return false; }
+      this.mic = graph; useVoiceStore.getState().setMicPermission('granted'); return true;
+    } catch (e) {
+      if (!current()) return false;
+      const name = e instanceof DOMException ? e.name : '';
+      const denied = name === 'NotAllowedError' || name === 'SecurityError';
+      const missing = name === 'NotFoundError' || name === 'OverconstrainedError';
+      useVoiceStore.getState().setMicPermission(denied ? 'denied' : missing ? 'no-device' : 'prompt');
+      this.fail(denied ? 'mic-denied' : 'no-mic', denied ? 'Microphone access was denied.' : missing ? 'The selected microphone is unavailable. Choose another input.' : 'The microphone could not be opened.', { silent: true });
       return false;
     }
-    const build = (exact: boolean): MediaStreamConstraints => ({
-      audio: {
-        ...(deviceId && exact ? { deviceId: { exact: deviceId } } : {}),
-        echoCancellation: true,
-        noiseSuppression: noise,
-        autoGainControl: true,
-        channelCount: 1,
-      },
-    });
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(build(true));
-    } catch (e) {
-      const name = e instanceof DOMException ? e.name : '';
-      if (name === 'NotAllowedError' || name === 'SecurityError') {
-        useVoiceStore.getState().setMicPermission('denied');
-        this.fail('mic-denied', 'Microphone access was denied.', { silent: true });
-        return false;
-      }
-      if (deviceId && (name === 'OverconstrainedError' || name === 'NotFoundError')) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(build(false));
-        } catch {
-          useVoiceStore.getState().setMicPermission('no-device');
-          this.fail('no-mic', 'No microphone detected.', { silent: true });
-          return false;
-        }
-      } else {
-        useVoiceStore.getState().setMicPermission(name === 'NotFoundError' ? 'no-device' : 'prompt');
-        this.fail('no-mic', name === 'NotFoundError' ? 'No microphone detected.' : 'The microphone could not be opened.', { silent: true });
-        return false;
-      }
-    }
-    useVoiceStore.getState().setMicPermission('granted');
-    const ctx = this.ensureContext();
-    const source = ctx.createMediaStreamSource(stream);
-    const gain = ctx.createGain();
-    gain.gain.value = Math.max(0, gainPercent) / 100;
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.5;
-    const processor = ctx.createScriptProcessor(4096, 1, 1);
-    const sink = ctx.createGain();
-    sink.gain.value = 0; // Chrome only pulses a ScriptProcessor that reaches the destination.
-    source.connect(gain);
-    gain.connect(analyser);
-    analyser.connect(processor);
-    processor.connect(sink);
-    sink.connect(ctx.destination);
-    processor.onaudioprocess = (ev) => this.onFrame(ev.inputBuffer.getChannelData(0), ctx.sampleRate);
-    for (const track of stream.getAudioTracks()) {
-      track.onended = () => {
-        if (this.mic?.stream === stream) void this.stop('mic-lost');
-      };
-    }
-    this.mic = { stream, source, gain, analyser, processor, sink };
-    return true;
   }
 
   private closeMic(): void {
-    const m = this.mic;
-    if (!m) return;
-    this.mic = null;
-    m.processor.onaudioprocess = null;
-    for (const t of m.stream.getTracks()) {
-      t.onended = null;
-      t.stop();
-    }
-    try {
-      m.source.disconnect();
-      m.gain.disconnect();
-      m.analyser.disconnect();
-      m.processor.disconnect();
-      m.sink.disconnect();
-    } catch {
-      /* already torn down */
-    }
-    this.levels.mic = 0;
-    this.levels.peak = 0;
-    this.levels.clipped = false;
+    this.micAttempt++;
+    const mic = this.mic; this.mic = null; this.pending = [];
+    if (mic) closeMicrophone(mic);
+    this.levels.mic = 0; this.levels.peak = 0; this.levels.clipped = false;
   }
 
   private onFrame(input: Float32Array, rate: number): void {
@@ -436,7 +400,7 @@ export class VoiceController {
     this.levels.clipped = clipped;
     const s = useVoiceStore.getState();
     if (rms > SPEECH_RMS) this.touch();
-    if (this.playing && s.sessionState === 'speaking') {
+    if (this.playback.playing && s.sessionState === 'speaking') {
       this.bargeHotMs = rms > BARGE_RMS ? this.bargeHotMs + frameMs : 0;
       if (this.bargeHotMs >= BARGE_MS) {
         this.bargeHotMs = 0;
@@ -462,22 +426,18 @@ export class VoiceController {
   }
 
   private flush(): void {
-    if (this.pending.length === 0) return;
-    const bytes = concatPcm16(this.pending);
-    this.pending = [];
-    voiceApi
-      .audio(bytesToBase64(bytes))
-      .then(() => {
-        this.sendFailures = 0;
-      })
-      .catch((e: unknown) => {
-        this.sendFailures += 1;
-        if (e instanceof EngineDown || this.sendFailures >= SEND_FAILURES_BEFORE_ERROR) {
-          this.sendFailures = 0;
-          this.fail('network-down', 'Audio is not reaching the engine.');
-          void this.stop('engine');
-        }
-      });
+    const run = this.run;
+    if (!run || !this.current(run) || !this.active || this.pending.length === 0) return;
+    const bytes = concatPcm16(this.pending); this.pending = [];
+    voiceApi.audio(bytesToBase64(bytes), { signal: run.abort.signal }).then(() => {
+      if (this.current(run)) this.sendFailures = 0;
+    }).catch((e: unknown) => {
+      if (!this.current(run)) return;
+      this.sendFailures++;
+      if (e instanceof EngineDown || this.sendFailures >= SEND_FAILURES_BEFORE_ERROR) {
+        this.sendFailures = 0; this.fail('network-down', 'Audio is not reaching the engine.'); void this.stop('engine');
+      }
+    });
   }
 
   /* ── playback ───────────────────────────────────────────────────────── */
@@ -494,78 +454,14 @@ export class VoiceController {
     this.ttsObservers.forEach((cb) => cb(ev));
   }
 
-  private async play(wavB64: string, text = ''): Promise<void> {
-    const ctx = this.ensureContext();
-    if (ctx.state === 'suspended') await ctx.resume().catch(() => undefined);
-    let buffer: AudioBuffer;
-    try {
-      const bytes = base64ToBytes(wavB64);
-      const copy = new ArrayBuffer(bytes.byteLength);
-      new Uint8Array(copy).set(bytes);
-      buffer = await ctx.decodeAudioData(copy);
-    } catch {
-      this.fail('tts-decode', 'The reply audio could not be decoded.');
-      void voiceApi.played().catch(() => undefined);
-      return;
-    }
-    this.stopPlayback();
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-    const pitch = useVoiceStore.getState().settings?.desktop.ttsPitch ?? 0;
-    src.detune.value = pitchToCents(pitch);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 1024;
-    src.connect(analyser);
-    analyser.connect(ctx.destination);
-    const me: Playback = { src, analyser };
-    src.onended = () => {
-      if (this.playing === me) {
-        this.playing = null;
-        this.levels.out = 0;
-        this.notifyTts({ kind: 'stop' });
-        void voiceApi.played().catch(() => undefined);
-        this.touch();
-      }
-    };
-    this.playing = me;
+  private play(wavB64: string, text = ''): Promise<void> {
+    const run = this.run;
+    if (!run || !this.current(run)) return Promise.resolve();
     this.bargeHotMs = 0;
-    src.start();
-    this.notifyTts({ kind: 'start', text, durationMs: buffer.duration * 1000 });
-    this.pumpOutLevel();
+    return this.playback.play(wavB64, text, () => this.current(run) && this.active);
   }
 
-  private pumpOutLevel(): void {
-    const tick = (): void => {
-      const p = this.playing;
-      if (!p) return;
-      p.analyser.getFloatTimeDomainData(this.scratch);
-      let sum = 0;
-      for (let i = 0; i < this.scratch.length; i++) sum += (this.scratch[i] ?? 0) ** 2;
-      this.levels.out = Math.sqrt(sum / this.scratch.length);
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }
-
-  private stopPlayback(): void {
-    const p = this.playing;
-    if (!p) return;
-    this.playing = null;
-    p.src.onended = null;
-    this.notifyTts({ kind: 'stop' });
-    try {
-      p.src.stop();
-    } catch {
-      /* never started / already stopped */
-    }
-    try {
-      p.src.disconnect();
-      p.analyser.disconnect();
-    } catch {
-      /* already disconnected */
-    }
-    this.levels.out = 0;
-  }
+  private stopPlayback(): void { this.playback.stop(); }
 
   /** 200 ms sine chimes — A4 for start/wake, C5 falling for goodbye. */
   chime(kind: 'start' | 'bye' | 'approval'): void {
@@ -619,40 +515,38 @@ export class VoiceController {
   /* ── SSE downlink ───────────────────────────────────────────────────── */
 
   private ensureEvents(): void {
-    if (this.sseWanted) return;
-    this.sseWanted = true;
-    void this.pumpEvents();
+    if (this.sseAbort || useEngineStore.getState().status !== 'ready') return;
+    const owner = new AbortController(), generation = useEngineStore.getState().generation;
+    this.sseAbort = owner;
+    void this.pumpEvents(owner, generation);
+  }
+
+  private releaseEvents(): void {
+    const owner = this.sseAbort; this.sseAbort = null; owner?.abort();
+    useVoiceStore.getState()._session({ connected: false });
   }
 
   private maybeReleaseEvents(): void {
     const s = useVoiceStore.getState();
-    if (this.retains > 0 || s.active || s.downloadBusy) return;
-    this.sseWanted = false;
-    this.sseAbort?.abort();
-    this.sseAbort = null;
+    if (this.retains > 0 || this.run || s.active || s.downloadBusy) return;
+    this.releaseEvents();
   }
 
-  private async pumpEvents(): Promise<void> {
-    while (this.sseWanted) {
-      const ac = new AbortController();
-      this.sseAbort = ac;
+  private async pumpEvents(owner: AbortController, generation: number): Promise<void> {
+    const current = () => this.sseAbort === owner && !owner.signal.aborted && useEngineStore.getState().generation === generation;
+    let backoff = 1000;
+    while (current()) {
       try {
-        const res = await voiceApi.events(ac.signal);
+        const res = await voiceApi.events(owner.signal);
+        if (!current()) { await res.body?.cancel().catch(() => {}); return; }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        useVoiceStore.getState()._session({ connected: true });
-        this.sseBackoff = 1000;
-        await readSse(res, (payload) => this.onPayload(payload), ac.signal);
-      } catch {
-        /* fall through to reconnect */
-      }
+        useVoiceStore.getState()._session({ connected: true }); backoff = 1000;
+        await readSse(res, payload => { if (current()) this.onPayload(payload); }, owner.signal);
+      } catch { /* reconnect only while this stream still owns the connection */ }
+      if (!current()) return;
       useVoiceStore.getState()._session({ connected: false });
-      if (ac.signal.aborted || !this.sseWanted) break;
-      if (this.active) {
-        this.fail('engine-disconnected', 'Lost the engine mid-session.');
-        void this.stop('engine');
-      }
-      await sleep(this.sseBackoff);
-      this.sseBackoff = Math.min(10_000, this.sseBackoff * 2);
+      if (this.active) { this.fail('engine-disconnected', 'Lost the engine mid-session.'); void this.stop('engine'); }
+      await sleep(backoff, owner.signal); backoff = Math.min(10_000, backoff * 2);
     }
   }
 
@@ -669,15 +563,17 @@ export class VoiceController {
 
   private onEvent(e: VoiceEngineEvent): void {
     const store = useVoiceStore.getState();
+    if (e.type !== 'download' && !(e.type === 'approval' && e.resolved) && (!this.run || !this.current(this.run) || !store.active)) return;
     switch (e.type) {
       case 'state': {
         const st = e.state ?? 'idle';
+        if (st === 'idle' || st === 'offline') { void this.stop('engine'); return; }
         // Only a session this window runs drives the UI; a stale engine
         // session (a client that vanished) is not "listening" for the user.
-        store._session({ sessionState: store.active ? st : 'idle' });
+        store._session({ sessionState: st });
         if (st !== 'listening') this.touch();
-        if (st === 'listening' || st === 'idle') store._session({ approval: null });
-        this.broadcastState(store.active ? st : 'idle');
+        if (st === 'listening') store._session({ approval: null });
+        this.broadcastState(st);
         return;
       }
       case 'final':
@@ -690,7 +586,6 @@ export class VoiceController {
       case 'tts':
         if (e.text) store._caption('xr', e.text);
         if (e.wav && store.active) void this.play(e.wav, e.text ?? '');
-        else if (e.wav) void voiceApi.played().catch(() => undefined);
         return;
       case 'tts_stop':
         this.stopPlayback();
@@ -722,6 +617,7 @@ export class VoiceController {
             bundleReceived: e.bundleReceived,
             bundleTotal: e.bundleTotal,
           });
+          this.maybeReleaseEvents();
         }
         return;
       case 'cost':
@@ -754,6 +650,7 @@ export class VoiceController {
       const ac = new AbortController();
       this.approvalAbort.set(e.id, ac);
       void bridgeEngineApproval({ id: e.id, tool, reason, args: e.args, riskTier: e.riskTier }, ac.signal).finally(() => {
+        if (this.approvalAbort.get(e.id!) !== ac) return;
         this.approvalAbort.delete(e.id!);
         const s = useVoiceStore.getState();
         if (s.approval?.id === e.id) s._session({ approval: null });

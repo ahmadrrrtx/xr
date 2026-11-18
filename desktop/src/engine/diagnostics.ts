@@ -13,10 +13,10 @@
  *     line is additionally redacted before it enters the bundle.
  * No engine call is made and no state changes: observing never mutates.
  */
+import { withinDeadline } from './deadline';
 import { APP_VERSION } from '@/lib/appMeta';
 import { isTauri } from '@/lib/tauri';
 import {
-  engineVersion,
   useEngineStore,
   type EngineFailureReason,
   type EngineStatus,
@@ -120,8 +120,10 @@ export async function collectEngineDiagnostics(): Promise<string> {
   let stderrSource: StderrSource = 'not-available-outside-tauri';
   if (isTauri()) {
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      stderrTail = await invoke<string[]>('engine_logs_tail', { lines: 40 });
+      stderrTail = await withinDeadline(async () => {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return invoke<string[]>('engine_logs_tail', { lines: 40 });
+      }, 3000);
       stderrSource = 'sidecar-stderr';
     } catch {
       stderrSource = 'not-available-ipc-error';
@@ -136,7 +138,7 @@ export async function collectEngineDiagnostics(): Promise<string> {
   return buildEngineDiagnostics({
     generatedAt: new Date().toISOString(),
     appVersion: APP_VERSION,
-    engineVersion: engineVersion(),
+    engineVersion: typeof s.handshake?.meta.version === 'string' ? s.handshake.meta.version : null,
     contractVersion,
     status: s.status,
     failureReason: s.failureReason,

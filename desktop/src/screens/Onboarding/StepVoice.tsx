@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { EngineHttpError } from '@/engine/transport';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { voiceApi } from '@/voice/voiceApi';
+import { useMediaOperation } from '@/voice/useMediaOperation';
+import { waitForVoiceDownload } from '@/voice/waitForDownload';
 import { OptionCard, Reveal, StepHeader } from './parts';
 
 /*
@@ -45,75 +47,59 @@ interface MissingVoice {
  * the run actually speaks with. The OS voice is a labelled fallback.
  */
 export function StepVoice() {
-  const { ttsVoice, setVoicePrefs } = useOnboardingStore();
+  const { ttsVoice, ttsSpeed: speed, setVoicePrefs } = useOnboardingStore();
   const [playing, setPlaying] = useState<string | null>(null);
   const [mode, setMode] = useState<PreviewMode | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [missing, setMissing] = useState<MissingVoice | null>(null);
   const [downloading, setDownloading] = useState<number | null>(null);
-  const aliveRef = useRef(true);
-  const [speed, setSpeed] = useState(1);
   // Feature-detect once — the speech engine can't appear mid-session.
   const speechOk = typeof speechSynthesis !== 'undefined';
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const { begin, cancel } = useMediaOperation(() => {
+    const audio = audioRef.current;
+    audioRef.current = null;
+    if (audio) { audio.onended = null; audio.onerror = null; audio.pause(); audio.removeAttribute('src'); audio.load(); }
+    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
+  });
   useEffect(() => {
     if (typeof speechSynthesis === 'undefined') return;
-    const load = () => {
-      voicesRef.current = speechSynthesis.getVoices();
-    };
+    const load = () => { voicesRef.current = speechSynthesis.getVoices(); };
     load();
     speechSynthesis.addEventListener('voiceschanged', load);
-    return () => {
-      aliveRef.current = false;
-      speechSynthesis.removeEventListener('voiceschanged', load);
-      speechSynthesis.cancel();
-      audioRef.current?.pause();
-    };
+    return () => speechSynthesis.removeEventListener('voiceschanged', load);
   }, []);
 
-  /**
-   * Start the engine download for the missing voice and audition it the moment
-   * the model lands. Progress is the engine's own byte count — the desktop does
-   * not invent a percentage.
-   */
+  const stop = () => { cancel(); setPlaying(null); setDownloading(null); setMode(null); };
   const downloadVoice = async (id: string) => {
+    stop();
+    const op = begin();
     setNote(null);
     setDownloading(0);
     try {
-      await voiceApi.download({ id, firstRun: true });
-      for (let i = 0; i < 600 && aliveRef.current; i++) {
-        await new Promise((r) => setTimeout(r, 1000));
-        const st = await voiceApi.status().catch(() => null);
-        if (!st) break;
-        if (!st.download) break;
-        const total = st.download.bundleTotal ?? 0;
-        setDownloading(
-          total > 0 ? Math.round(((st.download.bundleReceived ?? st.download.received) / total) * 100) : st.download.percent,
-        );
-      }
-      if (!aliveRef.current) return;
+      await voiceApi.download({ id, firstRun: true }, { signal: op.signal });
+      if (!op.current()) return;
+      await waitForVoiceDownload(id, op.signal, (p) => {
+        if (!op.current()) return;
+        const total = p.bundleTotal ?? p.total;
+        setDownloading(total > 0 ? Math.round(((p.bundleReceived ?? p.received) / total) * 100) : p.percent);
+      });
+      if (!op.current()) return;
       setDownloading(null);
       setMissing(null);
       void previewWithEngine(id);
-    } catch {
-      if (aliveRef.current) {
-        setDownloading(null);
-        setNote('The download could not start — retry from Settings → Voice.');
-      }
+    } catch (e) {
+      if (!op.current()) return;
+      setDownloading(null);
+      setNote(e instanceof Error ? e.message : 'Voice download failed. Retry in Settings → Voice.');
     }
   };
 
-  const stop = () => {
-    audioRef.current?.pause();
-    if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
-    setPlaying(null);
-  };
-
   /** The labelled stand-in: OS speech, pitched toward the preset's character. */
-  const previewWithOsVoice = (id: string) => {
-    if (typeof speechSynthesis === 'undefined') return;
+  const previewWithOsVoice = (id: string, current: () => boolean) => {
+    if (typeof speechSynthesis === 'undefined') { setPlaying(null); return; }
     const v = VOICES.find((x) => x.id === id)!;
     const u = new SpeechSynthesisUtterance(SAMPLE[id] ?? SAMPLE['piper-kusal']!);
     const pool = voicesRef.current.filter((x) => x.lang.startsWith('en'));
@@ -124,8 +110,8 @@ export function StepVoice() {
     if (match) u.voice = match;
     u.pitch = v.pitch;
     u.rate = v.rate * speed;
-    u.onend = () => setPlaying(null);
-    u.onerror = () => setPlaying(null);
+    u.onend = () => { if (current()) setPlaying(null); };
+    u.onerror = () => { if (current()) setPlaying(null); };
     setMode('stand-in');
     setPlaying(id);
     speechSynthesis.speak(u);
@@ -133,10 +119,15 @@ export function StepVoice() {
 
   /** The audited path: the engine renders the exact voice the user is choosing. */
   const previewWithEngine = async (id: string) => {
+    const op = begin();
+    setDownloading(null);
+    setMissing(null);
+    setMode(null);
     setNote(null);
     setPlaying(id);
     try {
-      const out = await voiceApi.testTts(SAMPLE[id] ?? SAMPLE['piper-kusal']!, id, speed);
+      const out = await voiceApi.testTts(SAMPLE[id] ?? SAMPLE['piper-kusal']!, id, speed, { signal: op.signal });
+      if (!op.current()) return;
       if (!out.wav) {
         // The engine spoke it host-side (system voice) — it cannot hand us bytes.
         setNote(out.detail ?? 'The engine host spoke this sample through its own system voice.');
@@ -146,24 +137,28 @@ export function StepVoice() {
       }
       const audio = new Audio(`data:audio/wav;base64,${out.wav}`);
       audioRef.current = audio;
-      audio.onended = () => setPlaying(null);
+      audio.onended = () => { if (op.current()) setPlaying(null); };
       audio.onerror = () => {
+        if (!op.current()) return;
         setNote('This browser could not play the engine audio; use the OS preview.');
         setPlaying(null);
       };
       setMode('engine');
       await audio.play();
+      if (!op.current()) audio.pause();
     } catch (err) {
+      if (!op.current()) return;
+      setPlaying(null);
       const body = err instanceof EngineHttpError ? err.body : null;
       if (body?.error === 'voice-not-installed') {
         // S-2: a missing model is a state with a fix, not a dead button.
         setMissing({ id, bytes: Number(body.bytes ?? 0) });
         setNote('This voice is not downloaded yet — below is your system voice, not XR.');
-        previewWithOsVoice(id);
+        previewWithOsVoice(id, op.current);
         return;
       }
       setNote('The engine is not reachable, so this preview is your system voice, not XR.');
-      previewWithOsVoice(id);
+      previewWithOsVoice(id, op.current);
     }
   };
 
@@ -195,7 +190,7 @@ export function StepVoice() {
             <OptionCard
               role="radio"
               selected={ttsVoice === v.id}
-              onClick={() => setVoicePrefs({ ttsVoice: v.id })}
+              onClick={() => { stop(); setVoicePrefs({ ttsVoice: v.id }); }}
               title={v.name}
               desc={v.tag}
               ariaLabel={`Voice ${v.name}`}
@@ -252,11 +247,11 @@ export function StepVoice() {
           <input
             id="voice-speed"
             type="range"
-            min={0.6}
-            max={1.6}
+            min={0.7}
+            max={1.3}
             step={0.05}
             value={speed}
-            onChange={(e) => setSpeed(Number(e.target.value))}
+            onChange={(e) => { stop(); setVoicePrefs({ ttsSpeed: Number(e.target.value) }); }}
             className="accent-accent w-full"
           />
         </div>

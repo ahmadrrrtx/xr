@@ -20,12 +20,17 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..');
-const tokenDir = resolve(here, '..', '.xr-dev');
-const tokenFile = resolve(tokenDir, 'token');
+const tokenFile = resolve(process.env.XR_DEV_TOKEN_FILE ?? resolve(here, '..', '.xr-dev', 'token'));
+const tokenDir = dirname(tokenFile);
 
 const args = process.argv.slice(2);
-if (!args.includes('--port'))
+if (args.some((a) => a === '--parent-pid' || a.startsWith('--parent-pid=')))
+  throw new Error('The dev launcher owns --parent-pid.');
+if (!args.some((a) => a === '--port' || a.startsWith('--port=')))
   args.push('--port', process.env.XR_DEV_PORT ?? '3141');
+// Same private, parent-owned handshake as the native shell. Ordinary `serve`
+// intentionally hides its bearer, so parsing its public banner cannot pair.
+args.push('--parent-pid', String(process.pid));
 
 mkdirSync(tokenDir, { recursive: true, mode: 0o700 });
 rmSync(tokenFile, { force: true });
@@ -35,6 +40,8 @@ const child = Bun.spawn(['bun', 'run', 'src/index.ts', 'serve', ...args], {
   env: {
     ...process.env,
     XR_HOME: desktopEngineHome(),
+    XR_DAEMON_TOKEN: undefined, // never pair using a CLI/other engine's bearer
+    XR_PRINT_TOKEN: undefined, // only the captured parent handshake may reveal it
     XR_SECRET_NAMESPACE: 'desktop',
     NO_COLOR: '1',
   },
@@ -52,8 +59,10 @@ let buffer = '';
     while ((nl = buffer.indexOf('\n')) >= 0) {
       const line = buffer.slice(0, nl);
       buffer = buffer.slice(nl + 1);
-      // Never echo the token to a shared terminal more than the daemon already does.
-      if (!/Token:\s*[0-9a-f]{32,}/.test(line)) console.log(line);
+      // The capture is private. Neither bearer nor one-use browser bootstrap
+      // credentials belong in the terminal/log forwarded by the launcher.
+      if (!/Token:\s*[0-9a-f]{32,}/.test(line))
+        console.log(line.replace(/\?(?:bootstrap|token)=[^\s]+/g, ''));
       const m = /Token:\s*([0-9a-f]{32,})/.exec(line);
       if (m && !wrote) {
         writeFileSync(tokenFile, m[1], { mode: 0o600 });

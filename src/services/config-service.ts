@@ -4,6 +4,7 @@
  */
 
 import { loadConfig, saveConfig, configPath, type XRConfig, isMemoryEnabled } from "../config/config.ts";
+import { sealConfiguredHeaders } from "../providers/header-secrets.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 
 /** Recursive deep merge (Phase 1 · M-03). Plain objects merge key-by-key;
@@ -82,8 +83,10 @@ export class ConfigService implements LifecycleHook {
    * them. Arrays are replaced only when the patch key is present (explicit).
    */
   async update(patch: Partial<XRConfig>): Promise<void> {
-    this.config = deepMerge(this.config, patch);
-    saveConfig(this.config);
+    const next = deepMerge(this.reload(), patch);
+    await sealConfiguredHeaders(next);
+    saveConfig(next);
+    this.config = next;
   }
 
   /**
@@ -101,7 +104,15 @@ export class ConfigService implements LifecycleHook {
   }
 
   async onInit(): Promise<void> {
-    // Validation already done in constructor via loadConfig()
+    const next = structuredClone(this.config);
+    try {
+      if (await sealConfiguredHeaders(next)) {
+        saveConfig(next); this.config = next;
+        this.warnings.push("Legacy custom headers moved to the secret broker. Rotate credentials previously stored in plaintext config/backups.");
+      }
+    } catch {
+      this.warnings.push("Legacy custom headers could not be sealed; affected providers are blocked. Re-enter and rotate their credentials.");
+    }
   }
 
   async onStart(): Promise<void> {}

@@ -1,3 +1,4 @@
+import { PreferenceNotice } from '@/voice/PreferenceNotice';
 /*
  * SCREEN 13 · Voice (Phase 15).
  *
@@ -70,6 +71,7 @@ export default function VoiceScreen() {
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-screen="voice">
+      <PreferenceNotice />
       <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-3">
         <div className="min-w-0">
           <h2 className="text-text-primary flex items-center gap-2 text-[24px] leading-tight font-semibold tracking-tight">

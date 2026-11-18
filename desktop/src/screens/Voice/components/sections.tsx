@@ -20,6 +20,8 @@ import { cn } from '@/lib/utils';
 import { base64ToBytes, bytesToBase64, concatPcm16, dbfs, floatToPcm16, formatBytes, pitchToCents, resampleTo16k, engineModeFor } from '@/voice/audio';
 import { probeMicrophones, voice } from '@/voice/session';
 import { voiceApi, type VoiceSettingsPatch } from '@/voice/voiceApi';
+import { useMediaOperation } from '@/voice/useMediaOperation';
+import { useEngineStore } from '@/stores/engineStore';
 import { useVoiceStore } from '@/voice/voiceStore';
 
 import { PermissionCard } from './shared';
@@ -39,6 +41,11 @@ function useApply(): (patch: VoiceSettingsPatch) => void {
 /* ── Microphone ─────────────────────────────────────────────────────────── */
 
 export function MicrophoneSection() {
+  const context = useVoiceStore(s => `${s.settings?.desktop.micDeviceId}:${s.settings?.noiseSuppression}`);
+  const generation = useEngineStore(s => s.generation);
+  return <MicrophoneOwner key={`${generation}:${context}`} />;
+}
+function MicrophoneOwner() {
   const settings = useVoiceStore((s) => s.settings);
   const devices = useVoiceStore((s) => s.devices);
   const permission = useVoiceStore((s) => s.micPermission);
@@ -50,62 +57,48 @@ export function MicrophoneSection() {
   const nodeRef = useRef<ScriptProcessorNode | null>(null);
   const timerRef = useRef<number>(0);
 
-  const stopMeter = useCallback((): void => {
+  const nodesRef = useRef<AudioNode[]>([]);
+  const generation = useEngineStore(s => s.generation);
+  const { begin, cancel } = useMediaOperation(() => {
     window.clearInterval(timerRef.current);
-    nodeRef.current?.disconnect();
+    if (nodeRef.current) nodeRef.current.onaudioprocess = null;
     nodeRef.current = null;
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setTesting(false);
-    setLeft(METER_SECONDS);
-    setLevel({ rms: 0, peak: 0, clipped: false });
-  }, []);
-
-  useEffect(() => stopMeter, [stopMeter]);
-
+    for (const node of nodesRef.current) { try { node.disconnect(); } catch { /* already detached */ } }
+    nodesRef.current = [];
+    streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null;
+  }, () => useEngineStore.getState().generation === generation);
+  const stopMeter = useCallback(() => { cancel(); setTesting(false); setLeft(METER_SECONDS); setLevel({ rms: 0, peak: 0, clipped: false }); }, [cancel]);
   const startMeter = (): void => {
-    stopMeter();
-    const ctx = voice.ensureContext();
+    const op = begin(); setTesting(true); setLeft(METER_SECONDS);
     void (async () => {
       try {
+        const ctx = voice.ensureContext();
         if (ctx.state === 'suspended') await ctx.resume();
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            ...(settings?.desktop.micDeviceId ? { deviceId: { exact: settings.desktop.micDeviceId } } : {}),
-            echoCancellation: true,
-            noiseSuppression: settings?.desktop.noiseSuppression ?? true,
-            autoGainControl: true,
-          },
-        });
+        if (!op.current()) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+          ...(settings?.desktop.micDeviceId ? { deviceId: { exact: settings.desktop.micDeviceId } } : {}),
+          echoCancellation: true, noiseSuppression: settings?.noiseSuppression ?? true, autoGainControl: true,
+        } });
+        if (!op.current()) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
-        useVoiceStore.getState().setMicPermission('granted');
-        void probeMicrophones(false);
-        const src = ctx.createMediaStreamSource(stream);
-        const node = ctx.createScriptProcessor(2048, 1, 1);
-        const sink = ctx.createGain();
-        sink.gain.value = 0;
+        useVoiceStore.getState().setMicPermission('granted'); void probeMicrophones(false);
+        const src = ctx.createMediaStreamSource(stream); nodesRef.current.push(src);
+        const node = ctx.createScriptProcessor(2048, 1, 1); nodesRef.current.push(node); nodeRef.current = node;
+        const sink = ctx.createGain(); nodesRef.current.push(sink); sink.gain.value = 0;
         let clipHold = 0;
-        node.onaudioprocess = (ev) => {
-          const g = (useVoiceStore.getState().settings?.desktop.inputGain ?? 100) / 100;
-          const r = floatToPcm16(ev.inputBuffer.getChannelData(0), g);
-          clipHold = r.clipped ? 6 : Math.max(0, clipHold - 1);
-          setLevel({ rms: r.rms, peak: r.peak, clipped: clipHold > 0 });
+        node.onaudioprocess = ev => {
+          if (!op.current()) return;
+          const r = floatToPcm16(ev.inputBuffer.getChannelData(0), (useVoiceStore.getState().settings?.desktop.inputGain ?? 100) / 100);
+          clipHold = r.clipped ? 6 : Math.max(0, clipHold - 1); setLevel({ rms: r.rms, peak: r.peak, clipped: clipHold > 0 });
         };
-        src.connect(node);
-        node.connect(sink);
-        sink.connect(ctx.destination);
-        nodeRef.current = node;
-        setTesting(true);
+        src.connect(node); node.connect(sink); sink.connect(ctx.destination);
+        let remaining = METER_SECONDS;
         timerRef.current = window.setInterval(() => {
-          setLeft((n) => {
-            if (n <= 1) {
-              stopMeter();
-              return METER_SECONDS;
-            }
-            return n - 1;
-          });
+          if (!op.current()) return;
+          remaining--; if (remaining <= 0) stopMeter(); else setLeft(remaining);
         }, 1000);
       } catch (e) {
+        if (!op.current()) return;
         const name = e instanceof DOMException ? e.name : '';
         useVoiceStore.getState().setMicPermission(name === 'NotAllowedError' ? 'denied' : name === 'NotFoundError' ? 'no-device' : 'prompt');
         stopMeter();
@@ -131,6 +124,7 @@ export function MicrophoneSection() {
           placeholder="System default"
           options={[{ value: '', label: 'System default' }, ...devices.map((d) => ({ value: d.id, label: d.label }))]}
           onChange={(v) => {
+            stopMeter();
             apply({ desktop: { micDeviceId: v || null } });
             void voice.switchDevice(v || null);
           }}
@@ -197,7 +191,7 @@ export function MicrophoneSection() {
         htmlFor="xr-voice-noise"
         description="Handled by the audio stack, together with echo cancellation and automatic gain."
       >
-        <Toggle id="xr-voice-noise" checked={settings?.desktop.noiseSuppression ?? true} onCheckedChange={(v) => apply({ desktop: { noiseSuppression: v } })} />
+        <Toggle id="xr-voice-noise" checked={settings?.noiseSuppression ?? true} onCheckedChange={(v) => apply({ noiseSuppression: v })} />
       </SettingRow>
     </SettingsSection>
   );
@@ -269,13 +263,18 @@ export function WakeWordSection() {
 /* ── Speech to text ─────────────────────────────────────────────────────── */
 
 export function SttSection() {
+  const context = useVoiceStore(s => `${s.settings?.desktop.micDeviceId}:${s.settings?.sttBackend}:${s.settings?.sttModel}`);
+  const generation = useEngineStore(s => s.generation);
+  return <TranscriptionOwner key={`${generation}:${context}`} />;
+}
+function TranscriptionOwner() {
   const settings = useVoiceStore((s) => s.settings);
   const models = useVoiceStore((s) => s.models);
   const status = useVoiceStore((s) => s.status);
   const download = useVoiceStore((s) => s.download);
   const startDownload = useVoiceStore((s) => s.startDownload);
   const apply = useApply();
-  const [testing, setTesting] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [testing, setTesting] = useState<'idle' | 'opening' | 'recording' | 'transcribing'>('idle');
   const [heard, setHeard] = useState<string | null>(null);
 
   const sttOptions = [
@@ -288,36 +287,48 @@ export function SttSection() {
   const selected = (models?.stt ?? []).find((m) => (m.kind === 'offline' ? `sherpa:${m.id}` : m.id) === current);
   const sttDownloading = download && download.component === 'stt' && (download.status === 'downloading' || download.status === 'extracting');
 
+  const streamRef = useRef<MediaStream | null>(null);
+  const nodesRef = useRef<AudioNode[]>([]);
+  const generation = useEngineStore(s => s.generation);
+  const releaseCapture = useCallback(() => {
+    for (const node of nodesRef.current) {
+      if ('onaudioprocess' in node) (node as ScriptProcessorNode).onaudioprocess = null;
+      try { node.disconnect(); } catch { /* already detached */ }
+    }
+    nodesRef.current = [];
+    streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null;
+  }, []);
+  const { begin } = useMediaOperation(releaseCapture, () => useEngineStore.getState().generation === generation);
   const testTranscription = (): void => {
-    const ctx = voice.ensureContext();
+    const op = begin(); setTesting('opening'); setHeard(null);
     void (async () => {
       try {
+        const ctx = voice.ensureContext();
         if (ctx.state === 'suspended') await ctx.resume();
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-        const src = ctx.createMediaStreamSource(stream);
-        const node = ctx.createScriptProcessor(4096, 1, 1);
-        const sink = ctx.createGain();
-        sink.gain.value = 0;
+        if (!op.current()) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+          ...(settings?.desktop.micDeviceId ? { deviceId: { exact: settings.desktop.micDeviceId } } : {}),
+          echoCancellation: true, noiseSuppression: settings?.noiseSuppression ?? true, autoGainControl: true,
+        } });
+        if (!op.current()) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        const src = ctx.createMediaStreamSource(stream); nodesRef.current.push(src);
+        const node = ctx.createScriptProcessor(4096, 1, 1); nodesRef.current.push(node);
+        const sink = ctx.createGain(); nodesRef.current.push(sink); sink.gain.value = 0;
         const chunks: Int16Array[] = [];
-        const g = (settings?.desktop.inputGain ?? 100) / 100;
-        node.onaudioprocess = (ev) => chunks.push(floatToPcm16(resampleTo16k(ev.inputBuffer.getChannelData(0), ctx.sampleRate), g).pcm);
-        src.connect(node);
-        node.connect(sink);
-        sink.connect(ctx.destination);
-        setTesting('recording');
-        setHeard(null);
-        await new Promise((r) => setTimeout(r, 3000));
-        node.disconnect();
-        src.disconnect();
-        stream.getTracks().forEach((t) => t.stop());
-        setTesting('transcribing');
-        const res = await voiceApi.transcribe(bytesToBase64(concatPcm16(chunks)));
-        setHeard(res.ok ? res.text || '(nothing recognised)' : res.detail || 'Transcription failed');
-      } catch (e) {
-        setHeard(e instanceof Error ? e.message : 'Transcription failed');
-      } finally {
-        setTesting('idle');
-      }
+        const gain = (settings?.desktop.inputGain ?? 100) / 100;
+        node.onaudioprocess = ev => { if (op.current()) chunks.push(floatToPcm16(resampleTo16k(ev.inputBuffer.getChannelData(0), ctx.sampleRate), gain).pcm); };
+        src.connect(node); node.connect(sink); sink.connect(ctx.destination); setTesting('recording');
+        await new Promise<void>(resolve => {
+          const done = () => { clearTimeout(timer); op.signal.removeEventListener('abort', done); resolve(); };
+          const timer = setTimeout(done, 3000); op.signal.addEventListener('abort', done, { once: true });
+        });
+        if (!op.current()) return;
+        releaseCapture(); setTesting('transcribing');
+        const res = await voiceApi.transcribe(bytesToBase64(concatPcm16(chunks)), { signal: op.signal });
+        if (op.current()) setHeard(res.ok ? res.text || '(nothing recognised)' : res.detail || 'Transcription failed');
+      } catch (e) { if (op.current()) setHeard(e instanceof Error ? e.message : 'Transcription failed'); }
+      finally { if (op.current()) { releaseCapture(); setTesting('idle'); } }
     })();
   };
 
@@ -377,7 +388,7 @@ export function SttSection() {
       >
         <Button size="sm" variant="secondary" disabled={testing !== 'idle' || !status?.stt.loaded} onClick={testTranscription} data-testid="voice-test-stt">
           {testing === 'recording' ? <Mic size={13} className="text-danger" aria-hidden="true" /> : testing === 'transcribing' ? <Loader2 size={13} className="motion-safe:animate-spin" aria-hidden="true" /> : <Mic size={13} aria-hidden="true" />}
-          {testing === 'recording' ? 'Listening…' : testing === 'transcribing' ? 'Working…' : 'Test'}
+          {testing === 'opening' ? 'Allow mic…' : testing === 'recording' ? 'Listening…' : testing === 'transcribing' ? 'Working…' : 'Test'}
         </Button>
       </SettingRow>
     </SettingsSection>
@@ -387,6 +398,11 @@ export function SttSection() {
 /* ── Text to speech ─────────────────────────────────────────────────────── */
 
 export function TtsSection() {
+  const context = useVoiceStore(s => s.settings?.ttsVoice ?? '');
+  const generation = useEngineStore(s => s.generation);
+  return <PreviewOwner key={`${generation}:${context}`} />;
+}
+function PreviewOwner() {
   const settings = useVoiceStore((s) => s.settings);
   const voices = useVoiceStore((s) => s.voices);
   const sample = useVoiceStore((s) => s.sampleText);
@@ -400,63 +416,37 @@ export function TtsSection() {
   const selected = voices.find((v) => v.id === settings?.ttsVoice) ?? voices[0];
   const ttsDownloading = download && download.component === 'tts' && (download.status === 'downloading' || download.status === 'extracting');
 
-  const stopPreview = useCallback((): void => {
-    try {
-      srcRef.current?.stop();
-    } catch {
-      /* not started */
-    }
-    srcRef.current = null;
-    setPreviewing(false);
-  }, []);
-  useEffect(() => () => stopPreview(), [stopPreview]);
-
-  const preview = useCallback(
-    (speed?: number, pitch?: number): void => {
-      window.clearTimeout(previewTimer.current);
-      previewTimer.current = window.setTimeout(() => {
-        const ctx = voice.ensureContext();
-        void (async () => {
-          try {
-            if (ctx.state === 'suspended') await ctx.resume();
-            setPreviewing(true);
-            const s = useVoiceStore.getState().settings;
-            const res = await voiceApi.testTts(sample, s?.ttsVoice, speed ?? s?.ttsSpeed);
-            // The engine may answer `{ok:true}` with no bytes when the host
-            // spoke through its own system voice. That is a success, not an
-            // error — decodeAudioData(undefined) would have thrown.
-            if (!res.wav) {
-              stopPreview();
-              toast.info(res.detail ?? 'The engine host spoke this sample through its own system voice.');
-              return;
-            }
-            const bytes = base64ToBytes(res.wav);
-            const copy = new ArrayBuffer(bytes.byteLength);
-            new Uint8Array(copy).set(bytes);
-            const buf = await ctx.decodeAudioData(copy);
-            stopPreview();
-            const node = ctx.createBufferSource();
-            node.buffer = buf;
-            node.detune.value = pitchToCents(pitch ?? s?.desktop.ttsPitch ?? 0);
-            node.connect(ctx.destination);
-            node.onended = () => {
-              if (srcRef.current === node) {
-                srcRef.current = null;
-                setPreviewing(false);
-              }
-            };
-            srcRef.current = node;
-            setPreviewing(true);
-            node.start();
-          } catch (e) {
-            setPreviewing(false);
-            toast.error(e instanceof Error ? e.message : 'Preview failed');
-          }
-        })();
-      }, 350);
-    },
-    [sample, stopPreview],
-  );
+  const generation = useEngineStore(s => s.generation);
+  const { begin, cancel } = useMediaOperation(() => {
+    window.clearTimeout(previewTimer.current);
+    const node = srcRef.current; srcRef.current = null;
+    if (node) { node.onended = null; try { node.stop(); } catch { /* not started */ } node.disconnect(); }
+  }, () => useEngineStore.getState().generation === generation);
+  const stopPreview = useCallback(() => { cancel(); setPreviewing(false); }, [cancel]);
+  const preview = useCallback((speed?: number, pitch?: number): void => {
+    const op = begin(); setPreviewing(true);
+    previewTimer.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          if (!op.current()) return;
+          const ctx = voice.ensureContext();
+          if (ctx.state === 'suspended') await ctx.resume();
+          if (!op.current()) return;
+          const s = useVoiceStore.getState().settings;
+          const res = await voiceApi.testTts(sample, s?.ttsVoice, speed ?? s?.ttsSpeed, { signal: op.signal });
+          if (!op.current()) return;
+          if (!res.wav) { stopPreview(); toast.info(res.detail ?? 'The engine host spoke this sample through its own system voice.'); return; }
+          const bytes = base64ToBytes(res.wav); const copy = new ArrayBuffer(bytes.byteLength); new Uint8Array(copy).set(bytes);
+          const buf = await ctx.decodeAudioData(copy);
+          if (!op.current()) return;
+          const node = ctx.createBufferSource(); node.buffer = buf;
+          node.detune.value = pitchToCents(pitch ?? s?.desktop.ttsPitch ?? 0); node.connect(ctx.destination);
+          node.onended = () => { if (op.current() && srcRef.current === node) { srcRef.current = null; node.disconnect(); setPreviewing(false); } };
+          srcRef.current = node; node.start();
+        } catch (e) { if (op.current()) { stopPreview(); toast.error(e instanceof Error ? e.message : 'Preview failed'); } }
+      })();
+    }, 350);
+  }, [sample, begin, stopPreview]);
 
   return (
     <SettingsSection title="Text to speech">
@@ -479,6 +469,7 @@ export function TtsSection() {
             value={settings?.ttsVoice ?? ''}
             options={voices.map((v) => ({ value: v.id, label: `${v.label} · ${v.gender}, ${v.accent}${v.kind === 'cloud' ? ' · cloud' : ''}` }))}
             onChange={(v) => {
+              stopPreview();
               const pick = voices.find((x) => x.id === v);
               apply(pick?.kind === 'cloud' ? { ttsVoice: v, ttsBackend: 'openai' } : { ttsVoice: v, ttsBackend: 'sherpa' });
             }}

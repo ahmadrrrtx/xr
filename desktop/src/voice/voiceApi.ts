@@ -1,3 +1,5 @@
+import type { VoiceMode, VoiceDesktopPrefs, VoiceActivation, VoiceWakeSensitivity } from '../../../src/voice/types';
+export type { VoiceDesktopPrefs, VoiceActivation, VoiceWakeSensitivity };
 /*
  * Voice engine API (Phase 15) — typed calls over the Phase 14 transport.
  *
@@ -73,25 +75,11 @@ export interface VoiceEngineEvent {
   seconds?: number;
 }
 
-export type VoiceActivation = 'hold' | 'tap' | 'always';
-export type VoiceWakeSensitivity = 'low' | 'medium' | 'high';
-
-export interface VoiceDesktopPrefs {
-  micDeviceId: string | null;
-  inputGain: number;
-  noiseSuppression: boolean;
-  activation: VoiceActivation;
-  ttsPitch: number;
-  autoExitSilenceSec: number;
-  showTranscripts: boolean;
-  theaterImmersive: boolean;
-  chatMicTarget: 'screen' | 'docked';
-  holdGlobalHotkey: boolean;
-}
-
 export interface VoiceEngineSettings {
+  revision?: string;
   enabled: boolean;
-  mode: 'push-to-talk' | 'wake-word' | 'always-on' | 'disabled';
+  mode: VoiceMode;
+  noiseSuppression: boolean;
   sttBackend: string;
   sttModel: string;
   ttsBackend: string;
@@ -101,11 +89,11 @@ export interface VoiceEngineSettings {
   wakeSensitivity: VoiceWakeSensitivity;
   wakeSound: boolean;
   profanityFilter: boolean;
-  language: string;
+  sttLanguage?: string;
   desktop: VoiceDesktopPrefs;
 }
 
-export type VoiceSettingsPatch = Partial<Omit<VoiceEngineSettings, 'desktop'>> & {
+export type VoiceSettingsPatch = Partial<Omit<VoiceEngineSettings, 'desktop' | 'revision'>> & {
   desktop?: Partial<VoiceDesktopPrefs>;
 };
 
@@ -167,38 +155,38 @@ export interface VoiceVoiceInfo {
 }
 
 export const voiceApi = {
-  status: () => engineJson<VoiceStatus>('/voice/status'),
-  models: () =>
+  status: (options: Pick<RequestInit, 'signal'> = {}) => engineJson<VoiceStatus>('/voice/status', options),
+  models: (options: Pick<RequestInit, 'signal'> = {}) =>
     engineJson<{ runtime: VoiceModelInfo; stt: VoiceModelInfo[]; espeak: VoiceModelInfo }>(
-      '/voice/models',
+      '/voice/models', options,
     ),
-  voices: () => engineJson<{ voices: VoiceVoiceInfo[]; sample: string }>('/voice/voices'),
+  voices: (options: Pick<RequestInit, 'signal'> = {}) => engineJson<{ voices: VoiceVoiceInfo[]; sample: string }>('/voice/voices', options),
   settingsGet: () => engineJson<{ settings: VoiceEngineSettings }>('/voice/settings'),
-  settingsSet: (patch: VoiceSettingsPatch) =>
-    enginePost<{ ok: boolean; settings: VoiceEngineSettings }>('/voice/settings', patch),
-  download: (body: { component?: VoiceComponent; id?: string; firstRun?: boolean }) =>
-    enginePost<{ started: VoiceFirstRunEntry[]; bytes: number }>('/voice/download', body),
+  settingsSet: (patch: VoiceSettingsPatch, expectedRevision = 'initial') =>
+    enginePost<{ settings: VoiceEngineSettings }>('/voice/settings', { ...patch, expectedRevision }),
+  download: (body: { component?: VoiceComponent; id?: string; firstRun?: boolean }, options: Pick<RequestInit, 'signal'> = {}) =>
+    enginePost<{ started: VoiceFirstRunEntry[]; bytes: number }>('/voice/download', body, options),
   cancelDownload: () => enginePost<{ ok: boolean }>('/voice/cancel-download', {}),
   clearModels: () => enginePost<{ ok: boolean; removed: number }>('/voice/clear-models', {}),
-  testTts: (text: string, voice?: string, speed?: number) =>
+  testTts: (text: string, voice?: string, speed?: number, options: Pick<RequestInit, 'signal'> = {}) =>
     enginePost<{ ok: boolean; wav?: string; sampleRate?: number; engine: string; detail?: string }>(
       '/voice/test-tts',
       {
         text,
         voice,
         speed,
-      },
+      }, options,
     ),
-  transcribe: (pcm: string) =>
+  transcribe: (pcm: string, options: Pick<RequestInit, 'signal'> = {}) =>
     enginePost<{ ok: boolean; text: string; backend: string; detail: string; ms: number }>(
       '/voice/transcribe',
-      { pcm },
+      { pcm }, options,
     ),
   session: (action: 'start' | 'stop') =>
     enginePost<{ state: VoiceSessionState }>('/voice/session', { action }),
-  audio: (pcm: string) => enginePost<{ ok: boolean }>('/voice/audio', { pcm }),
-  bargeIn: () => enginePost<{ ok: boolean }>('/voice/barge-in', {}),
-  played: () => enginePost<{ ok: boolean }>('/voice/played', {}),
+  audio: (pcm: string, options: Pick<RequestInit, 'signal'> = {}) => enginePost<{ ok: boolean }>('/voice/audio', { pcm }, options),
+  bargeIn: (options: Pick<RequestInit, 'signal'> = {}) => enginePost<{ ok: boolean }>('/voice/barge-in', {}, options),
+  played: (options: Pick<RequestInit, 'signal'> = {}) => enginePost<{ ok: boolean }>('/voice/played', {}, options),
   say: (text: string) => enginePost<{ ok: boolean }>('/voice/say', { text }),
   /** Open the SSE downlink; the caller pumps it with `readSse`. */
   events: (signal: AbortSignal) =>

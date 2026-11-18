@@ -4,9 +4,10 @@
  * save through the engine secret broker (OS store or explicitly reported sealed file). Generic JSON/localStorage are never
  * credential fallbacks. A failed save keeps the form open with a repair path.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { ProviderObservations } from './ProviderObservations';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,7 +23,12 @@ import {
   type ProviderTestResult,
 } from '@/lib/settingsApi';
 import {
+  addCustomProviderToEngine,
+  registerCustomProviderDraft,
   engineKnowsProvider,
+  probeEngineProvider,
+  requireEngineReady,
+  setEngineDefault,
   pingEngineLocalModel,
   sampleExchangeUsd,
   saveProviderKeyToEngine,
@@ -104,9 +110,13 @@ function ProviderForm({
   onClose: () => void;
 }) {
   const [apiKey, setApiKey] = useState('');
+  const [registeredId, setRegisteredId] = useState(existing?.id ?? (entry.id === 'custom' ? undefined : entry.id));
+  const alive = useRef(true);
+  const busy = useRef(false);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const [revealed, setRevealed] = useState(false);
   const [baseUrl, setBaseUrl] = useState(existing?.baseUrl ?? entry.baseUrl);
-  const [model, setModel] = useState(existing?.model ?? '');
+  const [model, setModel] = useState(existing?.model ?? useEngineStore.getState().providers?.providers.find(p => p.id === entry.id)?.defaultModel ?? '');
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const [saving, setSaving] = useState(false);
   const [setDefault, setSetDefault] = useState(false);
@@ -119,12 +129,56 @@ function ProviderForm({
 
   const isOllama = entry.kind === 'ollama';
   const isCustom = entry.kind === 'custom';
-  const canSave = isOllama || apiKey.trim().length > 0 || existing !== null;
+  const canSave = isCustom ? Boolean(baseUrl.trim() && model.trim()) : isOllama || apiKey.trim().length > 0 || existing !== null;
   // Phase 14: the engine makes the calls, so the engine must hold the key.
   const engineTakesKey =
     !isOllama && !isCustom && engineKnowsProvider(entry.id);
 
+  const saveCustom = async (probe: boolean): Promise<void> => {
+    if (busy.current) return;
+    busy.current = true;
+    setSaving(true);
+    setEngineNote(null);
+    try {
+      requireEngineReady();
+      const target = new URL(baseUrl.trim());
+      if (!['https:', 'http:'].includes(target.protocol) || target.username || target.password || target.search || target.hash || !model.trim())
+        throw new Error('Enter an HTTP(S) base URL without credentials/query/fragment and an explicit model.');
+      const saved = await addCustomProviderToEngine({ id: registeredId, label: entry.name, baseUrl: baseUrl.trim(), defaultModel: model.trim(), apiKey: apiKey.trim() || undefined });
+      if (!alive.current) return;
+      setRegisteredId(saved.provider.id);
+      setApiKey(''); // registration acknowledged the broker write; never persist or resubmit it
+      if (setDefault) await setEngineDefault(saved.provider.id, saved.provider.defaultModel);
+      if (!alive.current) return;
+      if (probe) {
+        const result = await probeEngineProvider(saved.provider.id, saved.provider.defaultModel);
+        if (alive.current) setTest({ status: 'done', result: { ok: result.ok, latencyMs: result.latencyMs ?? 0, models: [], message: `${result.detail} · endpoint probe, not an inference test` } });
+        return;
+      }
+      onSave({ id: saved.provider.id, kind: 'custom', name: saved.provider.label, baseUrl: saved.provider.baseUrl, model: saved.provider.defaultModel, apiKey: null, keyStorage: saved.provider.keyed ? 'engine' : 'none', test: null });
+    } catch (e) {
+      if (alive.current) {
+        setEngineNote({ tone: 'error', text: e instanceof Error ? e.message : 'Engine did not confirm the operation; retry.' });
+        setTest({ status: 'idle' });
+      }
+    } finally {
+      busy.current = false;
+      if (alive.current) setSaving(false);
+    }
+  };
+
+  const discoverCustom = async (signal: AbortSignal): Promise<string> => {
+    if (busy.current) throw new Error('An endpoint operation is already running.');
+    busy.current = true; setSaving(true);
+    try {
+      const saved = await registerCustomProviderDraft({ id: registeredId, label: entry.name, baseUrl: baseUrl.trim(), apiKey: apiKey.trim() || undefined }, signal);
+      if (alive.current) { setRegisteredId(saved.id); setApiKey(''); }
+      return saved.id;
+    } finally { busy.current = false; if (alive.current) setSaving(false); }
+  };
+
   const runTest = (): void => {
+    if (isCustom) { void saveCustom(true); return; }
     setTest({ status: 'testing' });
     if (isOllama && engineUp && engineModel) {
       // Real round trip through the engine: the same path a chat turn takes.
@@ -176,6 +230,7 @@ function ProviderForm({
   };
 
   const save = (): void => {
+    if (isCustom) { void saveCustom(false); return; }
     setSaving(true);
     void (async () => {
       const key = apiKey.trim();
@@ -237,6 +292,10 @@ function ProviderForm({
           return;
         }
       }
+      if (setDefault && !key && model.trim()) {
+        try { await setEngineDefault(entry.id, model.trim()); }
+        catch (e) { setEngineNote({ tone: 'error', text: e instanceof Error ? e.message : 'Selection failed.' }); setSaving(false); return; }
+      }
       const keyStorage: ProviderConfig['keyStorage'] = key
         ? 'engine'
         : (existing?.keyStorage ?? 'none');
@@ -245,7 +304,7 @@ function ProviderForm({
         kind: entry.kind,
         name: entry.name,
         baseUrl: isOllama || isCustom ? baseUrl.trim() || null : null,
-        model: isCustom && model.trim() ? model.trim() : null,
+        model: !isOllama && model.trim() ? model.trim() : null,
         apiKey: null, // Parent receives metadata only, never a raw credential.
         keyStorage,
         test: test.status === 'done' && test.result.ok ? test.result : null,
@@ -368,7 +427,8 @@ function ProviderForm({
         )}
       </div>
 
-      {engineTakesKey ? (
+      {isCustom ? <p className="text-text-tertiary text-[11.5px]">The engine stores this endpoint and optional key. Save &amp; test may send a minimal billable request; it does not certify model capabilities.</p> : null}
+      {engineTakesKey || isCustom ? (
         <label className="text-text-secondary flex items-center gap-2 text-xs">
           <input
             type="checkbox"
@@ -380,7 +440,7 @@ function ProviderForm({
           Make {entry.name} the engine's default provider for new turns
         </label>
       ) : null}
-      {engineTakesKey && !engineUp ? (
+      {(engineTakesKey || isCustom) && !engineUp ? (
         <p className="text-text-tertiary text-[11.5px]">
           Engine not running — keys are stored by the engine, so saving needs it
           up.
@@ -402,6 +462,9 @@ function ProviderForm({
         </div>
       ) : null}
 
+      <ProviderObservations key={isCustom ? baseUrl : entry.id} providerId={registeredId} model={model}
+        onModel={setModel} ensureRegistered={isCustom ? discoverCustom : undefined} disabled={saving || !engineUp} />
+
       {test.status === 'done' ? (
         <div
           role="status"
@@ -412,7 +475,7 @@ function ProviderForm({
           }
         >
           <span className="font-medium">
-            {test.result.ok ? 'Connected' : 'Test failed'}
+            {test.result.ok ? (isCustom ? 'Endpoint reachable' : 'Connected') : 'Test failed'}
           </span>
           {' — '}
           {test.result.message}
@@ -450,14 +513,14 @@ function ProviderForm({
           </Button>
         ) : null}
         <span className="flex-1" />
-        <Button variant="ghost" onClick={onClose}>
+        <Button variant="ghost" disabled={saving} onClick={onClose}>
           Cancel
         </Button>
         <Button
           variant="outline"
           disabled={
-            test.status === 'testing' ||
-            (!isOllama && !apiKey.trim() && !existing)
+            saving || test.status === 'testing' ||
+            (isCustom ? !canSave : !isOllama && !apiKey.trim() && !existing)
           }
           onClick={runTest}
         >
@@ -466,7 +529,7 @@ function ProviderForm({
               <Loader2 size={13} className="animate-spin" /> Testing…
             </>
           ) : (
-            'Test connection'
+            isCustom ? 'Save & test endpoint' : 'Test connection'
           )}
         </Button>
         <Button disabled={!canSave || saving} onClick={save}>

@@ -18,6 +18,7 @@ import { isTauri } from '@/lib/tauri';
 import { eventToCombo, formatTauriChord, toTauriChord } from '@/lib/shortcuts';
 import { pttSetShortcut, pttShortcutInfo } from '@/lib/settingsApi';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { PreferenceNotice } from '@/voice/PreferenceNotice';
 import { useVoiceStore } from '@/voice/voiceStore';
 
 export function VoiceTab() {
@@ -82,10 +83,11 @@ export function VoiceTab() {
 
   return (
     <div>
+      <PreferenceNotice />
       {/* ── Summary → Voice screen ── */}
       <SettingsSection title="Voice" description="Microphone, recogniser, voice and activation are set on the Voice screen, where you can hear the result.">
         <SettingRow label="Microphone" description={deviceLabel}>
-          <span className="text-text-tertiary text-xs">{engineVoice?.desktop.noiseSuppression === false ? 'noise suppression off' : 'noise suppression on'}</span>
+          <span className="text-text-tertiary text-xs">{engineVoice?.noiseSuppression === false ? 'noise suppression off' : 'noise suppression on'}</span>
         </SettingRow>
         <SettingRow label="Recogniser" description={engineVoice ? (engineVoice.sttBackend === 'sherpa' || engineVoice.sttBackend === 'auto' ? `${engineVoice.sttModel} · offline` : `${engineVoice.sttBackend} · cloud`) : 'Engine offline'}>
           <span className="text-text-tertiary text-xs">{engineVoice?.profanityFilter ? 'profanity filter on' : ''}</span>

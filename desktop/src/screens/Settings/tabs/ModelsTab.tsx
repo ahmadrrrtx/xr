@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import {
   buildProviderCatalog,
+  configuredProviderRows,
   desktopKindFor,
   type ProviderCatalogEntryUi,
 } from '@/engine/providerCatalog';
@@ -80,6 +81,8 @@ export function ModelsTab() {
   const engineProviders = useEngineStore((state) => state.providers?.providers ?? null);
   const enginePrimary = useEngineStore((state) => state.providers?.primary ?? null);
   const engineIssue = useEngineStore((state) => state.providers === null);
+  const snapshotStale = useEngineStore(state => state.catalogStale);
+  const observedAt = useEngineStore(state => state.catalogProvenance?.observedAt);
 
   // The add-provider catalog comes from the ENGINE (26 presets + any custom
   // providers), merged with presentation metadata — see engine/providerCatalog.
@@ -141,14 +144,13 @@ export function ModelsTab() {
   }, []);
 
   /*
-   * One row per provider the ENGINE reports a credential for. A local runtime
+   * One row per registered custom endpoint or credential-bearing provider. A local runtime
    * counts once it is selected as the model, because "configured" for Ollama
    * means "in use", not "has a key".
    */
   const providers = useMemo<ProviderConfig[]>(
     () =>
-      (engineProviders ?? [])
-        .filter((p) => p.id !== 'custom' && (p.hasKey || p.id === enginePrimary))
+      configuredProviderRows(engineProviders ?? [], enginePrimary)
         .map((p) => {
           const meta = models.providers.find((m) => m.id === p.id);
           const tested = meta?.lastTest ?? null;
@@ -225,7 +227,11 @@ export function ModelsTab() {
       models.providers.find((p) => p.id === id) ?? providers.find((p) => p.id === id);
     let notice =
       'Desktop entry removed; review external credentials separately.';
-    if (existing?.keyStorage === 'engine') {
+    if (existing?.kind === 'custom') {
+      const { removeCustomProviderFromEngine } = await import('@/engine/providers');
+      await removeCustomProviderFromEngine(id);
+      notice = 'Engine endpoint removed. Its broker credential is retained for explicit review.';
+    } else if (existing?.keyStorage === 'engine') {
       const { removeProviderKeyFromEngine } =
         await import('@/engine/providers');
       notice = (await removeProviderKeyFromEngine(id)).notice;
@@ -299,6 +305,7 @@ export function ModelsTab() {
 
   return (
     <div>
+      {snapshotStale && engineProviders ? <p role="status" className="text-warning mb-3 text-sm">Last-known engine configuration{observedAt ? ` from ${new Date(observedAt).toLocaleString()}` : ''}; stale, not current readiness.</p> : null}
       {/* ── Providers ── */}
       <SettingsSection title="Providers">
         {!hasProviders ? (

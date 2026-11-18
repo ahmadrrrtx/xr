@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "name": "picomatch",
+    "version": "4.0.7",
+    "tarball": "https://registry.npmjs.org/picomatch/-/picomatch-4.0.7.tgz",
+    "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==",
+    "sha256": "697b463be3cdbd9ffc8f4194fd5019a69ddf95875fb703d78b2b115cc9e740a8",
+    "gitCommit": "6bb40679c218cefba5d4e9662408c5fdf699a8bb"
+  },
+  "fork": {
+    "name": "@xr/picomatch-security",
+    "version": "4.0.7-xr.2",
+    "private": true,
+    "published": false
+  },
+  "advisory": "GHSA-fc5q-39xc-vjpf",
+  "maintainerReviewBy": "2026-12-16",
+  "files": {
+    "LICENSE": "d0cd141b0c322fded5dfad1d4645bb2fedfc05b7321fe1009469638190d59ef9",
+    "lib/constants.js": "c28f952d2758261fe5428a121add485cc25b03e0193633f649de903dc0e5e222",
+    "index.js": "02ae26406508e28f9ba0865be16cf77f0b33de6c4d4d49c212c4176df1d5625a",
+    "lib/parse.js": "4e1e05447668aa1e94366c5516a2bcd8f5fff800cc92b1d0cd7d77703b8618c4",
+    "lib/picomatch.js": "fdd249d7ffff853f3bb1c77eafc8baa1a437bea85a94c35877b83c6a40d9ca94",
+    "posix.js": "5695ff5dfcd5a338a40630bd506056f2950bcb08fe1cc068519cbbfe60add480",
+    "lib/scan.js": "6457a1764e5c2e543cc3a0c00ce12ebb3764097628868198370b64d4e642aaae",
+    "lib/utils.js": "f04604f70cd1a3f6ace80b84766468674ff38b4bb83818d2ef1d81fc6355f935",
+    "package.json": "479b70b87aa7b44344d62c8a459ae7e53dd2bca6c61f1396bd55e63e9de73fc6",
+    "README.md": "a69b87120fe2b9cb8f9057eaef6b9f9887f803e02185ca2f431e8162f6312220"
+  },
+  "modified": {
+    "lib/parse.js": {
+      "upstreamSha256": "4e1e05447668aa1e94366c5516a2bcd8f5fff800cc92b1d0cd7d77703b8618c4",
+      "patchedSha256": "cd7b769ab2192902e2882c16f439f614da11e13db029999beb34945ca3ab0163"
+    },
+    "package.json": {
+      "upstreamSha256": "479b70b87aa7b44344d62c8a459ae7e53dd2bca6c61f1396bd55e63e9de73fc6",
+      "patchedSha256": "9ca265f8d1c2ebc439fa2b544d73b613a5e9db9680951830f1cb21f9f1694d65"
+    }
+  },
+  "patchSha256": "b782ff84978c356260f7004c6bc17b428cbf92e5128abe4018e827e0a2521c6b"
+}
