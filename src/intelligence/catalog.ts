@@ -6,7 +6,7 @@
 import type { XRConfig } from "../config/config.ts";
 import { registry } from "../providers/registry.ts";
 import { PRESETS, type ProviderPreset } from "../providers/presets.ts";
-import { secretBrokerSync } from "../security/secret-broker.ts";
+import { configuredCredentialStatus } from "../providers/credential-presence.ts";
 import { TtlCache } from "../util/ttl-cache.ts";
 import { xrMetrics } from "../observability/metrics.ts";
 import {
@@ -82,10 +82,8 @@ export function invalidateCatalogCache(): void {
  */
 export function catalogFingerprint(config?: XRConfig): string {
   const keyPresence: Record<string, boolean> = {};
-  for (const preset of Object.values(PRESETS)) {
-    if (preset.apiKeyEnv) {
-      keyPresence[preset.apiKeyEnv] = !!secretBrokerSync(preset.apiKeyEnv);
-    }
+  for (const preset of [...Object.values(PRESETS), ...registry.list()]) {
+    keyPresence[preset.id] = configuredCredentialStatus(preset).available;
   }
   return JSON.stringify({
     defaults: config
@@ -114,8 +112,7 @@ export function catalogFingerprint(config?: XRConfig): string {
 }
 
 function credentialAvailable(preset: ProviderPreset): boolean {
-  if (!preset.apiKeyEnv) return true;
-  return !!secretBrokerSync(preset.apiKeyEnv);
+  return configuredCredentialStatus(preset).available;
 }
 
 /**

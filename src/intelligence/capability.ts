@@ -221,7 +221,7 @@ export function descriptorFromPreset(
     auth: {
       type: preset.authType ?? (preset.apiKeyEnv ? "bearer" : "none"),
       apiKeyEnv: preset.apiKeyEnv,
-      credentialAvailable: preset.apiKeyEnv ? credentialAvailable : true,
+      credentialAvailable,
     },
     baseUrl: preset.baseUrl,
     docsUrl: preset.docsUrl,

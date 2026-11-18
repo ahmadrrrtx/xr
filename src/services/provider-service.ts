@@ -35,7 +35,8 @@ import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import { setSecretAsync, getSecret } from "../security/secrets.ts";
 import { validateProviderUrl } from "../providers/provider-url-guard.ts";
-import { hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
+import { hydrateProviderEnv } from "../security/secret-broker.ts";
+import { configuredCredentialStatus } from "../providers/credential-presence.ts";
 import type {
   RouteRequest,
   RouteResult,
@@ -335,13 +336,8 @@ export class ProviderService implements LifecycleHook {
         envName: status.envName,
       };
     }
-    const preset = registry.getPreset(id) ?? PRESETS[id];
-    if (!preset) return { required: false, set: false };
-    if (!preset.apiKeyEnv) return { required: false, set: true };
-    // Phase 2 · F-24 — key presence through the broker seam (env hydration
-    // compat-gated; durable backend always consulted).
-    const set = Boolean(secretBrokerSync(preset.apiKeyEnv));
-    return { required: true, set, envName: preset.apiKeyEnv };
+    const status = configuredCredentialStatus(registry.getPreset(id) ?? PRESETS[id]);
+    return { required: status.required, set: status.available, envName: status.envName };
   }
 
   getProviderList(): string {
