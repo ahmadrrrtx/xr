@@ -187,6 +187,10 @@ export const THRESHOLD = 800;
 // extension/CI work added nothing under src/. No waived giant grew
 // (daemon/server.ts shrank by 10). Measured 174,068 (+403). Headroom ~432.
 // Needs maintainer sign-off.
+// 2026-11-16 engine-setup audit (owner: ahmadrrrtx): retain the already-approved
+// hardening allocation after the main merge; this restores a dropped export,
+// not a ceiling increase. See docs/development/ENGINE-SETUP-AUDIT-2026-11-16.md.
+export const TREE_CEILING = 176_500;
 
 // V1-P5-001 (release ledger docs/release/V1-RELEASE-LEDGER-2026-10-28.md §5):
 // the shipped PWA spoke a companion contract that existed only in the reference
