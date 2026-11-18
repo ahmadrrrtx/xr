@@ -41,6 +41,7 @@ import { runMigrationsUp } from "./migrations.ts";
 import { withMigrationLock } from "./migration-lock.ts";
 import {
   checkpointMessage,
+  auditIdentityDetail,
   generateAuditIdentity,
   loadAuditSigningKey,
   loadOrCreateAuditIdentity,
@@ -446,16 +447,10 @@ export class WorkspaceStore {
       const prev = this.lastHashInTxn();
       const ts = Date.now();
       const counter = this.nextCounterInTxn();
-      const safe = redactAuditDetail({
-        pubkey: identity.publicKeyB64,
-        fingerprint: identity.publicKeyFingerprint,
+      const safe = auditIdentityDetail({
         actor,
         note: "Per-install Ed25519 audit signing key established. Evidence before this entry is chain-only; evidence from this entry is signed.",
-      });
-      // Generated public identity bytes are protocol data, not free-form text:
-      // random base64 can resemble a token and MUST NOT be pattern-redacted.
-      safe.pubkey = identity.publicKeyB64;
-      safe.fingerprint = identity.publicKeyFingerprint;
+      }, identity);
       const payload = JSON.stringify({ event: "audit.keyed", detail: safe, prev, ts });
       const hash = createHash("sha256").update(payload).digest("hex");
       // The keyed event is itself signed by the new key — it is the first
@@ -506,18 +501,10 @@ export class WorkspaceStore {
       const prev = this.lastHashInTxn();
       const ts = Date.now();
       const counter = this.nextCounterInTxn();
-      const safe = redactAuditDetail({
-        pubkey: identity.publicKeyB64,
-        fingerprint: identity.publicKeyFingerprint,
-        previousPubkey: oldPubkey,
+      const safe = auditIdentityDetail({
         actor,
         note: "Audit signing key rotated. Prior segment remains verifiable to this point under the previous key.",
-      });
-      // Only internally sourced public identity fields bypass text heuristics;
-      // actor/note and all caller-controlled details remain redacted.
-      safe.pubkey = identity.publicKeyB64;
-      safe.fingerprint = identity.publicKeyFingerprint;
-      safe.previousPubkey = oldPubkey;
+      }, identity, oldPubkey);
       const payload = JSON.stringify({ event: "audit.rekey", detail: safe, prev, ts });
       const hash = createHash("sha256").update(payload).digest("hex");
       const sig = signCheckpoint(

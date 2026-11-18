@@ -146,3 +146,13 @@ identity, post-rotation append and actor-secret masking. Targeted crypto tests
 passed 12/0; real CLI audit blackboxes passed 7/0 (including tampering and key
 loss); typecheck passed. Existing corrupted audit history is NOT silently
 rewritten or declared valid. Fresh immutable full qualification remains required.
+
+The first full audit-repair candidate (`05da52b6`) passed the real audit
+blackboxes but failed the unchanged per-module size waiver (store 2,553 versus
+2,550 LOC); architecture and the canonical security runner both correctly
+reported that same violation. No package/native stages ran. The identity-detail
+construction is now extracted into the existing signer module, reducing the
+store below its waiver without increasing thresholds/waivers. Targeted crypto
+plus architecture passed 86/0; size and ownership checks pass (176,055 total LOC,
+176,500 ceiling, 16 existing waivers, 251 owned areas). All-source requalification
+is restarted on the resulting immutable commit; the failed report is retained.
