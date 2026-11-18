@@ -178,3 +178,30 @@ assertion, input or timeout is removed, and no failed workflow is retried or
 waived. Fresh all-applicable hosted success is still required before merging.
 The local release build was intentionally interrupted while compiling GTK on
 the 2 GB/no-swap host to keep heavy work serial; it yielded no installer.
+
+## Installed native first-launch recovery defect (release blocker)
+
+The exact successful Linux bundle job `135164470892` from PR run `44405971949`
+produced artifact `14475308577` for `c2f9cefd`. Its archive SHA-256 matched
+GitHub (`840d51196bd88c026e570d6b561b975e750e4488ee07df651eabb71455a8bda6`).
+The actual DEB installed successfully via dpkg on Debian 13. Real WebKit/Tauri
+execution authenticated the app-owned engine, refused anonymous/wrong sessions,
+read 26 providers/84 model configurations, and enforced the IPC ACL. However,
+the initial screenshot was a splash; that is NOT complete UI acceptance.
+
+A strengthened fresh-home test waited for visible onboarding with the splash
+gone, without setting flags or answering a modal. It failed: the renderer showed
+"XR did not shut down cleanly last time" on a brand-new isolated home. Setup
+writes the current dirty marker before frontend IPC; `crash_state` then re-read
+that live marker as if it belonged to the previous run. Unit tests of the marker
+alone and the prior mounted-root/engine checks did not catch this ordering bug.
+
+Recovery now captures previous-run state when its managed state is initialized,
+before setup writes the current marker. Resolving/forgetting recovery updates
+the in-memory choice rather than deleting the live marker, so another real crash
+in this session is still detected on the next launch. Genuine prior/malformed
+markers retain fail-closed recovery and report provenance. Native WebDriver
+journeys now require real Welcome onboarding after splash removal and reject a
+false crash screen. Focused recovery Rust tests: 8 passed; clippy: passed;
+journey protocol tests: 22 passed. Fresh immutable and actual native packaged
+validation remain required; the c2f9cefd DEB is NOT a working-release acceptance.

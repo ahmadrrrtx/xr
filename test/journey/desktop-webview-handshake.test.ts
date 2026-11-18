@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { webviewEngineSmoke } from "../../scripts/journey/desktop-journey.ts";
+import { webviewEngineSmoke, webviewOnboardingSmoke } from "../../scripts/journey/desktop-journey.ts";
+
+test("fresh native install requires onboarding rather than a splash or false crash screen", async () => {
+  expect(await webviewOnboardingSmoke(async () => ({ welcome: true, splash: false, recovery: false }), "fixture", 0)).toContain("onboarding rendered");
+  for (const broken of [{ welcome: false, splash: true }, { welcome: false, recovery: true }, { welcome: true, recovery: true }]) {
+    await expect(webviewOnboardingSmoke(async () => broken, "fixture", 0)).rejects.toThrow("fresh-home onboarding failed");
+  }
+});
 
 // WebDriver protocol unit fixtures only. Actual native proof requires running
 // desktop-journey.ts --webdriver against a freshly installed real artifact.

@@ -133,6 +133,7 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
       const port = await waitForEngineHealth(60_000);
       const webview = await webviewEngineSmoke(wd, sid);
+      await webviewOnboardingSmoke(wd, sid);
       const acl = await ipcAclSmoke(wd, sid);
       // Session deletion closes a window, but XR intentionally hides it and keeps
       // the engine alive. Request the same explicit quit as the user menu, then
@@ -152,6 +153,28 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
   } finally {
     driver.kill();
   }
+}
+
+/** Fresh-home install must reach onboarding, not just render a splash/recovery.
+ * Never sets completion flags, hides a modal or fabricates a recovery choice. */
+export async function webviewOnboardingSmoke(
+  wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string, timeoutMs = 20_000,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let result: { welcome?: boolean; splash?: boolean; recovery?: boolean } = {};
+  do {
+    result = await wd("POST", `/session/${sid}/execute/sync`, {
+      script: `return {
+        welcome: !!document.querySelector('[role="dialog"][aria-label="Onboarding — Welcome"]') && (document.body.innerText || '').includes('Welcome to XR.'),
+        splash: !!document.querySelector('[role="status"][aria-label^="XR is starting"]'),
+        recovery: (document.body.innerText || '').includes('XR did not shut down cleanly last time')
+      };`, args: [],
+    }) as typeof result;
+    if (result.welcome && !result.splash && !result.recovery) return "fresh-home onboarding rendered after splash; no false crash recovery";
+    if (Date.now() >= deadline) break;
+    await sleep(250);
+  } while (true);
+  throw new Error(`fresh-home onboarding failed: ${JSON.stringify(result)}`);
 }
 
 /** Prove the packaged webview, not a privileged runner curl, can reach its
