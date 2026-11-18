@@ -452,6 +452,10 @@ export class WorkspaceStore {
         actor,
         note: "Per-install Ed25519 audit signing key established. Evidence before this entry is chain-only; evidence from this entry is signed.",
       });
+      // Generated public identity bytes are protocol data, not free-form text:
+      // random base64 can resemble a token and MUST NOT be pattern-redacted.
+      safe.pubkey = identity.publicKeyB64;
+      safe.fingerprint = identity.publicKeyFingerprint;
       const payload = JSON.stringify({ event: "audit.keyed", detail: safe, prev, ts });
       const hash = createHash("sha256").update(payload).digest("hex");
       // The keyed event is itself signed by the new key — it is the first
@@ -509,6 +513,11 @@ export class WorkspaceStore {
         actor,
         note: "Audit signing key rotated. Prior segment remains verifiable to this point under the previous key.",
       });
+      // Only internally sourced public identity fields bypass text heuristics;
+      // actor/note and all caller-controlled details remain redacted.
+      safe.pubkey = identity.publicKeyB64;
+      safe.fingerprint = identity.publicKeyFingerprint;
+      safe.previousPubkey = oldPubkey;
       const payload = JSON.stringify({ event: "audit.rekey", detail: safe, prev, ts });
       const hash = createHash("sha256").update(payload).digest("hex");
       const sig = signCheckpoint(

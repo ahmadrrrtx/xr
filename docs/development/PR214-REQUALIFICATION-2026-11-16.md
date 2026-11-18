@@ -122,3 +122,27 @@ independent main rerun and final hashes/downloads. Debian 13 local execution
 alone cannot establish older Mint/Ubuntu compatibility. Unsigned validation
 packages are not production-ready; signatures, automatic/cross-version updates,
 live providers, physical audio and unavailable native OS lanes remain explicit.
+
+## Audit public-identity redaction repair
+
+The exact `8a28c961` serial run failed the cross-process audit re-key check
+(5,940 passed, one failed, 34 skipped). Its isolated home was removed and the
+child verification output was not retained, so that individual failure cannot
+be retrospectively attributed with certainty. Thirty-two independent fresh-home
+boot/re-key/verify probes subsequently passed; they do not replace the failure.
+
+A targeted independent reproduction demonstrated a concrete signing defect:
+valid Ed25519 SPKI base64 may contain a token-shaped substring (`+sk…`). Generic
+redaction changed that public key before `audit.keyed`/`audit.rekey` serialization,
+while checkpoints used its original bytes. With a publicly reproducible test
+seed, real CLI boot succeeded but the next `verify --crypto --json` exited 1:
+chain valid, key available, signatures invalid. After preserving only internally
+sourced public identity fields after ordinary detail redaction, the identical
+real-process experiment exits 0 with valid signatures. Actor/note redaction,
+private-key storage, verification and tamper rejection are unchanged.
+
+The regression checks exact public bytes, close/reopen, rotation, prior-segment
+identity, post-rotation append and actor-secret masking. Targeted crypto tests
+passed 12/0; real CLI audit blackboxes passed 7/0 (including tampering and key
+loss); typecheck passed. Existing corrupted audit history is NOT silently
+rewritten or declared valid. Fresh immutable full qualification remains required.
