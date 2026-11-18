@@ -255,6 +255,8 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/ux/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/v2-app-icon-ids.txt` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/validate-baseline.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/vendor-picomatch.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/vendored-dependencies.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-release.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-security.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-updater-signatures.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
