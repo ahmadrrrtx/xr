@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createRequire } from 'node:module';
-import { spawnSync } from 'node:child_process';
-import { basename, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { NODE_WORK_DEADLINE_MS, realNodeProbe } from './helpers/real-node-probe';
 
 const vendor = resolve(import.meta.dir, '../../vendor/picomatch');
 const require = createRequire(import.meta.url);
@@ -95,26 +95,37 @@ describe('GHSA-fc5q-39xc-vjpf: real repeated-wildcard mitigation', () => {
     expect(pm.isMatch('abab', '+(@(a|b))')).toBe(true);
   });
 
-  test('50,000-character rejects finish in an isolated, bounded real Node process', () => {
-    const isBun = basename(process.execPath).replace(/\.exe$/i, '').toLowerCase() === 'bun';
-    const result = spawnSync(isBun ? 'node' : process.execPath, ['-e', `
-      const assert = require('node:assert/strict');
-      assert(process.versions.node && !process.versions.bun, 'must execute real Node, including on Windows');
-      const pm = require(${JSON.stringify(vendor)});
-      for (const pattern of ${JSON.stringify(wildcardCases)}) {
-        assert(pm.makeRe(pattern).source.includes(pattern.includes('+(') ? '\\\\+\\\\(' : '\\\\*\\\\('));
-        assert.equal(pm.isMatch('a'.repeat(50000) + '!', pattern), false);
-      }
-      for (const pattern of ${JSON.stringify(bypassCases)}) {
-        assert(pm.makeRe(pattern).source.includes('\\\\+\\\\('));
-        assert.equal(pm.isMatch((pattern.includes('ab|ba') ? 'aba' : 'a').repeat(50000) + '!', pattern), false);
-      }
-      assert.equal(pm.isMatch('ab'.repeat(25000) + '!', '+(ab|abab)'), false);
-      assert.equal(pm.isMatch('fo'.repeat(25000) + '!', '*(fo|foo)'), false);
-      console.log('real-node-repeated-extglob-rejects-passed');
-    `], { encoding: 'utf8', timeout: 1500 });
-    expect(result.error).toBeUndefined();
-    expect(result.status).toBe(0);
+  test('50,000-character rejects finish within the external real-Node work deadline', async () => {
+    const result = await realNodeProbe({
+      bootstrap: `const pm = require(${JSON.stringify(vendor)});`,
+      work: `
+        for (const pattern of ${JSON.stringify(wildcardCases)}) {
+          console.log('XR_NODE_PROBE ' + JSON.stringify({kind:'case', pattern}));
+          assert(pm.makeRe(pattern).source.includes(pattern.includes('+(') ? '\\\\+\\\\(' : '\\\\*\\\\('));
+          assert.equal(pm.isMatch('a'.repeat(50000) + '!', pattern), false);
+        }
+        for (const pattern of ${JSON.stringify(bypassCases)}) {
+          console.log('XR_NODE_PROBE ' + JSON.stringify({kind:'case', pattern}));
+          assert(pm.makeRe(pattern).source.includes('\\\\+\\\\('));
+          assert.equal(pm.isMatch((pattern.includes('ab|ba') ? 'aba' : 'a').repeat(50000) + '!', pattern), false);
+        }
+        console.log('XR_NODE_PROBE ' + JSON.stringify({kind:'case', pattern:'+(ab|abab)'}));
+        assert.equal(pm.isMatch('ab'.repeat(25000) + '!', '+(ab|abab)'), false);
+        console.log('XR_NODE_PROBE ' + JSON.stringify({kind:'case', pattern:'*(fo|foo)'}));
+        assert.equal(pm.isMatch('fo'.repeat(25000) + '!', '*(fo|foo)'), false);
+        console.log('real-node-repeated-extglob-rejects-passed');
+      `,
+    });
+    const diagnostics = JSON.stringify(result);
+    expect(result.timedOut, diagnostics).toBe(false);
+    expect(result.error, diagnostics).toBeUndefined();
+    expect(result.exitCode, diagnostics).toBe(0);
+    expect(result.phase, diagnostics).toBe('complete');
+    expect(result.events.filter(event => event.kind === 'case')).toHaveLength(wildcardCases.length + bypassCases.length + 2);
+    const workMs = Number(result.events.find(event => event.kind === 'complete')?.workMs);
+    expect(workMs, diagnostics).toBeLessThan(NODE_WORK_DEADLINE_MS);
     expect(result.stdout).toContain('real-node-repeated-extglob-rejects-passed');
+    console.log(JSON.stringify({ proof:'real-node-repeated-extglob-rejects-passed', runtime:result.runtime,
+      startupWallMs:result.readyWallMs, workMs, workDeadlineMs:NODE_WORK_DEADLINE_MS }));
   });
 });

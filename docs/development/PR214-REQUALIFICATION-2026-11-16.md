@@ -67,9 +67,38 @@ caught during review. Unrelated parents and metadata were restored. Keep the
 clean-install, exact-source, raw scan and compatibility evidence; do not call
 the discarded attempts passing qualification.
 
+## First exact-head round and hosted watchdog finding
+
+Candidate `1bb2dc475f22bb0799d0a8c93542b44ba128d346` passed a clean local
+106-stage run: 5,937 core tests, zero failures, 34 platform skips; real Linux
+isolation effects, consumer builds, workflow lint and recursive OSV/audit gates.
+Packed npm and CLI binary/npm install/fixture-agent/update/uninstall journeys
+also passed with genuinely separate scratch caches. An earlier outer runner
+had incorrectly forced build and installed homes to share an npm cache; its
+failed fresh-fetch proof is retained rather than counted as a successful run.
+
+That candidate was pushed with a freshly verified owner identity. Hosted Supply
+Chain run `44321780821`, job `134862336355`, then refused the original combined
+1,500 ms Node child wall deadline (23 pass / 1 fail). No merge followed. The log
+did not distinguish startup, module loading, matching or child exit; it is not
+sufficient to claim either a parser bypass or harmless runner contention.
+Unmodified probes pass locally on Node 20.20.2, the runner image's exact default
+22.23.4 (official checksum verified), and 22.23.5. This does not erase the CI
+failure or establish its root cause.
+
+The test-only follow-up uses an asynchronous real-Node child with explicit
+readiness and per-pattern checkpoints. Startup/module loading still has a
+1,500 ms external deadline; **all compile/match/exit work together has a
+stricter 500 ms external deadline**. The child attests its actual Node/V8/path;
+Bun substitution is refused. Seeded startup and blocked-work probes prove the
+watchdogs kill rather than manufacture a pass; assertion failures remain
+failures. No input, parser guard or expectation was removed, and the private r2
+source, tarball identity, nine lock hashes and 66 compatibility differences are
+unchanged. Fresh exact-head local and hosted requalification remains required.
+
 ## Outstanding acceptance (not represented as complete)
 
-Fresh full unit/integration/E2E, behavioral security with real Linux isolation,
+Fresh current-head unit/integration/E2E, behavioral security with real Linux isolation,
 all required exact-head hosted checks, native installer journeys, guarded merge,
 independent main rerun and final hashes/downloads. Debian 13 local execution
 alone cannot establish older Mint/Ubuntu compatibility. Unsigned validation
