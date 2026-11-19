@@ -7,18 +7,30 @@
  *  - expose a stable source of truth for CLI, TUI, and daemon surfaces
  */
 
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   existsSync,
   mkdirSync,
   writeFileSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
-  unlinkSync,
 } from "node:fs";
 import { XR_HOME, loadConfig, type XRConfig } from "../config/config.ts";
 import { Store } from "../state/workspace-store.ts";
+import { databaseIdle } from "../state/db-liveness.ts";
+import { withMigrationLock } from "../state/migration-lock.ts";
+
+/** B17: deleting a workspace whose database is still open would corrupt it (POSIX) or half-fail (Windows). */
+export class WorkspaceInUseError extends Error {
+  constructor(readonly workspaceId: string, active: boolean) {
+    super(active
+      ? `Workspace "${workspaceId}" is the active workspace and is open; switch first (xr workspace use default), then delete it`
+      : `Workspace "${workspaceId}" is open in a running XR process (daemon, desktop app or a task); stop it, then delete again`);
+    this.name = "WorkspaceInUseError";
+  }
+}
 
 export interface WorkspaceContext {
   id: string;
@@ -285,27 +297,31 @@ export class WorkspaceManager {
   }
 
   /**
-   * Delete/clean up a workspace.
+   * Delete a workspace (B17). Under the database's cross-process migration lock it refuses while the database is
+   * open anywhere (WorkspaceInUseError), then moves the database to a tombstone outside workspaces/, so no opener
+   * can reach the data any more. Only after the lock is released (its open lockfile lives in the workspace
+   * directory, which Windows cannot rename while open) are the directory and the tombstone removed.
+   * Unknown ids and "default" return false.
    */
   deleteWorkspace(id: string): boolean {
     this.ensureLoadedSync();
-    if (id === "default") return false;
+    if (id === "default" || !existsSync(join(WORKSPACES_ROOT, id))) return false;
     const ctx = this.ensureWorkspace(id, id);
-
-    try {
-      this.stores.get(ctx.dbPath)?.close(); // never leave a cached handle on a deleted database
-      this.stores.delete(ctx.dbPath);
-      if (existsSync(ctx.dbPath)) unlinkSync(ctx.dbPath);
-      if (existsSync(ctx.configPath)) unlinkSync(ctx.configPath);
-      rmSync(ctx.rootDir, { recursive: true, force: true });
-      this.workspaces.delete(id);
-      if (this.activeWorkspaceId === id) {
-        this.activeWorkspaceId = "default";
-        this.writeState();
-      }
-      return true;
-    } catch {
-      return false;
+    this.stores.get(ctx.dbPath)?.close(); // our own cached handle is not a live holder
+    this.stores.delete(ctx.dbPath);
+    const tomb = join(XR_HOME, ".deleted-workspaces", `${id}-${Date.now()}-${process.pid}`);
+    withMigrationLock(ctx.dbPath, () => {
+      if (!databaseIdle(ctx.dbPath)) throw new WorkspaceInUseError(id, this.activeWorkspaceId === id);
+      mkdirSync(tomb, { recursive: true });
+      for (const f of ["", "-wal", "-shm", "-journal"].map((s) => ctx.dbPath + s)) if (existsSync(f)) renameSync(f, join(tomb, basename(f)));
+    });
+    rmSync(ctx.rootDir, { recursive: true, force: true });
+    this.workspaces.delete(id);
+    if (this.activeWorkspaceId === id) {
+      this.activeWorkspaceId = "default";
+      this.writeState();
     }
+    rmSync(tomb, { recursive: true, force: true });
+    return true;
   }
 }
