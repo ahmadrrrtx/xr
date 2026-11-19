@@ -14,6 +14,8 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | Repo is at 1.1.0; Phase 10 bumps to 1.1.1 | `release.manifest.json` identity is **1.2.0-preview.1** ("XR Preview 1", `public-beta`); `channels.publicVersion` is 1.0.0; v1.1.0 is a documented withdrawn tag (`docs/release/1.1.0/WITHDRAWN.md`). A 1.1.1 tag would sort **below** the current identity, and versions are stamped from the manifest (`bun run release:stamp`), never hand-edited in `package.json` | Phase 10 is held for an explicit owner decision (see Phase 10 section); nothing is tagged or published without it |
 | Line numbers from the audit | Several items have moved or were already fixed (C13, B13 history bound); each item was re-verified against HEAD below | Recon table records the HEAD state per item |
 | Size discipline not mentioned | `bun run size-gate`: tree **176,055 / 176,500 LOC (99.7%)**, waived giants may never grow (`workspace-store.ts` +10 lines of room, `interfaces/shell/app.ts` +0, `core/agent.ts` +17) | Fixes are written line-neutral where they touch waived giants; any ceiling move is a reasoned, dated comment in `scripts/size-gate.ts` (the repo's own mechanism) and needs maintainer sign-off |
+| Tree ceiling 176,500 would not hold Phases 3–7 | Measured: Phase 1 +143, Phase 2 +156 (local); Phases 3–7 estimated at +250–450 against 146 remaining | **Owner (ahmadrrrtx) approved +500 → 177,000 on 2026-11-19** in this session. It lands as its own dated, reasoned commit in `scripts/size-gate.ts` (the gate's documented mechanism) at the start of Phase 3, docs markers re-stamped; waived giants still may not grow; each phase's measured LOC is logged |
+| Phase 10 version choice | 1.1.1 would sort below the current 1.2.0-preview.1 identity | **Owner delegated the choice on 2026-11-19.** Decision: release **1.2.0-preview.2** through `release.manifest.json` + `bun run release:stamp` + the existing release workflow, only if every required check and the workflow's own gates are green and the full asset suite is produced; npm only via OIDC, desktop signing owner-blocked; otherwise nothing is published and Phase 10 records why |
 
 ## Phase 0 — NOTES (exact commands)
 
@@ -83,7 +85,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | Phase | Commit(s) | CI run(s) | Status |
 |---|---|---|---|
 | 0 — recon/baseline | `2b93d33` | CI [44499926066](https://github.com/ahmadrrrtx/xr/actions/runs/44499926066) ✓ · Cross-Platform [44499925774](https://github.com/ahmadrrrtx/xr/actions/runs/44499925774) ✓ · Supply Chain [44499925608](https://github.com/ahmadrrrtx/xr/actions/runs/44499925608) ✓ · npm Pack Smoke [44499925659](https://github.com/ahmadrrrtx/xr/actions/runs/44499925659) ✓ · Journey [44499926003](https://github.com/ahmadrrrtx/xr/actions/runs/44499926003) ✓ · Channel Install [44499925804](https://github.com/ahmadrrrtx/xr/actions/runs/44499925804) ✓ · Desktop App [44499925653](https://github.com/ahmadrrrtx/xr/actions/runs/44499925653) ✓ | **done** — all 6 required checks pass on PR #215 (82 checks pass, 1 skipped by design: "Real channel installs of the public version") |
-| 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` | pending (pushed after Phase 0 went green) | fixed-unverified |
+| 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ log `3f0f839`) | head `3f0f839`: CI [44508641467](https://github.com/ahmadrrrtx/xr/actions/runs/44508641467) ✓ · Supply Chain [44508641404](https://github.com/ahmadrrrtx/xr/actions/runs/44508641404) ✓ · npm Pack Smoke [44508641445](https://github.com/ahmadrrrtx/xr/actions/runs/44508641445) ✓ · Channel Install [44508641208](https://github.com/ahmadrrrtx/xr/actions/runs/44508641208) ✓ · Clean-Machine Journey [44508641214](https://github.com/ahmadrrrtx/xr/actions/runs/44508641214) ✗ — see "Phase 1 CI" below; re-run on the next head | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -106,3 +108,18 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
   `bun run boundaries` 0 errors (1 warning, `no-orphans: src/cost/pricing-types.ts`, identical on `main`).
 - **Size:** tree 176,055 → 176,198 (+143) of 176,500. `daemon/server.ts` 873 → 876 (waiver 878): +3 lines for
   the guard import, install and release. No other waived module touched.
+
+### Phase 1 CI — Clean-Machine Journey failure on `3f0f839`
+
+- Failed job: **`CLI journey — npm on windows-latest`**, step `Journey`, annotation "Process completed with exit
+  code 1". The other 17 CLI journeys (including npm on windows-11-arm, binary on windows-latest, and npm/binary on
+  every Linux and macOS runner) and both Docker journeys passed. CI (Quality Gate), Supply Chain, npm Pack Smoke
+  and Channel Install passed on the same head.
+- The raw job log and the `journey-evidence-cli-npm-windows-latest` artifact are served from
+  `*.blob.core.windows.net`, which this sandbox cannot reach, so the exact failing journey step is unknown.
+- Phase 1 changes nothing on that lane's path (npm pack → global npm install → launch → one-shot agent run →
+  `xr update` → uninstall): the voice modules are not loaded and the process guard is only installed by
+  `serve()`. Over the previous 25 journey runs this job never failed (earlier journey failures were gate-only).
+- R7 allows one flaky rerun, but the rerun API returns `403 Resource not accessible by integration` for this
+  token (`gh run rerun` and `POST …/rerun-failed-jobs`). The rerun is therefore this docs-only commit, which
+  re-runs every workflow on a new head. If the same job fails again it is treated as a defect, not a flake.
