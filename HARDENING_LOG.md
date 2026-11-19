@@ -171,3 +171,13 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 - Still outstanding for Phase 1: **one completed Desktop gate** on Phase 1 code. Earlier Desktop runs on `3f0f839`,
   `55fa18a` and `c67285d` were superseded before finishing. Phase 1 stays fixed-unverified until a single head has all
   six required checks green.
+
+### Phase 1 CI on `6ab3a1c` (docs-only head)
+
+- Green: Supply Chain, npm Pack Smoke, Channel Install. Red in CI [44524275761](https://github.com/ahmadrrrtx/xr/actions/runs/44524275761):
+  - **Accessibility** failed at "Install Playwright chromium (headless)", a browser download; no XR code ran.
+  - **Truth gate** failed in `bun run security:check` with only "exit code 1" visible. The same Phase 1 code passed this
+    gate on every earlier head, and locally the online dependency audit passes (35 + 286 production packages, 0 findings).
+- CI-fix attempt **2 of 3** for Phase 1 (diagnostic): `scripts/verify-security.ts` now emits each FAIL/BLOCKED/NOT RUN
+  stage (name, status, exit code, detail) as a GitHub `::error` annotation, readable via the check-run API. No stage,
+  threshold or exit semantics changed.

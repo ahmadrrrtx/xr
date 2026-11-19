@@ -148,6 +148,8 @@ try {
       ["bash", "scripts/audit-deps.sh", ".", "desktop"],
       120_000,
     );
+  // Check-run annotations are readable through the API even when raw job logs are not.
+  if (saved.GITHUB_ACTIONS) for (const s of stages.filter((x) => ["FAIL", "BLOCKED", "NOT RUN"].includes(x.status))) console.log(`::error title=security:check ${s.name}::${s.status} exit=${s.exitCode ?? "-"} ${(s.detail ?? "").replace(/%/g, "%25").replace(/\r?\n/g, "%0A").slice(0, 400)}`);
   const complete = !stages.some((s) =>
     ["FAIL", "BLOCKED", "NOT RUN"].includes(s.status),
   );
