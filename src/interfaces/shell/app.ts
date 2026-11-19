@@ -123,7 +123,7 @@ function refreshState(state: ShellState): void {
     state.totalTokens = summary.totalTokens;
   } catch { /* ignore */ }
   try {
-    state.auditValid = state.store.verifyChain().valid;
+    state.auditValid = !state.store.auditChainCorrupted; // B8: the open-time result; full verify is the export action
   } catch {
     state.auditValid = null;
   }
@@ -144,7 +144,7 @@ function createState(): ShellState {
   const workspaceId = wm.getActiveId();
   const store = wm.getStore(workspaceId);
   let auditValid: boolean | null = null;
-  try { auditValid = store.verifyChain().valid; } catch { /* ignore */ }
+  try { auditValid = !store.auditChainCorrupted; } catch { /* ignore */ }
   return {
     cwd: process.cwd(),
     meta: loadProjectMeta(process.cwd()),

@@ -41,6 +41,7 @@ const WORKSPACE_STATE_PATH = join(WORKSPACES_ROOT, "state.json");
 export class WorkspaceManager {
   private activeWorkspaceId = "default";
   private workspaces = new Map<string, WorkspaceContext>();
+  private stores = new Map<string, Store>(); // B8: one Store per workspace database
   private globalConfig: XRConfig;
   /** Phase 3 · T3 — true once async load() has run (kernel boot path). */
   private loaded = false;
@@ -268,17 +269,19 @@ export class WorkspaceManager {
   }
 
   /**
-   * Retrieve a localized SQLite store for the workspace.
-   *
-   * 0.2 Storage Unification: WARNING — this creates a NEW Store instance
-   * each time it's called. Prefer resolving the kernel's single "store"
-   * from the DI container instead. This method exists only for standalone
-   * CLI usage outside the kernel lifecycle.
+   * Retrieve the SQLite store for a workspace (B8/B11). One instance per database for the life of this manager,
+   * because construction runs migrations and the audit-chain check and must not repeat on every new chat. It is
+   * opened with its REAL workspace id: the path-only constructor forced "default" and misattributed rows. A closed
+   * instance is reopened; `fresh: true` is the escape hatch for callers that need an independent instance.
    */
-  getStore(id: string): Store {
+  getStore(id: string, opts: { fresh?: boolean } = {}): Store {
     this.ensureLoadedSync();
     const ctx = this.ensureWorkspace(id, id === "default" ? "Default Workspace" : id);
-    return new Store(ctx.dbPath);
+    const cached = this.stores.get(ctx.dbPath);
+    if (cached && !cached.isClosed && !opts.fresh) return cached;
+    const store = new Store(id, ctx.dbPath);
+    if (!opts.fresh) this.stores.set(ctx.dbPath, store);
+    return store;
   }
 
   /**
@@ -290,6 +293,8 @@ export class WorkspaceManager {
     const ctx = this.ensureWorkspace(id, id);
 
     try {
+      this.stores.get(ctx.dbPath)?.close(); // never leave a cached handle on a deleted database
+      this.stores.delete(ctx.dbPath);
       if (existsSync(ctx.dbPath)) unlinkSync(ctx.dbPath);
       if (existsSync(ctx.configPath)) unlinkSync(ctx.configPath);
       rmSync(ctx.rootDir, { recursive: true, force: true });
