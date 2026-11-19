@@ -133,6 +133,34 @@ The anchor is never a dependency for local verification. `xr audit verify
   and is labeled as such (the `--crypto-legacy` posture). This is documented, not
   hidden: we cannot retroactively sign what was written before a key existed.
 
+### If the signing key is stolen (hardening C6)
+
+Whoever holds the private key can sign for this install (section 2): they can append signed entries, and on a host
+they also control they can rebuild and re-sign history **after the last checkpoint someone else holds**. They cannot
+change a checkpoint that already left the machine. So, after a suspected key theft:
+
+1. Treat history newer than your most recent **off-host** checkpoint (remote or offline anchor, below) as
+   unverified. Checkpoints that exist only in this machine's own `audit_anchors` table prove nothing here, because the
+   same attacker can rewrite them.
+2. Rotate: `xr audit re-key --yes` appends an audited `audit.rekey` boundary and signs the new segment with a new
+   key. The old segment stays verifiable under the old public key, which you should now regard as compromised for
+   anything after the theft.
+3. Replace any `xr audit export-key` backup made with the stolen key, and change the passphrase of any backup that
+   may have been read.
+4. Push a fresh checkpoint off-host (`xr audit anchor`) so the post-rotation history is anchored again.
+
+### Offline anchors (no network sink)
+
+A remote sink is optional. The same off-host evidence can be kept offline with the existing file sink:
+`audit.anchor.sink: file:///<path on removable or write-once media>` appends one JSON line per checkpoint
+(`counter`, `entry_hash`, `entry_id`, `sig`, `pubkey`, `anchored_at`; never audit content). Run `xr audit anchor` on
+a schedule while the media is attached, then keep it disconnected.
+
+To check the live chain against an offline record, confirm that the entry at `entry_id` still has `entry_hash`, for
+example `sqlite3 ~/.xr/xr.db "SELECT hash FROM audit_log WHERE id = <entry_id>"`, and that `xr audit verify --crypto`
+passes. A mismatch means history before that checkpoint was rewritten. XR does not yet compare an external anchor file
+automatically: `verify --anchor` checks the copies recorded in the database. That comparison is a manual step today.
+
 ## 6. Storage / migration
 
 Migration 7 (additive; the chain is never rewritten by a migration):
