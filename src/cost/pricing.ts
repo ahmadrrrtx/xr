@@ -13,14 +13,18 @@ export function priceFor(providerId: string, model: string, opts: { now?: number
   if (override && typeof override.source === "string" && override.source.trim() && validRate(override.inPerMTok) && validRate(override.outPerMTok)) return { inPerMTok: override.inPerMTok!, outPerMTok: override.outPerMTok!, known: true, source: `operator-declared: ${override.source}` };
   if (LOCAL.has(providerId)) return { inPerMTok: 0, outPerMTok: 0, known: true, source: "local-no-provider-token-fee" };
   const fact = modelFact(providerId, model), now = opts.now ?? Date.now();
-  if (!fact?.price || !modelFactsFresh(now)) return UNAVAILABLE;
+  // B5: a calendar date must not brick paid providers. Past staleAt the last-known rates stay in force,
+  // flagged `stale`; XR_STALE_PRICE_FACTS=refuse is the operator's explicit opt-in to strict refusal.
+  const stale = !modelFactsFresh(now);
+  if (!fact?.price || (stale && process.env.XR_STALE_PRICE_FACTS === "refuse")) return UNAVAILABLE;
   let p = { input: fact.price.input, output: fact.price.output };
   if (fact.price.until && now > Date.parse(fact.price.until)) {
     if (!fact.price.then) return UNAVAILABLE;
     p = fact.price.then;
   }
   if (providerId === "openai" && model.startsWith("gpt-6") && (opts.inputTokens ?? 0) > 272_000) p = { input: p.input * 2, output: p.output * 1.5 };
-  return { inPerMTok: p.input, outPerMTok: p.output, known: true, source: fact.price.source, verifiedAt: MODEL_FACTS_VERIFIED_AT };
+  if (providerId === "xai" && model.startsWith("grok-4") && (opts.inputTokens ?? 0) >= 200_000) p = { input: p.input * 2, output: p.output * 2 };
+  return { inPerMTok: p.input, outPerMTok: p.output, known: true, source: fact.price.source, verifiedAt: MODEL_FACTS_VERIFIED_AT, ...(stale && { stale: true }) };
 }
 const validRate = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
 export function pricingAvailable(p: Pricing): boolean { return p.known !== false && validRate(p.inPerMTok) && validRate(p.outPerMTok); }

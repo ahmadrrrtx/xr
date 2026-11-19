@@ -3,6 +3,7 @@
  * View and manage spend caps. Glyph/color aligned with Shell status bar.
  */
 
+import { capLine } from "../cost/budget-truth.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import { BudgetService } from "../services/budget-service.ts";
@@ -40,6 +41,7 @@ export class BudgetCommand implements Command {
         {
           ok: true,
           monthlyCap: status.monthlyCap,
+          monthlyCapIsDefault: !budgetService.explicitCap(),
           monthlySpend: status.monthlySpend,
           remainingMonthly: status.remainingMonthly,
           percentUsed: status.percentUsed,
@@ -52,7 +54,7 @@ export class BudgetCommand implements Command {
           banner();
           console.log(`  ${icon("budget", "amber")}  ${xrBold("Budget")}`);
           console.log(`  ${xrDim("─".repeat(40))}`);
-          console.log(`  Monthly cap ...... ${xrGreen(`$${status.monthlyCap.toFixed(2)}`)}`);
+          console.log(`  Monthly cap ...... ${xrGreen(capLine(status.monthlyCap, budgetService.explicitCap()))}`);
           console.log(`  Monthly spend .... ${xrDim(`$${status.monthlySpend.toFixed(4)}`)}`);
           console.log(`  Remaining ........ ${xrCyan(`$${status.remainingMonthly.toFixed(4)}`)}`);
           const pctColor =

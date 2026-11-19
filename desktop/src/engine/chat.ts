@@ -352,6 +352,7 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     retryable?: boolean;
   } | null = null;
   let budgetStopMessage: string | null = null;
+  let unpricedStopMessage: string | null = null; // B4: a missing price is not a budget stop
   let maxStepsHit = false;
 
   const showText = (visible: string): void => {
@@ -415,6 +416,8 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
         }
         if (frame.status === 'budget_stopped')
           budgetStopMessage = frame.message ?? 'Stopped at the budget cap.';
+        if (frame.status === 'unpriced_stopped')
+          unpricedStopMessage = frame.message ?? 'Stopped before sending: this model has no known price.';
         emit({
           type: 'status',
           status: frame.status,
@@ -542,8 +545,14 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     return;
   }
 
-  // Terminal frame → honest outcome. Order matters: budget, model error,
-  // then the normal completion.
+  // Terminal frame → honest outcome. Order matters: unpriced, budget, model
+  // error, then the normal completion.
+  if (unpricedStopMessage) {
+    emit({ type: 'error', message: unpricedStopMessage, code: 'unpriced' });
+    emit({ type: 'done', stopped: 'unpriced' });
+    settle();
+    return;
+  }
   if (budgetStopMessage) {
     if (shown.trim())
       emit({ type: 'budget_cutoff', reason: budgetStopMessage });

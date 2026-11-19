@@ -50,10 +50,14 @@ lifecycle evidence remains pending until a matching build runs successfully.
 
 ## Models and providers
 
-- **Price facts ship for a minority of providers.** XR refuses to run a model it cannot price
-  (unpriced is never free). A provider without shipped facts needs an operator-declared rate under
-  `providerEngine.providerCapabilities.<provider>.models.<model>.cost`; the refusal message names
-  that path. Only openai, anthropic and google currently ship price facts.
+- **Two hosted presets ship without price facts.** XR refuses to run a model it cannot price
+  (unpriced is never free) and stops with its own `unpriced` state, never as a budget stop. Every
+  hosted preset's default model is priced from the provider's official page except **Hugging Face**
+  (the router bills each routed provider's own rate, so there is no single price) and **AWS
+  Bedrock** (its default still maps to a retired Claude id; current Claude models are reachable only
+  through inference profiles, which the Bedrock adapter does not address yet). Both need an
+  operator-declared rate under `providerEngine.providerCapabilities.<provider>.models.<model>.cost`;
+  the refusal message names that path. See `docs/budget-semantics.md`.
 - **A shell-exported API key is not used by default.** The secret broker ignores ambient
   `process.env`; use `xr onboarding`, or set `XR_SECRETS_ENV_COMPAT=1` to opt into shell-profile
   keys (with a boot warning).

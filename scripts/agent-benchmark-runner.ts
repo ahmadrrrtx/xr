@@ -523,7 +523,8 @@ export async function runAgentBenchmark(options: { smoke?: boolean } = {}) {
               pricing: { inPerMTok: NaN, outPerMTok: NaN, known: false },
             });
             check(
-              provider!.calls === 0 && unknown.stopped === "budget",
+              // Hardening B4: a price refusal is its own `unpriced` stop, never a budget stop.
+              provider!.calls === 0 && unknown.stopped === "unpriced",
               "Unavailable USD rate must reject before model call",
             );
             const handler = makeHandler(f.store, "benchmark-owner-token"),

@@ -115,12 +115,12 @@
       "usd": 0
     },
     {
-      "id": "registry-expired",
+      "id": "registry-stale-keeps-last-known-rates",
       "model": "openai::gpt-6-luna",
       "now": "2027-02-12T00:00:00Z",
       "input": 2000,
       "output": 800,
-      "usd": null
+      "usd": 0.0006
     },
     {
       "id": "deprecated-manual-price-not-auto",

@@ -46,7 +46,16 @@ export interface CostSnapshot {
 
 export type GovernorDecision =
   | { allow: true; warning?: string }
-  | { allow: false; reason: string; snapshot: CostSnapshot; suggestLocal?: boolean };
+  | { allow: false; reason: string; snapshot: CostSnapshot; suggestLocal?: boolean; code?: "unpriced" };
+
+/** B5: shown once per process, through the admission warning every surface already prints. */
+let staleNoticeShown = false;
+function withStaleNotice(p: Pricing, warning: string | undefined): string | undefined {
+  if (!p.stale || staleNoticeShown) return warning;
+  staleNoticeShown = true;
+  const notice = `model price facts are past their review date (verified ${p.verifiedAt ?? "?"}); using the last-known rates, see \`xr doctor\``;
+  return warning ? `${warning}; ${notice}` : notice;
+}
 
 export class CostGovernor {
   private inTokens = 0;
@@ -143,7 +152,7 @@ export class CostGovernor {
     this.settleOpenReservation();
 
     const snap = this.snapshot();
-    if (!snap.pricingAvailable) return { allow: false, reason: "price unavailable: configure sourced/operator-declared rates or choose a known-priced/local model; no request sent", snapshot: snap };
+    if (!snap.pricingAvailable) return { allow: false, code: "unpriced", reason: "price unavailable: configure sourced/operator-declared rates or choose a known-priced/local model; no request sent", snapshot: snap };
 
     // 1. Global Budget Check
     const avgTokens = this.steps > 0 ? snap.totalTokens / this.steps : 2000;
@@ -215,7 +224,7 @@ export class CostGovernor {
       this.openPartitionReservationId = admitted.reservationId;
       this.lastCommittedUsd = snap.usd;
       this.lastCommittedTokens = snap.totalTokens;
-      return { allow: true, warning: globalCheck.warning };
+      return { allow: true, warning: withStaleNotice(this.pricing, globalCheck.warning) };
     }
 
     // 3b. Phase 2 · F-12 — atomic admission (check-and-reserve as a write
@@ -243,10 +252,7 @@ export class CostGovernor {
       }
     }
 
-    return { 
-      allow: true, 
-      warning: globalCheck.warning 
-    };
+    return { allow: true, warning: withStaleNotice(this.pricing, globalCheck.warning) };
   }
 
   /**

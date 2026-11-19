@@ -47,6 +47,7 @@ export class BudgetService implements LifecycleHook {
   /**
    * Get current global budget config.
    */
+  explicitCap(): boolean { return this.budgetManager.explicitCap(); }
   getConfig() {
     return this.budgetManager.getConfig();
   }

@@ -14,7 +14,7 @@ import type {
 import type { CostGovernor, Budget, Pricing } from "../cost/governor.ts";
 import { priceFor, pricingAvailable } from "../cost/pricing.ts";
 export class ProviderBudgetAdmissionError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly code?: "unpriced") {
     super(message);
     this.name = "ProviderBudgetAdmissionError";
   }
@@ -106,6 +106,7 @@ export function attemptControls(d: AccountingDeps): ChatOptions {
       if (!pricingAvailable(pricing))
         throw new ProviderBudgetAdmissionError(
           "Token tariff unavailable; declare sourced/operator rates before a governed request, even with USD thresholds disabled",
+          "unpriced",
         );
       if (
         !Number.isFinite(
@@ -133,7 +134,8 @@ export function attemptControls(d: AccountingDeps): ChatOptions {
         outTokens: controls.maxOutputTokens,
       });
       if (!admission.allow)
-        throw new ProviderBudgetAdmissionError(admission.reason);
+        throw new ProviderBudgetAdmissionError(admission.reason, admission.code);
+      if (pricing.stale) d.audit("pricing.facts_stale", { provider: target.providerId, model: target.modelId ?? null, verifiedAt: pricing.verifiedAt ?? null });
       d.audit("provider.attempt.admitted", {
         step: d.step,
         provider: target.providerId,

@@ -133,18 +133,8 @@ test("catalog quote shares long-context rates, preserves unavailable remote-loca
   expect(catalogQuote(catalog, "openai", "gpt-6-luna", 300000, 1000, NOW)).toBe(
     0.06075,
   );
-  expect(
-    Number.isNaN(
-      catalogQuote(
-        catalog,
-        "openai",
-        "gpt-6-luna",
-        2000,
-        800,
-        Date.parse("2027-02-12"),
-      ),
-    ),
-  ).toBe(true);
+  // Hardening B5: past staleAt the quote uses the last-known rates (0.1/0.5 per MTok), not NaN.
+  expect(catalogQuote(catalog, "openai", "gpt-6-luna", 2000, 800, Date.parse("2027-02-12"))).toBeCloseTo(0.0006, 9);
   const remote = ConfigSchema.parse({
     providers: { ollama: { baseUrl: "https://remote.invalid/v1" } },
     defaults: { provider: "ollama", model: "qwen2.5:3b" },
@@ -348,7 +338,7 @@ test("implicit desktop synchronization can only tighten existing engine caps; co
       dailyLimit: 0,
       perRequestLimit: 0,
     }),
-  ).toEqual({ monthlyCap: 0 });
+  ).toEqual({ monthlyCap: 0, confirmBlockAll: true }); // hardening B6: local-only 0 is sent confirmed
   expect(() =>
     tighteningPatch(
       { ...budget, persisted: { monthly_cap: NaN } },

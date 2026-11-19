@@ -255,8 +255,10 @@ async function onbSetBudget() {
   if (!input || !result) return;
   const val = parseFloat(input.value);
   if (!(val >= 0) || input.value.trim() === "") { result.className = "onb-result warn"; result.textContent = "Enter a number — or skip this step (leave empty)."; return; }
+  const confirmBlockAll = val === 0 && confirm("A $0 cap blocks every paid request (local models still run). Save it?");
+  if (val === 0 && !confirmBlockAll) return;
   try {
-    await apiPost("/api/budget/set", { monthlyCap: val });
+    await apiPost("/api/budget/set", confirmBlockAll ? { monthlyCap: 0, confirmBlockAll: true } : { monthlyCap: val });
     result.className = "onb-result ok";
     result.textContent = "Monthly cap saved: $" + val.toFixed(2);
     loadComposerMeta();

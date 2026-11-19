@@ -11,6 +11,7 @@ import { isMemoryEnabled } from "../config/config.ts";
 import { engineLabel, inspectMemoryEngine } from "../context/engine.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 import { pluginDoctorLine } from "../plugins/cli.ts";
+import { budgetTruthChecks, DEFAULT_MONTHLY_CAP_USD } from "../cost/budget-truth.ts";
 import {
   evaluateRunnable,
   runtimeEnvironment,
@@ -57,6 +58,8 @@ export class DoctorCommand implements Command {
     const researchRows = store.listResearch(5);
     const researchCount = store.researchCount();
     const latestResearch = researchRows[0];
+    const persistedBudget = store.getBudgetConfig(); // B5/B6: cap in force + price-fact freshness, stated plainly
+    const budgetChecks = budgetTruthChecks(persistedBudget?.monthly_cap ?? DEFAULT_MONTHLY_CAP_USD, persistedBudget != null);
 
     if (json) {
       const opts: any = {}; for (const a of ctx.args) if (a === "--network") opts.network = true;
@@ -66,7 +69,7 @@ export class DoctorCommand implements Command {
         const reports = await providerService.checkAllProviders();
         for (const r of reports) checks.push({ id: `provider-${r.id}`, label: `Provider: ${r.id}`, state: r.ok ? "ok" : r.authOk ? "warn" : "fail", detail: r.detail });
       } catch(e){ checks.push({ id:"providers", label:"Provider health", state:"warn", detail:(e as Error).message });}
-      checks.push({ id:"research", label:"Research engine", state:"ok", detail:`${researchCount} sessions` });
+      checks.push({ id:"research", label:"Research engine", state:"ok", detail:`${researchCount} sessions` }, ...budgetChecks);
       if (deep) { try { const { checkVoiceStack } = await import("../voice/index.ts"); for(const c of (await checkVoiceStack()).checks) checks.push({ id:c.id, label:c.label, state:c.state === "unknown" ? "warn" : c.state, detail:c.detail }); } catch(e){ checks.push({ id:"voice", label:"Voice stack", state:"warn", detail:(e as Error).message });} }
       checks.push({
         id: "memory",
@@ -148,6 +151,7 @@ export class DoctorCommand implements Command {
       if (reports.length) { console.log(""); console.log(C.bold("Provider Health")); for (const r of reports) { const status = r.ok ? C.green("✓") : r.authOk ? C.amber("!") : C.red("✗"); console.log(`  ${r.id.padEnd(12)} ${status}  ${r.detail}`); } }
     } catch(e){ warn(`Provider health check failed: ${(e as Error).message}`); }
 
+    console.log(""); console.log(C.bold("Budget")); for (const c of budgetChecks) console.log(`  ${c.label.padEnd(18)} ${c.state === "ok" ? C.green("✓") : C.amber("!")} ${C.dim(c.detail)}`);
     console.log(""); console.log(C.bold("Research Engine"));
     console.log(`  sessions ....... ${C.green(`✓ ${researchCount}`)}`);
     if (latestResearch) console.log(`  latest ......... ${C.dim(`${latestResearch.id} · ${latestResearch.status}`)}`);

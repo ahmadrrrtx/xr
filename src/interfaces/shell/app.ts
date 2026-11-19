@@ -659,7 +659,7 @@ async function runTask(state: ShellState, task: string): Promise<void> {
 
   const deltaUsd = Math.max(0, after.totalUsd - before.totalUsd);
   if (result.stopped === "done") notify(state, "ok", "Task complete", `${result.steps} step(s) · $${deltaUsd.toFixed(4)}`);
-  else if (result.stopped === "budget") notify(state, "warn", "Task paused by budget", result.finalMessage);
+  else if (result.stopped === "budget" || result.stopped === "unpriced") notify(state, "warn", result.stopped === "unpriced" ? "Task stopped: price unavailable" : "Task paused by budget", result.finalMessage);
   else if (result.stopped === "approval") notify(state, "warn", "Task paused for approval", result.finalMessage);
   else if (result.stopped === "cancelled") notify(state, "warn", "Task interrupted", result.finalMessage || "Stopped at your request.");
   else notify(state, result.stopped === "error" ? "error" : "info", `Task ended: ${result.stopped}`, result.finalMessage);

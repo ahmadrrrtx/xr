@@ -49,7 +49,8 @@
  *   generating           src/core/agent.ts — a model turn is in flight
  *   tool_running         src/core/agent.ts — a tool call has been dispatched
  *   compacting_context   src/core/agent.ts — history compaction running
- *   budget_stopped       src/core/agent.ts — spend governor stopped the run
+  *   budget_stopped       src/core/agent.ts — spend governor stopped the run
+ *   unpriced_stopped     src/core/agent.ts — refused before sending: the model has no known price
  *   finishing            src/core/agent.ts — summary + session close after the last token
  *   cancelled            src/daemon/routes/chat.routes.ts — cooperative cancel observed
  *   awaiting_approval    src/execution/state-machine.ts — capability awaiting a human decision
@@ -64,6 +65,7 @@ export const RUN_STATUSES = [
   "compacting_context",
   "awaiting_approval",
   "budget_stopped",
+  "unpriced_stopped",
   "cancelled",
   "finishing",
   "done",
@@ -96,6 +98,7 @@ export const RUN_STATUS_TONE: Record<RunStatus, StatusTone> = {
   compacting_context: "active",
   awaiting_approval: "wait",
   budget_stopped: "warn",
+  unpriced_stopped: "warn",
   cancelled: "warn",
   finishing: "active",
   done: "ok",
@@ -116,6 +119,7 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
   compacting_context: "Compacting context",
   awaiting_approval: "Waiting for approval",
   budget_stopped: "Stopped by budget",
+  unpriced_stopped: "Stopped: price unavailable",
   cancelled: "Cancelled",
   finishing: "Finishing",
   done: "Done",

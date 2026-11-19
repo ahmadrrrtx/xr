@@ -244,7 +244,7 @@ function dependencyById(record: WorkflowRecord, taskId: string): WorkflowTask | 
 export interface WorkerStopResult {
   finalMessage: string;
   sessionId: string;
-  stopped: "done" | "max_steps" | "error" | "budget" | "approval" | "cancelled";
+  stopped: "done" | "max_steps" | "error" | "budget" | "unpriced" | "approval" | "cancelled";
   steps: number;
   meter?: string;
 }
@@ -395,6 +395,7 @@ export function honestStopCheck(result: WorkerStopResult): string | null {
   if (result.stopped === "budget") {
     return "worker stopped: budget ceiling reached before completion";
   }
+  if (result.stopped === "unpriced") return "worker stopped: the model has no known price, nothing was sent";
   if (result.stopped === "approval") {
     return "worker stopped: a required approval was declined";
   }

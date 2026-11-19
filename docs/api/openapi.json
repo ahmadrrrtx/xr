@@ -3191,6 +3191,10 @@
                     "description": "Atomically lower monthly/daily caps only; never raise policy or change the per-task default.",
                     "type": "boolean"
                   },
+                  "confirmBlockAll": {
+                    "description": "Required with monthlyCap 0: a global cap of 0 blocks ALL paid spend (per-task 0 means no per-task cap). See docs/budget-semantics.md.",
+                    "type": "boolean"
+                  },
                   "autoFallback": {
                     "type": "boolean"
                   }
@@ -7641,7 +7645,7 @@
                       "type": "string"
                     },
                     "finishReason": {
-                      "description": "Loop stop reason (done|error|budget|max_steps|approval|cancelled).",
+                      "description": "Loop stop reason (done|error|budget|unpriced|max_steps|approval|cancelled).",
                       "type": "string"
                     },
                     "ttftMs": {
