@@ -82,4 +82,27 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 
 | Phase | Commit(s) | CI run(s) | Status |
 |---|---|---|---|
-| 0 — recon/baseline | (this file) | pending | in progress |
+| 0 — recon/baseline | `2b93d33` | CI [44499926066](https://github.com/ahmadrrrtx/xr/actions/runs/44499926066) ✓ · Cross-Platform [44499925774](https://github.com/ahmadrrrtx/xr/actions/runs/44499925774) ✓ · Supply Chain [44499925608](https://github.com/ahmadrrrtx/xr/actions/runs/44499925608) ✓ · npm Pack Smoke [44499925659](https://github.com/ahmadrrrtx/xr/actions/runs/44499925659) ✓ · Journey [44499926003](https://github.com/ahmadrrrtx/xr/actions/runs/44499926003) ✓ · Channel Install [44499925804](https://github.com/ahmadrrrtx/xr/actions/runs/44499925804) ✓ · Desktop App [44499925653](https://github.com/ahmadrrrtx/xr/actions/runs/44499925653) ✓ | **done** — all 6 required checks pass on PR #215 (82 checks pass, 1 skipped by design: "Real channel installs of the public version") |
+| 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` | pending (pushed after Phase 0 went green) | fixed-unverified |
+
+## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
+
+| ID | Fix | Regression test (`test/voice/crash-chain.test.ts` unless noted) | Status |
+|---|---|---|---|
+| B1 | `describeThrown()` (new `src/util/thrown.ts`) is total for any thrown value and replaces `(e as Error).message.slice(…)` in the native probe; `VoiceSession.deliver()`/`emit()` isolate a throwing subscriber (audited once, `voice.subscriber.error`); a bundle's `done` promise never rejects (an inner throw becomes a terminal `status:"error"` record, `voice.download.failed`); a failing post-download reconfigure is contained (`voice.download.reconfigure_failed`); `installProcessGuards()` (new `src/daemon/process-guards.ts`) records an unhandled rejection as `daemon.unhandled_rejection` instead of letting it kill the daemon — installed in `serve()`, released in `stop()` | "thrown values of any shape…", "native probe survives a non-Error throw…" (string, number), "VoiceSession.emit isolates subscribers", "a bundle's completion promise never rejects" (3 tests), "process-level guard" (3 tests, child processes; one is a control showing the original crash) | fixed-unverified |
+| B15 | `VoiceDownloads.start()` is synchronous and returns a typed admission: `{started:true, done}` or `{started:false, reason:"busy", current}` — it no longer rejects with `download-busy` inside the route's detached promise. The route maps `!started` to the unchanged 409 body `{error:"download-busy", download}` (no API contract / generated-client change, R9) | "concurrent download starts get a typed busy result" (fails on old code: `start()` rejected). The HTTP test "two concurrent POSTs: one 200, one typed 409" is a **contract lock-in**, not the R2 proof: it passes on old code too, because the old route's `busy()` check and `start()` ran in one synchronous turn (verified by running it against the `2b93d33` sources) | fixed-unverified |
+| B19 | `recognize()` frees the wasm stream in `try/finally` | "the wasm recognizer stream is freed on every path" (3 tests) | fixed-unverified |
+| B20 | `selectEngine` auto branch probes the native loader once (`nativeProbe()`, injectable `nativeLoader`) | "auto TTS selection probes the native binding once…" | fixed-unverified |
+
+- **Deliberate contract change (B15):** `start()` changed from `Promise<void>` that rejects on busy to a
+  synchronous typed result. `test/voice/download-bundle.test.ts` asserted the old rejection
+  (`rejects.toThrow('download-busy')`); it was **converted** to assert the typed busy result plus that the first
+  bundle still completes — the same behaviour checked at the new contract, not weakened.
+- **R2 evidence:** with the six touched `src/` files reverted to `2b93d33` (`git stash push -- <files>`), the first
+  15 crash-chain tests gave 5 pass / 10 fail. The 5 that pass on old code are the new-module unit tests, the B19
+  success path and the control test that demonstrates the original crash; every defect test fails.
+- **Local verification:** `bun test test/voice test/voice.test.ts test/voice-presets.test.ts` 98 pass / 0 fail
+  (baseline 82 + 16); `bun test test/daemon` 379 pass / 0 fail; `bun run typecheck` exit 0; `bun run claim-lint` ✓;
+  `bun run boundaries` 0 errors (1 warning, `no-orphans: src/cost/pricing-types.ts`, identical on `main`).
+- **Size:** tree 176,055 → 176,198 (+143) of 176,500. `daemon/server.ts` 873 → 876 (waiver 878): +3 lines for
+  the guard import, install and release. No other waived module touched.
