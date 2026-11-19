@@ -123,3 +123,19 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 - R7 allows one flaky rerun, but the rerun API returns `403 Resource not accessible by integration` for this
   token (`gh run rerun` and `POST …/rerun-failed-jobs`). The rerun is therefore this docs-only commit, which
   re-runs every workflow on a new head. If the same job fails again it is treated as a defect, not a flake.
+
+### Phase 1 CI — second journey failure on `55fa18a` (now treated as a defect, NEW-3)
+
+- [44510462453](https://github.com/ahmadrrrtx/xr/actions/runs/44510462453): this time **`CLI journey — binary on
+  windows-latest`** failed (npm on windows-latest passed). Its `Journey` step failed after 25 s (passing runs take
+  33–40 s). The first failure (npm, run 44508641214) came after 85 s (passing runs take 92–120 s). Both are late in the
+  journey, where `update` and `uninstall --purge` run; Windows-only, intermittent, and a different channel each time.
+- Same head: **Cross-Platform [44510462269](https://github.com/ahmadrrrtx/xr/actions/runs/44510462269) passed on
+  Linux, macOS and Windows full parity** (typecheck + whole suite + golden path), so the Phase 1 code itself runs on
+  Windows. CI, Supply Chain, npm Pack Smoke and Channel Install also passed.
+- R7: a repeat failure is a defect, not a flake. It is logged as **NEW-3 (open)**: "windows-latest CLI journey fails
+  intermittently in its late steps". The raw log is unreachable from here, so CI-fix attempt **1 of 3** for Phase 1 is
+  diagnostic: `scripts/journey/cli-journey.ts` now also emits the failing step, its message and the runner image as a
+  GitHub `::error` annotation, which `GET /repos/{owner}/{repo}/check-runs/{id}/annotations` returns. The same edit
+  makes that catch block total (`(e as Error).message.slice` threw on a non-Error). No assertion, retry or timeout
+  changed.
