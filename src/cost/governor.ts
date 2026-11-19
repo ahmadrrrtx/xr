@@ -62,6 +62,11 @@ export class CostGovernor {
   private outTokens = 0;
   private usd = 0;
   private steps = 0;
+  /** B18: the last recorded step, the basis of the next estimate. */
+  private lastIn = 0;
+  private lastOut = 0;
+  /** B10: renews the open reservation while its step runs. */
+  private heartbeat: ReturnType<typeof setInterval> | undefined;
   /**
    * Phase 2 · F-12 — the open reservation for the currently-admitted step
    * (settled at the head of the next checkBeforeStep). Undefined when no
@@ -109,6 +114,8 @@ export class CostGovernor {
     if (![inTok, outTok].every(n => Number.isFinite(n) && n >= 0)) throw new Error("invalid provider usage");
     this.inTokens += inTok;
     this.outTokens += outTok;
+    this.lastIn = inTok;
+    this.lastOut = outTok;
     this.usd +=
       (inTok / 1_000_000) * this.pricing.inPerMTok +
       (outTok / 1_000_000) * this.pricing.outPerMTok;
@@ -155,9 +162,13 @@ export class CostGovernor {
     if (!snap.pricingAvailable) return { allow: false, code: "unpriced", reason: "price unavailable: configure sourced/operator-declared rates or choose a known-priced/local model; no request sent", snapshot: snap };
 
     // 1. Global Budget Check
+    // B18: price input and output at their own rates. The next step re-sends the context, so it costs at least
+    // the last step's input plus its output as new input, plus a reply like the last one; the running average
+    // understates a growing conversation and stays only as a floor. A first step prices a 1500 + 500 prior.
     const avgTokens = this.steps > 0 ? snap.totalTokens / this.steps : 2000;
-    const estTokens = bounds ? bounds.inTokens + bounds.outTokens : Math.max(avgTokens, 500);
-    const estUsd = bounds ? (bounds.inTokens * this.pricing.inPerMTok + bounds.outTokens * this.pricing.outPerMTok) / 1e6 : this.steps > 0 ? snap.usd / this.steps : (estTokens / 1_000_000) * this.pricing.outPerMTok;
+    const nextIn = bounds?.inTokens ?? (this.steps > 0 ? this.lastIn + this.lastOut : 1500), nextOut = bounds?.outTokens ?? (this.steps > 0 ? this.lastOut : 500);
+    const estTokens = bounds ? nextIn + nextOut : Math.max(nextIn + nextOut, avgTokens, 500);
+    const estUsd = Math.max((nextIn * this.pricing.inPerMTok + nextOut * this.pricing.outPerMTok) / 1e6, bounds || !this.steps ? 0 : snap.usd / this.steps);
 
     if (![estTokens, estUsd].every(n => Number.isFinite(n) && n >= 0)) return { allow: false, reason: "invalid admission estimate", snapshot: snap };
 
@@ -288,6 +299,7 @@ export class CostGovernor {
       return { allow: false, reason: result.reason, snapshot: this.snapshot(), suggestLocal: result.suggestLocal };
     }
     this.openReservationId = result.reservationId;
+    this.renewWhileOpen();
     this.lastCommittedUsd = this.snapshot().usd;
     this.lastCommittedTokens = this.snapshot().totalTokens;
     return { allow: true, reservationId: result.reservationId };
@@ -328,6 +340,18 @@ export class CostGovernor {
     if (reservationId) this.reservationStore.release(reservationId);
     else if (this.openReservationId) this.reservationStore.release(this.openReservationId);
     this.openReservationId = undefined;
+  }
+
+  /** B10: heartbeat the open reservation until it is settled/released; the timer never keeps the process alive. */
+  private renewWhileOpen(): void {
+    const store = this.reservationStore;
+    if (this.heartbeat || !store?.heartbeat) return;
+    this.heartbeat = setInterval(() => {
+      if (this.openReservationId) return store.heartbeat?.(this.openReservationId);
+      clearInterval(this.heartbeat);
+      this.heartbeat = undefined;
+    }, store.heartbeatIntervalMs?.() ?? 40_000);
+    (this.heartbeat as { unref?: () => void }).unref?.();
   }
 
   /** Settle the open reservation with the usage accrued since admission. */

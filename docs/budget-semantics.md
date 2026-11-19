@@ -27,3 +27,19 @@ rates, so a calendar date never blocks paid providers. XR says so instead: a
 `pricing.facts_stale` audit event on every governed request, a one-time warning in the run, and a
 `Model price facts` warning in `xr doctor`. Operators who prefer refusal set
 `XR_STALE_PRICE_FACTS=refuse`.
+
+## Estimated usage counts toward caps, and is reported as estimated
+
+Some spend is priced from **estimated** token counts: providers that report no usage, and voice
+(`usage_source = 'estimated'`). Admission (`getSpendForPeriod`) counts all recorded spend, estimates
+included, so a provider that omits usage can never let a cap be overshot. Reporting separates the
+two: `GET /api/budget` returns `usage.monthEstimatedUsd`, and `xr budget status` shows the estimated
+part of the month's spend (`monthlyEstimatedSpend` in `--json`). An estimate is never presented as
+provider-reported spend.
+
+## Reservations stay alive while their step runs
+
+An admitted step holds a reservation that counts against the caps until it settles. A long step
+renews it with a heartbeat three times per TTL (`XR_RESERVATION_TTL_MS`, default 120 s). The sweep,
+at store open and before every admission, expires only reservations whose last heartbeat is older
+than the TTL, which means those of a process that died.

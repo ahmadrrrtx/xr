@@ -1,5 +1,6 @@
 /** XR Daemon — budget routes. */
 
+import { spendBreakdown } from "../../state/repos/cost-repo.ts";
 import { loadConfig, saveConfig } from "../../config/config.ts";
 import { BudgetService } from "../../services/budget-service.ts";
 import { route, type DaemonRoute } from "./router.ts";
@@ -32,6 +33,8 @@ export function budgetRoutes(): DaemonRoute[] {
             totalTokens: cost.totalTokens,
             dayUsd: store.getSpendForPeriod(startOfDay.getTime()),
             monthUsd: store.getSpendForPeriod(startOfMonth.getTime()),
+            // B7: the part of monthUsd priced from ESTIMATED token counts (still counted at admission).
+            monthEstimatedUsd: spendBreakdown(store, startOfMonth.getTime()).estimated,
           },
           // Phase 4 · Trust Center burn bar: the ENGINE computes the percentage
           // (SEC-07 — the shell never derives budget math for display).

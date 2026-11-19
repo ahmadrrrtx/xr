@@ -859,6 +859,7 @@ export class WorkspaceStore {
       CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status, created_at);
       CREATE INDEX IF NOT EXISTS idx_reservations_env ON reservations(env_id, status);
     `);
+    if (!this.db.query<{ name: string }, []>(`PRAGMA table_info(reservations)`).all().some((c) => c.name === "last_heartbeat_at")) this.db.exec(`ALTER TABLE reservations ADD COLUMN last_heartbeat_at INTEGER`); // B10, idempotent
 
     // v0.9 semantic recall: ensure the embedding column exists on DBs created
     // before this version (CREATE TABLE IF NOT EXISTS won't add it). Idempotent
@@ -1959,11 +1960,11 @@ export class WorkspaceStore {
     });
   }
 
-  /** Release every active reservation older than the TTL (startup recovery). */
+  /** Expire every active reservation whose last heartbeat (or creation) is older than the TTL (B10). */
   releaseStaleReservations(ttlMs: number, now: number): void {
     if (this.closed) return;
     this.db
-      .query(`UPDATE reservations SET status = 'expired', updated_at = ? WHERE status = 'active' AND created_at <= ?`)
+      .query(`UPDATE reservations SET status = 'expired', updated_at = ? WHERE status = 'active' AND COALESCE(last_heartbeat_at, created_at) <= ?`)
       .run(now, now - ttlMs);
   }
 
