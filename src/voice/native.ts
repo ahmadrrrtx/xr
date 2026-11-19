@@ -17,6 +17,7 @@
  *     / espeak / none, and the desktop shows the download card.
  */
 import { createRequire } from "node:module";
+import { describeThrown } from "../util/thrown.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -156,13 +157,18 @@ export function loadNativeVoice(force = false, ttsVoice: string = cachedVoice): 
         recognize: (wav: Uint8Array) => {
           if (!recognizer) return { text: "", detail: sttDetail };
           const stream = recognizer.createStream();
-          const wave = sherpa.readWaveFromBinaryData(wav);
-          if (!wave) return { text: "", detail: "unreadable wav" };
-          stream.acceptWaveform(wave.sampleRate, wave.samples);
-          recognizer.decode(stream);
-          const res = recognizer.getResult(stream);
-          stream.free?.();
-          return { text: String(res?.text ?? "").trim() };
+          // B19 — the wasm stream is freed on EVERY path (unreadable wav,
+          // decode/getResult throwing), not only on success.
+          try {
+            const wave = sherpa.readWaveFromBinaryData(wav);
+            if (!wave) return { text: "", detail: "unreadable wav" };
+            stream.acceptWaveform(wave.sampleRate, wave.samples);
+            recognizer.decode(stream);
+            const res = recognizer.getResult(stream);
+            return { text: String(res?.text ?? "").trim() };
+          } finally {
+            try { stream.free?.(); } catch { /* already released by the runtime */ }
+          }
         },
         speak: (text: string, speed = 1) => {
           if (!tts) return null;
@@ -177,7 +183,7 @@ export function loadNativeVoice(force = false, ttsVoice: string = cachedVoice): 
   } catch (e) {
     cached = {
       ok: false,
-      detail: `sherpa-onnx not installed at ${modDir} (${(e as Error).message.slice(0, 80)})`,
+      detail: `sherpa-onnx not installed at ${modDir} (${describeThrown(e, 80)})`, // B1: a non-Error throw must not escape this catch
       missing: { runtime: ["sherpa-onnx"], stt: sttMissing, tts: ttsMissing },
     };
     return cached;

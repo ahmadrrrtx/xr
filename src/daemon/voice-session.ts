@@ -1,5 +1,6 @@
 /** Engine-owned voice session. Routes and surfaces share this one lifetime. */
-import { VoiceDownloads } from "../voice/downloads.ts";
+import { VoiceDownloads, type VoiceDownloadStart } from "../voice/downloads.ts";
+import { describeThrown } from "../util/thrown.ts";
 import { looksIncomplete, SILENCE_TAIL_EXTENDED_MS } from "../voice/endpointing.ts";
 import { VoicePipeline } from "../voice/pipeline.ts";
 import { SpeechToText, sttFromSettings } from "../voice/stt.ts";
@@ -10,7 +11,7 @@ import { pcm16Rms } from "../voice/audio.ts";
 import { parseConfirmation } from "../voice/wake.ts";
 import { loadNativeVoice, resetNativeVoice } from "../voice/native.ts";
 import { shapeTranscript } from "../voice/transcript.ts";
-import { DEFAULT_TTS_VOICE, STT_ENTRIES, entryBytes, findEntry, firstRunPlan, nativeModuleDir, voiceModelDir, type DownloadProgress, type VoiceComponent } from "../voice/models.ts";
+import { DEFAULT_TTS_VOICE, STT_ENTRIES, entryBytes, findEntry, firstRunPlan, nativeModuleDir, voiceModelDir, type DownloadProgress, type VoiceComponent, type VoiceModelEntry } from "../voice/models.ts";
 import { getApprovalStore } from "../control/approval-store.ts";
 import type { ApprovalRequest } from "../core/types.ts";
 import type { Store } from "../state/workspace-store.ts";
@@ -221,7 +222,7 @@ export class VoiceSession {
   subscribe(fn: (e: VoiceEvent) => void): () => void {
     this.subs.add(fn);
     if (this.orphanTimer) { clearTimeout(this.orphanTimer); this.orphanTimer = null; }
-    fn({ type: "state", state: this.state });
+    this.deliver(fn, { type: "state", state: this.state });
     return () => {
       this.subs.delete(fn);
       // No client left to hear the reply: a session whose window vanished
@@ -238,8 +239,55 @@ export class VoiceSession {
     };
   }
 
+  /** Subscribers already audited for throwing (one record per faulty subscriber). */
+  private faultySubs = new WeakSet<(e: VoiceEvent) => void>();
+
+  /**
+   * B1 — fan-out is isolated per subscriber: one throwing subscriber (a closed
+   * SSE controller, a test spy) is audited once and never aborts delivery to
+   * the others or escapes into a detached promise chain.
+   */
   emit(e: VoiceEvent): void {
-    for (const fn of this.subs) fn(e);
+    for (const fn of [...this.subs]) this.deliver(fn, e);
+  }
+
+  private deliver(fn: (e: VoiceEvent) => void, e: VoiceEvent): void {
+    try { fn(e); } catch (err) {
+      if (this.faultySubs.has(fn)) return;
+      this.faultySubs.add(fn);
+      this.safeAudit("voice.subscriber.error", { event: e.type, error: describeThrown(err) });
+    }
+  }
+
+  private safeAudit(action: string, details: Record<string, unknown>): void {
+    try { this.store.audit(action, details); } catch { /* audit sink may be absent in minimal contexts */ }
+  }
+
+  /**
+   * B1/B15 — start a model download. Admission is synchronous and typed (a
+   * running bundle answers `{ started: false, reason: "busy" }`), and the
+   * detached completion chain can never reject: a failed bundle is audited as
+   * `voice.download.failed`, and the native re-probe + reconfigure that follows
+   * every bundle is isolated so its failure surfaces as an error event.
+   */
+  startDownload(entries: VoiceModelEntry[]): VoiceDownloadStart {
+    const run = this.downloader.start(entries);
+    if (run.started) void run.done.then(() => this.afterDownload(), (e: unknown) => this.afterDownload(e)).catch(() => { /* afterDownload is total */ });
+    return run;
+  }
+
+  private afterDownload(thrown?: unknown): void {
+    const p = this.downloader.current();
+    if (thrown !== undefined || p?.status === "error") {
+      this.safeAudit("voice.download.failed", { id: p?.id ?? null, detail: thrown !== undefined ? describeThrown(thrown) : (p?.detail ?? null) });
+    }
+    try {
+      resetNativeVoice();
+      this.reconfigure(this.currentSettings());
+    } catch (err) {
+      this.safeAudit("voice.download.reconfigure_failed", { error: describeThrown(err) });
+      this.emit({ type: "error", detail: "voice-reconfigure-failed", message: describeThrown(err) });
+    }
   }
 
   setState(s: VoiceSessionState): void {

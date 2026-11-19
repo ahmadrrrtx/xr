@@ -188,7 +188,6 @@ export function voiceRoutes(): DaemonRoute[] {
       handle: async ({ req, json, state }) => {
         const body = (await req.json().catch(() => ({}))) as { component?: string; id?: string; firstRun?: boolean };
         const s = voiceSessionFor(state.store);
-        if (s.downloader.busy()) return json({ error: "download-busy", download: s.downloader.current() }, 409);
         const entries = body.firstRun
           ? firstRunPlan(body.id ?? (s.currentSettings().ttsVoice === "default" ? DEFAULT_TTS_VOICE : s.currentSettings().ttsVoice))
           : (() => {
@@ -196,11 +195,11 @@ export function voiceRoutes(): DaemonRoute[] {
               return e ? [e] : null;
             })();
         if (!entries) return json({ error: "unknown component/id" }, 400);
+        // B1/B15 — typed, synchronous admission; the session owns the detached
+        // completion chain (audited failure, isolated reconfigure, never rejects).
+        const run = s.startDownload(entries);
+        if (!run.started) return json({ error: "download-busy", download: run.current }, 409);
         state.store.audit("voice.models.download", { items: entries.map((e) => e.id) });
-        void s.downloader.start(entries).finally(() => {
-          resetNativeVoice();
-          s.reconfigure(s.currentSettings());
-        });
         return json({ started: entries.map((e) => ({ id: e.id, component: e.component, bytes: entryBytes(e) })), bytes: entries.reduce((n, e) => n + entryBytes(e), 0) });
       },
     }),

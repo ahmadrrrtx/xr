@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { VoiceSettings, VoiceTtsBackend } from "./types.ts";
 import { commandExists, runCommand, spawnAndWait } from "../util/process.ts";
-import { loadNativeVoice } from "./native.ts";
+import { loadNativeVoice, type NativeVoiceProbe } from "./native.ts";
 import { mkdtempPath, readBytes, removePath } from "../util/fs-async.ts";
 import { voiceIoLimit } from "../util/concurrency.ts";
 
@@ -29,6 +29,8 @@ export interface TtsOptions {
   speed?: number;
   /** Phase 15 · cloud TTS needs an explicit opt-in (settings.allowCloudTts). */
   allowCloud?: boolean;
+  /** Native binding loader (tests inject a counting fake). */
+  nativeLoader?: typeof loadNativeVoice;
 }
 
 export interface TtsResult {
@@ -75,6 +77,7 @@ export class TextToSpeech {
   private speed: number;
   private allowCloud: boolean;
   private engineCache: { engine: VoiceTtsBackend; available: boolean; detail: string; at: number } | null = null;
+  private loadNative: typeof loadNativeVoice;
 
   constructor(opts: TtsOptions = {}) {
     this.engine = opts.engine ?? "auto";
@@ -85,6 +88,12 @@ export class TextToSpeech {
     this.injectedFetch = opts.fetchFn;
     this.speed = Math.min(1.3, Math.max(0.7, opts.speed ?? 1));
     this.allowCloud = opts.allowCloud ?? false;
+    this.loadNative = opts.nativeLoader ?? loadNativeVoice;
+  }
+
+  /** The native probe for the selected catalogue voice ("default" → the loader's current voice). */
+  private nativeProbe(): NativeVoiceProbe {
+    return this.loadNative(false, this.voice === "default" ? undefined : this.voice);
   }
 
   /** Phase 15 · live speed changes from the settings screen (no re-probe). */
@@ -123,7 +132,7 @@ export class TextToSpeech {
 
       if (selected.engine === "http") return this.speakHttp(spokenText);
       if (selected.engine === "sherpa") {
-        const native = loadNativeVoice(false, this.voice === "default" ? undefined : this.voice);
+        const native = this.nativeProbe();
         const out = native.handles?.speak(spokenText, this.speed) ?? null;
         if (!out) return { ok: false, audio: null, spokenText, engine: "none", detail: native.handles?.ttsDetail ?? "offline TTS unavailable" };
         return { ok: true, audio: out.wav, spokenText, engine: "sherpa", sampleRate: out.sampleRate };
@@ -144,6 +153,9 @@ export class TextToSpeech {
     }
 
     let selected: { engine: VoiceTtsBackend; available: boolean; detail: string };
+    // B20 — the auto branch probes the native binding ONCE, for the selected voice
+    // (it used to probe twice, the second time without the voice).
+    let autoNative: NativeVoiceProbe | undefined;
 
     if (this.engine === "disabled") {
       selected = { engine: "disabled", available: false, detail: "TTS disabled" };
@@ -152,7 +164,7 @@ export class TextToSpeech {
     } else if (this.engine === "http") {
       selected = { engine: "http", available: true, detail: `HTTP TTS at ${this.baseUrl}` };
     } else if (this.engine === "sherpa") {
-      const native = loadNativeVoice(false, this.voice === "default" ? undefined : this.voice);
+      const native = this.nativeProbe();
       const ok = Boolean(native.ok && native.handles && native.handles.ttsDetail.startsWith("sherpa-onnx piper"));
       selected = { engine: "sherpa", available: ok, detail: ok ? (native.handles?.ttsDetail ?? "sherpa-onnx piper offline") : (native.handles?.ttsDetail ?? native.detail) };
     } else if (this.engine === "openai") {
@@ -160,8 +172,8 @@ export class TextToSpeech {
       selected = !this.allowCloud
         ? { engine: "openai", available: false, detail: "cloud TTS is not enabled; allow it in voice settings first" }
         : { engine: "openai", available: !!key, detail: key ? "OpenAI tts-1 (cloud, billed per character)" : "missing OPENAI_API_KEY" };
-    } else if (this.engine === "auto" && loadNativeVoice(false, this.voice === "default" ? undefined : this.voice).handles?.ttsDetail.startsWith("sherpa-onnx piper")) {
-      selected = { engine: "sherpa", available: true, detail: loadNativeVoice().handles?.ttsDetail ?? "sherpa-onnx piper offline" };
+    } else if (this.engine === "auto" && (autoNative = this.nativeProbe()).handles?.ttsDetail.startsWith("sherpa-onnx piper")) {
+      selected = { engine: "sherpa", available: true, detail: autoNative.handles.ttsDetail };
     } else if (this.engine === "piper") {
       const ok = await commandExists("piper");
       selected = { engine: "piper", available: ok, detail: ok ? "piper found" : "Install piper" };
