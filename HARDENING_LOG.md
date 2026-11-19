@@ -86,7 +86,8 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 |---|---|---|---|
 | 0 — recon/baseline | `2b93d33` | CI [44499926066](https://github.com/ahmadrrrtx/xr/actions/runs/44499926066) ✓ · Cross-Platform [44499925774](https://github.com/ahmadrrrtx/xr/actions/runs/44499925774) ✓ · Supply Chain [44499925608](https://github.com/ahmadrrrtx/xr/actions/runs/44499925608) ✓ · npm Pack Smoke [44499925659](https://github.com/ahmadrrrtx/xr/actions/runs/44499925659) ✓ · Journey [44499926003](https://github.com/ahmadrrrtx/xr/actions/runs/44499926003) ✓ · Channel Install [44499925804](https://github.com/ahmadrrrtx/xr/actions/runs/44499925804) ✓ · Desktop App [44499925653](https://github.com/ahmadrrrtx/xr/actions/runs/44499925653) ✓ | **done** — all 6 required checks pass on PR #215 (82 checks pass, 1 skipped by design: "Real channel installs of the public version") |
 | 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ CI diagnostics `f13a309` `42e13ec` `515a3bd`) | head `97bd3b4`: CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347) ✓ · Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) ✓ · Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) ✓ · Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281) ✓ · npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260) ✓ · Supply Chain [44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) ✓ · Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design) |
-| 2 — downloads (B2 B3/C2 B12) | `7219c23` | pending (pushed after Phase 1 went green) | fixed-unverified |
+| 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
+| 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` | pending (pushed after Phase 2 went green) | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -242,3 +243,62 @@ made along the way and no assertion, threshold, timeout or retry was changed.
   retried, cancel keeps `.part`), and the unit tests of the new `writeFully`.
 - **Local verification:** voice 118/0 (98 + 20), daemon 379/0, typecheck 0, claim-lint ✓, boundaries 0 errors.
 - **Size:** tree 176,198 → 176,354 (+156); `models.ts` 366 → 312, `fetch-file.ts` 124, `tar.ts` 86. No waived module touched.
+
+## Phase 3 — budget truth (B4, B5, B6, NEW-1) · commit `d0cebb3`
+
+| ID | Fix | Regression test (`test/cost-budget-truth.test.ts` unless noted) | Status |
+|---|---|---|---|
+| B4 | 11 hosted defaults priced in `model-facts.json` from official pages, each with `price.source` (table below). 9 stale or nonexistent defaults moved to current models; Perplexity's base URL moved to its Orchestrator API. A distinct **`unpriced`** stop state end to end: the governor decision and `ProviderBudgetAdmissionError` carry `code:"unpriced"`, and the agent then returns `stopped:"unpriced"`, emits stream status `unpriced_stopped`, offers **no** budget raise, and fires the task `fail` event with the decision's **own** reason (the hardcoded "budget ceiling reached; no raise granted" is gone). CLI `describeStop`, TUI, desktop chat, the multi-agent `honestStopCheck` (which counted an unpriced worker as success), the workflow runtime (which treated `unpriced` as success), `ux-status` and the `finishReason` contract description are updated. Bots render `finalMessage` plus `stopped`, so they show `unpriced` with the real reason | table-driven test over all 16 hosted `PRESETS`; agent runs: price refusal → `unpriced`, no raise, task reason = decision reason; genuine budget stop → task reason = decision reason; CLI and supervisor wording | fixed-unverified |
+| B5 | `priceFor` past `staleAt` keeps the last-known rates flagged `stale`; `XR_STALE_PRICE_FACTS=refuse` is the operator's explicit opt-in to refusal. A `pricing.facts_stale` audit event fires on every governed request, a one-time admission warning appears in the run, and `xr doctor` shows a "Model price facts" check | B5 group (stale → available + flagged; refuse opt-in; one-time notice; doctor) | fixed-unverified |
+| B6 | `POST /api/budget/set` refuses `monthlyCap: 0` without `confirmBlockAll: true` (new optional contract field; OpenAPI regenerated, typed client unchanged). Dashboard and onboarding ask before saving 0, and the desktop's local-only mode sends the confirmation. Onboarding copy states the $10 default is already in force; `xr budget status` and `xr doctor` say whether the cap is XR's default or explicit. `docs/budget-semantics.md` is the single place for what 0 means (global = block-all, per-task = no cap) | B6 group (HTTP 400 without the flag, 200 with it; default/explicit wording) | fixed-unverified |
+| NEW-1 | `BudgetManager.checkBudget` compared `percentUsed` (0–100) with fractions, so "95% of monthly cap used" fired at ~1% spend; a 0 cap divided by zero | NEW-1 group | fixed-unverified |
+
+**Hosted preset defaults and their official price sources** (USD per MTok, fetched 2026-11-19)
+
+| Preset | Default model | In / Out | Source |
+|---|---|---|---|
+| groq | `openai/gpt-oss-20b` | 0.075 / 0.30 | console.groq.com/docs/model/openai/gpt-oss-20b |
+| google | `gemini-3.8-flash` | 0.75 / 3.75 (until 2026-12-31) | unchanged |
+| deepseek | `deepseek-flash` (was `deepseek-chat`, no longer listed) | 0.30 / 1.20 (peak; off-peak half) | api-docs.deepseek.com/quick_start/pricing |
+| cerebras | `gpt-oss-120b` (was `cerebras/csm-8b`, not served) | 0.35 / 0.75 | cerebras.ai/pricing |
+| openrouter | `anthropic/claude-sonnet-5.5` (claude-3.5-sonnet has 0 endpoints) | 2 / 10 | openrouter.ai/api/v1/models/…/endpoints |
+| together | `openai/gpt-oss-120b` (Llama-3.3-70B-Turbo not served) | 0.15 / 0.60 | docs.together.ai/docs/serverless/models |
+| mistral | `mistral-small-2603` (dated id; `-latest` alias not priced) | 0.15 / 0.60 | docs.mistral.ai/models/mistral-small-4-0-26-03 |
+| fireworks | `accounts/fireworks/models/gpt-oss-120b` | 0.15 / 0.60 | docs.fireworks.ai/serverless/pricing |
+| sambanova | `gpt-oss-120b` (Llama-3.1-70B not listed) | 0.22 / 0.59 | cloud.sambanova.ai/plans/pricing |
+| huggingface | `meta-llama/Llama-3.1-8B-Instruct` | **unpriced** — the router bills each routed provider's own rate | huggingface.co/docs/inference-providers/pricing |
+| openai | `gpt-6-luna` | 0.10 / 0.50 | unchanged |
+| anthropic | `claude-sonnet-5-5` | 2 / 10 | unchanged |
+| cohere | `command-r-plus-08-2024` (still Live) | 2.50 / 10 | cohere.com/pricing (legacy-model FAQ) |
+| xai | `grok-4.7` (was `grok-2-latest`, not listed) | 2 / 6; ≥200k input ×2 | docs.x.ai/developers/models |
+| perplexity | `perplexity/glm-5.3-flash` (Sonar models retired; Orchestrator API) | 0.15 / 0.50 | docs.perplexity.ai/docs/orchestrator/models |
+| bedrock | `claude-3-sonnet` | **unpriced** — see NEW-2 | — |
+
+- **NEW-2 (open):** the Bedrock default maps to a retired `anthropic.claude-3-sonnet-20240229-v1:0`. The current
+  `anthropic.claude-sonnet-5-5` is invocable only through `us.`/`eu.`/`global.` inference profiles, which
+  `src/providers/native/bedrock.ts` cannot address. Changing the default needs adapter work and AWS-credentialed
+  verification, so it is not changed blind; the preset stays unpriced (stops as `unpriced`) and is in known-limitations.
+- The 11 pre-existing facts were not re-verified today, so the file-wide `verifiedAt`/`staleAt` are unchanged and only
+  `version` moved to `2026-11-19.1`.
+- **R2** (a probe run against a detached worktree at the Phase 2 head vs this commit):
+
+  | Defect | Old | New |
+  |---|---|---|
+  | B4 unpriced hosted defaults | 13 of 16 | 2 of 16 (huggingface, bedrock) |
+  | B4 unpriced run | `stopped: "budget"`, task reason "budget ceiling reached; no raise granted" | `stopped: "unpriced"`, task reason = the refusal's own text |
+  | B5 price past `staleAt` | unavailable (every paid run blocked) | available, flagged stale |
+  | B6 `POST /api/budget/set {monthlyCap: 0}` | HTTP 200 | HTTP 400 `confirm-block-all` |
+  | NEW-1 1% of the cap spent | warning "95% of monthly cap used" | no warning |
+- **Converted tests:** these are deliberate contract changes, not weakened assertions.
+  - `native-continuation` (B5): stale is now available and flagged; the refusal is still asserted under the opt-in.
+  - `pricing-v1.json`: `registry-expired` → `registry-stale-keeps-last-known-rates` at $0.0006.
+  - `selection-accounting`: the catalog quote at the stale date is $0.0006; `tighteningPatch` to 0 now sends `confirmBlockAll`.
+  - `offline-onboarding-budget`: tighten-only to 0 is now 400 without the flag and 200 with it, which is stronger.
+  - `dashboard-split`: re-pinned `aef98f81…` → `9b158be1…`, proven to be the only delta by reverting three files.
+- **Converted verifier:** `scripts/agent-benchmark-runner.ts` scenario A11 asserted an unavailable USD rate stops as
+  `budget`. It now asserts `unpriced`, keeping the guarantee that matters (`provider.calls === 0`: nothing is sent).
+  Found by the local `security:check` (`agent-smoke` and `test/reliability/agent-benchmark.test.ts`).
+- **NEW-4 (pre-existing, logged only):** `test/environment/service.test.ts` "never-execute-risky refuses…" fails
+  (`blocked` vs `denied`) when the whole `test/environment` directory runs in one Bun process. It fails identically on
+  the Phase 1 head, and passes alone and in CI's parity runner.
+- **Size:** tree +65; `agent.ts` 1198 → 1200 (waiver 1215); `shell/app.ts` line-neutral.
