@@ -61,13 +61,51 @@ const INJECTION_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: "zero_width", re: /[\u200b-\u200f\u202a-\u202e\u2060-\u206f]|[\u{E0000}-\u{E007F}]/u },
 ];
 
-/** Heuristic scan of untrusted text. */
+/** C8: Cyrillic/Greek letters that render like Latin ones. */
+const HOMOGLYPHS: Record<string, string> = { "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ɡ": "g", "һ": "h", "ո": "n", "ν": "v", "ο": "o", "α": "a", "ι": "i", "κ": "k", "τ": "t" };
+
+/**
+ * C8: undo cheap obfuscation before matching: compatibility forms (full-width letters), HTML entities, percent
+ * escapes, hidden characters, homoglyphs, markup and spacing between letters, and printable base64 runs.
+ */
+function deobfuscate(text: string): string {
+  let t = text.normalize("NFKC")
+    .replace(/&#x([0-9a-f]{1,6});?/gi, (_, h: string) => String.fromCodePoint(Math.min(parseInt(h, 16), 0x10ffff)))
+    .replace(/&#(\d{1,7});?/g, (_, d: string) => String.fromCodePoint(Math.min(Number(d), 0x10ffff)));
+  try { t = decodeURIComponent(t); } catch { /* not percent-encoded */ }
+  t = t.replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u206f]|[\u{E0000}-\u{E007F}]/gu, "").replace(/[^\x00-\x7f]/g, (c) => HOMOGLYPHS[c.toLowerCase()] ?? c);
+  for (const b of t.match(/[A-Za-z0-9+/]{16,}={0,2}/g) ?? []) {
+    const decoded = Buffer.from(b, "base64").toString("utf8");
+    if (/^[\x20-\x7e\s]+$/.test(decoded)) t += `\n${decoded}`;
+  }
+  return t.replace(/[*_~`#>|]+/g, "").replace(/\s+/g, " ").replace(/\b(\w) (?=\w\b)/g, "$1");
+}
+
+/** Heuristic scan of untrusted text (raw, then de-obfuscated: C8). */
 export function scanUntrusted(text: string): ScanResult {
   const signatures: string[] = [];
+  const plain = deobfuscate(text);
   for (const p of INJECTION_PATTERNS) {
-    if (p.re.test(text)) signatures.push(p.name);
+    if (p.re.test(text) || p.re.test(plain)) signatures.push(p.name);
   }
   return { flagged: signatures.length > 0, signatures };
+}
+
+/**
+ * C3 — `X=rm; $X -rf /`: substitute simple `NAME=value` assignments into later `$NAME`/`${NAME}` uses (a few
+ * rounds, for `A=r; B=m; $A$B`) so the dangerous-command patterns judge what the shell would run. A heuristic
+ * like the rest of this layer: the OS sandbox stays the boundary for computed commands.
+ */
+export function expandShellVars(cmd: string): string {
+  const vars = new Map<string, string>();
+  for (const m of cmd.matchAll(/(?:^|[\s;&|(`])(?:(?:export|local|readonly)\s+|declare\s+(?:-\w+\s+)*)?([A-Za-z_]\w*)=(?:"([^"]*)"|'([^']*)'|([^\s;&|)`]*))/g)) vars.set(m[1]!, m[2] ?? m[3] ?? m[4] ?? "");
+  let out = cmd;
+  for (let i = 0; i < 3 && vars.size; i++) {
+    const next = out.replace(/\$\{([A-Za-z_]\w*)\}|\$([A-Za-z_]\w*)/g, (all, a?: string, b?: string) => vars.get((a ?? b)!) ?? all);
+    if (next === out) break;
+    out = next;
+  }
+  return out;
 }
 
 /**
@@ -428,6 +466,7 @@ export function checkAction(action: ActionCheck, ctx: PolicyContext): PolicyDeci
   // ── 3. Dangerous shell patterns blocked outright. ─────────────────────────
   if (action.tool === "shell" || /\bshell\b/i.test(action.tool)) {
     const command = fullyDecode(argsStr);
+    const expanded = strings.map((s) => expandShellVars(fullyDecode(s))).join("\n"); // C3: judged after substitution
     const DANGEROUS: Array<{ re: RegExp; label: string }> = [
       // Recursive/forced delete in any flag spelling: -rf, -fr, -r -f,
       // --recursive --force, and the bare `rm -r` / `rm -f` short forms.
@@ -444,10 +483,19 @@ export function checkAction(action: ActionCheck, ctx: PolicyContext): PolicyDeci
       { re: /:\(\)\s*\{\s*:\|:&\s*\}\s*;:/, label: "fork bomb" },
       { re: /\bshutdown\b|\breboot\b|\bhalt\b/i, label: "power state change" },
       { re: /\bhistory\s+-c\b|\bshred\b/i, label: "evidence destruction" },
+      // C3: a decoded payload that gets executed: a decoder piped into a shell, or eval / sh -c / source of a
+      // decoding substitution (base64, base32, xxd, openssl, printf escapes, Python b64decode).
+      { re: /\b(base64|base32|basenc|xxd|openssl)\b[^\n]*\|\s*(sudo\s+)?(\S*\/)?(ba|z|da|k|c|tc)?sh\b/i, label: "decode-to-shell" },
+      { re: /(\beval\b|\b(ba|z|da|k)?sh\s+-c\b|\bsource\b)[^\n]*(\$\(|<\(|`)[^\n]*\b(base64|base32|basenc|xxd|openssl)\b/i, label: "eval of decoded input" },
+      { re: /(\beval\b|\b(ba|z|da|k)?sh\s+-c\b)[^\n]*(\$\(|`)\s*printf\s+['"]?\\+(x[0-9a-f]|[0-7])/i, label: "eval of decoded input" },
+      { re: /\b(exec|eval)\s*\(\s*(__import__\(\s*['"]base64['"]\s*\)|base64)\.b(64|32|16)decode\b/i, label: "eval of decoded input" },
     ];
     for (const { re, label } of DANGEROUS) {
       if (re.test(command)) {
         return { allowed: false, reason: `blocked: dangerous shell command (${label})` };
+      }
+      if (re.test(expanded)) {
+        return { allowed: false, reason: `blocked: dangerous shell command (${label}, via shell variables)` };
       }
     }
   }
