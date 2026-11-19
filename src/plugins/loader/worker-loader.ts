@@ -18,6 +18,7 @@ import { join, resolve, relative, isAbsolute, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { createContext, Script, compileFunction } from "node:vm";
 import { Worker } from "node:worker_threads";
+import { fileURLToPath } from "node:url";
 import { pluginIoLimit, yieldEventLoop } from "../../util/concurrency.ts";
 import type { Store } from "../../state/workspace-store.ts";
 import type { XRConfig } from "../../config/config.ts";
@@ -123,7 +124,9 @@ async function loadViaWorker(
   deps: LoadDeps,
   secretNames: string[],
 ): Promise<LoadResult> {
-  const workerPath = new URL("../sandbox-worker.ts", import.meta.url).href;
+  // NEW-5: worker_threads rejects a file:// URL *string* (`.href`), so every "isolated" plugin silently fell back
+  // to the in-process VM (audit plugin.worker_fallback). A filesystem path is accepted by Bun and Node alike.
+  const workerPath = fileURLToPath(new URL("../sandbox-worker.ts", import.meta.url));
   const egressAllowlist: string[] = (deps.config as any).security?.egressAllowlist ?? [];
 
   const worker = new Worker(workerPath, { workerData: {} });
@@ -137,6 +140,7 @@ async function loadViaWorker(
       resolvePromise(result);
     };
     const fail = (reason: string) => {
+      try { worker.removeAllListeners(); } catch {}
       worker.terminate().catch(() => {});
       settle({ ok: false, manifest, reason, kind: "error" });
     };
@@ -146,10 +150,11 @@ async function loadViaWorker(
     let contributionsMeta: SerializedContributions | null = null;
     let activeWorker = worker;
 
+    // NEW-5: success keeps the message listener: every later tool/command reply arrives through it (removing
+    // all listeners here made each invocation time out). Only fail() detaches, and it terminates the worker.
     const cleanup = () => {
       if (initTimer) clearTimeout(initTimer);
       if (activateTimer) clearTimeout(activateTimer);
-      try { worker.removeAllListeners(); } catch {}
     };
 
     // Invoke handler tracking
