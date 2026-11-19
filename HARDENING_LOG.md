@@ -155,3 +155,19 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
   by the `makeHandler` the test uses). The identical Phase 1 code passed the same test on every OS on `55fa18a`, and
   the runner reported macOS capacity constraints. Treated as a first-occurrence timing flake; the threshold is not
   touched (R1). This docs commit is its rerun; a repeat is a defect.
+
+### Phase 1 CI on `85cf8b0` — 5 of 6 required checks green; Desktop failed before the journey ran
+
+- Green: Quality Gate (CI [44516596852](https://github.com/ahmadrrrtx/xr/actions/runs/44516596852)), Cross-Platform gate
+  ([44516596688](https://github.com/ahmadrrrtx/xr/actions/runs/44516596688); Linux, macOS and Windows full parity, so the
+  macOS timing failure did not recur), Clean-Machine Journey gate
+  ([44516596947](https://github.com/ahmadrrrtx/xr/actions/runs/44516596947); all CLI journeys, including both windows-latest),
+  Supply Chain gate, and npm Pack Smoke gate.
+- Desktop App [44516596994](https://github.com/ahmadrrrtx/xr/actions/runs/44516596994): all bundles built.
+  `Desktop journey — linux-x64 on ubuntu-24.04` failed in step 5, **"WebDriver prerequisites (Linux — WebKitWebDriver +
+  Xvfb + tauri-driver)"**, after 20 minutes with exit code **100** (apt-get's failure code). The journey itself
+  never started, and the macOS arm64 journey was queued on runner capacity and then cancelled. This is infrastructure,
+  not XR code. Both the rerun and the dispatch APIs return 403 for this token, so this docs commit re-runs CI.
+- Still outstanding for Phase 1: **one completed Desktop gate** on Phase 1 code. Earlier Desktop runs on `3f0f839`,
+  `55fa18a` and `c67285d` were superseded before finishing. Phase 1 stays fixed-unverified until a single head has all
+  six required checks green.
