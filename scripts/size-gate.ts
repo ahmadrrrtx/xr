@@ -190,7 +190,16 @@ export const THRESHOLD = 800;
 // 2026-11-16 engine-setup audit (owner: ahmadrrrtx): retain the already-approved
 // hardening allocation after the main merge; this restores a dropped export,
 // not a ceiling increase. See docs/development/ENGINE-SETUP-AUDIT-2026-11-16.md.
-export const TREE_CEILING = 176_500;
+// Stabilization hardening · 176,500 → 177,000 (2026-11-19, owner sign-off: ahmadrrrtx,
+// recorded in HARDENING_LOG.md "Adaptations"). The audit-defect fixes (B1–B20) need code
+// in core, each with a regression test. Measured per phase: P1 +143 (voice crash chain),
+// P2 +156 (stall-proof sha256-pinned downloads, async tar), P3 +70 (unpriced stop state,
+// stale-price fuse, confirmed block-all, and its CI fixes), P4 +56 (reservation heartbeat,
+// growth-aware estimates), P5 +48 (incremental audit verification, per-workspace store
+// cache; the store itself shrank by 23). Measured 176,528 after P5; the rest is for P6–P7.
+// No waived giant grew past its record. Moving the voice and budget surfaces to satellite
+// packages stays the recorded alternative. Raised deliberately, in a diff (ADR-0028).
+export const TREE_CEILING = 177_000;
 
 // V1-P5-001 (release ledger docs/release/V1-RELEASE-LEDGER-2026-10-28.md §5):
 // the shipped PWA spoke a companion contract that existed only in the reference
