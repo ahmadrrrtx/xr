@@ -139,3 +139,19 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
   GitHub `::error` annotation, which `GET /repos/{owner}/{repo}/check-runs/{id}/annotations` returns. The same edit
   makes that catch block total (`(e as Error).message.slice` threw on a non-Error). No assertion, retry or timeout
   changed.
+
+### Phase 1 CI on `c67285d` — journey green; one macOS timing failure
+
+- Green: CI [44512363457](https://github.com/ahmadrrrtx/xr/actions/runs/44512363457), Supply Chain
+  [44512363535](https://github.com/ahmadrrrtx/xr/actions/runs/44512363535), npm Pack Smoke
+  [44512363745](https://github.com/ahmadrrrtx/xr/actions/runs/44512363745), Channel Install
+  [44512363511](https://github.com/ahmadrrrtx/xr/actions/runs/44512363511), and **Clean-Machine Journey
+  [44512363760](https://github.com/ahmadrrrtx/xr/actions/runs/44512363760), all 18 CLI journeys including both
+  windows-latest ones**. NEW-3 did not recur, so it stays open as an intermittent with annotations in place.
+- Cross-Platform [44512365989](https://github.com/ahmadrrrtx/xr/actions/runs/44512365989): Linux and Windows full parity
+  passed. **macOS** failed one test, read from the check annotations:
+  `test/perf/daemon-routes.test.ts` "/api/overview stays lightweight (< 500 ms CI tolerance)" took 659 ms. That route
+  shells out to `git` and touches no Phase 1 code (no voice, and the process guard is installed only by `serve()`, not
+  by the `makeHandler` the test uses). The identical Phase 1 code passed the same test on every OS on `55fa18a`, and
+  the runner reported macOS capacity constraints. Treated as a first-occurrence timing flake; the threshold is not
+  touched (R1). This docs commit is its rerun; a repeat is a defect.
