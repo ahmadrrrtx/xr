@@ -181,3 +181,30 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 - CI-fix attempt **2 of 3** for Phase 1 (diagnostic): `scripts/verify-security.ts` now emits each FAIL/BLOCKED/NOT RUN
   stage (name, status, exit code, detail) as a GitHub `::error` annotation, readable via the check-run API. No stage,
   threshold or exit semantics changed.
+
+### Phase 1 CI on `42e13ec`
+
+- Green: Quality Gate (CI [44525744871](https://github.com/ahmadrrrtx/xr/actions/runs/44525744871); the Truth gate and Accessibility jobs that failed on
+  `6ab3a1c` passed), Clean-Machine Journey [44525744702](https://github.com/ahmadrrrtx/xr/actions/runs/44525744702), npm Pack Smoke
+  [44525744852](https://github.com/ahmadrrrtx/xr/actions/runs/44525744852), Supply Chain [44525744758](https://github.com/ahmadrrrtx/xr/actions/runs/44525744758), Channel Install [44525744779](https://github.com/ahmadrrrtx/xr/actions/runs/44525744779).
+- Red, Cross-Platform [44525744774](https://github.com/ahmadrrrtx/xr/actions/runs/44525744774): Linux and macOS passed. Windows full parity failed one test,
+  `test/reliability/agent-benchmark.test.ts` "all15 actual verifiers pass…": the benchmark child exited 1, and which
+  scenario failed is not visible. The same test passed on Windows with identical Phase 1 code on `55fa18a`, `c67285d`
+  and `85cf8b0`.
+- Red, Desktop App [44525744690](https://github.com/ahmadrrrtx/xr/actions/runs/44525744690): `Desktop journey — windows-x64 on windows-latest` failed in its
+  `Journey` step after 89 s (exit 1, no detail). The Linux and macOS desktop journeys passed. On `85cf8b0` the Windows
+  desktop journey had passed, and Linux failed at its apt prerequisites.
+- Required checks on Phase 1 code so far (green / red; superseded runs not counted):
+
+  | Check | Green | Red (cause) |
+  |---|---|---|
+  | Quality Gate | 5 | 1 (`6ab3a1c`: Playwright browser download; `security:check` unknown) |
+  | Cross-Platform gate | 2 | 2 (macOS route timing; Windows agent benchmark) |
+  | Supply Chain gate | 6 | 0 |
+  | npm Pack Smoke gate | 6 | 0 |
+  | Clean-Machine Journey gate | 3 | 2 (Windows CLI journey: npm, then binary) |
+  | Desktop gate | 0 | 2 (Linux apt exit 100; Windows journey). Each OS's journey has passed at least once |
+- No red check points at Phase 1 code (voice, process guard, download admission), but no single head has had all six
+  green either. Diagnostics in this commit (no assertion, threshold, timeout or retry changed): the desktop journey
+  emits its failing step as a check annotation, and the agent-benchmark test names the failing scenarios in its error.
+
