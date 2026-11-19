@@ -5,10 +5,12 @@
  *   • the npm tarball extractor handles ustar entries and strips `package/`
  *   • the downloader streams to `.part`, resumes with Range, verifies the
  *     catalogue size, refuses silently-different payloads, and cancels cleanly
+ *   • B3: every source is an immutable revision with a pinned sha256
  *   • first-run plan only lists what is missing
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -101,6 +103,25 @@ describe("voice model catalogue", () => {
     expect(TTS_VOICES.map((v) => entryBytes(v))).toEqual([63_207_230, 63_537_415, 63_207_229, 63_207_228]);
   });
 
+  test("B3: every URL is an immutable revision and every file has a pinned sha256", () => {
+    const all: VoiceModelEntry[] = [RUNTIME_ENTRY, ...STT_ENTRIES, ESPEAK_ENTRY, ...TTS_VOICES];
+    for (const e of all) {
+      for (const f of e.files) {
+        expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
+        if (f.url.startsWith("https://huggingface.co/")) {
+          expect(f.url).toMatch(/^https:\/\/huggingface\.co\/csukuangfj\/[\w.-]+\/resolve\/[0-9a-f]{40}\//);
+          expect(f.url).not.toContain("/resolve/main/");
+        } else {
+          expect(f.url).toMatch(/^https:\/\/registry\.npmjs\.org\/sherpa-onnx\/-\/sherpa-onnx-\d+\.\d+\.\d+\.tgz$/);
+        }
+      }
+    }
+    // Identical files share one hash; distinct files never do.
+    const byHash = new Map<string, number>();
+    for (const e of all) for (const f of e.files) byHash.set(f.sha256, f.bytes);
+    for (const e of all) for (const f of e.files) expect(byHash.get(f.sha256)).toBe(f.bytes);
+  });
+
   test("first-run plan lists only missing entries and empties once files are complete", () => {
     expect(firstRunPlan().map((e) => e.id)).toEqual(["sherpa-onnx-wasm", "sherpa-small-en", "espeak-ng-data", "piper-kusal"]);
     const stt = STT_ENTRIES[0];
@@ -114,11 +135,11 @@ describe("voice model catalogue", () => {
 });
 
 describe("npm tarball extraction", () => {
-  test("strips package/ and writes files under dest", () => {
+  test("strips package/ and writes files under dest", async () => {
     const tgzPath = join(dir, "pkg.tgz");
     writeFileSync(tgzPath, tgz([["package/index.js", "module.exports = 1;"], ["package/lib/a.wasm", "WASM"]]));
     const dest = join(dir, "out");
-    expect(extractNpmTarball(tgzPath, dest)).toBe(2);
+    expect(await extractNpmTarball(tgzPath, dest)).toBe(2); // B12: extraction is async now
     expect(readFileSync(join(dest, "index.js"), "utf8")).toBe("module.exports = 1;");
     expect(readFileSync(join(dest, "lib/a.wasm"), "utf8")).toBe("WASM");
   });
@@ -131,9 +152,11 @@ describe("voice downloader", () => {
     name: "fake",
     detail: "",
     dir: "stt/fake",
-    files: [{ url: "https://example.test/a.bin", path: "a.bin", bytes: 1000 }],
+    files: [{ url: "https://example.test/a.bin", path: "a.bin", bytes: 1000, sha256: createHash("sha256").update(new Uint8Array(1000).map((_, i) => i % 251)).digest("hex") }],
   };
   const payload = new Uint8Array(1000).map((_, i) => i % 251);
+  // B2: transient failures now retry with backoff; keep these unit tests fast.
+  const quick = { backoffMs: 1 };
 
   function fakeFetch(opts: { ranges?: boolean; bytes?: number; fail?: boolean; slow?: boolean } = {}): typeof fetch {
     return (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -189,7 +212,7 @@ describe("voice downloader", () => {
   });
 
   test("HTTP failure is reported, not thrown", async () => {
-    const out = await new VoiceDownloader().download(entry, () => undefined, fakeFetch({ fail: true }));
+    const out = await new VoiceDownloader(quick).download(entry, () => undefined, fakeFetch({ fail: true }));
     expect(out.status).toBe("error");
     expect(out.detail).toContain("HTTP 500");
   });

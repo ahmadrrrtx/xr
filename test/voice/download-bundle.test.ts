@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { VoiceDownloads, type VoiceBundleProgress } from '../../src/voice/downloads.ts';
 import type { DownloadProgress, VoiceModelEntry } from '../../src/voice/models.ts';
-const entry = (id: string): VoiceModelEntry => ({ id, component: 'stt', name: id, dir: id, detail: '', files: [{ path: 'model', url: 'https://fixture.invalid/model', bytes: 10 }] });
+const entry = (id: string): VoiceModelEntry => ({ id, component: 'stt', name: id, dir: id, detail: '', files: [{ path: 'model', url: 'https://fixture.invalid/model', bytes: 10, sha256: 'f'.repeat(64) }] }); // downloader is injected: the hash is never checked here
 const pending = () => { let resolve!: (p: DownloadProgress) => void; return { promise: new Promise<DownloadProgress>(r => { resolve = r; }), resolve: (p: DownloadProgress) => resolve(p) }; };
 const done = (id: string): DownloadProgress => ({ id, component: 'stt', received: 10, total: 10, percent: 100, status: 'done' });
 test('a bundle is busy before headers, between entries, and retains its terminal evidence', async () => {

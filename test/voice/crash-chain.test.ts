@@ -168,7 +168,7 @@ describe("B1 — VoiceSession.emit isolates subscribers", () => {
   });
 });
 
-const entry = (id: string): VoiceModelEntry => ({ id, component: "stt", name: id, dir: id, detail: "", files: [{ path: "model", url: "https://fixture.invalid/model", bytes: 10 }] });
+const entry = (id: string): VoiceModelEntry => ({ id, component: "stt", name: id, dir: id, detail: "", files: [{ path: "model", url: "https://fixture.invalid/model", bytes: 10, sha256: "f".repeat(64) }] }); // injected downloader: hash unchecked
 const doneP = (id: string): DownloadProgress => ({ id, component: "stt", received: 10, total: 10, percent: 100, status: "done" });
 
 describe("B15 — concurrent download starts get a typed busy result", () => {
