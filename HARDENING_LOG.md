@@ -85,7 +85,8 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | Phase | Commit(s) | CI run(s) | Status |
 |---|---|---|---|
 | 0 — recon/baseline | `2b93d33` | CI [44499926066](https://github.com/ahmadrrrtx/xr/actions/runs/44499926066) ✓ · Cross-Platform [44499925774](https://github.com/ahmadrrrtx/xr/actions/runs/44499925774) ✓ · Supply Chain [44499925608](https://github.com/ahmadrrrtx/xr/actions/runs/44499925608) ✓ · npm Pack Smoke [44499925659](https://github.com/ahmadrrrtx/xr/actions/runs/44499925659) ✓ · Journey [44499926003](https://github.com/ahmadrrrtx/xr/actions/runs/44499926003) ✓ · Channel Install [44499925804](https://github.com/ahmadrrrtx/xr/actions/runs/44499925804) ✓ · Desktop App [44499925653](https://github.com/ahmadrrrtx/xr/actions/runs/44499925653) ✓ | **done** — all 6 required checks pass on PR #215 (82 checks pass, 1 skipped by design: "Real channel installs of the public version") |
-| 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ log `3f0f839`) | head `3f0f839`: CI [44508641467](https://github.com/ahmadrrrtx/xr/actions/runs/44508641467) ✓ · Supply Chain [44508641404](https://github.com/ahmadrrrtx/xr/actions/runs/44508641404) ✓ · npm Pack Smoke [44508641445](https://github.com/ahmadrrrtx/xr/actions/runs/44508641445) ✓ · Channel Install [44508641208](https://github.com/ahmadrrrtx/xr/actions/runs/44508641208) ✓ · Clean-Machine Journey [44508641214](https://github.com/ahmadrrrtx/xr/actions/runs/44508641214) ✗ — see "Phase 1 CI" below; re-run on the next head | fixed-unverified |
+| 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ CI diagnostics `f13a309` `42e13ec` `515a3bd`) | head `97bd3b4`: CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347) ✓ · Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) ✓ · Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) ✓ · Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281) ✓ · npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260) ✓ · Supply Chain [44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) ✓ · Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design) |
+| 2 — downloads (B2 B3/C2 B12) | `7219c23` | pending (pushed after Phase 1 went green) | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -208,3 +209,36 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
   green either. Diagnostics in this commit (no assertion, threshold, timeout or retry changed): the desktop journey
   emits its failing step as a check annotation, and the agent-benchmark test names the failing scenarios in its error.
 
+### Phase 1 CI on `97bd3b4` — all six required checks green (Phase 1 done)
+
+CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347), Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) (Linux, macOS and Windows full
+parity), Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) (bundles, `latest.json` and all desktop journeys), Clean-Machine
+Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281), npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260), Supply Chain
+[44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) and Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) all passed; `gh pr checks 215` shows 82
+pass and 1 skipped by design. The intermittent Windows failures seen on earlier heads (NEW-3) did not recur; NEW-3
+stays open, with step annotations in the CLI journey, desktop journey and agent benchmark. Three diagnostic commits were
+made along the way and no assertion, threshold, timeout or retry was changed.
+
+## Phase 2 — downloads (B2, B3/C2, B12) · commit `7219c23`
+
+| ID | Fix | Regression test | Status |
+|---|---|---|---|
+| B2 | New `src/voice/fetch-file.ts`: a stall watchdog (30 s with no byte, headers included), a hard per-file deadline across attempts (15 min; `XR_VOICE_FILE_DEADLINE_MS`), and 3 bounded retries with exponential backoff that resume the `.part` with `Range`. A terminal failure deletes the `.part` and the bundle reports `status:"error"`; a user cancel keeps the `.part`. 5xx/408/429/network errors retry; other 4xx do not | `test/voice/download-resilience.test.ts` against a **local `Bun.serve` fixture**: stall → abort → `Range` resume; a trickling server hits the deadline; 503 ×4 bounded ("gave up after 4 attempts"); 404 not retried; 502 → success; cancel during a stall keeps the `.part` | fixed-unverified |
+| B3 / C2 | Every Hugging Face URL is pinned to a commit SHA (6 repos), and all 30 catalogue files carry a sha256 verified **while streaming** (a resumed prefix is hashed first). `bytes` is the progress total plus a cheap early refusal | `models.test.ts` "B3: every URL is an immutable revision and every file has a pinned sha256"; download-resilience: same-size corrupt bytes are refused with nothing installed or stranded; a corrupt resumed prefix restarts once from zero | fixed-unverified |
+| B12 | New `src/voice/tar.ts`: async gunzip (threadpool) and async writes; pax `x` path/size, GNU `L` long names, base-256 sizes; an entry size past the archive is refused; `g`/`K` are consumed and never applied. The `..`/symlink/hardlink rejection is kept exactly, plus a resolved-path containment check. `writeFully` loops short writes | `test/voice/tar.test.ts`: 6 new-behaviour tests and 3 lock-ins (plain/prefix `..`, pax/GNU `..`, symlink/hardlink/fifo/dir); `writeFully` unit tests | fixed-unverified |
+
+- **Pins and hash provenance** (2026-11-19). Revisions come from `https://huggingface.co/api/models/<repo>/revision/main`:
+  STT `e8add537…`, lessac (espeak data) `83f74707…`, kusal `54090df5…`, kristin `6fdc6824…`, ryan `2784cf0f…`,
+  amy `79936839…`.
+  - LFS weights (7): sha256 = the `lfs.oid` from `/api/models/<repo>/tree/<sha>`.
+  - Non-LFS files (13 espeak, 4 `.onnx.json`, 3 distinct `tokens.txt`): bytes fetched through the GitHub blob API,
+    `git hash-object` equal to the HF tree `oid` and size equal to the catalogue, then `sha256sum`.
+  - npm runtime: the downloaded tarball's sha512 equals the registry `dist.integrity` and its sha1 equals `dist.shasum`.
+  - Result: 30/30 files backed (23 by bytes, 7 by first-party LFS records), 0 unbacked. The values live in
+    `src/voice/models.ts`.
+- **Real-artifact check:** the new extractor's output for `sherpa-onnx-1.13.8.tgz` is byte-identical to GNU `tar` (13/13 files).
+- **R2:** with `src/voice/models.ts` reverted to the Phase 1 version (the new modules left on disk), 14 of the 28
+  touched tests fail. The 14 that pass are the lock-ins (by design), behaviours the old code already had (404 not
+  retried, cancel keeps `.part`), and the unit tests of the new `writeFully`.
+- **Local verification:** voice 118/0 (98 + 20), daemon 379/0, typecheck 0, claim-lint ✓, boundaries 0 errors.
+- **Size:** tree 176,198 → 176,354 (+156); `models.ts` 366 → 312, `fetch-file.ts` 124, `tar.ts` 86. No waived module touched.
