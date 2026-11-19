@@ -290,7 +290,10 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       steps.push({ step: name, status: "pass", detail: await fn(), ms: Date.now() - t0 });
     } catch (e) {
       failed = true;
-      steps.push({ step: name, status: "fail", detail: (e as Error).message.slice(0, 900), ms: Date.now() - t0 });
+      const detail = String((e as Error)?.message ?? e).slice(0, 900);
+      steps.push({ step: name, status: "fail", detail, ms: Date.now() - t0 });
+      // Check-run annotations are readable through the API even when raw job logs are not.
+      if (process.env.GITHUB_ACTIONS) console.log(`::error title=desktop journey ${name} (${process.env.ImageOS ?? "?"} ${process.env.ImageVersion ?? "?"})::${detail.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
     }
     const s = steps[steps.length - 1]!;
     console.log(`  ${s.status.padEnd(7)} ${name} (${s.ms} ms) — ${s.detail}`);

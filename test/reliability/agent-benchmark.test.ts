@@ -62,6 +62,12 @@ test("all15 actual verifiers pass, costs remain explicitly synthetic/unavailable
       },
     );
     expect(run.error).toBeUndefined();
+    if (run.status !== 0) {
+      // Same failure, but name the failing scenarios (CI shows the error line, not the child's output).
+      let failing = "";
+      try { failing = JSON.stringify(JSON.parse(readFileSync(out, "utf8")).results.filter((r: { status?: string }) => r.status !== "PASS").map((r: { id?: string; status?: string; error?: string }) => ({ id: r.id, status: r.status, error: r.error }))); } catch { failing = `${run.stdout ?? ""}${run.stderr ?? ""}`.slice(-1200); }
+      throw new Error(`agent benchmark exited ${run.status}: ${failing}`.replace(/\s+/g, " "));
+    }
     expect(run.status).toBe(0);
     const report = JSON.parse(readFileSync(out, "utf8"));
     expect(report.summary).toMatchObject({
