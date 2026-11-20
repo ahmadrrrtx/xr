@@ -691,3 +691,17 @@ still pins an exact value. No waived giant grew.
   and the redaction (they caught a bearer-token redaction bug before the push).
 - This push is also the rerun. If NEW-7 recurs, the message should name the crash. Attempt 3 is then a real fix, the
   last before R7's halt.
+
+### Process deviation on `07ee114` (2026-11-20) — Phases 6–7 pushed early by mistake, reverted
+
+- **What happened:** the NEW-7 diagnostics (`c6b4030`) and their log entry (`07ee114`) were committed on top of the
+  local, unpushed stack instead of on top of the pushed head `c0249f3`. So the push `c0249f3..07ee114` also carried the
+  Phase 6 commit `aa3c044` and the Phase 7 commits `4045865`, `9c28812` and `e44d4d4` while Phase 5 was still red. That
+  breaks the one-phase-per-push rule.
+- **Repair:** force-pushing is forbidden (R4), so the four commits were reverted right away, newest first, in the next
+  push: `6221984` (P7c), `a5504ce` (P7b), `536b661` (P7a) and `bccb51b` (P6). The head's tree is now exactly `c0249f3`
+  plus the diagnostics and this log, verified with `git diff --stat c0249f3 HEAD`. The CI runs that started on the
+  combined head `07ee114` are superseded and are not counted as evidence for any phase.
+- Phase 5 remains the phase under test, at CI-fix attempt 2 of 3. Phases 6 and 7 are re-applied unchanged, one phase per
+  push, after Phase 5 is green. Their content is identical to the reverted commits.
+
