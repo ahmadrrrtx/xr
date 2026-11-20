@@ -14,7 +14,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | Repo is at 1.1.0; Phase 10 bumps to 1.1.1 | `release.manifest.json` identity is **1.2.0-preview.1** ("XR Preview 1", `public-beta`); `channels.publicVersion` is 1.0.0; v1.1.0 is a documented withdrawn tag (`docs/release/1.1.0/WITHDRAWN.md`). A 1.1.1 tag would sort **below** the current identity, and versions are stamped from the manifest (`bun run release:stamp`), never hand-edited in `package.json` | Phase 10 is held for an explicit owner decision (see Phase 10 section); nothing is tagged or published without it |
 | Line numbers from the audit | Several items have moved or were already fixed (C13, B13 history bound); each item was re-verified against HEAD below | Recon table records the HEAD state per item |
 | Size discipline not mentioned | `bun run size-gate`: tree **176,055 / 176,500 LOC (99.7%)**, waived giants may never grow (`workspace-store.ts` +10 lines of room, `interfaces/shell/app.ts` +0, `core/agent.ts` +17) | Fixes are written line-neutral where they touch waived giants; any ceiling move is a reasoned, dated comment in `scripts/size-gate.ts` (the repo's own mechanism) and needs maintainer sign-off |
-| Tree ceiling 176,500 would not hold Phases 3–7 | Measured: Phase 1 +143, Phase 2 +156 (local); Phases 3–7 estimated at +250–450 against 146 remaining | **Owner (ahmadrrrtx) approved +500 → 177,000 on 2026-11-19** in this session. It lands as its own dated, reasoned commit in `scripts/size-gate.ts` (the gate's documented mechanism) at the start of Phase 3, docs markers re-stamped; waived giants still may not grow; each phase's measured LOC is logged |
+| Tree ceiling 176,500 would not hold Phases 3–7 | Measured: Phase 1 +143, Phase 2 +156 (local); Phases 3–7 estimated at +250–450 against 146 remaining | **Owner (ahmadrrrtx) approved +500 → 177,000 on 2026-11-19** in this session. It lands as its own dated, reasoned commit in `scripts/size-gate.ts` (the gate's documented mechanism) together with Phase 5, the first phase whose tree exceeds 176,500 (planned for the start of Phase 3; Phases 3 and 4 fit under the old ceiling, at 176,424 and 176,480), docs markers re-stamped; waived giants still may not grow; each phase's measured LOC is logged |
 | Phase 10 version choice | 1.1.1 would sort below the current 1.2.0-preview.1 identity | **Owner delegated the choice on 2026-11-19.** Decision: release **1.2.0-preview.2** through `release.manifest.json` + `bun run release:stamp` + the existing release workflow, only if every required check and the workflow's own gates are green and the full asset suite is produced; npm only via OIDC, desktop signing owner-blocked; otherwise nothing is published and Phase 10 records why |
 | R7: three CI-fix attempts per phase, then halt | Phase 3 halted on 2026-11-20 after three attempts, with every targeted failure fixed and one intermittent left (NEW-9) | **Owner (ahmadrrrtx) authorised one fourth Phase 3 attempt on 2026-11-20** (the NEW-9 PowerShell fix as proposed: telemetry and update check off, 15 s bound unchanged) and kept every other rule: Phases 4–11 have the normal three attempts each, one rerun per first-occurrence flake, a repeat is a defect |
 
@@ -89,7 +89,8 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ CI diagnostics `f13a309` `42e13ec` `515a3bd`) | head `97bd3b4`: CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347) ✓ · Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) ✓ · Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) ✓ · Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281) ✓ · npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260) ✓ · Supply Chain [44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) ✓ · Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design) |
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
 | 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`, `d75a553`; diagnostics `d46ee7b`) | head `8bfc6ea`: CI [44780370623](https://github.com/ahmadrrrtx/xr/actions/runs/44780370623) ✓ · Cross-Platform [44780370742](https://github.com/ahmadrrrtx/xr/actions/runs/44780370742) ✓ · Desktop App [44780370923](https://github.com/ahmadrrrtx/xr/actions/runs/44780370923) ✓ · Clean-Machine Journey [44780370700](https://github.com/ahmadrrrtx/xr/actions/runs/44780370700) ✓ · npm Pack Smoke [44780370889](https://github.com/ahmadrrrtx/xr/actions/runs/44780370889) ✓ · Supply Chain [44780370632](https://github.com/ahmadrrrtx/xr/actions/runs/44780370632) ✓ · Channel Install [44780370922](https://github.com/ahmadrrrtx/xr/actions/runs/44780370922) ✓. History: the Phase 3 CI sections below (four CI-fix attempts, the fourth owner-authorised) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
-| 4 — accounting (B7 B10 B18) | `acdd8da` | head `db3ee5f`: 6 of 7 green; Desktop App [44786241411](https://github.com/ahmadrrrtx/xr/actions/runs/44786241411) ✗ only on the windows-x64 desktop journey (WebDriver session not created, first occurrence → NEW-10). Rerun pushed | fixed-unverified |
+| 4 — accounting (B7 B10 B18) | `acdd8da` | head `8dd647a`: CI [44792959241](https://github.com/ahmadrrrtx/xr/actions/runs/44792959241) ✓ · Cross-Platform [44792959329](https://github.com/ahmadrrrtx/xr/actions/runs/44792959329) ✓ · Desktop App [44792959554](https://github.com/ahmadrrrtx/xr/actions/runs/44792959554) ✓ · Clean-Machine Journey [44792959439](https://github.com/ahmadrrrtx/xr/actions/runs/44792959439) ✓ · npm Pack Smoke [44792959392](https://github.com/ahmadrrrtx/xr/actions/runs/44792959392) ✓ · Supply Chain [44792959372](https://github.com/ahmadrrrtx/xr/actions/runs/44792959372) ✓ · Channel Install [44792959409](https://github.com/ahmadrrrtx/xr/actions/runs/44792959409) ✓ (the `db3ee5f` run: NEW-10, rerun) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
+| 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`) | pending (pushed after Phase 4 went green) | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -598,3 +599,51 @@ made along the way and no assertion, threshold, timeout or retry was changed.
   the webview rendered, then the sidecar did not answer `/health` within 60 s) and this head (NEW-10). It passed on
   every run seen on `main` and the other branches. **Any further failure of this job in Phase 4, with either symptom,
   is treated as a repeat and gets a real CI-fix attempt.**
+
+### Phase 4 CI on `8dd647a` — all six required checks green (Phase 4 done)
+
+- Green, every workflow: CI [44792959241](https://github.com/ahmadrrrtx/xr/actions/runs/44792959241), Cross-Platform [44792959329](https://github.com/ahmadrrrtx/xr/actions/runs/44792959329), Desktop App
+  [44792959554](https://github.com/ahmadrrrtx/xr/actions/runs/44792959554) (the windows-x64 desktop journey included: NEW-10 did not recur), Clean-Machine Journey
+  [44792959439](https://github.com/ahmadrrrtx/xr/actions/runs/44792959439), npm Pack Smoke [44792959392](https://github.com/ahmadrrrtx/xr/actions/runs/44792959392), Supply Chain [44792959372](https://github.com/ahmadrrrtx/xr/actions/runs/44792959372),
+  Channel Install [44792959409](https://github.com/ahmadrrrtx/xr/actions/runs/44792959409), OS sandbox (non-gating) [44792959470](https://github.com/ahmadrrrtx/xr/actions/runs/44792959470). `gh pr checks 215`:
+  84 pass, 1 skipped by design.
+- Phase 4 used no CI-fix attempt: one docs-only rerun, for the first occurrence of NEW-10. NEW-7 and NEW-10 stay open
+  as Windows desktop-journey intermittents.
+- Next: Phase 5 with the ceiling raise, which it needs (176,528 > 176,500). It was re-verified locally on this base:
+  typecheck 0; state 72/0, core and one-agent 140/0, daemon 379/0, security 420/0, context 316/0, reliability 109/0,
+  scripts and architecture 88/0, trust and cost 184/0; claim-lint clean.
+
+## Size-gate raise · commit `3609352`
+
+`TREE_CEILING` 176,500 → 177,000 with the owner's sign-off (2026-11-19), as a dated, reasoned comment in
+`scripts/size-gate.ts` listing each phase's measured cost. It lands before Phase 5, the first phase that needs it.
+`bun run scripts/size-gate.ts --stamp-docs` re-stamped the three `XR:TREE-CEILING` markers (README, security
+KNOWN_LIMITATIONS, the frozen 1.1.0 excerpt; marker contents only). The pin in
+`test/scripts/size-gate-merge-contract.test.ts` ("the existing owner-approved hardening ceiling") moved with it and
+still pins an exact value. No waived giant grew.
+
+## Phase 5 — state performance and identity (B8, B9, B11, B14) · commit `94474b7`
+
+| ID | Fix | Regression test (`test/state/state-performance.test.ts`) | Status |
+|---|---|---|---|
+| B8 / B14 | New `src/state/audit-verify.ts` is the single chain verifier. Construction calls it **once** (no double `verifyChain()`). The first open of a database in a process is a full pass and records the verified head as an in-memory checkpoint. Later opens verify only rows after it (a rewritten or missing checkpoint row fails over to a full pass) and schedule one background full pass. Explicit verification (`verifyChain`, `chainStatus`, `xr audit verify`, TUI audit export) stays a full pass. Unparseable `detail` now counts as a break instead of throwing. `workspace-store.ts` shrank 2541 → 2518. The TUI reads the open-time result on boot, refresh and switch | 20k audit + 20k cost rows: the first open is one full pass of 20,000 rows and a later open reads 0 rows, all inside a generous bound; a recent row edited after the checkpoint is caught at open and appends are refused; an **old** row edited behind the checkpoint is caught by the background pass and by explicit verify | fixed-unverified |
+| B9 | `idx_cost_events_created` and `idx_cost_events_session` (`CREATE INDEX IF NOT EXISTS`, additive) | both exist, reopening is idempotent, and `EXPLAIN QUERY PLAN` for the spend window uses `idx_cost_events_created` | fixed-unverified |
+| B11 | `WorkspaceManager.getStore(id, { fresh? })` opens `new Store(id, dbPath)` with the real workspace id (the path-only form forced `"default"`). It caches one instance per database, reopens a closed one, `fresh: true` gives an independent instance, and `deleteWorkspace` closes and evicts the cached handle | real id; same cached instance; fresh and closed handling | fixed-unverified |
+
+- **Deviation from the brief's wording (documented):** construction does not start from the chain's own last signed
+  checkpoint. That signature can only be trusted against the signing key, which is not loaded at construction
+  (keychain I/O), and the public key embedded in the chain is exactly what a forger would rewrite. The trusted start
+  is therefore this process's own last verified head, kept in memory. The first open per process is a full pass, and
+  edits behind the checkpoint are caught by the background and explicit full passes, so tamper detection is not
+  weakened (both cases are tested). Rows written under the wrong workspace id before B11 are not rewritten (R9).
+- **R2** (probes against a detached worktree at the Phase 4 commit):
+
+  | Defect | Old | New |
+  |---|---|---|
+  | B8 three later constructions of a healthy 20k-row chain | 68 / 72 / 107 ms (full pass each time) | 102 ms (first open) / 8 / 8 ms |
+  | B14 one construction of a broken chain | 2 `verifyChain()` passes | 1 open-time pass (`verifyChain()` 0×); break detected |
+  | B9 `cost_events` indexes | none | both |
+  | B11 `getStore()` workspace id / reuse | `default`, new instance per call | real id, cached instance |
+- **Local verification:** 29 audit-related test files 187/0; state 72/0, context 316/0, core 121/0, daemon 379/0,
+  security 420/0, trust 142/0, reliability 109/0, cli 262/0, phases 0/1/2/4/6/8 all 0 fail; typecheck 0; claim-lint ✓.
+- **Size:** tree +48 → 176,528 of 177,000; `workspace-store.ts` 2541 → 2518; `shell/app.ts` line-neutral.
