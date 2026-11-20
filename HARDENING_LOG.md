@@ -90,7 +90,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
 | 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`, `d75a553`; diagnostics `d46ee7b`) | head `8bfc6ea`: CI [44780370623](https://github.com/ahmadrrrtx/xr/actions/runs/44780370623) ✓ · Cross-Platform [44780370742](https://github.com/ahmadrrrtx/xr/actions/runs/44780370742) ✓ · Desktop App [44780370923](https://github.com/ahmadrrrtx/xr/actions/runs/44780370923) ✓ · Clean-Machine Journey [44780370700](https://github.com/ahmadrrrtx/xr/actions/runs/44780370700) ✓ · npm Pack Smoke [44780370889](https://github.com/ahmadrrrtx/xr/actions/runs/44780370889) ✓ · Supply Chain [44780370632](https://github.com/ahmadrrrtx/xr/actions/runs/44780370632) ✓ · Channel Install [44780370922](https://github.com/ahmadrrrtx/xr/actions/runs/44780370922) ✓. History: the Phase 3 CI sections below (four CI-fix attempts, the fourth owner-authorised) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
 | 4 — accounting (B7 B10 B18) | `acdd8da` | head `8dd647a`: CI [44792959241](https://github.com/ahmadrrrtx/xr/actions/runs/44792959241) ✓ · Cross-Platform [44792959329](https://github.com/ahmadrrrtx/xr/actions/runs/44792959329) ✓ · Desktop App [44792959554](https://github.com/ahmadrrrtx/xr/actions/runs/44792959554) ✓ · Clean-Machine Journey [44792959439](https://github.com/ahmadrrrtx/xr/actions/runs/44792959439) ✓ · npm Pack Smoke [44792959392](https://github.com/ahmadrrrtx/xr/actions/runs/44792959392) ✓ · Supply Chain [44792959372](https://github.com/ahmadrrrtx/xr/actions/runs/44792959372) ✓ · Channel Install [44792959409](https://github.com/ahmadrrrtx/xr/actions/runs/44792959409) ✓ (the `db3ee5f` run: NEW-10, rerun) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
-| 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`; CI fix `6381ac0`; diagnostics `c6b4030`) | head `c1112b7`: 6 of 7 green; Cross-Platform [44799038762](https://github.com/ahmadrrrtx/xr/actions/runs/44799038762) ✗ on Windows (B11 test held an open store while deleting its workspace). CI-fix attempt 1 of 3 pushed. Head `c0249f3`: 6 of 7 green (Windows B11 test fixed); Desktop App [44801051295](https://github.com/ahmadrrrtx/xr/actions/runs/44801051295) ✗ only on the windows-x64 desktop journey (NEW-7 again). CI-fix attempt 2 of 3 (diagnostics) pushed | fixed-unverified |
+| 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`; CI fix `6381ac0`; diagnostics `c6b4030`, `a3eb0fb`) | head `c1112b7`: 6 of 7 green; Cross-Platform [44799038762](https://github.com/ahmadrrrtx/xr/actions/runs/44799038762) ✗ on Windows (B11 test held an open store while deleting its workspace). CI-fix attempt 1 of 3 pushed. Head `c0249f3`: 6 of 7 green (Windows B11 test fixed); Desktop App [44801051295](https://github.com/ahmadrrrtx/xr/actions/runs/44801051295) ✗ only on the windows-x64 desktop journey (NEW-7 again). CI-fix attempt 2 of 3 (diagnostics) pushed; head `2cb5404` (after the revert): 6 of 7 green, Desktop App [44809374497](https://github.com/ahmadrrrtx/xr/actions/runs/44809374497) ✗ on the windows-x64 journey again. CI-fix attempt 3 of 3 (exit-status diagnostics) pushed | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -705,3 +705,29 @@ still pins an exact value. No waived giant grew.
 - Phase 5 remains the phase under test, at CI-fix attempt 2 of 3. Phases 6 and 7 are re-applied unchanged, one phase per
   push, after Phase 5 is green. Their content is identical to the reverted commits.
 
+### Phase 5 CI on `2cb5404` — NEW-7 again, now with the shell's view; CI-fix attempt 3 of 3
+
+- Green: CI [44809374499](https://github.com/ahmadrrrtx/xr/actions/runs/44809374499), Cross-Platform [44809374591](https://github.com/ahmadrrrtx/xr/actions/runs/44809374591), Clean-Machine Journey
+  [44809374528](https://github.com/ahmadrrrtx/xr/actions/runs/44809374528), npm Pack Smoke [44809374727](https://github.com/ahmadrrrtx/xr/actions/runs/44809374727), Supply Chain [44809374522](https://github.com/ahmadrrrtx/xr/actions/runs/44809374522),
+  Channel Install [44809374748](https://github.com/ahmadrrrtx/xr/actions/runs/44809374748), OS sandbox (non-gating) [44809374461](https://github.com/ahmadrrrtx/xr/actions/runs/44809374461).
+- Red: Desktop App [44809374497](https://github.com/ahmadrrrtx/xr/actions/runs/44809374497), only **Desktop journey — windows-x64**, in `launch`. The `c6b4030`
+  evidence: the webview had rendered; no `xr-engine` listened during 60 s (45 probes); the WebDriver session was gone
+  because "the browser has closed the connection"; **no shell log and no crash flag** in the journey's desktop home;
+  **no XR, engine or WebView2 process alive**; **no Application Error record**. So the app ended quietly, without a crash
+  record and without a survivor.
+- **What the code says** (Tauri 2.12.0 source, read through the GitHub API): `setup()` builds the configured windows
+  **before** it runs the app's setup hook, so the page loads while setup runs (the XR-WIN-BOOT-001 race in `lib.rs`).
+  An unmanaged `State<T>` command argument returns an error to JavaScript; only a direct `state::<T>()` call panics.
+  XR's direct calls are all on states that are managed early, created lazily, or used on user action, and nothing in
+  setup before its first log line (`session start`) can plausibly panic. So either setup ended earlier than its first
+  log line in a way not yet visible, or the WebDriver-launched app did not inherit `XR_DESKTOP_HOME` and wrote its log
+  elsewhere. The desktop code on this branch is unchanged from `main` on every startup path: Phase 3 changed only
+  chat-frame handling, the budget sync flag and the native pricing table.
+- **Attempt 3 (`a3eb0fb`), diagnostics only:** no assertion, bound, timeout, retry or polling change. The CI workflow
+  audits process creation and termination on its throwaway Windows runner, next to the existing HKLM WebView2 policy.
+  A failed launch now reports every start and exit status of `xr-desktop`, `xr-engine` and `msedgewebview2` (Security
+  4688/4689: names and exit codes only), and looks for the shell log in the default desktop home too. A passing launch
+  records whether the shell log landed in the journey's desktop home. The patterns were checked against sample event
+  messages.
+- **This is Phase 5's third and last attempt.** Phase 5's own fix held on Windows (attempt 1). If this head is not
+  fully green, work halts under R7, and the exit statuses go to the owner.
