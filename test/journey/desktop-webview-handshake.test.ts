@@ -89,6 +89,18 @@ test("launch evidence carries only the shell's lifecycle lines and the crash fla
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
+test("launch evidence says so when the app wrote its shell log to the default desktop home instead (NEW-7)", async () => {
+  const home = mkdtempSync(join(tmpdir(), "xr-launch-evidence-default-"));
+  try {
+    const fallback = join(home, "profile", ".xr-desktop");
+    mkdirSync(join(fallback, "logs"), { recursive: true });
+    writeFileSync(join(fallback, "logs", "shell.log"), "[1795180000000] session start: pid 7 version 1.2.0-preview.1 interruption-count 1 engine-failed false\n");
+    const evidence = await launchEvidence(join(home, ".xr-desktop"), home, fallback);
+    expect(evidence).toStartWith("shell log only in the DEFAULT desktop home: session start: pid 7");
+    expect(evidence).not.toContain(home);
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
 test("evidence redaction removes token-shaped values and the scratch home", () => {
   expect(redactEvidence(`Authorization: Bearer abc.def /tmp/h/x ${"c".repeat(32)}`, "/tmp/h")).toBe("Authorization: [redacted] $HOME/x [redacted]");
   expect(redactEvidence("api_key=sk-live-123; token: xyz, ok", "")).toBe("api_key=[redacted]; token: [redacted], ok");

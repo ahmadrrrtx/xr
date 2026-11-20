@@ -130,20 +130,37 @@ const WINDOWS_FAULTS = [
   "Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match '(?i)(xr-desktop|xr-engine|msedgewebview2)\\.exe' } | Select-Object -First 3 | ForEach-Object { $m = [string]$_.Message; 'fault ' + [regex]::Match($m, '(?i)faulting application name:\\s*([a-z0-9_.-]+)').Groups[1].Value + ' exception=' + [regex]::Match($m, '(?i)exception code:\\s*(0x[0-9a-f]+)').Groups[1].Value + ' module=' + [regex]::Match($m, '(?i)faulting module name:\\s*([a-z0-9_.-]+)').Groups[1].Value }",
 ].join("; ");
 
-/** NEW-7 — what the shell itself recorded about a failed launch: its lifecycle log lines, the crash flag, and on Windows
- *  OS fault metadata. Filtered and redacted like the Windows installer journey's evidence. */
-export async function launchEvidence(engineHome: string, home: string): Promise<string> {
+/** Windows: every start and exit status of XR, its engine and WebView2, grouped (Security 4688/4689; CI enables the
+ *  audit policy on its throwaway runner). Process names and exit codes only. */
+const WINDOWS_EXITS = String.raw`$ev = @(Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4688,4689; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue); $rows = foreach ($e in $ev) { $m = [string]$e.Message; if ($e.Id -eq 4688) { $x = [regex]::Match($m, '(?i)new process name:[^\r\n]*\\(xr-desktop|xr-engine[^\\\r\n]*|msedgewebview2)\.exe'); if ($x.Success) { 'start ' + $x.Groups[1].Value.ToLower() } } else { $x = [regex]::Match($m, '(?i)process name:[^\r\n]*\\(xr-desktop|xr-engine[^\\\r\n]*|msedgewebview2)\.exe'); if ($x.Success) { 'exit ' + $x.Groups[1].Value.ToLower() + ' ' + [regex]::Match($m, '(?i)exit status:\s*(0x[0-9a-f]+)').Groups[1].Value } } }; 'audit events=' + $ev.Count + ': ' + (($rows | Group-Object | ForEach-Object { $_.Name + ' x' + $_.Count }) -join ', ')`;
+
+function shellLogLines(desktopHome: string): string | null {
+  const log = join(desktopHome, "logs", "shell.log");
+  if (!desktopHome || !existsSync(log)) return null;
+  const lines = readFileSync(log, "utf8").split(/\r?\n/).filter((l) => SHELL_LOG_LINE.test(l)).slice(-6);
+  return lines.map((l) => l.replace(/^\[\d+\] /, "")).join(" | ") || "(no lifecycle lines)";
+}
+
+/** NEW-7 — what the shell itself recorded about a failed launch: its lifecycle log lines (in the journey's desktop home,
+ *  or the default one if the app did not inherit XR_DESKTOP_HOME), the crash flag, and on Windows OS fault metadata and
+ *  process exit statuses. Filtered and redacted like the Windows installer journey's evidence. */
+export async function launchEvidence(engineHome: string, home: string, defaultHome = ""): Promise<string> {
   const parts: string[] = [];
-  const log = join(engineHome, "logs", "shell.log");
-  const lines = existsSync(log) ? readFileSync(log, "utf8").split(/\r?\n/).filter((l) => SHELL_LOG_LINE.test(l)).slice(-6) : [];
-  parts.push(existsSync(log) ? `shell log: ${lines.map((l) => l.replace(/^\[\d+\] /, "")).join(" | ") || "(no lifecycle lines)"}` : "no shell log");
+  const own = shellLogLines(engineHome);
+  const fallback = own === null ? shellLogLines(defaultHome) : null;
+  parts.push(own !== null ? `shell log: ${own}` : fallback !== null ? `shell log only in the DEFAULT desktop home: ${fallback}` : "no shell log");
   parts.push(existsSync(join(engineHome, "crash-dirty.json")) ? "crash flag present (no clean exit)" : "no crash flag");
   if (process.platform === "win32") {
     const r = await sh(["pwsh.exe", "-NoProfile", "-Command", WINDOWS_FAULTS], { timeoutMs: 30_000 });
     parts.push(`windows: ${tail(r.out, 400) || "(nothing)"}`);
+    const x = await sh(["pwsh.exe", "-NoProfile", "-Command", WINDOWS_EXITS], { timeoutMs: 60_000 });
+    parts.push(`processes: ${tail(x.out, 500) || "(nothing)"}`);
   }
   return redactEvidence(parts.join("; "), home);
 }
+
+/** Where the default desktop home is when XR_DESKTOP_HOME is not inherited (USERPROFILE on Windows, HOME elsewhere). */
+const defaultDesktopHome = () => join((process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) ?? "", ".xr-desktop");
 
 /** Keep the last 4 KB a child printed, so a launch failure carries the panic instead of only a timeout. */
 function captureOutput(child: ChildProcess): (e: unknown) => Error {
@@ -156,7 +173,7 @@ function captureOutput(child: ChildProcess): (e: unknown) => Error {
 
 /** Minimal W3C WebDriver client for tauri-driver (no npm dependency). */
 async function webdriverSmoke(app: string, env: Record<string,string>): Promise<string> {
-  const withEvidence = async (e: unknown) => new Error(`${e instanceof Error ? e.message : String(e)}; ${await launchEvidence(env.XR_DESKTOP_HOME ?? "", env.HOME ?? "").catch((x: unknown) => `launch evidence unavailable (${String(x)})`)}`);
+  const withEvidence = async (e: unknown) => new Error(`${e instanceof Error ? e.message : String(e)}; ${await launchEvidence(env.XR_DESKTOP_HOME ?? "", env.HOME ?? "", defaultDesktopHome()).catch((x: unknown) => `launch evidence unavailable (${String(x)})`)}`);
   const base = "http://127.0.0.1:4444";
   const driver = spawn("tauri-driver", [], { env, stdio: ["ignore", "pipe", "pipe"] });
   const explain = captureOutput(driver);
@@ -201,7 +218,8 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       });
       if (scheduled !== "quit scheduled") throw new Error("could not schedule explicit app quit");
       if (!(await engineGone(15_000))) throw new Error("engine sidecar still listening 15 s after explicit application quit (containment)");
-      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${webview}; ${acl}; explicit quit requested and sidecar stopped`;
+      const logged = existsSync(join(env.XR_DESKTOP_HOME ?? "", "logs", "shell.log")) ? "in the journey's desktop home" : "NOT in the journey's desktop home";
+      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${webview}; ${acl}; explicit quit requested and sidecar stopped; shell log ${logged}`;
     } finally {
       await wd("DELETE", `/session/${sid}`).catch(() => undefined);
     }
@@ -432,7 +450,7 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
         need(app.exitCode === null, `the app exited early (code ${app.exitCode})`);
         return `GUI process up; engine sidecar healthy on :${port}${process.platform === "darwin" ? " (no WKWebView driver on macOS: render not asserted)" : ""}`;
       } catch (e) {
-        throw explain(new Error(`${e instanceof Error ? e.message : String(e)}; ${await launchEvidence(engineHome, home).catch((x: unknown) => `launch evidence unavailable (${String(x)})`)}`));
+        throw explain(new Error(`${e instanceof Error ? e.message : String(e)}; ${await launchEvidence(engineHome, home, defaultDesktopHome()).catch((x: unknown) => `launch evidence unavailable (${String(x)})`)}`));
       } finally {
         app.kill("SIGTERM");
         if (!(await engineGone(15_000))) {
