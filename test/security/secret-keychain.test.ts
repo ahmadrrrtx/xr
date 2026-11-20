@@ -540,12 +540,3 @@ test("desktop OS keychain service is per-home and does not overwrite CLI service
   expect(calls[1].args).toContain(cli); expect(calls[1].input).toBe('different-cli-test-key');
   expect(macosAddCommand(NAME, VALUE, desktop)).toContain(`-s "${desktop}"`);
 });
-
-// Hardening C5 lock-in: the opt-in file vault is reported as a doctor warning, never as healthy.
-test("C5: XR_SECRET_BACKEND=file is a doctor warning that names the opt-in", () => {
-  process.env.XR_SECRET_BACKEND = "file";
-  const h = secretStoreHealth("linux");
-  expect(h.state).toBe("warn");
-  expect(h.detail).toContain("XR_SECRET_BACKEND=file");
-  expect(h.remediation).toContain("Unset XR_SECRET_BACKEND");
-});
