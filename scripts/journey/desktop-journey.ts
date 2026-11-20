@@ -55,31 +55,53 @@ export function flavourFor(slug: string): { channel: "deb" | "nsis" | "dmg"; mat
   throw new Error(`unknown desktop slug ${slug}`);
 }
 
-/** Port the engine sidecar (process name xr-engine*) listens on, or null. */
-async function enginePort(): Promise<number | null> {
+/** Port the engine sidecar (process name xr-engine*) listens on, or null, plus the raw probe output for failures. */
+async function enginePortProbe(): Promise<{ port: number | null; raw: string }> {
   let out = "";
   if (process.platform === "linux") out = (await sh(["sh", "-c", "ss -ltnpH 2>/dev/null | grep xr-engine || true"])).out;
   else if (process.platform === "darwin") out = (await sh(["sh", "-c", "lsof -nP -a -c xr-engine -iTCP -sTCP:LISTEN 2>/dev/null || true"])).out;
   else out = (await sh(["pwsh.exe", "-NoProfile", "-Command", "$p = (Get-Process xr-engine* -ErrorAction SilentlyContinue).Id; if ($p) { Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $p -contains $_.OwningProcess } | ForEach-Object { '127.0.0.1:' + $_.LocalPort } }"])).out;
   const m = /127\.0\.0\.1[:.](\d{2,5})/.exec(out);
-  return m ? Number(m[1]) : null;
+  return { port: m ? Number(m[1]) : null, raw: out };
+}
+async function enginePort(): Promise<number | null> {
+  return (await enginePortProbe()).port;
 }
 
 async function waitForEngineHealth(timeoutMs: number): Promise<number> {
   const deadline = Date.now() + timeoutMs;
+  // Diagnostics only (NEW-7): the polling, bounds and success rule are unchanged.
+  let polls = 0, slowest = 0, lastPort: number | null = null, lastRaw = "", last = "no listening port found";
   while (Date.now() < deadline) {
-    const port = await enginePort();
+    const t0 = Date.now();
+    const probe = await enginePortProbe();
+    const port = probe.port;
+    polls++; slowest = Math.max(slowest, Date.now() - t0); lastPort = port; lastRaw = probe.raw;
     if (port) {
       try {
         const r = await fetch(`http://127.0.0.1:${port}/api/v1/health`, { signal: AbortSignal.timeout(3000) });
         if (r.ok) return port;
-      } catch {
-        /* still booting */
+        last = `health answered HTTP ${r.status}`;
+      } catch (e) {
+        last = `health fetch failed: ${e instanceof Error ? e.message : String(e)}`; /* still booting */
       }
     }
     await sleep(1000);
   }
-  throw new Error(`the app's engine sidecar never answered /api/v1/health within ${timeoutMs / 1000} s`);
+  throw new Error(`the app's engine sidecar never answered /api/v1/health within ${timeoutMs / 1000} s [${polls} OS port probes, slowest ${slowest} ms; last port ${lastPort ?? "none"}; ${last}; last probe output: ${tail(lastRaw, 200) || "(empty)"}]`);
+}
+
+/** The shell's own view of its sidecar (engine_link), for a failure message. Never returns the token. */
+export async function shellEngineView(wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string): Promise<string> {
+  try {
+    const view = await wd("POST", `/session/${sid}/execute/async`, {
+      script: "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('engine_link').then((l) => done({ reachable: l.reachable, spawned: l.spawned, port: l.port, hasToken: Boolean(l.token || l.hasToken), reason: l.reason || null, containmentMode: l.containmentMode || null, stderr: (l.stderr || []).slice(-3).map((x) => String(x).slice(0, 120)) }), (e) => done({ error: String(e && e.message ? e.message : e) }));",
+      args: [],
+    });
+    return `the shell's engine_link: ${JSON.stringify(view).slice(0, 500)}`;
+  } catch (e) {
+    return `the shell's engine_link was unavailable (${e instanceof Error ? e.message : String(e)})`;
+  }
 }
 
 async function engineGone(timeoutMs: number): Promise<boolean> {
@@ -131,7 +153,9 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
         [children, text] = v;
       }
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
-      const port = await waitForEngineHealth(60_000);
+      const port = await waitForEngineHealth(60_000).catch(async (e: unknown) => {
+        throw new Error(`${e instanceof Error ? e.message : String(e)}; ${await shellEngineView(wd, sid)}`);
+      });
       const webview = await webviewEngineSmoke(wd, sid);
       await webviewOnboardingSmoke(wd, sid);
       const acl = await ipcAclSmoke(wd, sid);
@@ -290,7 +314,7 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       steps.push({ step: name, status: "pass", detail: await fn(), ms: Date.now() - t0 });
     } catch (e) {
       failed = true;
-      const detail = String((e as Error)?.message ?? e).slice(0, 900);
+      const detail = String((e as Error)?.message ?? e).slice(0, 1600);
       steps.push({ step: name, status: "fail", detail, ms: Date.now() - t0 });
       // Check-run annotations are readable through the API even when raw job logs are not.
       if (process.env.GITHUB_ACTIONS) console.log(`::error title=desktop journey ${name} (${process.env.ImageOS ?? "?"} ${process.env.ImageVersion ?? "?"})::${detail.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
