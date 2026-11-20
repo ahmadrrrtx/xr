@@ -87,7 +87,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 0 — recon/baseline | `2b93d33` | CI [44499926066](https://github.com/ahmadrrrtx/xr/actions/runs/44499926066) ✓ · Cross-Platform [44499925774](https://github.com/ahmadrrrtx/xr/actions/runs/44499925774) ✓ · Supply Chain [44499925608](https://github.com/ahmadrrrtx/xr/actions/runs/44499925608) ✓ · npm Pack Smoke [44499925659](https://github.com/ahmadrrrtx/xr/actions/runs/44499925659) ✓ · Journey [44499926003](https://github.com/ahmadrrrtx/xr/actions/runs/44499926003) ✓ · Channel Install [44499925804](https://github.com/ahmadrrrtx/xr/actions/runs/44499925804) ✓ · Desktop App [44499925653](https://github.com/ahmadrrrtx/xr/actions/runs/44499925653) ✓ | **done** — all 6 required checks pass on PR #215 (82 checks pass, 1 skipped by design: "Real channel installs of the public version") |
 | 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ CI diagnostics `f13a309` `42e13ec` `515a3bd`) | head `97bd3b4`: CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347) ✓ · Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) ✓ · Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) ✓ · Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281) ✓ · npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260) ✓ · Supply Chain [44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) ✓ · Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design) |
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
-| 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`; diagnostics `d46ee7b`) | head `5103ae5`: Cross-Platform ✗ (macOS `/api/overview` 861 ms → NEW-6), Desktop App ✗ (Rust shared pricing vector: B5 parity gap). Head `fb3163f`: 6 of 7 green; Desktop App ✗ only on the windows-x64 desktop journey (→ NEW-7). Head `8b2b1a3`: 6 of 7 green incl. Desktop App [44734448535](https://github.com/ahmadrrrtx/xr/actions/runs/44734448535); CI [44734448320](https://github.com/ahmadrrrtx/xr/actions/runs/44734448320) ✗ only on a first-occurrence PowerShell start-up timeout (unrelated test). Head `9bb1010`: 6 of 7 green incl. CI [44741467463](https://github.com/ahmadrrrtx/xr/actions/runs/44741467463); Desktop App [44741467604](https://github.com/ahmadrrrtx/xr/actions/runs/44741467604) ✗ only on a first-occurrence 3 s client timeout in a desktop shell test (unrelated). Rerun pushed. Head `789cc47`: 6 of 7 green; Desktop App [44743964067](https://github.com/ahmadrrrtx/xr/actions/runs/44743964067) ✗ on the same timeout again (→ NEW-8). CI-fix attempt 3 of 3 pushed. Head `1f15f51`: Desktop App [44748738547](https://github.com/ahmadrrrtx/xr/actions/runs/44748738547) ✓ (NEW-8 fix held), CI ✓; Cross-Platform [44748738656](https://github.com/ahmadrrrtx/xr/actions/runs/44748738656) ✗ (Windows `migration-race`, first occurrence), Journey [44748738499](https://github.com/ahmadrrrtx/xr/actions/runs/44748738499) ✗ (NEW-3 again). **R7 attempt limit reached**; docs-only rerun pushed. Head `a0943a7`: **every job that ran passed**; Journey and Desktop gates red only because two macOS arm64 jobs were never acquired by a hosted runner. Infrastructure re-run pushed | fixed-unverified |
+| 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`; diagnostics `d46ee7b`) | head `5103ae5`: Cross-Platform ✗ (macOS `/api/overview` 861 ms → NEW-6), Desktop App ✗ (Rust shared pricing vector: B5 parity gap). Head `fb3163f`: 6 of 7 green; Desktop App ✗ only on the windows-x64 desktop journey (→ NEW-7). Head `8b2b1a3`: 6 of 7 green incl. Desktop App [44734448535](https://github.com/ahmadrrrtx/xr/actions/runs/44734448535); CI [44734448320](https://github.com/ahmadrrrtx/xr/actions/runs/44734448320) ✗ only on a first-occurrence PowerShell start-up timeout (unrelated test). Head `9bb1010`: 6 of 7 green incl. CI [44741467463](https://github.com/ahmadrrrtx/xr/actions/runs/44741467463); Desktop App [44741467604](https://github.com/ahmadrrrtx/xr/actions/runs/44741467604) ✗ only on a first-occurrence 3 s client timeout in a desktop shell test (unrelated). Rerun pushed. Head `789cc47`: 6 of 7 green; Desktop App [44743964067](https://github.com/ahmadrrrtx/xr/actions/runs/44743964067) ✗ on the same timeout again (→ NEW-8). CI-fix attempt 3 of 3 pushed. Head `1f15f51`: Desktop App [44748738547](https://github.com/ahmadrrrtx/xr/actions/runs/44748738547) ✓ (NEW-8 fix held), CI ✓; Cross-Platform [44748738656](https://github.com/ahmadrrrtx/xr/actions/runs/44748738656) ✗ (Windows `migration-race`, first occurrence), Journey [44748738499](https://github.com/ahmadrrrtx/xr/actions/runs/44748738499) ✗ (NEW-3 again). **R7 attempt limit reached**; docs-only rerun pushed. Head `a0943a7`: **every job that ran passed**; Journey and Desktop gates red only because two macOS arm64 jobs were never acquired by a hosted runner. Infrastructure re-run pushed. Head `8d29f9e`: 5 of 6 required checks green (Desktop, Cross-Platform, Journey, npm Pack, Supply Chain); CI [44762916079](https://github.com/ahmadrrrtx/xr/actions/runs/44762916079) ✗ on the PowerShell start-up timeout again (→ NEW-9). **HALTED under R7** (owner decision needed) | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -465,3 +465,49 @@ made along the way and no assertion, threshold, timeout or retry was changed.
 - No test failed on this head. Both red gates are runner allocations that never happened, not verdicts on the code,
   and reruns through the API are refused (403). This docs-only commit re-requests them. It is not a CI-fix attempt:
   nothing is changed and nothing is retried in code.
+
+### Phase 3 CI on `8d29f9e` — PowerShell timeout repeated (NEW-9); work halted under R7
+
+- Green: **Desktop App [44762916089](https://github.com/ahmadrrrtx/xr/actions/runs/44762916089)** (every job, all seven desktop journeys), **Cross-Platform
+  [44762915982](https://github.com/ahmadrrrtx/xr/actions/runs/44762915982)**, **Clean-Machine Journey [44762915978](https://github.com/ahmadrrrtx/xr/actions/runs/44762915978)** (every CLI and Docker journey,
+  macOS included this time), npm Pack Smoke [44762915998](https://github.com/ahmadrrrtx/xr/actions/runs/44762915998), Supply Chain [44762916094](https://github.com/ahmadrrrtx/xr/actions/runs/44762916094),
+  Channel Install [44762916002](https://github.com/ahmadrrrtx/xr/actions/runs/44762916002), OS sandbox (non-gating) [44762916082](https://github.com/ahmadrrrtx/xr/actions/runs/44762916082).
+- Red: CI [44762916079](https://github.com/ahmadrrrtx/xr/actions/runs/44762916079), job `test / core`, the same test as on `8b2b1a3`:
+  `test/release/windows-installers-negative.test.ts` "missing or duplicate installer inputs fail closed: empty". This
+  time `pwsh` printed nothing before the test's 15 s `spawnSync` bound (`ETIMEDOUT`). On `8b2b1a3` it had printed the
+  expected refusal and then not exited. Under R7 a repeat is a defect: **NEW-9 (open)**, "the first PowerShell 7
+  process on the Ubuntu `test / core` runner can take more than 15 s to start or exit". The script exits within a
+  second of starting when the bundle folder is empty, and nothing in Phases 1–3 touches PowerShell, that script or
+  `test/release`. The candidate fix, unproven because this sandbox has no `pwsh`, is to start the test's `pwsh` with
+  `POWERSHELL_TELEMETRY_OPTOUT=1` and `POWERSHELL_UPDATECHECK=Off`. That removes PowerShell's start-up and exit network
+  calls (telemetry, update check) without touching the 15 s bound or anything the test asserts.
+
+## HALT — Phase 3, under R7 (2026-11-20)
+
+- **Rule:** R7 allows three CI-fix attempts per phase, then a halt with a report. Phase 3 used its three: (1) `7b4b719`
+  and `beebd2c` (B5 native-governor parity; NEW-6 overview never waits on git), (2) `d46ee7b` (NEW-7 desktop-journey
+  diagnostics), (3) `dac8ba4` (NEW-8 isolation probes off the boot path). A fourth change, for NEW-9, is not made
+  without the owner.
+- **Every fix held.** None of the failures each attempt targeted came back on any later head: the Rust shared pricing
+  vector, the macOS `/api/overview` bound, the Windows desktop journey and the desktop catalog timeout.
+- **Required checks on Phase 3 code** (green / red; one head may count in several rows):
+
+  | Check | Green heads | Red heads (cause) |
+  |---|---|---|
+  | Quality Gate | `5103ae5` `fb3163f` `9bb1010` `789cc47` `1f15f51` `a0943a7` | `8b2b1a3` `8d29f9e` (NEW-9) |
+  | Cross-Platform gate | `fb3163f` `8b2b1a3` `9bb1010` `789cc47` `a0943a7` `8d29f9e` | `5103ae5` (NEW-6, fixed), `1f15f51` (Windows `migration-race`, did not recur) |
+  | Supply Chain gate | all eight | none |
+  | npm Pack Smoke gate | all eight | none |
+  | Clean-Machine Journey gate | `5103ae5` `fb3163f` `8b2b1a3` `9bb1010` `789cc47` `8d29f9e` | `1f15f51` (NEW-3), `a0943a7` (no runner) |
+  | Desktop gate | `8b2b1a3` `1f15f51` `8d29f9e` | `5103ae5` (B5 parity, fixed), `fb3163f` (NEW-7), `9bb1010` `789cc47` (NEW-8, fixed), `a0943a7` (no runner) |
+
+- **Closest heads:** on `a0943a7` every job that ran passed (two macOS arm64 jobs never got a runner). On `8d29f9e`, five
+  of six required checks passed, and NEW-9 failed the sixth.
+- **Open defects:** NEW-2 (Bedrock default model), NEW-3 (Windows CLI journey, late `update` step: `xr status --json`
+  exit 1), NEW-7 (Windows desktop journey sidecar health), NEW-9 (PowerShell start-up on Linux). The last three are
+  intermittent and now carry diagnostics.
+- **Not pushed:** Phases 4–7 are implemented, verified locally and committed locally on top of this head: accounting,
+  the size-gate raise, state performance, daemon/workspace, and the three security commits. They wait for the owner's
+  decision. R7 forbids pushing a later phase while this one is red.
+- **Owner decision needed:** authorise a fourth Phase 3 attempt (the NEW-9 candidate fix above) and say how reruns for
+  runner and infrastructure flakes count from here, or stop the run at Phase 3.
