@@ -135,6 +135,15 @@ describe("B5 — stale price facts warn, they do not brick", () => {
     expect(second.allow ? second.warning : "x").toBeFalsy();
   });
 
+  test("the desktop webview, which has no `process` global, still prices stale facts", () => {
+    const saved = globalThis.process;
+    let price: ReturnType<typeof priceFor> | undefined;
+    Object.defineProperty(globalThis, "process", { value: undefined, configurable: true, writable: true });
+    try { price = priceFor("anthropic", "claude-sonnet-5-5", { now: after }); }
+    finally { Object.defineProperty(globalThis, "process", { value: saved, configurable: true, writable: true }); }
+    expect(price && pricingAvailable(price) && price.stale).toBe(true);
+  });
+
   test("doctor states the freshness plainly", () => {
     expect(budgetTruthChecks(10, true, after)[1]).toMatchObject({ id: "price-facts", state: "warn" });
     expect(budgetTruthChecks(10, true)[1]).toMatchObject({ id: "price-facts", state: "ok" });

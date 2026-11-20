@@ -16,7 +16,7 @@ export function priceFor(providerId: string, model: string, opts: { now?: number
   // B5: a calendar date must not brick paid providers. Past staleAt the last-known rates stay in force,
   // flagged `stale`; XR_STALE_PRICE_FACTS=refuse is the operator's explicit opt-in to strict refusal.
   const stale = !modelFactsFresh(now);
-  if (!fact?.price || (stale && process.env.XR_STALE_PRICE_FACTS === "refuse")) return UNAVAILABLE;
+  if (!fact?.price || (stale && staleFactsRefused())) return UNAVAILABLE;
   let p = { input: fact.price.input, output: fact.price.output };
   if (fact.price.until && now > Date.parse(fact.price.until)) {
     if (!fact.price.then) return UNAVAILABLE;
@@ -26,6 +26,8 @@ export function priceFor(providerId: string, model: string, opts: { now?: number
   if (providerId === "xai" && model.startsWith("grok-4") && (opts.inputTokens ?? 0) >= 200_000) p = { input: p.input * 2, output: p.output * 2 };
   return { inPerMTok: p.input, outPerMTok: p.output, known: true, source: fact.price.source, verifiedAt: MODEL_FACTS_VERIFIED_AT, ...(stale && { stale: true }) };
 }
+/** The desktop webview imports this module and has no `process` global outside a Vite build. */
+const staleFactsRefused = (): boolean => (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.XR_STALE_PRICE_FACTS === "refuse";
 const validRate = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
 export function pricingAvailable(p: Pricing): boolean { return p.known !== false && validRate(p.inPerMTok) && validRate(p.outPerMTok); }
 export function isFreeProvider(providerId: string): boolean { return LOCAL.has(providerId); }
