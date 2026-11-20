@@ -90,7 +90,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
 | 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`, `d75a553`; diagnostics `d46ee7b`) | head `8bfc6ea`: CI [44780370623](https://github.com/ahmadrrrtx/xr/actions/runs/44780370623) ✓ · Cross-Platform [44780370742](https://github.com/ahmadrrrtx/xr/actions/runs/44780370742) ✓ · Desktop App [44780370923](https://github.com/ahmadrrrtx/xr/actions/runs/44780370923) ✓ · Clean-Machine Journey [44780370700](https://github.com/ahmadrrrtx/xr/actions/runs/44780370700) ✓ · npm Pack Smoke [44780370889](https://github.com/ahmadrrrtx/xr/actions/runs/44780370889) ✓ · Supply Chain [44780370632](https://github.com/ahmadrrrtx/xr/actions/runs/44780370632) ✓ · Channel Install [44780370922](https://github.com/ahmadrrrtx/xr/actions/runs/44780370922) ✓. History: the Phase 3 CI sections below (four CI-fix attempts, the fourth owner-authorised) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
 | 4 — accounting (B7 B10 B18) | `acdd8da` | head `8dd647a`: CI [44792959241](https://github.com/ahmadrrrtx/xr/actions/runs/44792959241) ✓ · Cross-Platform [44792959329](https://github.com/ahmadrrrtx/xr/actions/runs/44792959329) ✓ · Desktop App [44792959554](https://github.com/ahmadrrrtx/xr/actions/runs/44792959554) ✓ · Clean-Machine Journey [44792959439](https://github.com/ahmadrrrtx/xr/actions/runs/44792959439) ✓ · npm Pack Smoke [44792959392](https://github.com/ahmadrrrtx/xr/actions/runs/44792959392) ✓ · Supply Chain [44792959372](https://github.com/ahmadrrrtx/xr/actions/runs/44792959372) ✓ · Channel Install [44792959409](https://github.com/ahmadrrrtx/xr/actions/runs/44792959409) ✓ (the `db3ee5f` run: NEW-10, rerun) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
-| 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`; CI fix `6381ac0`; diagnostics `c6b4030`, `a3eb0fb`) | head `c1112b7`: 6 of 7 green; Cross-Platform [44799038762](https://github.com/ahmadrrrtx/xr/actions/runs/44799038762) ✗ on Windows (B11 test held an open store while deleting its workspace). CI-fix attempt 1 of 3 pushed. Head `c0249f3`: 6 of 7 green (Windows B11 test fixed); Desktop App [44801051295](https://github.com/ahmadrrrtx/xr/actions/runs/44801051295) ✗ only on the windows-x64 desktop journey (NEW-7 again). CI-fix attempt 2 of 3 (diagnostics) pushed; head `2cb5404` (after the revert): 6 of 7 green, Desktop App [44809374497](https://github.com/ahmadrrrtx/xr/actions/runs/44809374497) ✗ on the windows-x64 journey again. CI-fix attempt 3 of 3 (exit-status diagnostics) pushed | fixed-unverified |
+| 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`; CI fix `6381ac0`; diagnostics `c6b4030`, `a3eb0fb`) | head `c1112b7`: 6 of 7 green; Cross-Platform [44799038762](https://github.com/ahmadrrrtx/xr/actions/runs/44799038762) ✗ on Windows (B11 test held an open store while deleting its workspace). CI-fix attempt 1 of 3 pushed. Head `c0249f3`: 6 of 7 green (Windows B11 test fixed); Desktop App [44801051295](https://github.com/ahmadrrrtx/xr/actions/runs/44801051295) ✗ only on the windows-x64 desktop journey (NEW-7 again). CI-fix attempt 2 of 3 (diagnostics) pushed; head `2cb5404` (after the revert): 6 of 7 green, Desktop App [44809374497](https://github.com/ahmadrrrtx/xr/actions/runs/44809374497) ✗ on the windows-x64 journey again. CI-fix attempt 3 of 3 (exit-status diagnostics) pushed; head `0445a89`: 6 of 7 green, Desktop App [44815440538](https://github.com/ahmadrrrtx/xr/actions/runs/44815440538) ✗: `xr-desktop.exe` exited 0xC0000409 (root cause found, see HALT). **HALTED under R7** (owner decision needed) | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -731,3 +731,39 @@ still pins an exact value. No waived giant grew.
   messages.
 - **This is Phase 5's third and last attempt.** Phase 5's own fix held on Windows (attempt 1). If this head is not
   fully green, work halts under R7, and the exit statuses go to the owner.
+
+### Phase 5 CI on `0445a89` — NEW-7's cause found: the shell aborts (0xC0000409) during startup
+
+- Green: CI [44815440715](https://github.com/ahmadrrrtx/xr/actions/runs/44815440715), Cross-Platform [44815440745](https://github.com/ahmadrrrtx/xr/actions/runs/44815440745), Clean-Machine Journey
+  [44815440770](https://github.com/ahmadrrrtx/xr/actions/runs/44815440770), npm Pack Smoke [44815440648](https://github.com/ahmadrrrtx/xr/actions/runs/44815440648), Supply Chain [44815440712](https://github.com/ahmadrrrtx/xr/actions/runs/44815440712),
+  Channel Install [44815440587](https://github.com/ahmadrrrtx/xr/actions/runs/44815440587), OS sandbox [44815440578](https://github.com/ahmadrrrtx/xr/actions/runs/44815440578) and Workflow Audit
+  [44815440574](https://github.com/ahmadrrrtx/xr/actions/runs/44815440574) (both non-gating).
+- Red: Desktop App [44815440538](https://github.com/ahmadrrrtx/xr/actions/runs/44815440538), only the windows-x64 desktop journey. The process audit gave the answer:
+  `audit events=852: exit msedgewebview2 0x0 x8, exit xr-desktop 0xC0000409 x1, exit xr-engine 0x0 x1, start msedgewebview2
+  x8, start xr-desktop x1, start xr-engine x1`. **`xr-desktop.exe` ended with 0xC0000409**, the Windows fail-fast status
+  of a Rust abort (a panic that cannot unwind through a native callback). The single `xr-engine` start and clean exit
+  is the journey's own `xr-engine --version` call, so the shell never reached its sidecar spawn: it died before setup's
+  first lines ran (no shell log, no crash flag, as observed).
+
+## HALT — Phase 5, under R7 (2026-11-20)
+
+- **Rule:** three CI-fix attempts per phase, then halt. Phase 5 used: (1) `6381ac0`, the B11 test closes its fresh store
+  on Windows (held: Cross-Platform green ever since); (2) `c6b4030`, launch evidence; (3) `a3eb0fb`, process exit
+  statuses. No fourth change is pushed without the owner.
+- **Root cause of NEW-7 (and very likely NEW-10)**, a desktop-shell defect that predates this branch (the startup code
+  is unchanged from `main`). `tauri.conf.json` creates three windows at startup (`main`, `hud`, `orb`). Tauri 2.12.0
+  builds every configured window **before** it runs the app's `setup` hook (`crates/tauri/src/app.rs`, `fn setup`), and
+  creating the hud and orb webviews pumps messages. So the main page, which loads first, can dispatch its bootstrap
+  IPC before the first line of XR's `setup`. That IPC includes `updates_state`, which calls `app.state::<UpdatesState>()`,
+  and the recovery commands, which read `RecoveryState` directly. XR-WIN-BOOT-001 manages those states at the **top of
+  setup**, which is still too late on this path. A direct `state()` on an unmanaged type panics ("state() called before
+  manage()"), and inside the WebView2 callback the panic aborts the process with 0xC0000409. The comment's own
+  real-world capture names this exact site: "UpdatesState, inside CreateWebViewEnvironmentWithOptionsInternal → abort".
+  It is timing-dependent, so it shows only on slow starts, here the windows-x64 runner since about 2026-11-19.
+- **Proposed fix (ready locally, not pushed):** manage the five in-memory states (`RecoveryState`, `UpdatesState`,
+  `DataHealth`, `SpawnState`, `ScreenshotState`) on the `tauri::Builder`, next to the engine state, so they exist before
+  any window does; setup no longer manages them. All five are pure in-memory defaults, and `DataHealth`'s later manage
+  is already idempotent. The regression test is a structural guard in `test/desktop` that fails on the current code.
+  Rust cannot be built here (R6), so CI proves the change.
+- **Owner decision needed:** authorise a fourth Phase 5 attempt (this fix), or stop at Phase 5. Phases 6–7 stay as saved
+  patches until Phase 5 is green.
