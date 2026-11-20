@@ -87,7 +87,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 0 — recon/baseline | `2b93d33` | CI [44499926066](https://github.com/ahmadrrrtx/xr/actions/runs/44499926066) ✓ · Cross-Platform [44499925774](https://github.com/ahmadrrrtx/xr/actions/runs/44499925774) ✓ · Supply Chain [44499925608](https://github.com/ahmadrrrtx/xr/actions/runs/44499925608) ✓ · npm Pack Smoke [44499925659](https://github.com/ahmadrrrtx/xr/actions/runs/44499925659) ✓ · Journey [44499926003](https://github.com/ahmadrrrtx/xr/actions/runs/44499926003) ✓ · Channel Install [44499925804](https://github.com/ahmadrrrtx/xr/actions/runs/44499925804) ✓ · Desktop App [44499925653](https://github.com/ahmadrrrtx/xr/actions/runs/44499925653) ✓ | **done** — all 6 required checks pass on PR #215 (82 checks pass, 1 skipped by design: "Real channel installs of the public version") |
 | 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ CI diagnostics `f13a309` `42e13ec` `515a3bd`) | head `97bd3b4`: CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347) ✓ · Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) ✓ · Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) ✓ · Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281) ✓ · npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260) ✓ · Supply Chain [44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) ✓ · Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design) |
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
-| 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fix `7b4b719`, `beebd2c`; diagnostics `d46ee7b`) | head `5103ae5`: Cross-Platform ✗ (macOS `/api/overview` 861 ms → NEW-6), Desktop App ✗ (Rust shared pricing vector: B5 parity gap). Head `fb3163f`: 6 of 7 green; Desktop App ✗ only on the windows-x64 desktop journey (→ NEW-7). Head `8b2b1a3`: 6 of 7 green incl. Desktop App [44734448535](https://github.com/ahmadrrrtx/xr/actions/runs/44734448535); CI [44734448320](https://github.com/ahmadrrrtx/xr/actions/runs/44734448320) ✗ only on a first-occurrence PowerShell start-up timeout (unrelated test). Head `9bb1010`: 6 of 7 green incl. CI [44741467463](https://github.com/ahmadrrrtx/xr/actions/runs/44741467463); Desktop App [44741467604](https://github.com/ahmadrrrtx/xr/actions/runs/44741467604) ✗ only on a first-occurrence 3 s client timeout in a desktop shell test (unrelated). Rerun pushed | fixed-unverified |
+| 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`; diagnostics `d46ee7b`) | head `5103ae5`: Cross-Platform ✗ (macOS `/api/overview` 861 ms → NEW-6), Desktop App ✗ (Rust shared pricing vector: B5 parity gap). Head `fb3163f`: 6 of 7 green; Desktop App ✗ only on the windows-x64 desktop journey (→ NEW-7). Head `8b2b1a3`: 6 of 7 green incl. Desktop App [44734448535](https://github.com/ahmadrrrtx/xr/actions/runs/44734448535); CI [44734448320](https://github.com/ahmadrrrtx/xr/actions/runs/44734448320) ✗ only on a first-occurrence PowerShell start-up timeout (unrelated test). Head `9bb1010`: 6 of 7 green incl. CI [44741467463](https://github.com/ahmadrrrtx/xr/actions/runs/44741467463); Desktop App [44741467604](https://github.com/ahmadrrrtx/xr/actions/runs/44741467604) ✗ only on a first-occurrence 3 s client timeout in a desktop shell test (unrelated). Rerun pushed. Head `789cc47`: 6 of 7 green; Desktop App [44743964067](https://github.com/ahmadrrrtx/xr/actions/runs/44743964067) ✗ on the same timeout again (→ NEW-8). CI-fix attempt 3 of 3 pushed | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -392,3 +392,34 @@ made along the way and no assertion, threshold, timeout or retry was changed.
   one that starts the app container: 255–321 ms on `9bb1010` against 344–486 ms on the base, so it is not a regression.
   It is treated as a first-occurrence flake: this docs-only commit is its one rerun, the 3 s bound is not touched
   (R1), and a repeat is a defect.
+
+### Phase 3 CI on `789cc47` — the desktop shell-test timeout repeated (NEW-8); CI-fix attempt 3 of 3
+
+- Green: CI [44743964232](https://github.com/ahmadrrrtx/xr/actions/runs/44743964232), Cross-Platform [44743963987](https://github.com/ahmadrrrtx/xr/actions/runs/44743963987), Clean-Machine Journey
+  [44743964197](https://github.com/ahmadrrrtx/xr/actions/runs/44743964197), npm Pack Smoke [44743963937](https://github.com/ahmadrrrtx/xr/actions/runs/44743963937), Supply Chain [44743963934](https://github.com/ahmadrrrtx/xr/actions/runs/44743963934),
+  Channel Install [44743964158](https://github.com/ahmadrrrtx/xr/actions/runs/44743964158).
+- Red: Desktop App [44743964067](https://github.com/ahmadrrrtx/xr/actions/runs/44743964067), the same test as on `9bb1010`
+  (`test/desktop/full-engine-catalog.test.ts`, `TimeoutError`). Under R7 a repeat is a defect: **NEW-8**.
+- **Evidence:** the fixture child's request log is part of the check annotation on both heads. Health, the three
+  version handshakes, `/providers` and `/providers/catalog` each answered in 0–5 ms. The next request,
+  `POST /providers/custom`, never answered within the 3 s client timeout. It is the first request that boots the app
+  container (`agentExecutor.ensureApp()`).
+- **Cause:** kernel init (`TrustService.onInit`) awaited `EnvironmentManager.init()`, which ran every isolation probe
+  one after another: `docker info` (8 s budget, then `podman info`), and the bwrap and unshare self-checks (5 s plus
+  10 s budgets). A slow `docker info` on hosted runners is already documented in
+  `test/trust/adapters-risk.test.ts`. CI's `test / core` lane runs the same test and passed on both heads. Only the
+  desktop job installs the WebKit packages, which bring bubblewrap and so the extra bwrap self-check.
+- **Reproduced locally:** with a stand-in `docker` that takes 4 s, the old code fails this exact test with the same
+  `TimeoutError` after 3.45 s, and the fixed code passes in 0.7 s.
+- **Fix `dac8ba4`:** the probes run concurrently and concurrent callers share one detection run. Kernel init only starts
+  detection. `evaluate()` awaits it before any placement decision, so decisions only ever see completed detection and
+  fail closed exactly as before. `ensureReady()` is unchanged, and every synchronous reader (`xr trust`, `/api/trust`)
+  already calls it first. The new `test/trust/detection-off-boot-path.test.ts` covers this, and both of its tests fail
+  on the old code. No bound was changed: the fixture's 3 s timeout and every probe budget stand.
+- Local verification: typecheck 0; trust 144/0, execution 155/0, core and one-agent 140/0, desktop 702/0, daemon 379/0,
+  perf 129/0, reliability 109/0, security 420/0, context 316/0, phase0 and phase2 273/0, api, observability and ux
+  228/0, bots and voice 244/0, research, cloud and state 174/0, capabilities and control 169/0, architecture 135/0;
+  boundaries, claim-lint, ownership, hot-path and ci:policy clean. Tree 176,423 → 176,424 of 176,500.
+- **This is Phase 3's third and last CI-fix attempt (R7).** Attempts so far: 1 `7b4b719` + `beebd2c`, 2 `d46ee7b`,
+  3 `dac8ba4`. The `9bb1010` and `789cc47` pushes were reruns for first-occurrence flakes. If this head is not fully
+  green because of a fix that did not hold, work stops here with this log as the report.
