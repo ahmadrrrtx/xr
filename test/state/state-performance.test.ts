@@ -110,7 +110,7 @@ describe("B11 — workspace identity and the store cache", () => {
     const independent = wm.getStore(id, { fresh: true });
     expect(independent).not.toBe(s1);
     expect(independent.workspaceId).toBe(id);
-    independent.close(); // a fresh instance is its caller's to close; B17: an open workspace cannot be deleted
+    independent.close(); // a fresh instance is its caller's to close; Windows cannot delete an open database file
     s1.close();
     const reopened = wm.getStore(id);
     expect(reopened).not.toBe(s1);

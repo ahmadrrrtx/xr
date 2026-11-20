@@ -7,7 +7,6 @@
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import type { XRApp } from "../core/app.ts";
-import { WorkspaceInUseError } from "../core/workspace.ts";
 import {
   banner,
   heading,
@@ -125,15 +124,7 @@ export class WorkspaceCommand implements Command {
           process.exitCode = 4;
           return;
         }
-        let success: boolean;
-        try {
-          success = wm.deleteWorkspace(id);
-        } catch (e) {
-          if (!(e instanceof WorkspaceInUseError)) throw e;
-          error(e.message); // B17: refused while the workspace is open; nothing was deleted
-          process.exitCode = 4;
-          return;
-        }
+        const success = wm.deleteWorkspace(id);
         if (success) {
           emit({ ok: true, deleted: id }, () => {
             ok(`Workspace "${id}" deleted.`);

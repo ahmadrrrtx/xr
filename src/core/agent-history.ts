@@ -14,9 +14,9 @@ const HISTORY_MAX_CHARS = 24_000;
  */
 export function boundedHistory(
   history: ReadonlyArray<{ role: string; content: string }> | undefined,
-): Array<Message & { role: "user" | "assistant" }> {
+): Message[] {
   if (!history?.length) return [];
-  const out: Array<Message & { role: "user" | "assistant" }> = [];
+  const out: Message[] = [];
   let chars = 0;
   for (let i = history.length - 1; i >= 0 && out.length < HISTORY_MAX_TURNS; i--) {
     const h = history[i]!;

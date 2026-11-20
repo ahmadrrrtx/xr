@@ -25,7 +25,6 @@ import { randomUUID } from "node:crypto";
 import type { ChatStreamEvent, Mode, StreamEventSink } from "../../core/types.ts";
 import { LaneBusyError } from "../../execution/lane.ts";
 import { ProviderOfflineError } from "../agent-executor.ts";
-import { boundedHistory } from "../../core/agent-history.ts";
 import { route, type DaemonRoute } from "./router.ts";
 import { chatSpan as makeChatSpan, endChatSpan as endGenAiSpan } from "../../observability/instrument.ts";
 import { withSpan as runInSpan } from "../../observability/tracer.ts";
@@ -36,9 +35,8 @@ import { getApprovalStore } from "../../control/approval-store.ts";
 interface ChatBody {
   message?: string;
   /** Prior conversation turns. Phase 14: replayed into the loop's transcript
-   * (bounded: newest 24 turns / 24k chars, defined once in core/agent-history.ts)
-   * so follow-up questions keep their context. Earlier generations accepted this
-   * field and dropped it. */
+   * (bounded: newest 24 turns / 24k chars) so follow-up questions keep their
+   * context. Earlier generations accepted this field and dropped it. */
   history?: Array<{ role: string; content: string }>;
   mode?: "agent" | "ask" | "plan";
   /** Explicit execution mode gate. Default is the SAFE read-only `ask` mode. */
@@ -234,17 +232,17 @@ export function chatRoutes(): DaemonRoute[] {
                     runId,
                     laneKey,
                     sessionId: body.sessionId,
-                    // Phase 14 — prior turns are replayed into the loop's transcript; only chat
-                    // roles with text. B13: the ONE bound (core/agent-history.ts) applies here too.
+                    // Phase 14 — prior turns are replayed into the loop's
+                    // transcript (bounded there); only chat roles with text.
                     history: Array.isArray(body.history)
-                      ? boundedHistory(
-                          body.history.filter(
+                      ? body.history
+                          .filter(
                             (h): h is { role: "user" | "assistant"; content: string } =>
                               !!h &&
                               (h.role === "user" || h.role === "assistant") &&
                               typeof h.content === "string",
-                          ),
-                        )
+                          )
+                          .slice(-64)
                       : undefined,
                     provider: body.provider,
                     model: body.model,
@@ -326,15 +324,6 @@ export function chatRoutes(): DaemonRoute[] {
                     finishReason: result.stopped,
                   });
                   xrMetrics.llmDuration.observe({ provider: body.provider ?? "unknown", model: body.model ?? "unknown" }, totalMs);
-                  // B13: audit BEFORE the terminal frame, total on a missing finalMessage, so a failure here can
-                  // never put GENERATION_FAILED after `done`: the client always sees exactly one terminal frame.
-                  state.store.audit("chat.message", {
-                    mode,
-                    stopped: result.stopped,
-                    steps: result.steps,
-                    input: body.message!.slice(0, 200),
-                    output: (result.finalMessage ?? "").slice(0, 200),
-                  });
 
                   if (result.stopped === "cancelled") {
                     xrMetrics.chatStreamCancelled.inc();
@@ -357,6 +346,13 @@ export function chatRoutes(): DaemonRoute[] {
                       stopped: result.stopped,
                     });
                   }
+                  state.store.audit("chat.message", {
+                    mode,
+                    stopped: result.stopped,
+                    steps: result.steps,
+                    input: body.message!.slice(0, 200),
+                    output: result.finalMessage.slice(0, 200),
+                  });
                 } catch (e) {
                   xrMetrics.chatStreamError.inc();
                   const msg = e instanceof Error ? e.message : String(e);
