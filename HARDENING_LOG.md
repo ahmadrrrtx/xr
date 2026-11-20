@@ -87,7 +87,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 0 — recon/baseline | `2b93d33` | CI [44499926066](https://github.com/ahmadrrrtx/xr/actions/runs/44499926066) ✓ · Cross-Platform [44499925774](https://github.com/ahmadrrrtx/xr/actions/runs/44499925774) ✓ · Supply Chain [44499925608](https://github.com/ahmadrrrtx/xr/actions/runs/44499925608) ✓ · npm Pack Smoke [44499925659](https://github.com/ahmadrrrtx/xr/actions/runs/44499925659) ✓ · Journey [44499926003](https://github.com/ahmadrrrtx/xr/actions/runs/44499926003) ✓ · Channel Install [44499925804](https://github.com/ahmadrrrtx/xr/actions/runs/44499925804) ✓ · Desktop App [44499925653](https://github.com/ahmadrrrtx/xr/actions/runs/44499925653) ✓ | **done** — all 6 required checks pass on PR #215 (82 checks pass, 1 skipped by design: "Real channel installs of the public version") |
 | 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ CI diagnostics `f13a309` `42e13ec` `515a3bd`) | head `97bd3b4`: CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347) ✓ · Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) ✓ · Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) ✓ · Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281) ✓ · npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260) ✓ · Supply Chain [44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) ✓ · Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design) |
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
-| 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` | pending (pushed after Phase 2 went green) | fixed-unverified |
+| 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fix `7b4b719`, `beebd2c`) | head `5103ae5`: 5 of 7 workflows green; Cross-Platform [44641444350](https://github.com/ahmadrrrtx/xr/actions/runs/44641444350) ✗ (macOS `/api/overview` 861 ms → NEW-6), Desktop App [44641444363](https://github.com/ahmadrrrtx/xr/actions/runs/44641444363) ✗ (Rust shared pricing vector: B5 parity gap). CI-fix attempt 1 of 3 pushed | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -302,3 +302,35 @@ made along the way and no assertion, threshold, timeout or retry was changed.
   (`blocked` vs `denied`) when the whole `test/environment` directory runs in one Bun process. It fails identically on
   the Phase 1 head, and passes alone and in CI's parity runner.
 - **Size:** tree +65; `agent.ts` 1198 → 1200 (waiver 1215); `shell/app.ts` line-neutral.
+
+### Phase 3 CI on `5103ae5` — two red workflows; CI-fix attempt 1 of 3
+
+- Green: CI [44641444320](https://github.com/ahmadrrrtx/xr/actions/runs/44641444320), Supply Chain [44641444307](https://github.com/ahmadrrrtx/xr/actions/runs/44641444307), npm Pack Smoke
+  [44641444311](https://github.com/ahmadrrrtx/xr/actions/runs/44641444311), Channel Install [44641444261](https://github.com/ahmadrrrtx/xr/actions/runs/44641444261) and Clean-Machine Journey
+  [44641444293](https://github.com/ahmadrrrtx/xr/actions/runs/44641444293) (NEW-3 did not recur).
+- **Desktop App [44641444363](https://github.com/ahmadrrrtx/xr/actions/runs/44641444363):** the Linux Rust job passed `cargo check` and `clippy -D warnings` but
+  failed `cargo test` (exit 101); the Windows `cargo test` job failed too. The Rust shell reads two Phase 3 files through
+  `include_str!`: `model-facts.json` and the shared vector file. `shared_dated_pricing_vectors` priced the B5 vector
+  `registry-stale-keeps-last-known-rates` as unavailable, because the native governor (`governor.rs` `priced_at`) still
+  returned NaN past `staleAt`. That is a real gap in the Phase 3 fix, not a test problem: past the review date the
+  desktop's native admission would still have refused every paid call. **Fix `7b4b719`:** the native governor applies
+  the engine's rule (last-known rates; `XR_STALE_PRICE_FACTS=refuse` opts into refusal) and mirrors the Grok 4
+  long-prompt tier. The shared vectors gain both sides of that tier, so TS and Rust are pinned together. The same commit
+  reads the engine's opt-in through `globalThis.process?.env`: the desktop webview imports `src/cost/pricing.ts` and has
+  no `process` global outside a Vite build. Its new test fails on the Phase 3 code with "undefined is not an object
+  (evaluating 'process.env')". Rust cannot be built here (R6), so CI verifies the Rust side; the expected values were
+  cross-checked with a line-by-line mirror of `priced_at` (0.0006, 0.405998, 0.812).
+- **Cross-Platform [44641444350](https://github.com/ahmadrrrtx/xr/actions/runs/44641444350):** Linux and Windows passed. macOS failed only "/api/overview stays
+  lightweight (< 500 ms)", at 861 ms. That is the second failure on this branch (659 ms on `c67285d`), and the same test
+  failed on other branches (685 ms in run [43937582977](https://github.com/ahmadrrrtx/xr/actions/runs/43937582977), 509 ms in run
+  [43889333388](https://github.com/ahmadrrrtx/xr/actions/runs/43889333388)). Under R7 a repeat flake is a defect: **NEW-6**. The route awaited `git rev-parse` and
+  `git status --porcelain` (a working-tree walk) on the request path whenever its 5 s cache was cold. Locally the cold
+  route takes about 19 ms and about 4 ms with git pre-warmed, so git is roughly 80% of it; on hosted Windows the same wait
+  is why that platform's bound is 2 s. **Fix `beebd2c`:** the overview never waits on git. `observeGitSummary` reports
+  `pending` while one background probe runs, serves the last summary while it refreshes, and keeps the legacy
+  `{ branch: "no git" }` value as `unavailable`. The 500 ms bound is unchanged. R2: against the old route the new
+  held-probe test sees the response held for more than 1 s.
+- Both fixes go out in one push: CI-fix attempt 1 of 3 for Phase 3. Local verification: typecheck 0; perf 129/0, daemon
+  379/0, api 116/0, observability and ux 112/0, desktop 702/0, scripts and architecture 88/0, `daemon.test` and
+  `cost-budget-truth` 54/0; claim-lint, boundaries (the pre-existing warning only), api:schema, ownership, hot-path and
+  ci:policy clean. Tree 176,419 → 176,423 of 176,500.
