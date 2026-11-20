@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { shellEngineView, webviewEngineSmoke, webviewOnboardingSmoke } from "../../scripts/journey/desktop-journey.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { launchEvidence, redactEvidence, shellEngineView, webviewEngineSmoke, webviewOnboardingSmoke } from "../../scripts/journey/desktop-journey.ts";
 
 test("fresh native install requires onboarding rather than a splash or false crash screen", async () => {
   expect(await webviewOnboardingSmoke(async () => ({ welcome: true, splash: false, recovery: false }), "fixture", 0)).toContain("onboarding rendered");
@@ -60,3 +63,34 @@ test("a launch failure carries the shell's own engine view, never the engine tok
   expect(booting).toContain('"hasToken":false');
   expect(await shellEngineView(async () => { throw new Error("no session"); }, "fixture")).toContain("unavailable (no session)");
 });
+
+test("launch evidence carries only the shell's lifecycle lines and the crash flag, redacted (NEW-7)", async () => {
+  const home = mkdtempSync(join(tmpdir(), "xr-launch-evidence-"));
+  try {
+    const engineHome = join(home, ".xr-desktop");
+    mkdirSync(join(engineHome, "logs"), { recursive: true });
+    const token = "a".repeat(48);
+    writeFileSync(join(engineHome, "logs", "shell.log"), [
+      "[1795180000000] session start: pid 4242 version 1.2.0-preview.1 interruption-count 1 engine-failed false",
+      `[1795180000001] debug dump token=${token} path=${home}/secret`,
+      `[1795180008000] engine down: spawn failed: ${home}/.xr-desktop/bin missing (key ${"b".repeat(40)})`,
+    ].join("\n"));
+    writeFileSync(join(engineHome, "crash-dirty.json"), "{}");
+    const evidence = await launchEvidence(engineHome, home);
+    expect(evidence).toContain("session start: pid 4242");
+    expect(evidence).toContain("engine down: spawn failed: $HOME/.xr-desktop/bin missing (key [redacted])");
+    expect(evidence).toContain("crash flag present (no clean exit)");
+    expect(evidence).not.toContain("debug dump");
+    expect(evidence).not.toContain(token);
+    expect(evidence).not.toContain(home);
+    const absent = await launchEvidence(join(home, "absent"), home);
+    if (process.platform === "win32") expect(absent).toStartWith("no shell log; no crash flag; windows: ");
+    else expect(absent).toBe("no shell log; no crash flag");
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test("evidence redaction removes token-shaped values and the scratch home", () => {
+  expect(redactEvidence(`Authorization: Bearer abc.def /tmp/h/x ${"c".repeat(32)}`, "/tmp/h")).toBe("Authorization: [redacted] $HOME/x [redacted]");
+  expect(redactEvidence("api_key=sk-live-123; token: xyz, ok", "")).toBe("api_key=[redacted]; token: [redacted], ok");
+});
+
