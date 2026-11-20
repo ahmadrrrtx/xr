@@ -90,7 +90,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
 | 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`, `d75a553`; diagnostics `d46ee7b`) | head `8bfc6ea`: CI [44780370623](https://github.com/ahmadrrrtx/xr/actions/runs/44780370623) ✓ · Cross-Platform [44780370742](https://github.com/ahmadrrrtx/xr/actions/runs/44780370742) ✓ · Desktop App [44780370923](https://github.com/ahmadrrrtx/xr/actions/runs/44780370923) ✓ · Clean-Machine Journey [44780370700](https://github.com/ahmadrrrtx/xr/actions/runs/44780370700) ✓ · npm Pack Smoke [44780370889](https://github.com/ahmadrrrtx/xr/actions/runs/44780370889) ✓ · Supply Chain [44780370632](https://github.com/ahmadrrrtx/xr/actions/runs/44780370632) ✓ · Channel Install [44780370922](https://github.com/ahmadrrrtx/xr/actions/runs/44780370922) ✓. History: the Phase 3 CI sections below (four CI-fix attempts, the fourth owner-authorised) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
 | 4 — accounting (B7 B10 B18) | `acdd8da` | head `8dd647a`: CI [44792959241](https://github.com/ahmadrrrtx/xr/actions/runs/44792959241) ✓ · Cross-Platform [44792959329](https://github.com/ahmadrrrtx/xr/actions/runs/44792959329) ✓ · Desktop App [44792959554](https://github.com/ahmadrrrtx/xr/actions/runs/44792959554) ✓ · Clean-Machine Journey [44792959439](https://github.com/ahmadrrrtx/xr/actions/runs/44792959439) ✓ · npm Pack Smoke [44792959392](https://github.com/ahmadrrrtx/xr/actions/runs/44792959392) ✓ · Supply Chain [44792959372](https://github.com/ahmadrrrtx/xr/actions/runs/44792959372) ✓ · Channel Install [44792959409](https://github.com/ahmadrrrtx/xr/actions/runs/44792959409) ✓ (the `db3ee5f` run: NEW-10, rerun) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
-| 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`; CI fix `6381ac0`) | head `c1112b7`: 6 of 7 green; Cross-Platform [44799038762](https://github.com/ahmadrrrtx/xr/actions/runs/44799038762) ✗ on Windows (B11 test held an open store while deleting its workspace). CI-fix attempt 1 of 3 pushed | fixed-unverified |
+| 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`; CI fix `6381ac0`; diagnostics `c6b4030`) | head `c1112b7`: 6 of 7 green; Cross-Platform [44799038762](https://github.com/ahmadrrrtx/xr/actions/runs/44799038762) ✗ on Windows (B11 test held an open store while deleting its workspace). CI-fix attempt 1 of 3 pushed. Head `c0249f3`: 6 of 7 green (Windows B11 test fixed); Desktop App [44801051295](https://github.com/ahmadrrrtx/xr/actions/runs/44801051295) ✗ only on the windows-x64 desktop journey (NEW-7 again). CI-fix attempt 2 of 3 (diagnostics) pushed | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -665,3 +665,29 @@ still pins an exact value. No waived giant grew.
 - **Fix `6381ac0` (attempt 1 of 3):** the test closes its fresh instance before deleting the workspace. The assertion is
   unchanged. Phase 6 then turns deleting a still-open workspace into an explicit refusal (`WorkspaceInUseError`) and
   rewords this line's comment. Local: `test/state` 72/0.
+
+### Phase 5 CI on `c0249f3` — Windows B11 fix held; NEW-7 recurred with a clearer picture; CI-fix attempt 2 of 3
+
+- Green: **Cross-Platform [44801051112](https://github.com/ahmadrrrtx/xr/actions/runs/44801051112)** (Windows passed the B11 store-cache test: the fix held), CI
+  [44801051197](https://github.com/ahmadrrrtx/xr/actions/runs/44801051197), Clean-Machine Journey [44801051151](https://github.com/ahmadrrrtx/xr/actions/runs/44801051151), npm Pack Smoke
+  [44801051341](https://github.com/ahmadrrrtx/xr/actions/runs/44801051341), Supply Chain [44801051246](https://github.com/ahmadrrrtx/xr/actions/runs/44801051246), Channel Install [44801051523](https://github.com/ahmadrrrtx/xr/actions/runs/44801051523),
+  OS sandbox (non-gating) [44801051346](https://github.com/ahmadrrrtx/xr/actions/runs/44801051346).
+- Red: Desktop App [44801051295](https://github.com/ahmadrrrtx/xr/actions/runs/44801051295), only **Desktop journey — windows-x64**, in `launch`. This is NEW-7's
+  symptom. The diagnostics from `d46ee7b` now give the picture: the webview had rendered; then for 60 s no `xr-engine`
+  process listened on any port (47 OS port probes, slowest 448 ms, all empty); and when the journey asked the shell for
+  its own view, WebDriver answered "invalid session id: session deleted as the browser has closed the connection". So
+  **the whole app went away soon after rendering**, taking its job-contained sidecar with it. That fits both NEW-7
+  observations (`fb3163f`, here) and probably NEW-10 (an app that dies at launch leaves msedgedriver no
+  DevToolsActivePort file). Only windows-x64 is affected; windows-arm64 passes on every head.
+- **Not Phase 5 code:** Phase 5 touches no desktop, shell or webview file. On this branch the job has now failed on
+  four of thirteen heads; on `main` and the other branches it passed on every run seen. Why the app goes away is still
+  unknown, and a real fix needs that answer. Rust cannot be built or run here (R6).
+- **Attempt 2 (`c6b4030`), diagnostics only:** no assertion, bound, timeout, retry or polling change. A failed launch
+  now also reports the shell's own lifecycle log lines (`<desktop home>/logs/shell.log`: session start, engine up or
+  down with its reason, clean exit), whether the crash flag is still down, and on Windows which
+  `xr-desktop`/`xr-engine`/`msedgewebview2` processes are alive and any Application Error records for them
+  (application, exception code, faulting module). Everything is filtered and redacted under the rule the Windows
+  installer journey already follows: no raw logs, tokens or environment leave the runner. Unit tests cover the filter
+  and the redaction (they caught a bearer-token redaction bug before the push).
+- This push is also the rerun. If NEW-7 recurs, the message should name the crash. Attempt 3 is then a real fix, the
+  last before R7's halt.
