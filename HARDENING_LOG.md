@@ -89,7 +89,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 1 — voice crash chain (B1 B15 B19 B20) | `6fe87e8` (+ CI diagnostics `f13a309` `42e13ec` `515a3bd`) | head `97bd3b4`: CI [44629362347](https://github.com/ahmadrrrtx/xr/actions/runs/44629362347) ✓ · Cross-Platform [44629362352](https://github.com/ahmadrrrtx/xr/actions/runs/44629362352) ✓ · Desktop App [44629362192](https://github.com/ahmadrrrtx/xr/actions/runs/44629362192) ✓ · Journey [44629362281](https://github.com/ahmadrrrtx/xr/actions/runs/44629362281) ✓ · npm Pack Smoke [44629362260](https://github.com/ahmadrrrtx/xr/actions/runs/44629362260) ✓ · Supply Chain [44629362046](https://github.com/ahmadrrrtx/xr/actions/runs/44629362046) ✓ · Channel Install [44629362279](https://github.com/ahmadrrrtx/xr/actions/runs/44629362279) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design) |
 | 2 — downloads (B2 B3/C2 B12) | `7219c23` (+ log `341e5b1`) | head `341e5b1`: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949) ✓ · Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917) ✓ · Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958) ✓ · Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005) ✓ · npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856) ✓ · Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919) ✓ · Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864) ✓ | **done**: all 6 required checks pass (82 pass, 1 skipped by design) |
 | 3 — budget truth (B4 B5 B6 NEW-1) | `d0cebb3` (+ CI fixes `7b4b719`, `beebd2c`, `dac8ba4`, `d75a553`; diagnostics `d46ee7b`) | head `8bfc6ea`: CI [44780370623](https://github.com/ahmadrrrtx/xr/actions/runs/44780370623) ✓ · Cross-Platform [44780370742](https://github.com/ahmadrrrtx/xr/actions/runs/44780370742) ✓ · Desktop App [44780370923](https://github.com/ahmadrrrtx/xr/actions/runs/44780370923) ✓ · Clean-Machine Journey [44780370700](https://github.com/ahmadrrrtx/xr/actions/runs/44780370700) ✓ · npm Pack Smoke [44780370889](https://github.com/ahmadrrrtx/xr/actions/runs/44780370889) ✓ · Supply Chain [44780370632](https://github.com/ahmadrrrtx/xr/actions/runs/44780370632) ✓ · Channel Install [44780370922](https://github.com/ahmadrrrtx/xr/actions/runs/44780370922) ✓. History: the Phase 3 CI sections below (four CI-fix attempts, the fourth owner-authorised) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
-| 4 — accounting (B7 B10 B18) | `acdd8da` | pending (pushed after Phase 3 went green) | fixed-unverified |
+| 4 — accounting (B7 B10 B18) | `acdd8da` | head `db3ee5f`: 6 of 7 green; Desktop App [44786241411](https://github.com/ahmadrrrtx/xr/actions/runs/44786241411) ✗ only on the windows-x64 desktop journey (WebDriver session not created, first occurrence → NEW-10). Rerun pushed | fixed-unverified |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -575,3 +575,26 @@ made along the way and no assertion, threshold, timeout or retry was changed.
 - **Local verification:** state 67/0, cost 44/0, phase6 89/0, phase0 217/0, core 121/0, daemon 379/0, services 28/0,
   execution 155/0, context 316/0; typecheck 0; claim-lint ✓; boundaries 0 errors; API schema, client and ownership in sync.
 - **Size:** tree +56 → 176,480, still under the original 176,500 ceiling; `workspace-store.ts` +1 (2541/2550).
+
+### Phase 4 CI on `db3ee5f` — 6 of 7 green; Windows x64 desktop journey could not open a WebDriver session (NEW-10, rerun)
+
+- Green: CI [44786241315](https://github.com/ahmadrrrtx/xr/actions/runs/44786241315), Cross-Platform [44786241503](https://github.com/ahmadrrrtx/xr/actions/runs/44786241503), Clean-Machine Journey
+  [44786241443](https://github.com/ahmadrrrtx/xr/actions/runs/44786241443), npm Pack Smoke [44786241379](https://github.com/ahmadrrrtx/xr/actions/runs/44786241379), Supply Chain [44786241493](https://github.com/ahmadrrrtx/xr/actions/runs/44786241493),
+  Channel Install [44786241535](https://github.com/ahmadrrrtx/xr/actions/runs/44786241535), OS sandbox (non-gating) [44786241461](https://github.com/ahmadrrrtx/xr/actions/runs/44786241461).
+- Red: Desktop App [44786241411](https://github.com/ahmadrrrtx/xr/actions/runs/44786241411). Both Rust jobs, all five bundles, `latest.json` and six of the seven
+  desktop journeys passed. **Desktop journey — windows-x64** failed in `launch` at `WebDriver POST /session`: "session not
+  created: DevToolsActivePort file doesn't exist". msedgedriver never received the WebView2 debug port, so no XR window
+  was ever driven.
+- **Why this is not Phase 4 code:** Phase 4 touches no desktop, shell or webview file (accounting in `src/cost` and
+  `src/state` only). The error is the documented WebView2 limitation the workflow already works around: Runtime 150
+  and later ignores `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` in an elevated host. The workaround is an HKLM
+  `AdditionalBrowserArguments` policy scoped to `xr-desktop.exe` (actions/runner-images#14738,
+  MicrosoftEdge/WebView2Feedback#5645), added in PR #214, the commit this branch started from. This head shows the
+  policy does not always take effect.
+- **Classification, stated plainly:** this exact error is a first occurrence on this branch, logged as **NEW-10 (open)**:
+  "windows-latest WebDriver session intermittently not created (WebView2 debug-port policy not applied)". It gets R7's
+  one rerun, as this docs-only commit, and no Phase 4 attempt is used. The job itself has now failed at launch on three
+  of the eleven heads where it ran on this branch: `42e13ec` (cause unknown, before the diagnostics), `fb3163f` (NEW-7:
+  the webview rendered, then the sidecar did not answer `/health` within 60 s) and this head (NEW-10). It passed on
+  every run seen on `main` and the other branches. **Any further failure of this job in Phase 4, with either symptom,
+  is treated as a repeat and gets a real CI-fix attempt.**
