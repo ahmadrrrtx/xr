@@ -32,6 +32,10 @@
       {
         "tag": "v1.1.0",
         "reason": "Release run 38663173550 failed at its gates job (Identity + claim + channel gates, exit 2), so no CLI binaries, SHA256SUMS, npm tarball, Docker image or channel manifests were produced. The GitHub release only carries 5 unsigned desktop bundles attached by desktop-app.yml. Superseded by the next complete release; see launch audit XR-LAUNCH-001."
+      },
+      {
+        "tag": "v1.2.0-preview.2",
+        "reason": "Release run 44917320963 failed at its gates job (Behavioral security + deterministic agent smoke: the runner was never given real Linux isolation, NEW-12), so nothing was built, signed or published: no GitHub release or draft, no npm version, no Docker image. The desktop tag run 44917320668 stopped at its signing preflight (no signing secrets). Superseded by 1.2.0-preview.3; see docs/release/1.2.0-preview.2/WITHDRAWN.md."
       }
     ]
   },
