@@ -190,6 +190,9 @@
 
 ### Documentation
 
+- **release:** Preview 2 known limitations (1.2.0-preview.2) (821fcde)
+- **hardening:** Phase 8 done (3 consecutive green main runs); record Phase 9 (CHANGELOG, launch-gate evidence) (6a53e67)
+- **changelog:** generate the 1.2.0-preview.2 section from conventional commits since v1.1.0 (9337a09)
 - **release:** launch-gate evidence from the hardening runs; XR-LAUNCH-005 to fixed-unverified (67f0315)
 - **hardening:** NEW-3 has two failure modes; the installer fix covers the binary one, npm stays open (a60f26a)
 - **hardening:** main run 1 green on 23090ee; PR #216 green and merged as 4ea49e2 (main run 2) (18c2979)
@@ -287,6 +290,7 @@
 
 ### Maintenance
 
+- **release:** 1.2.0-preview.2 (Preview 2) — manifest, stamped surfaces, channel metadata, OpenAPI version (ba7e6a7)
 - **size-gate:** raise tree ceiling 176,500 → 177,000 for the hardening phases (owner sign-off 2026-11-19) (3609352)
 - **security:** allow-list gitleaks prose false positive in A1 design doc (a808bf8)
 
