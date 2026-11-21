@@ -19,6 +19,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | R7: three CI-fix attempts per phase, then halt | Phase 3 halted on 2026-11-20 after three attempts, with every targeted failure fixed and one intermittent left (NEW-9) | **Owner (ahmadrrrtx) authorised one fourth Phase 3 attempt on 2026-11-20** (the NEW-9 PowerShell fix as proposed: telemetry and update check off, 15 s bound unchanged) and kept every other rule: Phases 4–11 have the normal three attempts each, one rerun per first-occurrence flake, a repeat is a defect |
 | R7 again: Phase 5 halted after three attempts | NEW-7 (the desktop shell aborts at startup) was root-caused on the third attempt; the fix was ready but would have been a fourth | **Owner (ahmadrrrtx) authorised one fourth Phase 5 attempt on 2026-11-20** (the NEW-7 fix as proposed) and again kept every other rule: Phases 6–11 have the normal three attempts each |
 | Merging PR #215 and pushing a release tag | Both change shared state that is hard to undo; the brief lists the merge (Phase 8) and the release (Phase 10) | **Owner (ahmadrrrtx) approved on 2026-11-21:** merge PR #215 with a merge commit once Phase 7 is green (done: `23090ee`); in Phase 10, push tag `v1.2.0-preview.2` for a verified PRIVATE draft only; the SUPERSEDED note on v1.1.0 is applied only once 1.2.0-preview.2 is public |
+| The `v1.2.0-preview.2` tag run failed at its gates (NEW-12) | A tag always runs its own commit's workflow, so that tag can never pass; re-pointing it would rewrite a published ref | **Owner (ahmadrrrtx) decided on 2026-11-21:** withdraw `v1.2.0-preview.2` (`channels.withdrawnTags`, never reused, not deleted or moved, as with v1.1.0) and release **1.2.0-preview.3**, tag `v1.2.0-preview.3`, verified PRIVATE draft only |
 
 ## Phase 0 — NOTES (exact commands)
 
@@ -97,7 +98,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 7 — security sweep (C3–C8, lock-ins, C16) | `dba65dc` `c3a6e09` `dcf954d` | head `d1f7f6d`: CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288) ✓ · Cross-Platform [44892794304](https://github.com/ahmadrrrtx/xr/actions/runs/44892794304) ✓ · Desktop App [44892794282](https://github.com/ahmadrrrtx/xr/actions/runs/44892794282) ✓ · Clean-Machine Journey [44892794346](https://github.com/ahmadrrrtx/xr/actions/runs/44892794346) ✓ · npm Pack Smoke [44892794255](https://github.com/ahmadrrrtx/xr/actions/runs/44892794255) ✓ · Supply Chain [44892794294](https://github.com/ahmadrrrtx/xr/actions/runs/44892794294) ✓ · Channel Install [44892794245](https://github.com/ahmadrrrtx/xr/actions/runs/44892794245) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
 | 8 — CI: actionlint, required-check names, merge, 3 green `main` runs | merges `23090ee` (PR #215), `4ea49e2` (PR #216), `1397292` (PR #217); NEW-3 fix `8d1b98b` | `main` run 1 `23090ee`: CI [44898171204](https://github.com/ahmadrrrtx/xr/actions/runs/44898171204) ✓ · Cross-Platform [44898171045](https://github.com/ahmadrrrtx/xr/actions/runs/44898171045) ✓ · Desktop App [44898171222](https://github.com/ahmadrrrtx/xr/actions/runs/44898171222) ✓ · Clean-Machine Journey [44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078) ✓ · npm Pack Smoke [44898171035](https://github.com/ahmadrrrtx/xr/actions/runs/44898171035) ✓ · Supply Chain [44898171079](https://github.com/ahmadrrrtx/xr/actions/runs/44898171079) ✓ · Channel Install [44898171046](https://github.com/ahmadrrrtx/xr/actions/runs/44898171046) ✓ — run 2 `4ea49e2`: CI [44902873796](https://github.com/ahmadrrrtx/xr/actions/runs/44902873796) ✓ · Cross-Platform [44902873864](https://github.com/ahmadrrrtx/xr/actions/runs/44902873864) ✓ · Desktop App [44902873729](https://github.com/ahmadrrrtx/xr/actions/runs/44902873729) ✓ · Clean-Machine Journey [44902873728](https://github.com/ahmadrrrtx/xr/actions/runs/44902873728) ✓ · npm Pack Smoke [44902873760](https://github.com/ahmadrrrtx/xr/actions/runs/44902873760) ✓ · Supply Chain [44902873925](https://github.com/ahmadrrrtx/xr/actions/runs/44902873925) ✓ · Channel Install [44902873752](https://github.com/ahmadrrrtx/xr/actions/runs/44902873752) ✓ — run 3 `1397292`: CI [44906486932](https://github.com/ahmadrrrtx/xr/actions/runs/44906486932) ✓ · Cross-Platform [44906486922](https://github.com/ahmadrrrtx/xr/actions/runs/44906486922) ✓ · Desktop App [44906486914](https://github.com/ahmadrrrtx/xr/actions/runs/44906486914) ✓ · Clean-Machine Journey [44906486939](https://github.com/ahmadrrrtx/xr/actions/runs/44906486939) ✓ · npm Pack Smoke [44906487005](https://github.com/ahmadrrrtx/xr/actions/runs/44906487005) ✓ · Supply Chain [44906486940](https://github.com/ahmadrrrtx/xr/actions/runs/44906486940) ✓ · Channel Install [44906486963](https://github.com/ahmadrrrtx/xr/actions/runs/44906486963) ✓ | **done**: 3 consecutive green `main` runs (all six required checks each); 1 of 3 CI-fix attempts used |
 | 9 — docs: CHANGELOG section, launch-gate evidence | `67f0315` `9337a09` | head `6a53e67` (PR #218): CI [44909028062](https://github.com/ahmadrrrtx/xr/actions/runs/44909028062) ✓ · Cross-Platform [44909028066](https://github.com/ahmadrrrtx/xr/actions/runs/44909028066) ✓ · Desktop App [44909028071](https://github.com/ahmadrrrtx/xr/actions/runs/44909028071) ✓ · Clean-Machine Journey [44909028048](https://github.com/ahmadrrrtx/xr/actions/runs/44909028048) ✓ · npm Pack Smoke [44909028033](https://github.com/ahmadrrrtx/xr/actions/runs/44909028033) ✓ · Supply Chain [44909028075](https://github.com/ahmadrrrtx/xr/actions/runs/44909028075) ✓ · Channel Install [44909028023](https://github.com/ahmadrrrtx/xr/actions/runs/44909028023) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design); merged as `5b1ca0a` |
-| 10 — release 1.2.0-preview.2 (B16, C1) | `821fcde` `ba7e6a7` `a63a0c4` | pending (pushed after Phase 9 went green) | in-progress |
+| 10 — release (B16, C1): 1.2.0-preview.2 withdrawn → 1.2.0-preview.3 | `821fcde` `ba7e6a7` `a63a0c4`; NEW-12 `aac7944`; NEW-13 `bf261ef`; withdrawal `a19e6cf`; Preview 3 `62e7a14` `76e6049` `b7968d2` | PR #219 head `5e360c7`: CI [44911981493](https://github.com/ahmadrrrtx/xr/actions/runs/44911981493) ✓ · Cross-Platform [44911981497](https://github.com/ahmadrrrtx/xr/actions/runs/44911981497) ✓ · Desktop App [44911981509](https://github.com/ahmadrrrtx/xr/actions/runs/44911981509) ✓ · Clean-Machine Journey [44911981574](https://github.com/ahmadrrrtx/xr/actions/runs/44911981574) ✓ · npm Pack Smoke [44911981533](https://github.com/ahmadrrrtx/xr/actions/runs/44911981533) ✓ · Supply Chain [44911981594](https://github.com/ahmadrrrtx/xr/actions/runs/44911981594) ✓ · Channel Install [44911981607](https://github.com/ahmadrrrtx/xr/actions/runs/44911981607) ✓ — `main` `08a04cd` run 5 ✓ — tag `v1.2.0-preview.2`: Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963) ✗ (NEW-12, nothing published) | in-progress (CI-fix attempt 2 of 3) |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -1134,3 +1135,45 @@ The version follows the owner's delegation (adaptations table). The release goes
   `08a04cd` can never pass these gates. The repo's precedent for a tag whose release run failed at the gates is
   v1.1.0: it was listed in `channels.withdrawnTags` with the failing run as evidence, never reused, and superseded by
   the next release. How to proceed is an owner decision, recorded below when made.
+
+### Phase 10 — owner decision: withdraw `v1.2.0-preview.2`, release 1.2.0-preview.3; NEW-13 found before the next tag; CI-fix attempt 2 of 3
+
+- **Decision** (owner, 2026-11-21, adaptations table): withdraw `v1.2.0-preview.2` the way v1.1.0 was withdrawn and
+  release 1.2.0-preview.3 as a verified private draft. No tag is deleted or moved.
+- **Branch move:** after the PRs merged, Arena closed `arena/68fa6c7d-xr` for further work. This continues on
+  `arena/09a66852-xr`, from `main` at `08a04cd`. PR #220's two commits (`aac7944`, the NEW-12 fix, and `9a71189`, its
+  log) were merged into this branch unchanged (`aa5e581`), so the hashes recorded above stay valid. PR #220 closes as
+  merged once they reach `main`. At the switch its own checks stood at 65 pass, 6 pending.
+- **NEW-13 (pre-existing; it would have failed every draft-only tag run):** the release job's last step, "Assert live
+  release asset completeness (L-010)", read the release through `GET /releases/tags/{tag}`. GitHub answers that
+  lookup for published releases only: it returned 404 for this repository's own draft `win-x64-drop-2026-10-23`,
+  even with push access, while the release list showed the draft. Since a tag push now prepares a draft, even a
+  perfect run would have ended red there.
+  - **Fix** `bf261ef`: on a 404, the check searches the release list (drafts are visible to the job's token) for the
+    tag. Any other API error still fails at once, and no release at all is an explicit error.
+  - **Tests** (`test/release/release-assets-check.test.ts`, a fake API that answers like GitHub): a draft is found
+    with its assets; an incomplete draft is still reported incomplete; a published release comes from the tag lookup
+    alone; no release, and other API errors, fail. **R2:** against the old implementation (made importable with
+    `export` only), the three draft tests fail; the published-release lock-in passes on both.
+- **Withdrawal** `a19e6cf`: a `channels.withdrawnTags` entry citing run 44917320963, and
+  `docs/release/1.2.0-preview.2/WITHDRAWN.md`.
+  - `validateReleaseTag` now refuses the tag.
+  - The tag ⇔ npm invariant stays green: it gates stable tags only, and it fails if a withdrawn version ever reaches
+    npm. The live invariant run printed "ok".
+  - Channel Live's withdrawn check only objects to a published non-prerelease release, and preview.2 has no release.
+- **Preview 3:**
+  - `62e7a14` adds the known-limitations page, which is Preview 2's page with the withdrawal noted.
+  - `76e6049` is the bump. `release.manifest.json` goes to 1.2.0-preview.3 / "Preview 3", then `release:stamp`
+    (10 surfaces), `channel:sync` (descriptions only) and `api:schema:generate` (the `info.version` line only).
+  - `b7968d2` regenerates the changelog section on this branch: 399 commits since `v1.1.0`, and all 399 cited hashes
+    resolve.
+- **Local verification:**
+  - Gates: `release:check` (10 surfaces at 1.2.0-preview.3), `channel:check`, claim-lint, `changelog:check`,
+    `api:schema:check`, `client:check`, `api:compat`, ownership, platform parity, size gate, `ci:policy`,
+    `ci-capability-gate`; typecheck 0.
+  - Tests: release 323/0, update 38/0, phase0 217/0, core 121/0, journey 26/0, supply-chain 60/0, cli 262/0, daemon
+    379/0, desktop 709/0.
+- **R7:** this push carries the second fix (NEW-13) and the re-release: Phase 10 CI-fix attempt **2 of 3**.
+- **Next:** this PR green and its `main` run green, then tag `v1.2.0-preview.3` on that merge commit, then
+  `release.yml`, then a verified private draft. The desktop workflow's tag preflight will stop again without signing
+  secrets (OWNER-BLOCKED, XR-LAUNCH-008); the release does not depend on it.
