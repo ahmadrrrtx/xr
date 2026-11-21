@@ -1203,3 +1203,34 @@ The version follows the owner's delegation (adaptations table). The release goes
   `assemble` still demands both zips. **R2:** against the old `release.yml`, both fail; with the fix, both pass.
   `test/release` 325/0; `ci:policy`, claim-lint and `ci-capability-gate` clean; the workflow parses (`Bun.YAML`).
 - **R7:** Phase 10 CI-fix attempt **3 of 3**. If the `v1.2.0-preview.3` tag run fails, the phase halts with a report.
+
+## HALT — Phase 10, under R7 (2026-11-21)
+
+- **Where Phase 10 stands:** all three CI-fix attempts are used.
+  1. NEW-12 `aac7944` (release gates: Linux isolation).
+  2. NEW-13 `bf261ef`, with the withdrawal of `v1.2.0-preview.2` and the 1.2.0-preview.3 preparation (PR #221: green,
+     merged as `99e50c2`).
+  3. NEW-14 `275be64` (windows-arm64 cross-compiled on macOS), PR #222.
+- **Nothing is published, and `v1.2.0-preview.3` is not tagged,** so that version is not burned.
+- **PR #222 at `f58efd5`: Cross-Platform red** ([44922590861](https://github.com/ahmadrrrtx/xr/actions/runs/44922590861)), macOS full parity only. Linux and Windows parity
+  passed. The PR changes only `release.yml`, which PR CI does not execute, and its static test. Two tests failed:
+  - `test/cli/npm-runtime-launcher.test.ts` "a termination signal sent to the launcher is forwarded to its child", at
+    line 241: the child's signal file never appeared. **This is the same test that failed on `9a5f011` in Phase 5**,
+    where it got its one rerun as a first-occurrence flake. A repeat is a defect: **NEW-15**.
+  - `test/providers/stream-settlement.test.ts:85`, the disconnect fixture's upstream error. It is a first occurrence
+    (never seen in this log), so R7 allows it one rerun.
+- **NEW-15, root cause, reproduced locally.** The test's fake runtime writes its PID file, which is the test's "ready"
+  signal, before it installs its `TERM` trap (`echo $$ > pid` then `trap … TERM`). The test sends SIGTERM as soon as the
+  PID file exists. If the launcher forwards it before the `trap` line has run, the shell dies by default and never
+  writes the signal file. With that window widened to 0.5 s in a temporary copy of the test (since deleted), the
+  current order failed 3 of 3 runs and the trap-first order passed 3 of 3. The launcher's forwarding is not at fault.
+  The SIGINT sibling test already installs its handler before writing its PID file.
+- **Candidate fix (not pushed):** install the trap before writing the PID file. The assertion and the single 4 s
+  deadline stay unchanged (R1). The regression evidence is the widened-window reproduction above.
+- `main` run 6 on `99e50c2` passed its macOS parity lane, including this test; it is intermittent. That run's Desktop
+  App was still running when this was written.
+- **Owner decision needed:** authorise one fourth Phase 10 attempt, or stop Phase 10 here.
+  - A fourth attempt would push the NEW-15 fixture fix on top of PR #222, merge once all six checks are green, then tag
+    `v1.2.0-preview.3` once that merge's `main` run is green.
+  - Stopping means no tag: the release-pipeline fixes stay merged or open, and the report records Phase 10 as halted.
+  This docs-only push is the one rerun for the stream-settlement first occurrence.
