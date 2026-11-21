@@ -96,7 +96,8 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 6 — daemon and workspace safety (B13 B17 C13) | `a63ad32` | head `928e609`: CI [44890244897](https://github.com/ahmadrrrtx/xr/actions/runs/44890244897) ✓ · Cross-Platform [44890244913](https://github.com/ahmadrrrtx/xr/actions/runs/44890244913) ✓ · Desktop App [44890244875](https://github.com/ahmadrrrtx/xr/actions/runs/44890244875) ✓ · Clean-Machine Journey [44890244883](https://github.com/ahmadrrrtx/xr/actions/runs/44890244883) ✓ · npm Pack Smoke [44890244866](https://github.com/ahmadrrrtx/xr/actions/runs/44890244866) ✓ · Supply Chain [44890244847](https://github.com/ahmadrrrtx/xr/actions/runs/44890244847) ✓ · Channel Install [44890244867](https://github.com/ahmadrrrtx/xr/actions/runs/44890244867) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
 | 7 — security sweep (C3–C8, lock-ins, C16) | `dba65dc` `c3a6e09` `dcf954d` | head `d1f7f6d`: CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288) ✓ · Cross-Platform [44892794304](https://github.com/ahmadrrrtx/xr/actions/runs/44892794304) ✓ · Desktop App [44892794282](https://github.com/ahmadrrrtx/xr/actions/runs/44892794282) ✓ · Clean-Machine Journey [44892794346](https://github.com/ahmadrrrtx/xr/actions/runs/44892794346) ✓ · npm Pack Smoke [44892794255](https://github.com/ahmadrrrtx/xr/actions/runs/44892794255) ✓ · Supply Chain [44892794294](https://github.com/ahmadrrrtx/xr/actions/runs/44892794294) ✓ · Channel Install [44892794245](https://github.com/ahmadrrrtx/xr/actions/runs/44892794245) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
 | 8 — CI: actionlint, required-check names, merge, 3 green `main` runs | merges `23090ee` (PR #215), `4ea49e2` (PR #216), `1397292` (PR #217); NEW-3 fix `8d1b98b` | `main` run 1 `23090ee`: CI [44898171204](https://github.com/ahmadrrrtx/xr/actions/runs/44898171204) ✓ · Cross-Platform [44898171045](https://github.com/ahmadrrrtx/xr/actions/runs/44898171045) ✓ · Desktop App [44898171222](https://github.com/ahmadrrrtx/xr/actions/runs/44898171222) ✓ · Clean-Machine Journey [44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078) ✓ · npm Pack Smoke [44898171035](https://github.com/ahmadrrrtx/xr/actions/runs/44898171035) ✓ · Supply Chain [44898171079](https://github.com/ahmadrrrtx/xr/actions/runs/44898171079) ✓ · Channel Install [44898171046](https://github.com/ahmadrrrtx/xr/actions/runs/44898171046) ✓ — run 2 `4ea49e2`: CI [44902873796](https://github.com/ahmadrrrtx/xr/actions/runs/44902873796) ✓ · Cross-Platform [44902873864](https://github.com/ahmadrrrtx/xr/actions/runs/44902873864) ✓ · Desktop App [44902873729](https://github.com/ahmadrrrtx/xr/actions/runs/44902873729) ✓ · Clean-Machine Journey [44902873728](https://github.com/ahmadrrrtx/xr/actions/runs/44902873728) ✓ · npm Pack Smoke [44902873760](https://github.com/ahmadrrrtx/xr/actions/runs/44902873760) ✓ · Supply Chain [44902873925](https://github.com/ahmadrrrtx/xr/actions/runs/44902873925) ✓ · Channel Install [44902873752](https://github.com/ahmadrrrtx/xr/actions/runs/44902873752) ✓ — run 3 `1397292`: CI [44906486932](https://github.com/ahmadrrrtx/xr/actions/runs/44906486932) ✓ · Cross-Platform [44906486922](https://github.com/ahmadrrrtx/xr/actions/runs/44906486922) ✓ · Desktop App [44906486914](https://github.com/ahmadrrrtx/xr/actions/runs/44906486914) ✓ · Clean-Machine Journey [44906486939](https://github.com/ahmadrrrtx/xr/actions/runs/44906486939) ✓ · npm Pack Smoke [44906487005](https://github.com/ahmadrrrtx/xr/actions/runs/44906487005) ✓ · Supply Chain [44906486940](https://github.com/ahmadrrrtx/xr/actions/runs/44906486940) ✓ · Channel Install [44906486963](https://github.com/ahmadrrrtx/xr/actions/runs/44906486963) ✓ | **done**: 3 consecutive green `main` runs (all six required checks each); 1 of 3 CI-fix attempts used |
-| 9 — docs: CHANGELOG section, launch-gate evidence | `67f0315` `9337a09` | pending (pushed after Phase 8 went green) | fixed-unverified |
+| 9 — docs: CHANGELOG section, launch-gate evidence | `67f0315` `9337a09` | head `6a53e67` (PR #218): CI [44909028062](https://github.com/ahmadrrrtx/xr/actions/runs/44909028062) ✓ · Cross-Platform [44909028066](https://github.com/ahmadrrrtx/xr/actions/runs/44909028066) ✓ · Desktop App [44909028071](https://github.com/ahmadrrrtx/xr/actions/runs/44909028071) ✓ · Clean-Machine Journey [44909028048](https://github.com/ahmadrrrtx/xr/actions/runs/44909028048) ✓ · npm Pack Smoke [44909028033](https://github.com/ahmadrrrtx/xr/actions/runs/44909028033) ✓ · Supply Chain [44909028075](https://github.com/ahmadrrrtx/xr/actions/runs/44909028075) ✓ · Channel Install [44909028023](https://github.com/ahmadrrrtx/xr/actions/runs/44909028023) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design); merged as `5b1ca0a` |
+| 10 — release 1.2.0-preview.2 (B16, C1) | `821fcde` `ba7e6a7` `a63a0c4` | pending (pushed after Phase 9 went green) | in-progress |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -1039,3 +1040,54 @@ still pins an exact value. No waived giant grew.
 - No gate is green, so the label stays "Public beta" (claim-lint enforces it).
 - **Verification:** claim-lint ✓ (it reads `launch-gates.json`), `test/release/launch-claims.test.ts` 10/0,
   `changelog:check` ✓, `release:check` ✓.
+
+### Phase 9 CI on `6a53e67` (PR #218) — all six required checks green (Phase 9 done)
+
+- CI [44909028062](https://github.com/ahmadrrrtx/xr/actions/runs/44909028062), Cross-Platform [44909028066](https://github.com/ahmadrrrtx/xr/actions/runs/44909028066), Desktop App [44909028071](https://github.com/ahmadrrrtx/xr/actions/runs/44909028071), Clean-Machine Journey [44909028048](https://github.com/ahmadrrrtx/xr/actions/runs/44909028048), npm Pack Smoke [44909028033](https://github.com/ahmadrrrtx/xr/actions/runs/44909028033), Supply Chain [44909028075](https://github.com/ahmadrrrtx/xr/actions/runs/44909028075), Channel Install [44909028023](https://github.com/ahmadrrrtx/xr/actions/runs/44909028023). `gh pr checks 218`: 82 pass,
+  1 skipped by design. No CI-fix attempt used.
+- Merged on 2026-11-21 at 14:01:21 UTC, after `main` run 3 had finished green, with a merge commit pinned to `6a53e67`:
+  `5b1ca0a`. Its `main` run was in progress when this was written: CI [44911760912](https://github.com/ahmadrrrtx/xr/actions/runs/44911760912), Cross-Platform [44911760941](https://github.com/ahmadrrrtx/xr/actions/runs/44911760941), Desktop App [44911760911](https://github.com/ahmadrrrtx/xr/actions/runs/44911760911), Clean-Machine Journey [44911761040](https://github.com/ahmadrrrtx/xr/actions/runs/44911761040), npm Pack Smoke [44911760907](https://github.com/ahmadrrrtx/xr/actions/runs/44911760907), Supply Chain [44911760891](https://github.com/ahmadrrrtx/xr/actions/runs/44911760891), Channel Install [44911760922](https://github.com/ahmadrrrtx/xr/actions/runs/44911760922).
+
+## Phase 10 — release 1.2.0-preview.2 (B16, C1) · commits `821fcde` `ba7e6a7` `a63a0c4`
+
+The version follows the owner's delegation (adaptations table). The release goes through `release.manifest.json`,
+`bun run release:stamp` and the existing release workflow, following `docs/release/RELEASING.md` §1.
+
+- `821fcde`, **Preview 2 known limitations** (`docs/release/1.2.0-preview.2/known-limitations.md`). The stamped README
+  links to this page, so it lands first. It is Preview 1's page, reviewed. Entries stay unless closed by a test.
+  Added: distribution via owner promotion only, the red live check of the public channels (NEW-11), the
+  unexplained npm update failure on Windows (NEW-3 npm mode), and "no run on physical hardware". The code-health note
+  is updated to 2,518 lines.
+- `ba7e6a7`, **the version bump.** `release.manifest.json` identity goes to `1.2.0-preview.2` / "Preview 2" (stability
+  stays `public-beta`; `channels.publicVersion` stays `1.0.0`). Then `bun run release:stamp` updates the 10 stamp
+  targets, `bun run channel:sync` updates the channel metadata descriptions (they carry the manifest description by
+  design; versions stay 1.0.0), and `bun run api:schema:generate` updates the OpenAPI document. Only its
+  `info.version` line changed. The runbook does not list that step, but `api:schema:check` fails without it.
+- `a63a0c4`, **CHANGELOG**: `bun run changelog:generate` regenerated the 1.2.0-preview.2 section in place, covering 391
+  commits since `v1.1.0`, the release commits included. All 391 cited hashes resolve. It was regenerated on this
+  branch, because a section generated in the rehearsal worktree would have cited that worktree's commit hashes.
+- `bun run size-gate --stamp-docs`: already in sync (ceiling 177,000); no change.
+- **Not refreshed: `docs/release/TEST-BASELINE.json`** (runbook §1g, still 4972 pass / 29 skip / 0 fail, measured
+  2026-10-22). Preview 1 did not refresh it either. A root `bun test` of the whole suite in one process is what it
+  records, and R6 keeps this pass to per-directory batches, so the dated measurement stays as it is.
+- **Local verification** (rehearsed in a separate worktree, then repeated on the branch): `release:check` (10
+  surfaces at 1.2.0-preview.2), `channel:check`, claim-lint, `changelog:check`, `api:schema:check`, `client:check`,
+  `api:compat`, ownership, platform parity, size gate, typecheck 0. Tests: release 317/0, update 38/0, phase0 217/0,
+  core 121/0, journey 26/0, cli 262/0, daemon 379/0 (the pinned dashboard hash normalizes version and codename),
+  desktop 709/0.
+- **What happens next, and under which conditions:**
+  1. This PR needs all six required checks green, and `main` run 4 must have finished green.
+  2. Merge, and wait for that merge's `main` run to finish green.
+  3. Tag `v1.2.0-preview.2` on that merge commit (owner approval, adaptations table).
+  4. `release.yml` runs gates, the 5-target build, assemble (sums, SBOM, .deb, changelog), cosign keyless signing,
+     SLSA provenance, `verify-release.ts`, the tag journey and the supply chain. The result is a **private draft**
+     pre-release, checked by `release-assets-check.ts` for the complete asset set. If any of this fails, nothing is
+     published and the failure is recorded here.
+- **OWNER-BLOCKED:** promotion of the draft (`workflow_dispatch publish=true`; this session's token gets 403 on
+  `workflow_dispatch`), and with it npm publishing (trusted publishing via OIDC runs only inside the promotion),
+  Docker and the channel pushes; desktop code signing and notarization (no signing secrets).
+- **v1.1.0 SUPERSEDED note:** prepared, and applied only once 1.2.0-preview.2 is public (owner decision 2026-11-21).
+  The release body of v1.1.0 is empty today, so the note would be its only text, and nothing is deleted:
+
+  > **SUPERSEDED.** v1.1.0 is withdrawn (see `docs/release/1.1.0/WITHDRAWN.md`). The current pre-release is
+  > XR v1.2.0-preview.2; the installers serve 1.0.0.
