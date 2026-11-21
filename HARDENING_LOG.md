@@ -18,6 +18,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | Phase 10 version choice | 1.1.1 would sort below the current 1.2.0-preview.1 identity | **Owner delegated the choice on 2026-11-19.** Decision: release **1.2.0-preview.2** through `release.manifest.json` + `bun run release:stamp` + the existing release workflow, only if every required check and the workflow's own gates are green and the full asset suite is produced; npm only via OIDC, desktop signing owner-blocked; otherwise nothing is published and Phase 10 records why |
 | R7: three CI-fix attempts per phase, then halt | Phase 3 halted on 2026-11-20 after three attempts, with every targeted failure fixed and one intermittent left (NEW-9) | **Owner (ahmadrrrtx) authorised one fourth Phase 3 attempt on 2026-11-20** (the NEW-9 PowerShell fix as proposed: telemetry and update check off, 15 s bound unchanged) and kept every other rule: Phases 4–11 have the normal three attempts each, one rerun per first-occurrence flake, a repeat is a defect |
 | R7 again: Phase 5 halted after three attempts | NEW-7 (the desktop shell aborts at startup) was root-caused on the third attempt; the fix was ready but would have been a fourth | **Owner (ahmadrrrtx) authorised one fourth Phase 5 attempt on 2026-11-20** (the NEW-7 fix as proposed) and again kept every other rule: Phases 6–11 have the normal three attempts each |
+| Merging PR #215 and pushing a release tag | Both change shared state that is hard to undo; the brief lists the merge (Phase 8) and the release (Phase 10) | **Owner (ahmadrrrtx) approved on 2026-11-21:** merge PR #215 with a merge commit once Phase 7 is green (done: `23090ee`); in Phase 10, push tag `v1.2.0-preview.2` for a verified PRIVATE draft only; the SUPERSEDED note on v1.1.0 is applied only once 1.2.0-preview.2 is public |
 
 ## Phase 0 — NOTES (exact commands)
 
@@ -93,7 +94,8 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 4 — accounting (B7 B10 B18) | `acdd8da` | head `8dd647a`: CI [44792959241](https://github.com/ahmadrrrtx/xr/actions/runs/44792959241) ✓ · Cross-Platform [44792959329](https://github.com/ahmadrrrtx/xr/actions/runs/44792959329) ✓ · Desktop App [44792959554](https://github.com/ahmadrrrtx/xr/actions/runs/44792959554) ✓ · Clean-Machine Journey [44792959439](https://github.com/ahmadrrrtx/xr/actions/runs/44792959439) ✓ · npm Pack Smoke [44792959392](https://github.com/ahmadrrrtx/xr/actions/runs/44792959392) ✓ · Supply Chain [44792959372](https://github.com/ahmadrrrtx/xr/actions/runs/44792959372) ✓ · Channel Install [44792959409](https://github.com/ahmadrrrtx/xr/actions/runs/44792959409) ✓ (the `db3ee5f` run: NEW-10, rerun) | **done**: all 6 required checks pass on one head (84 pass, 1 skipped by design) |
 | 5 — state performance (B8 B9 B11 B14) + ceiling raise | `94474b7` (raise `3609352`; CI fix `6381ac0`; diagnostics `c6b4030`, `a3eb0fb`; NEW-7 fix `fdee0b2`) | head `9195707`: CI [44887694266](https://github.com/ahmadrrrtx/xr/actions/runs/44887694266) ✓ · Cross-Platform [44887694147](https://github.com/ahmadrrrtx/xr/actions/runs/44887694147) ✓ · Desktop App [44887694249](https://github.com/ahmadrrrtx/xr/actions/runs/44887694249) ✓ · Clean-Machine Journey [44887694111](https://github.com/ahmadrrrtx/xr/actions/runs/44887694111) ✓ · npm Pack Smoke [44887694137](https://github.com/ahmadrrrtx/xr/actions/runs/44887694137) ✓ · Supply Chain [44887694173](https://github.com/ahmadrrrtx/xr/actions/runs/44887694173) ✓ · Channel Install [44887694190](https://github.com/ahmadrrrtx/xr/actions/runs/44887694190) ✓. History: the Phase 5 CI sections below (four CI-fix attempts, the fourth owner-authorised) | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
 | 6 — daemon and workspace safety (B13 B17 C13) | `a63ad32` | head `928e609`: CI [44890244897](https://github.com/ahmadrrrtx/xr/actions/runs/44890244897) ✓ · Cross-Platform [44890244913](https://github.com/ahmadrrrtx/xr/actions/runs/44890244913) ✓ · Desktop App [44890244875](https://github.com/ahmadrrrtx/xr/actions/runs/44890244875) ✓ · Clean-Machine Journey [44890244883](https://github.com/ahmadrrrtx/xr/actions/runs/44890244883) ✓ · npm Pack Smoke [44890244866](https://github.com/ahmadrrrtx/xr/actions/runs/44890244866) ✓ · Supply Chain [44890244847](https://github.com/ahmadrrrtx/xr/actions/runs/44890244847) ✓ · Channel Install [44890244867](https://github.com/ahmadrrrtx/xr/actions/runs/44890244867) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
-| 7 — security sweep (C3–C8, lock-ins, C16) | `dba65dc` `c3a6e09` `dcf954d` | pending (pushed after Phase 6 went green) | fixed-unverified |
+| 7 — security sweep (C3–C8, lock-ins, C16) | `dba65dc` `c3a6e09` `dcf954d` | head `d1f7f6d`: CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288) ✓ · Cross-Platform [44892794304](https://github.com/ahmadrrrtx/xr/actions/runs/44892794304) ✓ · Desktop App [44892794282](https://github.com/ahmadrrrtx/xr/actions/runs/44892794282) ✓ · Clean-Machine Journey [44892794346](https://github.com/ahmadrrrtx/xr/actions/runs/44892794346) ✓ · npm Pack Smoke [44892794255](https://github.com/ahmadrrrtx/xr/actions/runs/44892794255) ✓ · Supply Chain [44892794294](https://github.com/ahmadrrrtx/xr/actions/runs/44892794294) ✓ · Channel Install [44892794245](https://github.com/ahmadrrrtx/xr/actions/runs/44892794245) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
+| 8 — CI: actionlint, required-check names, merge, 3 green `main` runs | merge `23090ee` (PR #215) | `main` run 1 on `23090ee`: in progress | in-progress |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -249,6 +251,12 @@ made along the way and no assertion, threshold, timeout or retry was changed.
   retried, cancel keeps `.part`), and the unit tests of the new `writeFully`.
 - **Local verification:** voice 118/0 (98 + 20), daemon 379/0, typecheck 0, claim-lint ✓, boundaries 0 errors.
 - **Size:** tree 176,198 → 176,354 (+156); `models.ts` 366 → 312, `fetch-file.ts` 124, `tar.ts` 86. No waived module touched.
+
+### Phase 2 CI on `341e5b1` — all six required checks green (Phase 2 done)
+
+- Green on the first push, every workflow: CI [44636377949](https://github.com/ahmadrrrtx/xr/actions/runs/44636377949), Cross-Platform [44636377917](https://github.com/ahmadrrrtx/xr/actions/runs/44636377917), Desktop App [44636377958](https://github.com/ahmadrrrtx/xr/actions/runs/44636377958), Clean-Machine Journey [44636378005](https://github.com/ahmadrrrtx/xr/actions/runs/44636378005), npm Pack Smoke [44636377856](https://github.com/ahmadrrrtx/xr/actions/runs/44636377856), Supply Chain [44636377919](https://github.com/ahmadrrrtx/xr/actions/runs/44636377919), Channel Install [44636377864](https://github.com/ahmadrrrtx/xr/actions/runs/44636377864).
+  No CI-fix attempt used.
+- This note was added late, with the Phase 8 evidence; the phase ledger row already carries these links.
 
 ## Phase 3 — budget truth (B4, B5, B6, NEW-1) · commit `d0cebb3`
 
@@ -878,3 +886,81 @@ still pins an exact value. No waived giant grew.
   state 75/0, reliability 109/0 (single-writer invariant included), one-agent 22/0, core 121/0, cli 262/0; typecheck 0;
   claim-lint ✓; boundaries 0 errors; API schema/client, ownership, hot-path and placeholder lints clean.
 - **Size:** tree 176,582 → 176,635 (+53) of 177,000; no waived module touched.
+
+### Phase 7 CI on `d1f7f6d` — all six required checks green (Phase 7 done)
+
+- Green on the first push, every workflow: CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288), Cross-Platform [44892794304](https://github.com/ahmadrrrtx/xr/actions/runs/44892794304), Desktop App [44892794282](https://github.com/ahmadrrrtx/xr/actions/runs/44892794282), Clean-Machine Journey [44892794346](https://github.com/ahmadrrrtx/xr/actions/runs/44892794346), npm Pack Smoke [44892794255](https://github.com/ahmadrrrtx/xr/actions/runs/44892794255), Supply Chain [44892794294](https://github.com/ahmadrrrtx/xr/actions/runs/44892794294), Channel Install [44892794245](https://github.com/ahmadrrrtx/xr/actions/runs/44892794245),
+  and the non-gating OS sandbox [44892795008](https://github.com/ahmadrrrtx/xr/actions/runs/44892795008) and Workflow Audit [44892794287](https://github.com/ahmadrrrtx/xr/actions/runs/44892794287). `gh pr checks 215`: 85 pass,
+  1 skipped by design ("Real channel installs of the public version"). No CI-fix attempt used.
+- All seven desktop journeys passed; windows-x64 passed for the fourth consecutive head that carries the NEW-7 fix.
+
+## Phase 8 — CI: actionlint, required-check names, merge, `main` runs
+
+- **actionlint:** enforced on every PR and every push to `main`. The Truth gate in `ci.yml` runs "Workflow lint
+  (actionlint + shellcheck, pinned)" (XR-LAUNCH-032; version and sha256 pinned). It passed on every phase head, most
+  recently `d1f7f6d` (CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288)), next to "Gate changelog:check (XR-P08/D-026)". A local run is not possible:
+  the binary is only distributed as a GitHub release asset, which this sandbox cannot download.
+- **Required-check names:** `bun run ci:policy` → "OK — 6 required checks, 22 workflows": every name in
+  `.github/required-checks.json` matches a job name. **Gap, owner action:** the active ruleset "main protection"
+  (id 19119579) enforces 4 of the 6 (Quality Gate, Cross-Platform gate, Supply Chain gate, npm Pack Smoke gate).
+  Desktop gate (bundles + latest.json + journey) and Clean-Machine Journey gate are declared but not enforced.
+  Rulesets are repository settings (this session's token cannot even read branch protection), so nothing is changed
+  from here.
+- **Merge:** with the owner's approval (adaptations table), PR #215 was marked ready and merged on 2026-11-21 at
+  11:14:41 UTC with a merge commit pinned to the Phase 7 green head (`gh pr merge 215 --merge --match-head-commit
+  d1f7f6d…`). The result is `23090ee`, with parents `cd21cd5` and `d1f7f6d`. A merge commit keeps the per-defect
+  conventional commits, which `scripts/changelog.ts` reads (`git log --no-merges`).
+- **What counts as a green `main` run:** all six required checks pass on one push to `main`. Non-gating workflows are
+  reported alongside and do not count either way.
+- **How the runs are produced:** every merge to `main` starts one run of each push workflow, and `main` runs queue
+  instead of cancelling (`cancel-in-progress` is false on `main`). `workflow_dispatch` is not available to this
+  session (403), so runs 2 and 3 come from two small evidence PRs from this branch. Each is merged only after the
+  previous `main` run has finished green.
+- **`main` run 1, `23090ee`:** in progress when this was written: CI [44898171204](https://github.com/ahmadrrrtx/xr/actions/runs/44898171204), Cross-Platform [44898171045](https://github.com/ahmadrrrtx/xr/actions/runs/44898171045), Desktop App [44898171222](https://github.com/ahmadrrrtx/xr/actions/runs/44898171222), Clean-Machine Journey [44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078), npm Pack Smoke [44898171035](https://github.com/ahmadrrrtx/xr/actions/runs/44898171035), Supply Chain [44898171079](https://github.com/ahmadrrrtx/xr/actions/runs/44898171079), Channel Install [44898171046](https://github.com/ahmadrrrtx/xr/actions/runs/44898171046).
+- **NEW-11 (pre-existing, logged only; owner action):** Channel Live is not a required check. It asks the public
+  registries whether every claimed channel serves `channels.publicVersion` (XR-LAUNCH-001). It failed on this push
+  ([44898171263](https://github.com/ahmadrrrtx/xr/actions/runs/44898171263)) in "Claimed channels serve the public version" (steps `channel:live` and "README channel claims
+  match the live registries"). It has failed on every run since at least 2026-11-16, including `main` at `cd21cd5`:
+  push [44418953446](https://github.com/ahmadrrrtx/xr/actions/runs/44418953446) and nightly runs [44544636564](https://github.com/ahmadrrrtx/xr/actions/runs/44544636564) and [44750652238](https://github.com/ahmadrrrtx/xr/actions/runs/44750652238).
+  - A local `bun run channel:live` shows the npm cause: the retired versions 3.0.0, 3.0.1, 3.0.2, 3.0.3 and 3.1.5
+    outrank `latest` 1.0.0, and their deprecation messages point to `@beta`, not `@latest`.
+  - Fixing that needs `npm deprecate` with publish rights, so it is OWNER-BLOCKED; `bun run npm:ghosts --
+    --print-commands` prints the five commands.
+  - The other five claimed channels cannot be checked from this sandbox (TLS interception), so whether they fail too
+    is unknown. The three install jobs in the same run passed (install.sh on macOS and Ubuntu, install.ps1 on Windows).
+- **Gate XR-LAUNCH-012** asks for 10 consecutive green `main` runs; it stays in progress.
+
+### Phase 8 CI on `365ea49` (PR #216) — Clean-Machine Journey red: NEW-3 again, now with its cause; CI-fix attempt 1 of 3
+
+- Red, Clean-Machine Journey [44898444685](https://github.com/ahmadrrrtx/xr/actions/runs/44898444685): **`CLI journey — binary on windows-latest`**, step `Journey`. The
+  annotation names the step: "installer N+1 exit 1: … Downloading compiled binary v1.2.1-journey.1
+  (xr-windows-x64.exe) Move-Item: install.ps1:297 … The process cannot access the file because it is being used by
+  another process." The other 19 journeys passed. The same tree passed this journey in `main` run 1
+  ([44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078)), so the failure is intermittent.
+- **Classification:** the fourth occurrence of NEW-3 ("windows-latest CLI journey fails intermittently in its late
+  steps", after `3f0f839`, `55fa18a` and `1f15f51`), so a defect, not a flake. It blocks Phase 8: PR #216 is not
+  merged while a declared required check is red, even though the ruleset does not enforce this one.
+- **Cause:** in `Install-XrBinary`, the new binary is run once as `.partial-<name>` (`& $partial --version`) and then
+  moved over the installed one with `Move-Item -Force`. PowerShell's `FileSystemProvider.MoveFileInfoItem`
+  (PowerShell/PowerShell, `src/System.Management.Automation/namespaces/FileSystemProvider.cs`) reports the error of
+  its *first* `MoveTo` even when the `-Force` fallback fails, and a held destination would surface as "already
+  exists". A sharing violation (32) therefore means the **source** was still held: the binary run a moment earlier,
+  while Windows tears the exited image down or real-time antivirus reads the new file. The same fallback deletes the
+  installed binary before its second move fails, so on the old code a failed update also lost the installed binary.
+- **Fix** `8d1b98b`: both moves of the downloaded binary go through `Move-XrItemWithRetry`. It retries only an
+  `IOException` carrying a sharing or lock violation (32, 33), up to 30 × 500 ms, then rethrows the original error.
+  Any other error (access denied, a missing file) still stops the install at once.
+- **Regression tests** in `test/release/installer-powershell.test.ts`:
+  - Static, every OS: `Install-XrBinary` has no bare `Move-Item`, and the helper's budget, error filter and rethrow are
+    pinned. **R2:** with `install.ps1` from `365ea49`, both fail; with the fix, both pass.
+  - Executed under PowerShell (`test/release/installer-move-controls.ps1`): 2 controls on every host (an unheld
+    replace; a missing source fails at once). On Windows, 4 more hold the new binary the way a scanner can (readers
+    allowed, delete and rename refused). The negative control shows that a plain `Move-Item` under that hold fails
+    with the CI journey's error code 32 (the old code). The retry waits a 1.5 s hold out, with and without an
+    installed binary in place. A hold longer than the budget ends in the original sharing violation, with the new
+    binary kept.
+- **Local verification:** `test/release` 317/0 (17 skipped: the PowerShell-executed tests, since this sandbox has no
+  PowerShell), install-container and journey tests 43/0, typecheck 0, claim-lint ✓, ownership ✓, `release:check` and
+  `channel:check` in sync. Size unchanged at 176,635 (installer scripts and tests are outside the counted tree).
+- **`main` run 1 (`23090ee`)** at the time of this commit: 5 of 6 required checks green, Desktop App still running.
+- **R7:** Phase 8 CI-fix attempt **1 of 3**.
