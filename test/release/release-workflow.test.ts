@@ -8,7 +8,7 @@
  * bug (empty SLSA subjects) can never recur silently.
  */
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..");
@@ -118,6 +118,45 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
 
   test("changelog is generated from git history at release time", () => {
     expect(workflow).toContain("scripts/changelog.ts --version");
+  });
+});
+
+/** The jobs of a workflow file: each `  <key>:` under `jobs:` up to the next one. */
+function jobsOf(doc: string): { name: string; body: string }[] {
+  const start = doc.search(/^jobs:\s*$/m);
+  if (start < 0) return [];
+  const rest = doc.slice(start);
+  const heads = [...rest.matchAll(/^  ([A-Za-z0-9_-]+):\s*$/gm)];
+  return heads.map((h, i) => ({ name: h[1]!, body: rest.slice(h.index!, i + 1 < heads.length ? heads[i + 1]!.index : undefined) }));
+}
+
+// The v1.2.0-preview.2 tag run (44917320963) stopped in release.yml's gates: `security:check` ran on a stock runner,
+// and its self-check reported "unshare=false,bwrap=false" (BLOCKED). ci.yml's Truth gate had always provisioned Node
+// and the runner's isolation capability first; the release gates did not.
+describe("the security gate gets a capable runner wherever it runs", () => {
+  test("every workflow job that runs security:check first provisions Node and runs ci-enable-linux-isolation.sh", () => {
+    const dir = join(ROOT, ".github", "workflows");
+    const seen: string[] = [];
+    for (const file of readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)).sort()) {
+      for (const job of jobsOf(readFileSync(join(dir, file), "utf8"))) {
+        const check = job.body.indexOf("bun run security:check");
+        if (check < 0) continue;
+        const node = job.body.indexOf("actions/setup-node@");
+        const enable = job.body.indexOf("bash scripts/ci-enable-linux-isolation.sh");
+        const where = `${file}:${job.name}`;
+        seen.push(where);
+        expect({ where, node: node > -1 && node < check, enable: enable > -1 && enable < check }).toEqual({ where, node: true, enable: true });
+      }
+    }
+    expect(seen).toEqual(expect.arrayContaining(["ci.yml:truth-gate", "release.yml:gates"]));
+  });
+
+  test("the release gates use the same Node pin as the Truth gate", () => {
+    const pin = (doc: string) => /uses: (actions\/setup-node@[0-9a-f]{40})[^\n]*\n\s+with:\n\s+node-version: '([^']+)'/.exec(doc)?.slice(1, 3);
+    const gates = jobsOf(workflow).find((j) => j.name === "gates")!.body;
+    const truth = jobsOf(readFileSync(join(ROOT, ".github", "workflows", "ci.yml"), "utf8")).find((j) => j.name === "truth-gate")!.body;
+    expect(pin(gates)).toBeDefined();
+    expect(pin(gates)).toEqual(pin(truth));
   });
 });
 

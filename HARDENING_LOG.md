@@ -1091,3 +1091,46 @@ The version follows the owner's delegation (adaptations table). The release goes
 
   > **SUPERSEDED.** v1.1.0 is withdrawn (see `docs/release/1.1.0/WITHDRAWN.md`). The current pre-release is
   > XR v1.2.0-preview.2; the installers serve 1.0.0.
+
+### Phase 10 — PR #219 green, merged as `08a04cd`; `main` runs 4 and 5 green
+
+- `main` run 4 on `5b1ca0a` (the merge of PR #218): all six required checks green
+  (CI [44911760912](https://github.com/ahmadrrrtx/xr/actions/runs/44911760912), Cross-Platform [44911760941](https://github.com/ahmadrrrtx/xr/actions/runs/44911760941), Desktop App [44911760911](https://github.com/ahmadrrrtx/xr/actions/runs/44911760911), Clean-Machine Journey [44911761040](https://github.com/ahmadrrrtx/xr/actions/runs/44911761040), npm Pack Smoke [44911760907](https://github.com/ahmadrrrtx/xr/actions/runs/44911760907), Supply Chain [44911760891](https://github.com/ahmadrrrtx/xr/actions/runs/44911760891), Channel Install [44911760922](https://github.com/ahmadrrrtx/xr/actions/runs/44911760922)).
+- PR #219 on `5e360c7`: all six required checks green (82 pass, 1 skipped by design). It was merged on 2026-11-21 at
+  14:36:19 UTC, pinned to its head: `08a04cd`.
+- `main` run 5 on `08a04cd`: all six required checks green (CI [44914799515](https://github.com/ahmadrrrtx/xr/actions/runs/44914799515), Cross-Platform [44914799421](https://github.com/ahmadrrrtx/xr/actions/runs/44914799421), Desktop App [44914799399](https://github.com/ahmadrrrtx/xr/actions/runs/44914799399), Clean-Machine Journey [44914799451](https://github.com/ahmadrrrtx/xr/actions/runs/44914799451), npm Pack Smoke [44914799439](https://github.com/ahmadrrrtx/xr/actions/runs/44914799439), Supply Chain [44914799505](https://github.com/ahmadrrrtx/xr/actions/runs/44914799505), Channel Install [44914799496](https://github.com/ahmadrrrtx/xr/actions/runs/44914799496)).
+  Channel Live [44914799509](https://github.com/ahmadrrrtx/xr/actions/runs/44914799509) failed again with NEW-11; its three install jobs passed.
+
+### Phase 10 — tag `v1.2.0-preview.2`: the release gates were red (NEW-12); nothing was published; CI-fix attempt 1 of 3
+
+- With every condition met (`main` run 5 green on `08a04cd`, owner approval), the annotated tag `v1.2.0-preview.2`
+  was pushed on `08a04cd` at 15:05 UTC.
+- **Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963): failure.** The gates job stopped at "Behavioral security + deterministic agent smoke
+  (real Linux isolation required)". The annotation reads "BLOCKED exit=- real self-check: unshare=false,bwrap=false;
+  at least one mandatory". So build, assemble, signing, provenance, verification and the draft were all skipped.
+  **No release and no draft exist for the tag; nothing was published.** The 27 jobs that ran without the gates
+  passed: all 16 tag CLI journeys, both Docker journeys, and the whole tag supply chain (trivy, gitleaks, osv/bun
+  audit, licences, SBOM drift, install hygiene, the tag ⇔ npm invariant).
+- **NEW-12 (pre-existing, blocks Phase 10):** `release.yml`'s gates job runs `bun run security:check` on a stock
+  runner. `ci.yml`'s Truth gate runs the same command only after "Provision real Node for bounded security probes"
+  (`actions/setup-node`, Node 22.23.5) and "Make the runner capable of real Linux isolation (userns + bubblewrap)"
+  (`scripts/ci-enable-linux-isolation.sh`). A stock ubuntu-24.04 runner ships no bubblewrap and restricts
+  unprivileged user namespaces, so the gate refuses, correctly. The step had never run on a tag before: the last tag
+  run, v1.1.0, failed earlier in the same job.
+- **Fix** `aac7944`: the gates job gets the same two steps, with the same pins, before `security:check`. The gate
+  itself is unchanged, and its real self-check still decides; this is the configuration `security:check` passes
+  under in the Truth gate on every `main` run.
+- **Regression tests** (`test/release/release-workflow.test.ts`): every workflow job that runs `security:check`
+  first provisions Node and runs the isolation script (today `ci.yml:truth-gate` and `release.yml:gates`), and the
+  release gates use the Truth gate's Node pin. **R2:** against the old `release.yml`, both fail; with the fix, both
+  pass. `test/release` 319/0, `test/supply-chain` 60/0, `ci:policy`, claim-lint and `ci-capability-gate` clean; the
+  workflow parses (`Bun.YAML`) with the steps in the intended order.
+- **Desktop App on the tag [44917320668](https://github.com/ahmadrrrtx/xr/actions/runs/44917320668): failure by design.** The tag-only preflight "Fail on identity drift or
+  missing tag-signing prerequisites" requires the updater key, the Apple certificate and notarization credentials,
+  and the Windows certificate (`scripts/desktop-signing-plan.ts --preflight --tag true`). None are provisioned, so no
+  desktop bundle is built for a tag: **OWNER-BLOCKED** (XR-LAUNCH-008). `release.yml`'s private draft does not depend
+  on it; its asset-completeness gate covers the CLI set.
+- **The tag itself:** a tag run always uses the workflow file of the tagged commit, so `v1.2.0-preview.2` on
+  `08a04cd` can never pass these gates. The repo's precedent for a tag whose release run failed at the gates is
+  v1.1.0: it was listed in `channels.withdrawnTags` with the failing run as evidence, never reused, and superseded by
+  the next release. How to proceed is an owner decision, recorded below when made.
