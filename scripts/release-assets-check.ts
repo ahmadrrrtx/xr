@@ -60,17 +60,32 @@ interface ReleaseAssetsResponse {
   message?: string;
 }
 
-async function fetchAssetNames(repo: string, tag: string): Promise<string[]> {
-  const res = await fetch(`https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`, {
-    headers: {
-      accept: "application/vnd.github+json",
-      ...(process.env.GH_TOKEN ? { authorization: `Bearer ${process.env.GH_TOKEN}` } : {}),
-      "user-agent": "xr-release-assets-check",
-    },
-  });
-  if (!res.ok) throw new Error(`GitHub API ${res.status} for ${repo}@${tag}: ${res.statusText}`);
-  const data = (await res.json()) as ReleaseAssetsResponse;
-  return (data.assets ?? []).map((a) => a.name ?? "").filter(Boolean);
+/**
+ * The asset names of the tag's release, drafts included (NEW-13). GitHub's tag
+ * lookup returns published releases only: it answers 404 for a draft even with
+ * push access. A tag push now prepares a PRIVATE draft, so on 404 the release
+ * list (which shows drafts to a token with push access) is searched for the tag.
+ * Any other API error fails at once.
+ */
+export async function fetchAssetNames(repo: string, tag: string): Promise<string[]> {
+  const headers = {
+    accept: "application/vnd.github+json",
+    ...(process.env.GH_TOKEN ? { authorization: `Bearer ${process.env.GH_TOKEN}` } : {}),
+    "user-agent": "xr-release-assets-check",
+  };
+  const names = (r: ReleaseAssetsResponse) => (r.assets ?? []).map((a) => a.name ?? "").filter(Boolean);
+  const res = await fetch(`https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`, { headers });
+  if (res.ok) return names((await res.json()) as ReleaseAssetsResponse);
+  if (res.status !== 404) throw new Error(`GitHub API ${res.status} for ${repo}@${tag}: ${res.statusText}`);
+  for (let page = 1; page <= 10; page++) {
+    const list = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`, { headers });
+    if (!list.ok) throw new Error(`GitHub API ${list.status} listing the releases of ${repo}: ${list.statusText}`);
+    const releases = (await list.json()) as ReleaseAssetsResponse[];
+    const hit = releases.find((r) => r.tag_name === tag);
+    if (hit) return names(hit);
+    if (releases.length < 100) break;
+  }
+  throw new Error(`GitHub API: no release, published or draft, for ${repo}@${tag}`);
 }
 
 if (import.meta.main) {
