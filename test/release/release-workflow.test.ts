@@ -160,6 +160,29 @@ describe("the security gate gets a capable runner wherever it runs", () => {
   });
 });
 
+// NEW-14: Bun could not extract its aarch64 Windows baseline on windows-x64 runners (channel-install run 39549149344;
+// commit 19bc129f moved that lane's build to macOS). release.yml still compiled windows-arm64 inside its windows-latest
+// entry, a path no tag run had exercised.
+describe("windows-arm64 is cross-compiled on the proven host", () => {
+  const build = jobsOf(workflow).find((j) => j.name === "build")!.body;
+  const entries = [...build.matchAll(/^\s+- \{ name: ([^,]+), os: ([^,]+), targets: "([^"]+)"/gm)].map((m) => ({ name: m[1]!, os: m[2]!, targets: m[3]!.split(",") }));
+
+  test("no windows runner compiles windows-arm64; one macOS entry does, and every target is still built exactly once", () => {
+    expect(entries.filter((e) => e.os.startsWith("windows")).flatMap((e) => e.targets)).not.toContain("windows-arm64");
+    expect(entries.filter((e) => e.targets.includes("windows-arm64")).map((e) => e.os)).toEqual(["macos-latest"]);
+    expect(entries.flatMap((e) => e.targets).sort()).toEqual(["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "windows-arm64", "windows-x64"]);
+  });
+
+  test("the windows-arm64 portable zip is packaged where its binary is built, and assemble still demands both zips", () => {
+    expect(build).toContain("if: matrix.name == 'windows-arm64'");
+    expect(build).toContain("(cd dist/zip && zip -q ../xr-windows-arm64.zip xr.exe)");
+    expect(build).not.toContain("Copy-Item dist/xr-windows-arm64.exe");
+    const assemble = jobsOf(workflow).find((j) => j.name === "assemble")!.body;
+    expect(assemble).toContain("pattern: binaries-*");
+    expect(assemble).toContain("xr-windows-x64.zip xr-windows-arm64.zip");
+  });
+});
+
 describe("Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families", () => {
   test("a single matrix drives Linux + macOS + Windows", () => {
     expect(crossPlatform).toContain("ubuntu-24.04");
