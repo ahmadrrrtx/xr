@@ -1269,3 +1269,40 @@ The version follows the owner's delegation (adaptations table). The release goes
     requested in chat.
 - **Next:** this PR green, then merge, then a green `main` run, then tag `v1.2.0-preview.3` on that merge commit,
   then `release.yml`, then a verified private draft.
+
+## HALT — Phase 10 again, under R7 (2026-11-21): the owner-authorised fourth attempt is used
+
+- PR #223 (attempt 4) passed all six required checks on `e3937a1`. It was merged on 2026-11-21 at 17:12:53 UTC as
+  `b46173a`, and GitHub marked PR #222 as merged. `main` run 7 on `b46173a` passed all six required checks.
+- Tag `v1.2.0-preview.3` was pushed on `b46173a`, with the owner's approval. **Release [44931782266](https://github.com/ahmadrrrtx/xr/actions/runs/44931782266): failure.**
+  - **Passed:** Release gates, now with real Linux isolation (NEW-12 holds); the four builds, with windows-arm64 on
+    macOS (NEW-14 holds); Assemble; cosign keyless signing, including its fail-closed re-verification of
+    `SHA256SUMS`; the SLSA provenance generator; every tag CLI and Docker journey; and the whole tag supply chain.
+  - **Failed:** "Verify signed artifacts (verify-release.ts)", step "verify-release.ts against the signed npm tarball
+    + SBOM + sums" (exit 1). The script prints its per-check ✓/✗ lines only to the job log, which this sandbox
+    cannot download (blob storage), and the step raises no annotation naming the check. So the draft job was
+    skipped. **No release or draft exists for the tag; nothing was published.**
+  - The desktop tag run [44931781798](https://github.com/ahmadrrrtx/xr/actions/runs/44931781798) stopped at its signing preflight, by design (OWNER-BLOCKED).
+- **NEW-17 (pre-existing; blocks Phase 10):** `verify-release.ts` fails on the first tag run that reached it, and
+  without the log the failing check is unknown. What this sandbox could narrow down:
+  - The release SBOM, generated exactly as Assemble does, validates (`validateSbom`: CycloneDX 1.5, root
+    `1.2.0-preview.3`, 1,202 components, no missing or malformed hashes, no dangling references).
+  - `SHA256SUMS` covers all of `dist/`, and the signed bundle carries all of `dist/`, so the strict inventory should
+    hold.
+  - The SLSA generator is referenced by tag (`v2.1.0`), as `slsa-verifier` requires.
+  - Still open, needing the artifacts or the log: cosign verification of the tarball and SBOM against the exact tag
+    identity (the sign job re-verified only `SHA256SUMS`, with an identity regexp), `slsa-verifier`'s builder and
+    source-tag check, and the provenance-subject check.
+- **NEW-16 (owner action, found while writing the signing guide):** the desktop tag build takes Windows signing
+  material as `WINDOWS_CERTIFICATE`, a base64 `.pfx`. Since 1 June 2023 public CAs issue code-signing keys only on
+  hardware tokens or cloud HSMs, never as a downloadable `.pfx`. A new certificate therefore cannot be supplied
+  this way. Once the owner picks a provider, the step has to use that provider's signing tool (for example SSL.com
+  eSigner, DigiCert KeyLocker or Certum). Microsoft's Artifact Signing admits individuals only in the US and Canada.
+- **R7:** four attempts are used, the fourth owner-authorised. **Halted.**
+- **`v1.2.0-preview.3`:** under the repository's rule and the owner's preview.2 decision, a tag whose release run
+  failed is withdrawn and never reused. That entry lands with the next attempt.
+- **Owner decision needed:**
+  1. The ✗ lines of that step, read in the browser from the job log; they name the failing check without spending a
+     tag on diagnostics.
+  2. Either a fifth attempt (fix NEW-17, make a failing check raise an annotation, withdraw preview.3, release
+     1.2.0-preview.4) or stopping Phase 10 here with nothing published.
