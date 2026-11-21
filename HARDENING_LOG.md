@@ -929,3 +929,38 @@ still pins an exact value. No waived giant grew.
   - The other five claimed channels cannot be checked from this sandbox (TLS interception), so whether they fail too
     is unknown. The three install jobs in the same run passed (install.sh on macOS and Ubuntu, install.ps1 on Windows).
 - **Gate XR-LAUNCH-012** asks for 10 consecutive green `main` runs; it stays in progress.
+
+### Phase 8 CI on `365ea49` (PR #216) — Clean-Machine Journey red: NEW-3 again, now with its cause; CI-fix attempt 1 of 3
+
+- Red, Clean-Machine Journey [44898444685](https://github.com/ahmadrrrtx/xr/actions/runs/44898444685): **`CLI journey — binary on windows-latest`**, step `Journey`. The
+  annotation names the step: "installer N+1 exit 1: … Downloading compiled binary v1.2.1-journey.1
+  (xr-windows-x64.exe) Move-Item: install.ps1:297 … The process cannot access the file because it is being used by
+  another process." The other 19 journeys passed. The same tree passed this journey in `main` run 1
+  ([44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078)), so the failure is intermittent.
+- **Classification:** the fourth occurrence of NEW-3 ("windows-latest CLI journey fails intermittently in its late
+  steps", after `3f0f839`, `55fa18a` and `1f15f51`), so a defect, not a flake. It blocks Phase 8: PR #216 is not
+  merged while a declared required check is red, even though the ruleset does not enforce this one.
+- **Cause:** in `Install-XrBinary`, the new binary is run once as `.partial-<name>` (`& $partial --version`) and then
+  moved over the installed one with `Move-Item -Force`. PowerShell's `FileSystemProvider.MoveFileInfoItem`
+  (PowerShell/PowerShell, `src/System.Management.Automation/namespaces/FileSystemProvider.cs`) reports the error of
+  its *first* `MoveTo` even when the `-Force` fallback fails, and a held destination would surface as "already
+  exists". A sharing violation (32) therefore means the **source** was still held: the binary run a moment earlier,
+  while Windows tears the exited image down or real-time antivirus reads the new file. The same fallback deletes the
+  installed binary before its second move fails, so on the old code a failed update also lost the installed binary.
+- **Fix** `8d1b98b`: both moves of the downloaded binary go through `Move-XrItemWithRetry`. It retries only an
+  `IOException` carrying a sharing or lock violation (32, 33), up to 30 × 500 ms, then rethrows the original error.
+  Any other error (access denied, a missing file) still stops the install at once.
+- **Regression tests** in `test/release/installer-powershell.test.ts`:
+  - Static, every OS: `Install-XrBinary` has no bare `Move-Item`, and the helper's budget, error filter and rethrow are
+    pinned. **R2:** with `install.ps1` from `365ea49`, both fail; with the fix, both pass.
+  - Executed under PowerShell (`test/release/installer-move-controls.ps1`): 2 controls on every host (an unheld
+    replace; a missing source fails at once). On Windows, 4 more hold the new binary the way a scanner can (readers
+    allowed, delete and rename refused). The negative control shows that a plain `Move-Item` under that hold fails
+    with the CI journey's error code 32 (the old code). The retry waits a 1.5 s hold out, with and without an
+    installed binary in place. A hold longer than the budget ends in the original sharing violation, with the new
+    binary kept.
+- **Local verification:** `test/release` 317/0 (17 skipped: the PowerShell-executed tests, since this sandbox has no
+  PowerShell), install-container and journey tests 43/0, typecheck 0, claim-lint ✓, ownership ✓, `release:check` and
+  `channel:check` in sync. Size unchanged at 176,635 (installer scripts and tests are outside the counted tree).
+- **`main` run 1 (`23090ee`)** at the time of this commit: 5 of 6 required checks green, Desktop App still running.
+- **R7:** Phase 8 CI-fix attempt **1 of 3**.
