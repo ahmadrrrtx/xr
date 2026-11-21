@@ -977,8 +977,13 @@ still pins an exact value. No waived giant grew.
   trigger.
 - **NEW-3 fix held on its first run:** the windows-latest binary journey passed with `8d1b98b`, and Cross-Platform's
   Windows parity ran the six installer move controls. Windows parity excludes only the 7 files listed by
-  `platform-parity.ts`, and this test file is not one of them. NEW-3 was intermittent, so green runs are evidence,
-  not proof, and it stays **fixed-unverified**. Phase 8 has used 1 of its 3 CI-fix attempts.
+  `platform-parity.ts`, and this test file is not one of them. Phase 8 has used 1 of its 3 CI-fix attempts.
+- **Correction: NEW-3 has two failure modes, and `8d1b98b` fixes one.**
+  - **Binary channel:** the installer's move of the binary it has just run. Confirmed on `365ea49`; the binary failure
+    on `55fa18a` (late in the journey, after 25 s) was probably the same. Fixed by `8d1b98b`, **fixed-unverified**:
+    the failure was intermittent, so green runs are evidence, not proof.
+  - **npm channel:** on `1f15f51`, `xr status --json` exited 1 after `xr update --yes`; the step on `3f0f839` is
+    unknown. `install.ps1` is not on that path, so this mode stays **open**, with its annotation in place.
 - PR #216 was merged on 2026-11-21 at 12:14:03 UTC, after `main` run 1 had finished green, with a merge commit pinned to
   `bc22f82` (`--match-head-commit`). The result is `4ea49e2`.
 - **`main` run 2, `4ea49e2`:** in progress when this was written: CI [44902873796](https://github.com/ahmadrrrtx/xr/actions/runs/44902873796), Cross-Platform [44902873864](https://github.com/ahmadrrrtx/xr/actions/runs/44902873864), Desktop App [44902873729](https://github.com/ahmadrrrtx/xr/actions/runs/44902873729), Clean-Machine Journey [44902873728](https://github.com/ahmadrrrtx/xr/actions/runs/44902873728), npm Pack Smoke [44902873760](https://github.com/ahmadrrrtx/xr/actions/runs/44902873760), Supply Chain [44902873925](https://github.com/ahmadrrrtx/xr/actions/runs/44902873925), Channel Install [44902873752](https://github.com/ahmadrrrtx/xr/actions/runs/44902873752).
