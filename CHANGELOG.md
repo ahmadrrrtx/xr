@@ -24,6 +24,7 @@
 
 ### Fixes
 
+- **ci:** cross-compile windows-arm64 on macOS in the release build, as channel-install does (NEW-14) (275be64)
 - **release:** the asset-completeness gate finds the private draft a tag push prepares (NEW-13) (bf261ef)
 - **ci:** the release gates prepare real Linux isolation before security:check, as the Truth gate does (aac7944)
 - **installer:** wait out a transient Windows hold on the new binary before moving it (NEW-3) (8d1b98b)
@@ -192,6 +193,10 @@
 
 ### Documentation
 
+- **hardening:** HALT — Phase 10 under R7: NEW-15 (launcher test fixture race, repeat) needs a fourth attempt (5f05476)
+- **hardening:** PR #221 merged; NEW-14 windows-arm64 release build fixed before tagging (attempt 3 of 3) (f58efd5)
+- **hardening:** Phase 10 — withdraw v1.2.0-preview.2, NEW-13, 1.2.0-preview.3 prepared (attempt 2 of 3) (6307299)
+- **changelog:** generate the 1.2.0-preview.3 section from conventional commits since v1.1.0 (b7968d2)
 - **release:** Preview 3 known limitations (1.2.0-preview.3) (62e7a14)
 - **hardening:** Phase 10 tag run — release gates red (NEW-12), nothing published; fix and regression test (attempt 1 of 3) (9a71189)
 - **hardening:** Phase 9 green on 6a53e67; record Phase 10 (1.2.0-preview.2 release prep) (5e360c7)
@@ -277,6 +282,7 @@
 
 ### Tests
 
+- **cli:** the TERM fixture installs its trap before it announces readiness (NEW-15) (0ca9015)
 - **state:** the store-cache test closes its caller-owned fresh instance before deleting the workspace (Windows) (6381ac0)
 - **release:** PowerShell children of the installer negative suite start with telemetry and the update check off (NEW-9) (d75a553)
 - **security:** attest real Node startup and enforce external match watchdog (25a0923)
