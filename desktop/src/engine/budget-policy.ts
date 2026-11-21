@@ -7,6 +7,8 @@ export interface EngineLimitPatch {
   monthlyCap?: number;
   dailyCap?: number | null;
   perTaskUsd?: number;
+  /** B6: the engine refuses monthlyCap 0 (local-only) unless it is confirmed. */
+  confirmBlockAll?: true;
 }
 export function ownerLimitPatch(s: BudgetSettings): EngineLimitPatch {
   if (
@@ -19,6 +21,7 @@ export function ownerLimitPatch(s: BudgetSettings): EngineLimitPatch {
     monthlyCap: s.monthlyLimit,
     dailyCap: s.dailyLimit > 0 ? s.dailyLimit : null,
     perTaskUsd: s.perRequestLimit,
+    ...(s.monthlyLimit === 0 ? { confirmBlockAll: true as const } : {}),
   };
 }
 export function tighteningPatch(
@@ -46,6 +49,7 @@ export function tighteningPatch(
   // increase the engine authority's limits. Daily/per-task zero means off.
   if ((s.hardCap || s.monthlyLimit === 0) && desired.monthlyCap! < monthly)
     out.monthlyCap = desired.monthlyCap;
+  if (out.monthlyCap === 0) out.confirmBlockAll = true;
   if (s.dailyLimit > 0 && (daily == null || s.dailyLimit < daily))
     out.dailyCap = s.dailyLimit;
   if (s.perRequestLimit > 0 && (task === 0 || s.perRequestLimit < task))

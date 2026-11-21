@@ -625,6 +625,11 @@ jobs:
           $k = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
           New-Item -Path $k -Force | Out-Null
           New-ItemProperty -Path $k -Name 'xr-desktop.exe' -Value '--remote-debugging-port=0' -PropertyType String -Force | Out-Null
+          # NEW-7 diagnostics on this throwaway runner only: audit process creation and
+          # termination (Security events 4688/4689, by subcategory GUID, locale-proof), so a
+          # failed launch reports how the app, its engine and WebView2 exited.
+          auditpol /set /subcategory:"{0CCE922B-69AE-11D9-BED3-505054503030}" /success:enable | Out-Null
+          auditpol /set /subcategory:"{0CCE922C-69AE-11D9-BED3-505054503030}" /success:enable | Out-Null
       - name: Journey
         shell: bash
         run: |

@@ -22,6 +22,7 @@
  *     growth; a checkpoint runs on close.
  */
 import { Database } from "bun:sqlite";
+import { recordCheckpoint, verifyAtOpen, verifyAuditRows } from "./audit-verify.ts";
 import { canonicalDbKey } from "../util/paths.ts";
 import { createHash, randomUUID } from "node:crypto";
 import { join, dirname } from "node:path";
@@ -273,8 +274,8 @@ export class WorkspaceStore {
     // the TTL are released before anything can consume the caps again. A
     // crashed process can therefore never leave permanent headroom consumed.
     this.releaseStaleReservations(reservationTtlMs(), Date.now());
-    // Phase 1 (T1): fail-closed detection of a pre-existing broken chain.
-    this.chainBrokenAt = this.verifyChain().valid ? null : (this.verifyChain().brokenAt ?? null);
+    // Phase 1 (T1) + B8/B14: fail-closed detection of a broken chain, verified ONCE and incrementally (audit-verify.ts).
+    this.chainBrokenAt = verifyAtOpen(this, this.sharedKey, GENESIS, () => { if (!this.closed) this.verifyChain(); });
 
     // Phase 4 (F-08): signing cadence (env-tunable).
     const every = Number.parseInt(process.env.XR_AUDIT_SIGN_EVERY ?? "", 10);
@@ -699,6 +700,8 @@ export class WorkspaceStore {
         created_at INTEGER NOT NULL,
         usage_source TEXT NOT NULL DEFAULT 'provider'
       );
+      CREATE INDEX IF NOT EXISTS idx_cost_events_created ON cost_events(created_at); -- B9: spend windows
+      CREATE INDEX IF NOT EXISTS idx_cost_events_session ON cost_events(session_id); -- B9: session totals
       CREATE TABLE IF NOT EXISTS budget_config (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         monthly_cap REAL NOT NULL,
@@ -859,6 +862,7 @@ export class WorkspaceStore {
       CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status, created_at);
       CREATE INDEX IF NOT EXISTS idx_reservations_env ON reservations(env_id, status);
     `);
+    if (!this.db.query<{ name: string }, []>(`PRAGMA table_info(reservations)`).all().some((c) => c.name === "last_heartbeat_at")) this.db.exec(`ALTER TABLE reservations ADD COLUMN last_heartbeat_at INTEGER`); // B10, idempotent
 
     // v0.9 semantic recall: ensure the embedding column exists on DBs created
     // before this version (CREATE TABLE IF NOT EXISTS won't add it). Idempotent
@@ -1474,36 +1478,10 @@ export class WorkspaceStore {
 
   /** Recompute the whole chain; return first broken index or null if intact. */
   verifyChain(): { valid: boolean; brokenAt?: number } {
-    const rows = this.db
-      .query<
-        {
-          id: number;
-          event: string;
-          detail: string;
-          prev_hash: string;
-          hash: string;
-          created_at: number;
-        },
-        []
-      >(`SELECT * FROM audit_log ORDER BY id ASC`)
-      .all();
-    let prev = GENESIS;
-    for (const r of rows) {
-      const payload = JSON.stringify({
-        event: r.event,
-        detail: JSON.parse(r.detail),
-        prev,
-        ts: r.created_at,
-      });
-      const expected = createHash("sha256").update(payload).digest("hex");
-      if (expected !== r.hash || r.prev_hash !== prev) {
-        this.chainBrokenAt = r.id;
-        return { valid: false, brokenAt: r.id };
-      }
-      prev = r.hash;
-    }
-    this.chainBrokenAt = null;
-    return { valid: true };
+    const r = verifyAuditRows(this, 0, GENESIS); // explicit verification is always a full pass (B8)
+    recordCheckpoint(this.sharedKey, r);
+    this.chainBrokenAt = r.valid ? null : r.brokenAt;
+    return r.valid ? { valid: true } : { valid: false, brokenAt: r.brokenAt };
   }
 
   /** Chain metadata for status/operator tooling. */
@@ -1959,11 +1937,11 @@ export class WorkspaceStore {
     });
   }
 
-  /** Release every active reservation older than the TTL (startup recovery). */
+  /** Expire every active reservation whose last heartbeat (or creation) is older than the TTL (B10). */
   releaseStaleReservations(ttlMs: number, now: number): void {
     if (this.closed) return;
     this.db
-      .query(`UPDATE reservations SET status = 'expired', updated_at = ? WHERE status = 'active' AND created_at <= ?`)
+      .query(`UPDATE reservations SET status = 'expired', updated_at = ? WHERE status = 'active' AND COALESCE(last_heartbeat_at, created_at) <= ?`)
       .run(now, now - ttlMs);
   }
 

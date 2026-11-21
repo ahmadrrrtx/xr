@@ -128,9 +128,11 @@ export class TrustService {
 
   // ── Lifecycle (registered as a kernel lifecycle participant) ────────────
 
-  /** Detect available isolation backends. Runs once at kernel init. */
+  /** Start isolation-backend detection at kernel init without holding the boot on it (NEW-8:
+   *  `docker info` alone can take seconds on a loaded host). Every placement decision waits for it:
+   *  `evaluate()` and `ensureReady()` await the same detection run. */
   async onInit(): Promise<void> {
-    await this.deps.manager.init();
+    void this.deps.manager.init();
   }
 
   /** Idempotent readiness check (used by lazy consumers like the daemon). */
@@ -191,6 +193,7 @@ export class TrustService {
 
   async evaluate(params: EvaluateParams): Promise<TrustEvaluation> {
     const { manager, registry, broker } = this.deps;
+    await manager.init(); // decisions only ever see completed backend detection (fail-closed)
     let classification = classifyRisk(params.request);
 
     // Phase 4 · T1 — escalate-only lattice merge: effective tier = max(

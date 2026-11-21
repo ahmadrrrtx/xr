@@ -10,14 +10,9 @@ import { IsolatedMemoryStore } from "../../context/isolated-store.ts";
 import { inspectMemoryEngine } from "../../context/engine.ts";
 import { BRAND_ASSET_ROUTES, brandAssetBytes, dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
 import { AUTH_PAGE_SCRIPT } from "../auth-page.ts";
-import { gitSummaryCached } from "../state/cache.ts";
+import { observeGitSummary } from "../state/cache.ts";
 import { observeProjectProfile } from "../state/project-profile.ts";
 import { assetResponse, route, type DaemonRoute, binaryAssetResponse } from "./router.ts";
-
-async function gitSummary(cwd: string): Promise<{ branch: string; dirty: boolean }> {
-  // Phase 01 — cached 5 s so dashboard polling never re-runs git per request.
-  return (await gitSummaryCached(cwd)) ?? { branch: "no git", dirty: false };
-}
 
 export function systemRoutes(): DaemonRoute[] {
   return [
@@ -93,7 +88,6 @@ export function systemRoutes(): DaemonRoute[] {
         const store = state.store;
         const project = basename(process.cwd());
         const memory = new IsolatedMemoryStore(store);
-        const git = await gitSummary(process.cwd());
         return json({
           version: versionInfo(),
           constants: { coreVersion: CORE_VERSION, displayVersion: DISPLAY_VERSION, package: PKG.name },
@@ -113,7 +107,7 @@ export function systemRoutes(): DaemonRoute[] {
           ragChunks: store.ragCount(project),
           memory: { enabled: isMemoryEnabled(), count: memory.count(), health: memory.health(), engine: inspectMemoryEngine(store) },
           research: { count: store.researchCount(), recent: store.listResearch(4) },
-          git,
+          ...observeGitSummary(process.cwd()),
           budget: {
             perTaskUsd: config.budget.perTaskUsd,
             perTaskTokens: config.budget.perTaskTokens,

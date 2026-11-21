@@ -608,20 +608,28 @@ fn priced_at(id: &str, now: i64, input_tokens: f64) -> Priced {
     // of the parity pin the same sentinel.
     let mut out = Priced { provider: provider.unwrap_or(if is_local { "ollama" } else { "other" }).into(), in_per_1m: if is_local { 0.0 } else { UNKNOWN_IN_PER_1M }, out_per_1m: if is_local { 0.0 } else { UNKNOWN_OUT_PER_1M }, local: is_local, estimate: !is_local };
     if is_local { return out; }
+    // Hardening B5, mirroring src/cost/pricing.ts: a calendar date must not brick paid providers.
+    // Past staleAt the last-known rates stay in force; XR_STALE_PRICE_FACTS=refuse is the
+    // operator's explicit opt-in to strict refusal.
     let fresh = facts()["staleAt"].as_str().and_then(iso_ms).map(|end| now <= end).unwrap_or(false);
-    if !fresh { return out; }
+    if !fresh && stale_facts_refused() { return out; }
     if let Some(f) = facts()["models"].as_array().and_then(|rows| rows.iter().find(|f| f["modelId"].as_str() == Some(model) && f["providerId"].as_str() == provider)) {
         let mut p = &f["price"];
         if p["until"].as_str().and_then(iso_ms).map(|end| now > end).unwrap_or(false) { p = &p["then"]; }
         if let (Some(i), Some(o)) = (p["input"].as_f64(), p["output"].as_f64()) {
             if i.is_finite() && o.is_finite() && i >= 0.0 && o >= 0.0 {
                 let long = provider == Some("openai") && model.starts_with("gpt-6") && input_tokens > 272_000.0;
-                out.in_per_1m = i * if long { 2.0 } else { 1.0 };
-                out.out_per_1m = o * if long { 1.5 } else { 1.0 };
+                // xAI lists Grok 4 prompts of 200k input tokens or more at twice both rates (pricing.ts mirror).
+                let xai_long = provider == Some("xai") && model.starts_with("grok-4") && input_tokens >= 200_000.0;
+                out.in_per_1m = i * if long || xai_long { 2.0 } else { 1.0 };
+                out.out_per_1m = o * if long { 1.5 } else if xai_long { 2.0 } else { 1.0 };
             }
         }
     }
     out
+}
+fn stale_facts_refused() -> bool {
+    std::env::var("XR_STALE_PRICE_FACTS").is_ok_and(|v| v == "refuse")
 }
 pub fn is_local_model(id: &str) -> bool { model_info(id).local }
 pub fn estimate_cost(id: &str, tokens_in: f64, tokens_out: f64) -> f64 {

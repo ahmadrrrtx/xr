@@ -1,5 +1,6 @@
 /** XR Daemon — budget routes. */
 
+import { spendBreakdown } from "../../state/repos/cost-repo.ts";
 import { loadConfig, saveConfig } from "../../config/config.ts";
 import { BudgetService } from "../../services/budget-service.ts";
 import { route, type DaemonRoute } from "./router.ts";
@@ -32,6 +33,8 @@ export function budgetRoutes(): DaemonRoute[] {
             totalTokens: cost.totalTokens,
             dayUsd: store.getSpendForPeriod(startOfDay.getTime()),
             monthUsd: store.getSpendForPeriod(startOfMonth.getTime()),
+            // B7: the part of monthUsd priced from ESTIMATED token counts (still counted at admission).
+            monthEstimatedUsd: spendBreakdown(store, startOfMonth.getTime()).estimated,
           },
           // Phase 4 · Trust Center burn bar: the ENGINE computes the percentage
           // (SEC-07 — the shell never derives budget math for display).
@@ -63,13 +66,16 @@ export function budgetRoutes(): DaemonRoute[] {
             warningsEnabled?: boolean;
             autoFallback?: boolean;
             tightenOnly?: boolean;
+            confirmBlockAll?: boolean;
           };
           for (const key of ['perTaskUsd', 'monthlyCap', 'dailyCap'] as const) {
             const value = body[key];
             if (value === undefined || (key === 'dailyCap' && value === null)) continue;
             if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return json({ error: `${key} must be a finite nonnegative number` }, 400);
           }
-          for (const key of ['warningsEnabled', 'autoFallback', 'tightenOnly'] as const) if (body[key] !== undefined && typeof body[key] !== 'boolean') return json({ error: `${key} must be a boolean` }, 400);
+          for (const key of ['warningsEnabled', 'autoFallback', 'tightenOnly', 'confirmBlockAll'] as const) if (body[key] !== undefined && typeof body[key] !== 'boolean') return json({ error: `${key} must be a boolean` }, 400);
+          // B6: a global cap of 0 blocks ALL paid spend, so it must be an explicit choice (docs/budget-semantics.md).
+          if (body.monthlyCap === 0 && body.confirmBlockAll !== true) return json({ error: "monthlyCap 0 blocks all paid spend in this workspace; resend with confirmBlockAll: true to confirm", code: "confirm-block-all" }, 400);
           const next = loadConfig().config;
           const store = state.store;
           const intent = { perTaskUsd: body.perTaskUsd ?? null, monthlyCap: body.monthlyCap ?? null, dailyCap: body.dailyCap ?? null, warningsEnabled: body.warningsEnabled ?? null, autoFallback: body.autoFallback ?? null, tightenOnly: body.tightenOnly === true };

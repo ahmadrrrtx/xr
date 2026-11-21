@@ -115,12 +115,12 @@
       "usd": 0
     },
     {
-      "id": "registry-expired",
+      "id": "registry-stale-keeps-last-known-rates",
       "model": "openai::gpt-6-luna",
       "now": "2027-02-12T00:00:00Z",
       "input": 2000,
       "output": 800,
-      "usd": null
+      "usd": 0.0006
     },
     {
       "id": "deprecated-manual-price-not-auto",
@@ -129,6 +129,22 @@
       "input": 2000,
       "output": 800,
       "usd": 0.00078
+    },
+    {
+      "id": "xai-grok-4-under-200k-standard-rate",
+      "model": "xai::grok-4.7",
+      "now": "2026-11-20T00:00:00Z",
+      "input": 199999,
+      "output": 1000,
+      "usd": 0.405998
+    },
+    {
+      "id": "xai-grok-4-200k-input-doubles-both-rates",
+      "model": "xai::grok-4.7",
+      "now": "2026-11-20T00:00:00Z",
+      "input": 200000,
+      "output": 1000,
+      "usd": 0.812
     }
   ]
 }

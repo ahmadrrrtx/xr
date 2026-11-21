@@ -7,18 +7,30 @@
  *  - expose a stable source of truth for CLI, TUI, and daemon surfaces
  */
 
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   existsSync,
   mkdirSync,
   writeFileSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
-  unlinkSync,
 } from "node:fs";
 import { XR_HOME, loadConfig, type XRConfig } from "../config/config.ts";
 import { Store } from "../state/workspace-store.ts";
+import { databaseIdle } from "../state/db-liveness.ts";
+import { withMigrationLock } from "../state/migration-lock.ts";
+
+/** B17: deleting a workspace whose database is still open would corrupt it (POSIX) or half-fail (Windows). */
+export class WorkspaceInUseError extends Error {
+  constructor(readonly workspaceId: string, active: boolean) {
+    super(active
+      ? `Workspace "${workspaceId}" is the active workspace and is open; switch first (xr workspace use default), then delete it`
+      : `Workspace "${workspaceId}" is open in a running XR process (daemon, desktop app or a task); stop it, then delete again`);
+    this.name = "WorkspaceInUseError";
+  }
+}
 
 export interface WorkspaceContext {
   id: string;
@@ -41,6 +53,7 @@ const WORKSPACE_STATE_PATH = join(WORKSPACES_ROOT, "state.json");
 export class WorkspaceManager {
   private activeWorkspaceId = "default";
   private workspaces = new Map<string, WorkspaceContext>();
+  private stores = new Map<string, Store>(); // B8: one Store per workspace database
   private globalConfig: XRConfig;
   /** Phase 3 · T3 — true once async load() has run (kernel boot path). */
   private loaded = false;
@@ -268,39 +281,47 @@ export class WorkspaceManager {
   }
 
   /**
-   * Retrieve a localized SQLite store for the workspace.
-   *
-   * 0.2 Storage Unification: WARNING — this creates a NEW Store instance
-   * each time it's called. Prefer resolving the kernel's single "store"
-   * from the DI container instead. This method exists only for standalone
-   * CLI usage outside the kernel lifecycle.
+   * Retrieve the SQLite store for a workspace (B8/B11). One instance per database for the life of this manager,
+   * because construction runs migrations and the audit-chain check and must not repeat on every new chat. It is
+   * opened with its REAL workspace id: the path-only constructor forced "default" and misattributed rows. A closed
+   * instance is reopened; `fresh: true` is the escape hatch for callers that need an independent instance.
    */
-  getStore(id: string): Store {
+  getStore(id: string, opts: { fresh?: boolean } = {}): Store {
     this.ensureLoadedSync();
     const ctx = this.ensureWorkspace(id, id === "default" ? "Default Workspace" : id);
-    return new Store(ctx.dbPath);
+    const cached = this.stores.get(ctx.dbPath);
+    if (cached && !cached.isClosed && !opts.fresh) return cached;
+    const store = new Store(id, ctx.dbPath);
+    if (!opts.fresh) this.stores.set(ctx.dbPath, store);
+    return store;
   }
 
   /**
-   * Delete/clean up a workspace.
+   * Delete a workspace (B17). Under the database's cross-process migration lock it refuses while the database is
+   * open anywhere (WorkspaceInUseError), then moves the database to a tombstone outside workspaces/, so no opener
+   * can reach the data any more. Only after the lock is released (its open lockfile lives in the workspace
+   * directory, which Windows cannot rename while open) are the directory and the tombstone removed.
+   * Unknown ids and "default" return false.
    */
   deleteWorkspace(id: string): boolean {
     this.ensureLoadedSync();
-    if (id === "default") return false;
+    if (id === "default" || !existsSync(join(WORKSPACES_ROOT, id))) return false;
     const ctx = this.ensureWorkspace(id, id);
-
-    try {
-      if (existsSync(ctx.dbPath)) unlinkSync(ctx.dbPath);
-      if (existsSync(ctx.configPath)) unlinkSync(ctx.configPath);
-      rmSync(ctx.rootDir, { recursive: true, force: true });
-      this.workspaces.delete(id);
-      if (this.activeWorkspaceId === id) {
-        this.activeWorkspaceId = "default";
-        this.writeState();
-      }
-      return true;
-    } catch {
-      return false;
+    this.stores.get(ctx.dbPath)?.close(); // our own cached handle is not a live holder
+    this.stores.delete(ctx.dbPath);
+    const tomb = join(XR_HOME, ".deleted-workspaces", `${id}-${Date.now()}-${process.pid}`);
+    withMigrationLock(ctx.dbPath, () => {
+      if (!databaseIdle(ctx.dbPath)) throw new WorkspaceInUseError(id, this.activeWorkspaceId === id);
+      mkdirSync(tomb, { recursive: true });
+      for (const f of ["", "-wal", "-shm", "-journal"].map((s) => ctx.dbPath + s)) if (existsSync(f)) renameSync(f, join(tomb, basename(f)));
+    });
+    rmSync(ctx.rootDir, { recursive: true, force: true });
+    this.workspaces.delete(id);
+    if (this.activeWorkspaceId === id) {
+      this.activeWorkspaceId = "default";
+      this.writeState();
     }
+    rmSync(tomb, { recursive: true, force: true });
+    return true;
   }
 }

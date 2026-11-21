@@ -234,7 +234,7 @@ provider-health.test.ts, hardware.test.ts, daemon-routes.test.ts.
 | intelligence catalog | config + registry.version + API-key presence | 60 s | 15 s | — | config/registry/key change → new key | stale served + microtask rebuild |
 | provider health | provider id + model | 60 s | 15 s | 15 s (failures) | key stored/cleared via auth short-circuit | stale served + background refresh |
 | internet probe | "default" | 15 s | — | same | — | never stale beyond TTL |
-| git summary | cwd | 5 s | — | — | — | never stale beyond TTL |
+| git summary | cwd | 5 s | 60 s | 5 s unavailable | invalidateGitCache | null + `pending` while cold; stale served + background refresh; the response never waits on git |
 | overview project profile | cwd | 5 s | — | 5 s unavailable | invalidateProjectProfiles | null + explicit state while cold/expired; never stale beyond TTL |
 
 Kill switches (env, consistent with the existing XR_* override pattern):
@@ -318,6 +318,16 @@ Authentication still precedes scheduling. An actual authorized empty project is
 shipped dashboard or desktop consumer dereferences the overview fingerprint;
 external consumers must handle the documented null state. Other overview fields
 and the minimal unauthenticated health payload are unchanged.
+
+**API consumer note (hardening, 2026-11-20):** `/api/overview` no longer waits on
+`git rev-parse` + `git status` (a working-tree walk that took about 1 s on hosted
+Windows and intermittently 0.5–0.9 s on hosted macOS, failing the 500 ms budget).
+`git` is `null` while the first probe for a cwd runs, and `gitStatus` is always
+supplied: `pending` (observedAt null), `ready` (the `{branch, dirty}` object,
+observedAt = probe time; up to 65 s old while one background probe refreshes it) or
+`unavailable` (not a repository or no git binary; the legacy
+`{ branch: "no git", dirty: false }` value). No shipped dashboard or desktop
+consumer reads the overview's git field.
 
 Regression proofs: `test/perf/overview-fingerprint.test.ts` covers cold and warm
 responses, held work, authentication, deduplication, expiry, failure recovery,

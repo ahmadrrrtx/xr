@@ -49,6 +49,9 @@ export class BudgetManager {
     return result;
   }
 
+  /** B6: false while XR's default safety cap is in force (nothing persisted). */
+  explicitCap(): boolean { return this.store.getBudgetConfig() != null; }
+
   /**
    * Check if a request with the estimated cost is allowed.
    */
@@ -79,12 +82,12 @@ export class BudgetManager {
 
     // Check warnings
     if (cfg.warnings_enabled) {
-      const thresholds = [0.95, 0.8, 0.5];
-      for (const t of thresholds) {
+      // NEW-1: percentUsed is 0–100; comparing it with fractions warned "95% used" at ~1% spend.
+      for (const t of [95, 80, 50]) {
         if (status.percentUsed >= t) {
           return { 
             allow: true, 
-            warning: `Budget warning: ${Math.round(t * 100)}% of monthly cap used ($${status.monthlySpend.toFixed(4)} / $${status.monthlyCap})` 
+            warning: `Budget warning: ${t}% of monthly cap used ($${status.monthlySpend.toFixed(4)} / $${status.monthlyCap})` 
           };
         }
       }
@@ -113,7 +116,7 @@ export class BudgetManager {
       dailyCap: cfg.daily_cap,
       remainingMonthly: cfg.monthly_cap - monthlySpend,
       remainingDaily: cfg.daily_cap ? cfg.daily_cap - dailySpend : null,
-      percentUsed: (monthlySpend / cfg.monthly_cap) * 100,
+      percentUsed: cfg.monthly_cap > 0 ? (monthlySpend / cfg.monthly_cap) * 100 : 100, // a 0 cap blocks all paid spend
       isOverBudget: monthlySpend >= cfg.monthly_cap,
       isNearCap: monthlySpend >= cfg.monthly_cap * 0.8,
     };

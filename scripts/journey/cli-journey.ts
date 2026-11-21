@@ -161,7 +161,10 @@ export async function runJourney(opts: { channel: "binary" | "npm"; evidenceClas
       steps.push({ step: name, status: "pass", detail, ms: Date.now() - t0 });
     } catch (e) {
       failed = true;
-      steps.push({ step: name, status: "fail", detail: (e as Error).message.slice(0, 900), ms: Date.now() - t0 });
+      const detail = String((e as Error)?.message ?? e).slice(0, 900);
+      steps.push({ step: name, status: "fail", detail, ms: Date.now() - t0 });
+      // Check-run annotations are readable through the API even when raw job logs are not.
+      if (process.env.GITHUB_ACTIONS) console.log(`::error title=journey ${opts.channel} ${name} (${process.env.ImageOS ?? "?"} ${process.env.ImageVersion ?? "?"})::${detail.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
     }
     const last = steps[steps.length - 1]!;
     console.log(`  ${last.status.padEnd(7)} ${name} (${last.ms} ms) — ${last.detail}`);

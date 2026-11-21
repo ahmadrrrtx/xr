@@ -6,4 +6,6 @@ export interface Pricing {
   known?: boolean;
   source?: string;
   verifiedAt?: string;
+  /** B5: past the facts' review date; the last-known rates still apply (audited, warned once). */
+  stale?: boolean;
 }

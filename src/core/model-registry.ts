@@ -4,6 +4,7 @@
 import data from "./model-facts.json";
 export const MODEL_REGISTRY_VERSION = data.version;
 export const MODEL_FACTS_VERIFIED_AT = data.verifiedAt;
+export const MODEL_FACTS_STALE_AT = data.staleAt;
 export type ModelTransport =
   | "responses"
   | "chat-completions"

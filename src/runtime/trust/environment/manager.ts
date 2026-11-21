@@ -55,24 +55,22 @@ export class EnvironmentManager {
   private quarantinedCount = 0;
   private readonly quarantinedBackends = new Set<string>();
   private ready = false;
+  private detecting: Promise<void> | null = null;
 
   constructor(
     private readonly backends: readonly EnvironmentBackend[],
     private readonly broker: CredentialBroker,
   ) {}
 
-  async init(): Promise<void> {
-    if (this.ready) return; // idempotent: detect backends once
-    for (const b of this.backends) {
-      let ok = false;
-      try {
-        ok = await b.detect();
-      } catch {
-        ok = false;
-      }
-      this.availability.set(b.id, ok);
-    }
-    this.ready = true;
+  /** Detect every backend once. The probes are independent subprocesses (`docker info`, sandbox
+   *  self-checks), so they run together and concurrent callers share the one run (NEW-8). */
+  init(): Promise<void> {
+    if (this.ready) return Promise.resolve();
+    this.detecting ??= Promise.all(this.backends.map((b) => Promise.resolve().then(() => b.detect()).catch(() => false))).then((found) => {
+      this.backends.forEach((b, i) => this.availability.set(b.id, found[i] === true));
+      this.ready = true;
+    });
+    return this.detecting;
   }
 
   capabilities(): PlacementCapabilities {

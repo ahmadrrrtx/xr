@@ -85,7 +85,12 @@ import {
 // POST to /auth/logout; no script, no inline style), proven by removing those
 // two lines from the render, which reproduces the previous pin
 // (b38f9903…271f8c20) byte-for-byte.
-const POST_PHASE4_SHA256 = "aef98f816e0c30e1d6d95b0da1a2d16347121a1d5c363734653ea9e32817f4c9";
+// Hardening Phase 3 (B6) re-pin, 2026-11-19: the ONLY delta is the onboarding budget step's
+// copy (the $10 default is already in force; 0 blocks every paid request) and a confirm()
+// before saving a $0 monthly cap from onboarding or the Budget panel. Reverting
+// page-tail.ts, client-runtime.ts and client-panels-c.ts reproduces the previous pin
+// (aef98f81…2817f4c9) byte-for-byte.
+const POST_PHASE4_SHA256 = "9b158be1a6b485a53abe30795029972e6ba582df5634bbcdde568e1bf5bb8dad";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {

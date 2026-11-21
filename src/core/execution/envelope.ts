@@ -137,7 +137,7 @@ export interface EnvelopeOutcome {
   readonly sessionId: string;
   readonly finalMessage: string;
   readonly steps: number;
-  readonly stopped: "done" | "max_steps" | "error" | "budget" | "approval" | "cancelled";
+  readonly stopped: "done" | "max_steps" | "error" | "budget" | "unpriced" | "approval" | "cancelled";
   readonly meter?: string;
   readonly inputTokens?: number;
   readonly outputTokens?: number;

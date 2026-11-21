@@ -140,6 +140,7 @@ export function exitCodeFor(result: AgentResult, autoDenied: number): number {
 }
 
 const GENERIC_BUDGET_STOP = "budget limit reached (raise it in the desktop app or `xr run --budget`)";
+const UNPRICED_HINT = "raising the budget will not help. XR refuses to run a model it cannot price: declare the rate under providerEngine.providerCapabilities.<provider>.models.<model>.cost (known, inPerMTok, outPerMTok, source), or pick a known-priced or local model.";
 
 /**
  * A `budget` stop is not always a spent ceiling. The governor also refuses a
@@ -154,11 +155,11 @@ export function describeStop(result: AgentResult): string {
     case "budget": {
       const reason = (result.finalMessage ?? "").trim();
       if (!reason || reason === GENERIC_BUDGET_STOP) return GENERIC_BUDGET_STOP;
-      if (/price unavailable|tariff|unpriced/i.test(reason)) {
-        return `${reason} — raising the budget will not help. XR refuses to run a model it cannot price: declare the rate under providerEngine.providerCapabilities.<provider>.models.<model>.cost (known, inPerMTok, outPerMTok, source), or pick a known-priced or local model.`;
-      }
+      if (/price unavailable|tariff|unpriced/i.test(reason)) return `${reason} — ${UNPRICED_HINT}`; // legacy results
       return `${reason} Raise it in the desktop app or with \`xr run --budget\`.`;
     }
+    case "unpriced": // B4: its own state since the governor tags price refusals
+      return `${(result.finalMessage ?? "").trim() || "price unavailable"} — ${UNPRICED_HINT}`;
     case "max_steps":
       return "step limit reached before the task finished";
     case "approval":

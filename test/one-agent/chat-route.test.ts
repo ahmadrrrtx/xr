@@ -158,3 +158,42 @@ test("offline provider chain returns a fast 503 (Phase 01 contract preserved)", 
   const body: any = await res.json();
   expect(body.error).toContain("Provider offline");
 });
+
+// Hardening B13 — one terminal frame, one history bound.
+const frames = async (res: Response) =>
+  (await collectSSE(res)).filter((f) => !f.includes("[DONE]")).map((f) => JSON.parse(f.replace(/^data: /, "")));
+const terminalFrames = (events: any[]) => events.filter((e) => e.done || e.type === "done" || e.type === "error" || e.error);
+const chatReq = (body: unknown) => new Request("http://x/api/chat", { method: "POST", headers: auth, body: JSON.stringify(body) });
+
+test("B13: a result without finalMessage ends with exactly one terminal frame, done, and is audited", async () => {
+  const { executor } = makeExecutor({ result: { stopped: "done", steps: 1 } as any });
+  const audit: any[] = [];
+  const events = await frames(await handleChat(chatReq({ message: "hi" }), executor, audit));
+  const terminal = terminalFrames(events);
+  expect(terminal).toHaveLength(1);
+  expect(terminal[0].type).toBe("done");
+  expect(events.some((e) => e.code === "GENERATION_FAILED")).toBe(false);
+  expect(audit.find((a) => a.e === "chat.message")?.d.output).toBe("");
+});
+
+test("B13: the audit is written before the terminal frame, so a failing audit can never follow a done frame", async () => {
+  const { executor } = makeExecutor({});
+  const failingAudit: any = { push() { throw new Error("audit chain corrupted"); } };
+  const terminal = terminalFrames(await frames(await handleChat(chatReq({ message: "hi" }), executor, failingAudit)));
+  expect(terminal).toHaveLength(1);
+  expect(terminal[0].code).toBe("GENERATION_FAILED");
+  expect(terminal[0].done).toBeUndefined();
+});
+
+test("B13: replayed history is bounded once, by the loop's own rule (newest 24 turns / 24k chars)", async () => {
+  const { executor } = makeExecutor({});
+  const seen: any[] = [];
+  const run = executor.runHeld;
+  executor.runHeld = async (task, mode, opts) => { seen.push(opts.history); return run(task, mode, opts); };
+  const history = Array.from({ length: 100 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `turn ${i} ${"x".repeat(1500)}` }));
+  await collectSSE(await handleChat(chatReq({ message: "next", history }), executor));
+  const passed = seen[0] as Array<{ content: string }>;
+  expect(passed.length).toBeLessThanOrEqual(24);
+  expect(passed.reduce((n, t) => n + t.content.length, 0)).toBeLessThanOrEqual(24_000);
+  expect(passed.at(-1)!.content.startsWith("turn 99 ")).toBe(true); // newest first to survive
+});

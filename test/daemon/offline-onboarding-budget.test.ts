@@ -204,8 +204,11 @@ test("atomic tighten-only cannot raise a newer engine cap, null explicitly clear
   expect((await call("/budget/set", { dailyCap: null })).status).toBe(200);
   expect(store.getBudgetConfig()!.daily_cap).toBeNull();
   expect(store.getBudgetConfig()!.monthly_cap).toBe(1);
+  // Hardening B6: 0 blocks all paid spend, so even a tighten-only request must confirm it.
+  expect((await call("/budget/set", { monthlyCap: 0, tightenOnly: true })).status).toBe(400);
+  expect(store.getBudgetConfig()!.monthly_cap).toBe(1);
   expect(
-    (await call("/budget/set", { monthlyCap: 0, tightenOnly: true })).status,
+    (await call("/budget/set", { monthlyCap: 0, tightenOnly: true, confirmBlockAll: true })).status,
   ).toBe(200);
   expect(store.getBudgetConfig()!.monthly_cap).toBe(0);
 });

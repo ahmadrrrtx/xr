@@ -66,6 +66,7 @@ import { PRIVATE_PROVIDER_WARNING, privateProviderAllowed } from "../providers/p
 import { TelegramManager } from "../telegram/manager.ts";
 import { DiscordManager } from "../discord/manager.ts";
 import { WhatsAppManager } from "../whatsapp/manager.ts";
+import { installProcessGuards } from "./process-guards.ts";
 export { clientIpFor } from "./security-headers.ts";
 
 /** Phase 2.4 · P1-1 — LAN opt-in DTO from the CLI; presence IS the §15#10
@@ -730,6 +731,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const token = opts.token ?? (process.env.XR_DAEMON_TOKEN || undefined) ?? randomBytes(24).toString("hex");
   const workspaceManager = new WorkspaceManager();
   const store = opts.store ?? workspaceManager.getStore(workspaceManager.getActiveId());
+  const releaseProcessGuards = installProcessGuards(store); // B1: log + audit unhandled rejections while serving
 
   await prepareDaemonSecrets(hydrateSecretsAsync); // XR-LAUNCH-015: warm keychain secrets (bounded) before serving; migrate in background
 
@@ -844,6 +846,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     // ":0"); the runtime is finalised in place for the mobile context.
     ...(lanRuntime ? { lanUrl: (lanRuntime.lanUrl = lanUrlFor(boundPort)) } : {}),
     stop: () => {
+      releaseProcessGuards();
       desktopMobile?.stop();
       tokenFile.release();
       stopTriggers();

@@ -55,31 +55,53 @@ export function flavourFor(slug: string): { channel: "deb" | "nsis" | "dmg"; mat
   throw new Error(`unknown desktop slug ${slug}`);
 }
 
-/** Port the engine sidecar (process name xr-engine*) listens on, or null. */
-async function enginePort(): Promise<number | null> {
+/** Port the engine sidecar (process name xr-engine*) listens on, or null, plus the raw probe output for failures. */
+async function enginePortProbe(): Promise<{ port: number | null; raw: string }> {
   let out = "";
   if (process.platform === "linux") out = (await sh(["sh", "-c", "ss -ltnpH 2>/dev/null | grep xr-engine || true"])).out;
   else if (process.platform === "darwin") out = (await sh(["sh", "-c", "lsof -nP -a -c xr-engine -iTCP -sTCP:LISTEN 2>/dev/null || true"])).out;
   else out = (await sh(["pwsh.exe", "-NoProfile", "-Command", "$p = (Get-Process xr-engine* -ErrorAction SilentlyContinue).Id; if ($p) { Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $p -contains $_.OwningProcess } | ForEach-Object { '127.0.0.1:' + $_.LocalPort } }"])).out;
   const m = /127\.0\.0\.1[:.](\d{2,5})/.exec(out);
-  return m ? Number(m[1]) : null;
+  return { port: m ? Number(m[1]) : null, raw: out };
+}
+async function enginePort(): Promise<number | null> {
+  return (await enginePortProbe()).port;
 }
 
 async function waitForEngineHealth(timeoutMs: number): Promise<number> {
   const deadline = Date.now() + timeoutMs;
+  // Diagnostics only (NEW-7): the polling, bounds and success rule are unchanged.
+  let polls = 0, slowest = 0, lastPort: number | null = null, lastRaw = "", last = "no listening port found";
   while (Date.now() < deadline) {
-    const port = await enginePort();
+    const t0 = Date.now();
+    const probe = await enginePortProbe();
+    const port = probe.port;
+    polls++; slowest = Math.max(slowest, Date.now() - t0); lastPort = port; lastRaw = probe.raw;
     if (port) {
       try {
         const r = await fetch(`http://127.0.0.1:${port}/api/v1/health`, { signal: AbortSignal.timeout(3000) });
         if (r.ok) return port;
-      } catch {
-        /* still booting */
+        last = `health answered HTTP ${r.status}`;
+      } catch (e) {
+        last = `health fetch failed: ${e instanceof Error ? e.message : String(e)}`; /* still booting */
       }
     }
     await sleep(1000);
   }
-  throw new Error(`the app's engine sidecar never answered /api/v1/health within ${timeoutMs / 1000} s`);
+  throw new Error(`the app's engine sidecar never answered /api/v1/health within ${timeoutMs / 1000} s [${polls} OS port probes, slowest ${slowest} ms; last port ${lastPort ?? "none"}; ${last}; last probe output: ${tail(lastRaw, 200) || "(empty)"}]`);
+}
+
+/** The shell's own view of its sidecar (engine_link), for a failure message. Never returns the token. */
+export async function shellEngineView(wd: (method: string, path: string, body?: unknown) => Promise<unknown>, sid: string): Promise<string> {
+  try {
+    const view = await wd("POST", `/session/${sid}/execute/async`, {
+      script: "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('engine_link').then((l) => done({ reachable: l.reachable, spawned: l.spawned, port: l.port, hasToken: Boolean(l.token || l.hasToken), reason: l.reason || null, containmentMode: l.containmentMode || null, stderr: (l.stderr || []).slice(-3).map((x) => String(x).slice(0, 120)) }), (e) => done({ error: String(e && e.message ? e.message : e) }));",
+      args: [],
+    });
+    return `the shell's engine_link: ${JSON.stringify(view).slice(0, 500)}`;
+  } catch (e) {
+    return `the shell's engine_link was unavailable (${e instanceof Error ? e.message : String(e)})`;
+  }
 }
 
 async function engineGone(timeoutMs: number): Promise<boolean> {
@@ -90,6 +112,55 @@ async function engineGone(timeoutMs: number): Promise<boolean> {
   }
   return false;
 }
+
+/** Only the shell's own lifecycle lines leave the runner (never raw logs, tokens or environment). */
+const SHELL_LOG_LINE = /\] (session start:|engine up:|engine down:|engine never came up:|exit:|recovery:|main window hidden)/;
+
+/** Token-shaped text and the scratch home never leave the runner. */
+export function redactEvidence(text: string, home: string): string {
+  return (home ? text.split(home).join("$HOME") : text)
+    .replace(/\b[0-9a-f]{32,}\b/gi, "[redacted]")
+    .replace(/\b(bearer|token|authorization|api[_-]?key)(["'\s:=]+)(?:bearer\s+)?[^\s;,"']+/gi, "$1$2[redacted]");
+}
+
+/** Windows: which XR/WebView2 processes are alive, and any OS application-error records for them (code + module only). */
+const WINDOWS_FAULTS = [
+  "$alive = @(Get-Process -Name 'xr-desktop*','xr-engine*','msedgewebview2*' -ErrorAction SilentlyContinue | Group-Object ProcessName | ForEach-Object { $_.Name + 'x' + $_.Count })",
+  "'alive=[' + ($alive -join ',') + ']'",
+  "Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue | Where-Object { $_.Message -match '(?i)(xr-desktop|xr-engine|msedgewebview2)\\.exe' } | Select-Object -First 3 | ForEach-Object { $m = [string]$_.Message; 'fault ' + [regex]::Match($m, '(?i)faulting application name:\\s*([a-z0-9_.-]+)').Groups[1].Value + ' exception=' + [regex]::Match($m, '(?i)exception code:\\s*(0x[0-9a-f]+)').Groups[1].Value + ' module=' + [regex]::Match($m, '(?i)faulting module name:\\s*([a-z0-9_.-]+)').Groups[1].Value }",
+].join("; ");
+
+/** Windows: every start and exit status of XR, its engine and WebView2, grouped (Security 4688/4689; CI enables the
+ *  audit policy on its throwaway runner). Process names and exit codes only. */
+const WINDOWS_EXITS = String.raw`$ev = @(Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4688,4689; StartTime=(Get-Date).AddMinutes(-15)} -ErrorAction SilentlyContinue); $rows = foreach ($e in $ev) { $m = [string]$e.Message; if ($e.Id -eq 4688) { $x = [regex]::Match($m, '(?i)new process name:[^\r\n]*\\(xr-desktop|xr-engine[^\\\r\n]*|msedgewebview2)\.exe'); if ($x.Success) { 'start ' + $x.Groups[1].Value.ToLower() } } else { $x = [regex]::Match($m, '(?i)process name:[^\r\n]*\\(xr-desktop|xr-engine[^\\\r\n]*|msedgewebview2)\.exe'); if ($x.Success) { 'exit ' + $x.Groups[1].Value.ToLower() + ' ' + [regex]::Match($m, '(?i)exit status:\s*(0x[0-9a-f]+)').Groups[1].Value } } }; 'audit events=' + $ev.Count + ': ' + (($rows | Group-Object | ForEach-Object { $_.Name + ' x' + $_.Count }) -join ', ')`;
+
+function shellLogLines(desktopHome: string): string | null {
+  const log = join(desktopHome, "logs", "shell.log");
+  if (!desktopHome || !existsSync(log)) return null;
+  const lines = readFileSync(log, "utf8").split(/\r?\n/).filter((l) => SHELL_LOG_LINE.test(l)).slice(-6);
+  return lines.map((l) => l.replace(/^\[\d+\] /, "")).join(" | ") || "(no lifecycle lines)";
+}
+
+/** NEW-7 — what the shell itself recorded about a failed launch: its lifecycle log lines (in the journey's desktop home,
+ *  or the default one if the app did not inherit XR_DESKTOP_HOME), the crash flag, and on Windows OS fault metadata and
+ *  process exit statuses. Filtered and redacted like the Windows installer journey's evidence. */
+export async function launchEvidence(engineHome: string, home: string, defaultHome = ""): Promise<string> {
+  const parts: string[] = [];
+  const own = shellLogLines(engineHome);
+  const fallback = own === null ? shellLogLines(defaultHome) : null;
+  parts.push(own !== null ? `shell log: ${own}` : fallback !== null ? `shell log only in the DEFAULT desktop home: ${fallback}` : "no shell log");
+  parts.push(existsSync(join(engineHome, "crash-dirty.json")) ? "crash flag present (no clean exit)" : "no crash flag");
+  if (process.platform === "win32") {
+    const r = await sh(["pwsh.exe", "-NoProfile", "-Command", WINDOWS_FAULTS], { timeoutMs: 30_000 });
+    parts.push(`windows: ${tail(r.out, 400) || "(nothing)"}`);
+    const x = await sh(["pwsh.exe", "-NoProfile", "-Command", WINDOWS_EXITS], { timeoutMs: 60_000 });
+    parts.push(`processes: ${tail(x.out, 500) || "(nothing)"}`);
+  }
+  return redactEvidence(parts.join("; "), home);
+}
+
+/** Where the default desktop home is when XR_DESKTOP_HOME is not inherited (USERPROFILE on Windows, HOME elsewhere). */
+const defaultDesktopHome = () => join((process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) ?? "", ".xr-desktop");
 
 /** Keep the last 4 KB a child printed, so a launch failure carries the panic instead of only a timeout. */
 function captureOutput(child: ChildProcess): (e: unknown) => Error {
@@ -102,6 +173,7 @@ function captureOutput(child: ChildProcess): (e: unknown) => Error {
 
 /** Minimal W3C WebDriver client for tauri-driver (no npm dependency). */
 async function webdriverSmoke(app: string, env: Record<string,string>): Promise<string> {
+  const withEvidence = async (e: unknown) => new Error(`${e instanceof Error ? e.message : String(e)}; ${await launchEvidence(env.XR_DESKTOP_HOME ?? "", env.HOME ?? "", defaultDesktopHome()).catch((x: unknown) => `launch evidence unavailable (${String(x)})`)}`);
   const base = "http://127.0.0.1:4444";
   const driver = spawn("tauri-driver", [], { env, stdio: ["ignore", "pipe", "pipe"] });
   const explain = captureOutput(driver);
@@ -131,7 +203,9 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
         [children, text] = v;
       }
       if (title !== "XR" || children === 0 || text === 0) throw new Error(`webview did not render: title=${JSON.stringify(title)} #root children=${children} text=${text}`);
-      const port = await waitForEngineHealth(60_000);
+      const port = await waitForEngineHealth(60_000).catch(async (e: unknown) => {
+        throw new Error(`${e instanceof Error ? e.message : String(e)}; ${await shellEngineView(wd, sid)}`);
+      });
       const webview = await webviewEngineSmoke(wd, sid);
       await webviewOnboardingSmoke(wd, sid);
       const acl = await ipcAclSmoke(wd, sid);
@@ -144,12 +218,13 @@ async function webdriverSmoke(app: string, env: Record<string,string>): Promise<
       });
       if (scheduled !== "quit scheduled") throw new Error("could not schedule explicit app quit");
       if (!(await engineGone(15_000))) throw new Error("engine sidecar still listening 15 s after explicit application quit (containment)");
-      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${webview}; ${acl}; explicit quit requested and sidecar stopped`;
+      const logged = existsSync(join(env.XR_DESKTOP_HOME ?? "", "logs", "shell.log")) ? "in the journey's desktop home" : "NOT in the journey's desktop home";
+      return `WebDriver: title "XR", #root rendered (${children} children); engine sidecar healthy on :${port}; ${webview}; ${acl}; explicit quit requested and sidecar stopped; shell log ${logged}`;
     } finally {
       await wd("DELETE", `/session/${sid}`).catch(() => undefined);
     }
   } catch (e) {
-    throw explain(e);
+    throw explain(await withEvidence(e));
   } finally {
     driver.kill();
   }
@@ -290,7 +365,10 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
       steps.push({ step: name, status: "pass", detail: await fn(), ms: Date.now() - t0 });
     } catch (e) {
       failed = true;
-      steps.push({ step: name, status: "fail", detail: (e as Error).message.slice(0, 900), ms: Date.now() - t0 });
+      const detail = String((e as Error)?.message ?? e).slice(0, 3000);
+      steps.push({ step: name, status: "fail", detail, ms: Date.now() - t0 });
+      // Check-run annotations are readable through the API even when raw job logs are not.
+      if (process.env.GITHUB_ACTIONS) console.log(`::error title=desktop journey ${name} (${process.env.ImageOS ?? "?"} ${process.env.ImageVersion ?? "?"})::${detail.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
     }
     const s = steps[steps.length - 1]!;
     console.log(`  ${s.status.padEnd(7)} ${name} (${s.ms} ms) — ${s.detail}`);
@@ -372,7 +450,7 @@ export async function runDesktopJourney(opts: { slug: string; bundles: string; w
         need(app.exitCode === null, `the app exited early (code ${app.exitCode})`);
         return `GUI process up; engine sidecar healthy on :${port}${process.platform === "darwin" ? " (no WKWebView driver on macOS: render not asserted)" : ""}`;
       } catch (e) {
-        throw explain(e);
+        throw explain(new Error(`${e instanceof Error ? e.message : String(e)}; ${await launchEvidence(engineHome, home, defaultDesktopHome()).catch((x: unknown) => `launch evidence unavailable (${String(x)})`)}`));
       } finally {
         app.kill("SIGTERM");
         if (!(await engineGone(15_000))) {

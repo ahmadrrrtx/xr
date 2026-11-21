@@ -427,7 +427,7 @@ export class WorkflowRuntime {
         const cost = { usd: Math.round(usd * 1e6) / 1e6, tokensIn, tokensOut };
         if (result.stopped === "cancelled") throw Object.assign(new Error("cancelled"), { cost });
         if (result.stopped === "error") throw Object.assign(new Error(result.finalMessage || "agent run failed"), { cost });
-        if (result.stopped === "budget") throw Object.assign(new Error(`stopped: budget cap reached — ${result.finalMessage}`.trim()), { cost });
+        if (result.stopped === "budget" || result.stopped === "unpriced") throw Object.assign(new Error(`stopped: ${result.stopped === "unpriced" ? "price unavailable" : "budget cap reached"} — ${result.finalMessage}`.trim()), { cost });
         if (result.stopped === "approval") throw Object.assign(new Error(`stopped: an approval was denied — ${result.finalMessage}`.trim()), { cost });
         return { summary: result.finalMessage, structured: { stopped: result.stopped, steps: result.steps, provider, model }, cost };
       },

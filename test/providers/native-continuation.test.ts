@@ -133,11 +133,16 @@ test("unknown/account-dependent pricing is unavailable, dated standard rates cha
     priceFor("google", "gemini-3.8-flash", { now: Date.parse("2027-01-01") })
       .outPerMTok,
   ).toBe(7.5);
-  expect(
-    pricingAvailable(
-      priceFor("openai", "gpt-6.1-sol", { now: Date.parse("2028-01-01") }),
-    ),
-  ).toBe(false);
+  // Hardening B5: a calendar date no longer bricks paid providers. Past staleAt the
+  // last-known rate stays in force, flagged stale; refusal is the operator's explicit opt-in.
+  const stale = priceFor("openai", "gpt-6.1-sol", { now: Date.parse("2028-01-01") });
+  expect(pricingAvailable(stale) && stale.stale === true && stale.inPerMTok === 2).toBe(true);
+  process.env.XR_STALE_PRICE_FACTS = "refuse";
+  try {
+    expect(pricingAvailable(priceFor("openai", "gpt-6.1-sol", { now: Date.parse("2028-01-01") }))).toBe(false);
+  } finally {
+    delete process.env.XR_STALE_PRICE_FACTS;
+  }
 });
 test("Responses uses native schema, preserves reasoning and distinct identical calls by id", async () => {
   const blocks = [

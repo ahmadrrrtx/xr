@@ -12,12 +12,13 @@
  *   admit()      → row(status='active')  — counts against the caps
  *   commit()     → row(status='settled') — settled with ACTUAL usage
  *   release()    → row(status='released')— cancelled/denied, no usage
- *   TTL sweep    → row(status='expired') — uncommitted past the TTL
+ *   heartbeat()  → renews an active row while its step is still running (B10)
+ *   TTL sweep    → row(status='expired') — no heartbeat (or admission) within the TTL
  *                (runs at store open = startup recovery, and at the head
  *                 of every admit = in-flight recovery)
  */
 
-import type { WorkspaceStore } from "../workspace-store.ts";
+import { reservationTtlMs, type WorkspaceStore } from "../workspace-store.ts";
 
 export interface ReservationCaps {
   monthlyCapUsd: number | null;
@@ -41,6 +42,9 @@ export interface ReservationStoreLike {
   release(reservationId: string): void;
   releaseForEnv(envId: string): void;
   activeTotals(): { usd: number; tokens: number };
+  /** B10: renew an open reservation; optional so store-less governors stay valid. */
+  heartbeat?(reservationId: string): void;
+  heartbeatIntervalMs?(): number;
 }
 
 export class ReservationRepo implements ReservationStoreLike {
@@ -65,6 +69,13 @@ export class ReservationRepo implements ReservationStoreLike {
 
   releaseForEnv(envId: string): void {
     this.store.reservationReleaseForEnv(envId);
+  }
+  heartbeat(reservationId: string, now = Date.now()): void {
+    this.store.query(`UPDATE reservations SET last_heartbeat_at = ?1 WHERE id = ?2 AND status = 'active'`).run(now, reservationId);
+  }
+  /** Three renewals per TTL, so one missed tick never expires a live step. */
+  heartbeatIntervalMs(): number {
+    return Math.max(250, Math.floor(reservationTtlMs() / 3));
   }
 
   activeTotals(): { usd: number; tokens: number } {

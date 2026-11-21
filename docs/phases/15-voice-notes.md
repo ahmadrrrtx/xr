@@ -93,6 +93,10 @@
 
 ## Model sources (measured `Content-Length`, Hugging Face `resolve/main`, stable)
 
+> Superseded 2026-11-19 (hardening B3): `resolve/main` was a mutable ref. Every source in
+> `src/voice/models.ts` is now pinned to a commit SHA and verified by sha256 while it streams;
+> the table below is the Phase 15 record and its voice list predates the current catalogue.
+
 | Component | Files | Bytes |
 | --- | --- | --- |
 | runtime `sherpa-onnx` 1.13.8 (wasm) | `registry.npmjs.org/sherpa-onnx/-/sherpa-onnx-1.13.8.tgz` | 4 320 484 (15.4 MB unpacked) |

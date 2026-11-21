@@ -16,6 +16,7 @@ export type RunStatus =
   | 'compacting_context'
   | 'awaiting_approval'
   | 'budget_stopped'
+  | 'unpriced_stopped'
   | 'cancelled'
   | 'finishing'
   | 'done'

@@ -334,8 +334,10 @@ async function saveBudgetConfig() {
   const dailyCap = Number.parseFloat(document.getElementById("bud-input-day")?.value) || null;
   const warningsEnabled = document.getElementById("bud-toggle-warn")?.checked;
   const autoFallback = document.getElementById("bud-toggle-fallback")?.checked;
+  const confirmBlockAll = monthlyCap === 0 && confirm("A $0 monthly cap blocks every paid request (local models still run). Save it?");
+  if (monthlyCap === 0 && !confirmBlockAll) return;
   try {
-    await api("/api/budget/set", { method:"POST", body: { perTaskUsd, monthlyCap, dailyCap, warningsEnabled, autoFallback } });
+    await api("/api/budget/set", { method:"POST", body: { perTaskUsd, monthlyCap, dailyCap, warningsEnabled, autoFallback, confirmBlockAll } });
     toast("Budget cap governor updated", "ok");
     loadBudgetPanel();
   } catch {}

@@ -4,7 +4,8 @@
  * ONE coherent home for daemon-scoped cached resources that have no natural
  * domain module of their own:
  *   · internet reachability probe (onboarding) — TTL 15 s
- *   · git summary for /api/overview — TTL 5 s (dashboard polling guard)
+ *   · git summary for /api/overview — TTL 5 s, then served stale while one
+ *     background probe refreshes it; a request never waits on git
  *
  * Domain caches live with their domains because the CLI shares them:
  *   · runtimes   → src/local/runtimes.ts (60 s, config-fingerprint keyed)
@@ -56,28 +57,35 @@ export function invalidateInternetCache(): void {
 
 // ── Git summary (/api/overview) ──────────────────────────────────────────────
 const GIT_TTL_MS = 5_000;
-const gitCache = new TtlCache<{ branch: string; dirty: boolean }>({ ttlMs: GIT_TTL_MS, maxEntries: 2 });
+const GIT_SWR_MS = 60_000;
+export interface GitSummary { branch: string; dirty: boolean }
+const gitCache = new TtlCache<{ summary: GitSummary | null; observedAt: number }>({ ttlMs: GIT_TTL_MS, staleWhileRevalidateMs: GIT_SWR_MS, maxEntries: 2 });
 
-/**
- * Cached git summary so dashboard polling never re-runs `git status` on every
- * overview request. Errors fall back to the caller's default (branch: "no git").
- */
-export async function gitSummaryCached(cwd: string): Promise<{ branch: string; dirty: boolean } | undefined> {
-  const hit = gitCache.get(cwd);
-  if (hit) return hit.value;
+async function probeGit(cwd: string): Promise<{ summary: GitSummary | null; observedAt: number }> {
+  let summary: GitSummary | null = null;
   try {
     const { runCommand } = await import("../../util/process.ts");
     const [branch, status] = await Promise.all([
       runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, timeoutMs: 3000 }),
       runCommand("git", ["status", "--porcelain"], { cwd, timeoutMs: 3000 }),
     ]);
-    if (!branch.ok || !status.ok) return undefined;
-    const summary = { branch: branch.stdout.trim() || "detached", dirty: status.stdout.trim().length > 0 };
-    gitCache.set(cwd, summary);
-    return summary;
-  } catch {
-    return undefined;
-  }
+    if (branch.ok && status.ok) summary = { branch: branch.stdout.trim() || "detached", dirty: status.stdout.trim().length > 0 };
+  } catch { /* no git binary or not a repository: unavailable */ }
+  return { summary, observedAt: Date.now() };
+}
+
+/**
+ * The overview's git summary, without ever holding the response on git: `git status` walks the
+ * working tree (≈1 s on hosted Windows, up to 0.9 s on hosted macOS). Cold → `pending` while ONE
+ * background probe runs; past the TTL the last summary is served while one probe refreshes it.
+ * `unavailable` keeps the legacy `{ branch: "no git" }` value.
+ */
+export function observeGitSummary(cwd: string): { git: GitSummary | null; gitStatus: { state: "ready" | "pending" | "unavailable"; observedAt: number | null } } {
+  const hit = gitCache.get(cwd);
+  if (!hit || hit.stale) void gitCache.getOrStart(cwd, () => probeGit(cwd)).catch(() => { /* probeGit never rejects */ });
+  if (!hit) return { git: null, gitStatus: { state: "pending", observedAt: null } };
+  const { summary, observedAt } = hit.value;
+  return { git: summary ?? { branch: "no git", dirty: false }, gitStatus: { state: summary ? "ready" : "unavailable", observedAt } };
 }
 
 export function invalidateGitCache(): void {

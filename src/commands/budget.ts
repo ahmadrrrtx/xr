@@ -3,6 +3,8 @@
  * View and manage spend caps. Glyph/color aligned with Shell status bar.
  */
 
+import { spendBreakdown } from "../state/repos/cost-repo.ts";
+import { capLine } from "../cost/budget-truth.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import { BudgetService } from "../services/budget-service.ts";
@@ -35,12 +37,16 @@ export class BudgetCommand implements Command {
     if (!sub || sub === "status" || sub === "show") {
       const status = budgetService.getStatus();
       const cfg = budgetService.getConfig();
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+      const estimated = spendBreakdown(registry.resolve(Tokens.Store), monthStart).estimated; // B7
 
       emit(
         {
           ok: true,
           monthlyCap: status.monthlyCap,
+          monthlyCapIsDefault: !budgetService.explicitCap(),
           monthlySpend: status.monthlySpend,
+          monthlyEstimatedSpend: estimated,
           remainingMonthly: status.remainingMonthly,
           percentUsed: status.percentUsed,
           dailyCap: status.dailyCap,
@@ -52,8 +58,8 @@ export class BudgetCommand implements Command {
           banner();
           console.log(`  ${icon("budget", "amber")}  ${xrBold("Budget")}`);
           console.log(`  ${xrDim("─".repeat(40))}`);
-          console.log(`  Monthly cap ...... ${xrGreen(`$${status.monthlyCap.toFixed(2)}`)}`);
-          console.log(`  Monthly spend .... ${xrDim(`$${status.monthlySpend.toFixed(4)}`)}`);
+          console.log(`  Monthly cap ...... ${xrGreen(capLine(status.monthlyCap, budgetService.explicitCap()))}`);
+          console.log(`  Monthly spend .... ${xrDim(`$${status.monthlySpend.toFixed(4)}`)}${estimated > 0 ? xrDim(` (incl. $${estimated.toFixed(4)} from estimated usage, counted toward the cap)`) : ""}`);
           console.log(`  Remaining ........ ${xrCyan(`$${status.remainingMonthly.toFixed(4)}`)}`);
           const pctColor =
             status.percentUsed > 90 ? xrRed : status.percentUsed > 70 ? xrAmber : xrGreen;

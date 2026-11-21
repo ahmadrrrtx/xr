@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { invalidateConfigCache } from "../../src/config/cache.ts";
 import { makeHandler } from "../../src/daemon/server.ts";
+import { invalidateGitCache } from "../../src/daemon/state/cache.ts";
+import * as processUtil from "../../src/util/process.ts";
 import { invalidateProjectProfiles, observeProjectProfile, type ProjectProfileObservation } from "../../src/daemon/state/project-profile.ts";
 import { FilesystemAuthority } from "../../src/security/filesystem.ts";
 import { Store } from "../../src/state/workspace-store.ts";
@@ -13,6 +15,9 @@ const token = "overview-fixture";
 const turn = () => new Promise<void>(resolve => setImmediate(resolve));
 let temp: string, root: string, cwd: string, home: string | undefined, store: Store;
 let handler: ReturnType<typeof makeHandler>;
+// The overview's git probe runs after the response; stubbed so no child process outlives a test's temp cwd.
+let gitRun: ReturnType<typeof spyOn<typeof processUtil, "runCommand">>;
+const gitResult = (stdout: string, ok = true): processUtil.RunCommandResult => ({ ok, status: ok ? 0 : 128, stdout, stderr: "", signal: null });
 const get = (path: string, authorized = true) => handler(new Request(`http://localhost:3141/api/v1/${path}`, {
   headers: authorized ? { authorization: `Bearer ${token}` } : {},
 }));
@@ -33,10 +38,12 @@ beforeEach(() => {
   writeFileSync(join(root, "safe.test.ts"), "export const safe = true;");
   process.chdir(root); process.env.XR_HOME = join(temp, "home");
   invalidateProjectProfiles(); invalidateConfigCache("all");
+  invalidateGitCache(); gitRun = spyOn(processUtil, "runCommand").mockResolvedValue(gitResult("", false));
   store = new Store(join(temp, "state.db")); handler = makeHandler(store, token);
 });
 afterEach(async () => {
   invalidateProjectProfiles(); await turn();
+  gitRun.mockRestore(); invalidateGitCache();
   store.close(); process.chdir(cwd);
   if (home === undefined) delete process.env.XR_HOME; else process.env.XR_HOME = home;
   invalidateConfigCache("all"); rmSync(temp, { recursive: true, force: true });
@@ -145,4 +152,52 @@ test("distinct roots never share counts and no more than two walks run at once",
     expect(empty.fingerprint?.files).toBe(0); expect(empty.fingerprintStatus.state).toBe("ready");
     expect(walk).toHaveBeenCalledTimes(3);
   } finally { release(); walk.mockRestore(); }
+});
+
+type OverviewGit = { git: { branch: string; dirty: boolean } | null; gitStatus: { state: string; observedAt: number | null } };
+async function until(check: () => boolean | Promise<boolean>): Promise<void> {
+  const deadline = performance.now() + 2500;
+  while (!(await check())) {
+    if (performance.now() > deadline) throw new Error("condition not reached");
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+}
+async function settledGit(): Promise<OverviewGit> {
+  let body: OverviewGit | undefined;
+  await until(async () => {
+    body = await (await get("overview")).json() as OverviewGit;
+    return body.gitStatus.state !== "pending";
+  });
+  return body!;
+}
+
+test("a held git probe cannot hold overview; polls share one probe; expiry serves the last summary while one refresh runs", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  gitRun.mockImplementation(async (_cmd, args = []) => { await gate; return gitResult(args[0] === "rev-parse" ? "main\n" : " M src/x.ts\n"); });
+  try {
+    const first = await Promise.race([get("overview"), new Promise<"held">(resolve => setTimeout(() => resolve("held"), 1_000))]);
+    expect(first).not.toBe("held"); // the old handler awaited `git status` right here
+    expect(await (first as Response).json()).toMatchObject({ git: null, gitStatus: { state: "pending", observedAt: null } });
+    await Promise.all([get("overview"), get("overview")]);
+    await until(() => gitRun.mock.calls.length >= 2); await turn();
+    expect(gitRun).toHaveBeenCalledTimes(2); // ONE probe (rev-parse + status) for all three polls
+    release();
+    const ready = await settledGit();
+    expect(ready).toMatchObject({ git: { branch: "main", dirty: true }, gitStatus: { state: "ready" } });
+    expect(ready.gitStatus.observedAt).toBeGreaterThan(0);
+    const clock = spyOn(Date, "now").mockReturnValue(Date.now() + 5_001);
+    try {
+      expect(await (await get("overview")).json()).toMatchObject({ git: { branch: "main", dirty: true }, gitStatus: { state: "ready", observedAt: ready.gitStatus.observedAt } });
+    } finally { clock.mockRestore(); }
+    await until(() => gitRun.mock.calls.length >= 4);
+    expect(gitRun).toHaveBeenCalledTimes(4); // the stale read started exactly one refresh
+  } finally { release(); }
+});
+
+test("a failed git probe is unavailable with the legacy value, never a fabricated branch", async () => {
+  expect((await (await get("overview")).json() as OverviewGit).gitStatus.state).toBe("pending");
+  const failed = await settledGit();
+  expect(failed).toMatchObject({ git: { branch: "no git", dirty: false }, gitStatus: { state: "unavailable" } });
+  expect(gitRun).toHaveBeenCalledTimes(2);
 });

@@ -67,10 +67,10 @@ export const PAGE_TAIL = `</div><!-- /app -->
         <div id="onb-security-content" class="onb-security"><div class="muted">Loading…</div></div>
       </section>
       <section class="onb-step" data-step="budget" hidden>
-        <h2 class="onb-step-title">Set a spending cap (optional)</h2>
-        <p class="onb-step-sub">A monthly cap protects you on cloud providers. You can change or remove it anytime from the Budget panel.</p>
+        <h2 class="onb-step-title">Your monthly spending cap</h2>
+        <p class="onb-step-sub">XR already caps paid cloud spend at $10 a month by default; local models are never charged. Change it here or anytime in the Budget panel. A cap of 0 blocks every paid request.</p>
         <label class="onb-field" for="onb-budget-monthly">Monthly cap (USD)</label>
-        <input id="onb-budget-monthly" class="input" type="number" min="0" step="1" inputmode="decimal" aria-label="Monthly spending cap in US dollars" placeholder="e.g. 10" />
+        <input id="onb-budget-monthly" class="input" type="number" min="0" step="1" inputmode="decimal" aria-label="Monthly spending cap in US dollars" placeholder="10 (default)" />
         <div class="onb-actions">
           <button type="button" class="btn" data-xr-action="onbSetBudget()" id="onb-budget-btn">Save cap</button>
           <span class="onb-result" id="onb-budget-result" role="status"></span>

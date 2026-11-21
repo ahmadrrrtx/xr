@@ -389,6 +389,7 @@ export const BudgetSetRequest = z.looseObject({
   dailyCap: z.number().nonnegative().nullable().optional(),
   warningsEnabled: z.boolean().optional(),
   tightenOnly: z.boolean().optional().describe("Atomically lower monthly/daily caps only; never raise policy or change the per-task default."),
+  confirmBlockAll: z.boolean().optional().describe("Required with monthlyCap 0: a global cap of 0 blocks ALL paid spend (per-task 0 means no per-task cap). See docs/budget-semantics.md."),
   autoFallback: z.boolean().optional(), // R2 · handler-read, must be declared
 });
 
@@ -524,7 +525,7 @@ export const ChatStreamEvent = z.looseObject({
   next: z.string().optional().describe("Short next step for a person for type=tool_result when ok=false."),
   usage: z.looseObject({ inTokens: z.number().optional(), outTokens: z.number().optional() }).optional(),
   fullText: z.string().optional().describe("Final generated text (backward-compatible final result)."),
-  finishReason: z.string().optional().describe("Loop stop reason (done|error|budget|max_steps|approval|cancelled)."),
+  finishReason: z.string().optional().describe("Loop stop reason (done|error|budget|unpriced|max_steps|approval|cancelled)."),
   ttftMs: z.number().optional().describe("Time to first token, ms."),
   totalMs: z.number().optional().describe("Total generation duration, ms."),
   code: z.string().optional().describe("Structured error code for type=error."),

@@ -26,12 +26,11 @@ test("governor records usage and computes USD correctly", () => {
 });
 
 test("governor blocks the next step before exceeding the token ceiling", () => {
-  const g = new CostGovernor({ maxTokens: 1000 }, { inPerMTok: 0, outPerMTok: 0 });
-  g.record(400, 100); // 500 used, avg 500/step
-  const d = g.checkBeforeStep(); // est next ~500 → 1000, not over yet
-  // 500 + 500 = 1000 which is > 1000? no, equal boundary → allow (strict >)
+  const g = new CostGovernor({ maxTokens: 1100 }, { inPerMTok: 0, outPerMTok: 0 });
+  g.record(400, 100); // 500 used. Hardening B18: the next step re-sends 400 + 100 as input and replies ~100 → ~600
+  const d = g.checkBeforeStep(); // 500 + 600 = 1100: equal boundary → allow (strict >)
   expect(d.allow).toBe(true);
-  g.record(400, 100); // now 1000 used
+  g.record(500, 100); // now 1100 used
   expect(g.checkBeforeStep().allow).toBe(false); // already at ceiling
 });
 
@@ -120,4 +119,23 @@ test("AGENT LOOP: raising the ceiling lets it continue", async () => {
 
   expect(result.stopped).toBe("done");
   store.close();
+});
+
+// Hardening B18 — the estimator prices input and output separately and grows with the conversation.
+test("B18: a later step is estimated from last-step growth, not the running average", () => {
+  const g = new CostGovernor({ maxUsd: 0.0475 }, { inPerMTok: 1, outPerMTok: 5 });
+  g.record(10_000, 1_000); // $0.015
+  g.record(11_000, 1_000); // $0.016 — the context grew by the last reply
+  // Average would admit ($0.031 + $0.0155 ≤ $0.0475) and then overshoot; the next step re-sends
+  // 11k + 1k as input and replies ~1k: $0.017 → $0.048 > $0.0475, so it is refused before sending.
+  const d = g.checkBeforeStep();
+  expect(d.allow).toBe(false);
+  if (!d.allow) expect(d.reason).toContain("per-task spend ceiling");
+});
+
+test("B18: a first step prices input and output at their own rates (not all at the output rate)", () => {
+  // 2000 tokens at the $50 output rate would be $0.10 and refuse a $0.05 task outright;
+  // 1500 in at $1 + 500 out at $50 is $0.0265, so the first step is admitted.
+  const d = new CostGovernor({ maxUsd: 0.05 }, { inPerMTok: 1, outPerMTok: 50 }).checkBeforeStep();
+  expect(d.allow).toBe(true);
 });

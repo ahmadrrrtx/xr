@@ -250,7 +250,7 @@ export interface AgentResult {
   sessionId: string;
   finalMessage: string;
   steps: number;
-  stopped: "done" | "max_steps" | "error" | "budget" | "approval" | "cancelled";
+  stopped: "done" | "max_steps" | "error" | "budget" | "unpriced" | "approval" | "cancelled";
   /** Optional token counters for richer UIs when a caller/provider supplies them. */
   inputTokens?: number;
   outputTokens?: number;
@@ -853,23 +853,24 @@ export async function runAgentLoop(
           say(`\x1b[33m⚠ Cloud budget exhausted. If you have a local model, consider using it.\x1b[0m`);
         }
 
-        const extra = deps.onOverBudget
+        const unpriced = decision.code === "unpriced"; // B4: no budget raise can price an unknown tariff
+        const extra = deps.onOverBudget && !unpriced
           ? await deps.onOverBudget(governor.meter(), decision.reason)
           : null;
         if (!extra) {
           say(`\x1b[33m⏸ stopped — ${decision.reason}\x1b[0m`);
           // Phase 12 · Phase C — a budget stop is its own honest state, not a
           // generic error: nothing failed, XR stopped to respect the cap.
-          deps.onStreamEvent?.({ type: "status", status: "budget_stopped", message: decision.reason });
+          deps.onStreamEvent?.({ type: "status", status: unpriced ? "unpriced_stopped" : "budget_stopped", message: decision.reason });
           sessionStore.endSession(sessionId, "stopped");
-          fireTask("budget_block", { reason: decision.reason.slice(0, 300) });
-          fireTask("fail", { reason: "budget ceiling reached; no raise granted" });
-          auditStore.audit("budget.stop", { snapshot: governor.snapshot() }, sessionId);
+          if (!unpriced) fireTask("budget_block", { reason: decision.reason.slice(0, 300) });
+          fireTask("fail", { reason: decision.reason.slice(0, 300) });
+          auditStore.audit("budget.stop", { snapshot: governor.snapshot(), ...(unpriced && { code: "unpriced" }) }, sessionId);
           return {
             sessionId,
-            finalMessage: finalMessage || `Stopped to respect your budget: ${decision.reason}. ${governor.meter()}`,
+            finalMessage: finalMessage || (unpriced ? `Stopped before sending anything: ${decision.reason}` : `Stopped to respect your budget: ${decision.reason}. ${governor.meter()}`),
             steps: stepIdx,
-            stopped: "budget",
+            stopped: unpriced ? "unpriced" : "budget",
             routingDecisionId: deps.routingDecision?.decisionId,
           };
         }
@@ -1159,11 +1160,12 @@ export async function runAgentLoop(
     // contract is success | failed | cancelled, honestly stamped).
     if (isCancellation(e) || (deps.signal?.aborted && (e as Error)?.name === "AbortError")) return cancelledResult(stepIdx);
     if (e instanceof ProviderBudgetAdmissionError) {
+      const unpriced = e.code === "unpriced";
       sessionStore.endSession(sessionId, "stopped");
-      auditStore.audit("budget.stop", { reason: e.message, snapshot: governor.snapshot(), beforeRequest: true }, sessionId);
-      deps.onStreamEvent?.({ type: "status", status: "budget_stopped", message: e.message });
-      fireTask("budget_block", { reason: e.message });
-      return { sessionId, finalMessage: e.message, steps: stepIdx, stopped: "budget", meter: governor.meter(), routingDecisionId: deps.routingDecision?.decisionId };
+      auditStore.audit("budget.stop", { reason: e.message, snapshot: governor.snapshot(), beforeRequest: true, ...(unpriced && { code: "unpriced" }) }, sessionId);
+      deps.onStreamEvent?.({ type: "status", status: unpriced ? "unpriced_stopped" : "budget_stopped", message: e.message });
+      fireTask(unpriced ? "fail" : "budget_block", { reason: e.message });
+      return { sessionId, finalMessage: e.message, steps: stepIdx, stopped: unpriced ? "unpriced" : "budget", meter: governor.meter(), routingDecisionId: deps.routingDecision?.decisionId };
     }
     deps.onStreamEvent?.({ type: "error", code: "provider.failure", message: (e as Error).message });
     sessionStore.endSession(sessionId, "error");
