@@ -68,6 +68,16 @@ function installFakeRuntime(dir: string, name: string, binaryBody: string, pkgVe
   return exe;
 }
 
+/**
+ * A fake runtime that announces readiness (its PID file) only AFTER its TERM trap is installed. NEW-15: the trap used
+ * to come second, so a SIGTERM the launcher forwarded right after the PID file appeared could reach the shell before
+ * the trap existed and kill it by default, with no signal file (macOS, `9a5f011` and `f58efd5`). With that window
+ * widened to 0.5 s the old order failed 3 of 3 runs and this order passed 3 of 3.
+ */
+function termReadyChild(pidFile: string, signalFile: string): string {
+  return `trap "echo TERM > '${signalFile}'; exit 143" TERM\necho $$ > '${pidFile}'\nwhile :; do /bin/sleep 0.1; done`;
+}
+
 describe("npm runtime dependency and launcher", () => {
   test("every supported platform runtime is an exact pin matching .bun-version", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { optionalDependencies?: Record<string, string> };
@@ -224,11 +234,19 @@ describe("npm runtime dependency and launcher", () => {
     expect(f.run().status).toBe(130);
   });
 
+  test("the TERM fixture installs its trap before it announces readiness (NEW-15)", () => {
+    const script = termReadyChild("/tmp/child.pid", "/tmp/child-signal");
+    const trap = script.indexOf("trap ");
+    const ready = script.indexOf("echo $$ >");
+    expect(trap).toBe(0);
+    expect(ready).toBeGreaterThan(trap);
+  });
+
   test.skipIf(process.platform === "win32" || !selectedPackage())("a termination signal sent to the launcher is forwarded to its child", async () => {
     const f = fixture();
     const pidFile = join(f.dir, "child.pid");
     const signalFile = join(f.dir, "child-signal");
-    installFakeRuntime(f.dir, selectedPackage()!, `echo $$ > '${pidFile}'\ntrap "echo TERM > '${signalFile}'; exit 143" TERM\nwhile :; do /bin/sleep 0.1; done`);
+    installFakeRuntime(f.dir, selectedPackage()!, termReadyChild(pidFile, signalFile));
     const parent = spawn(nodePath(), [join(f.dir, "bin", "xr")], { cwd: f.dir, env: f.env, stdio: "ignore" });
     let childPid = 0;
     try {

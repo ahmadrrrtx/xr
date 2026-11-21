@@ -18,6 +18,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | Phase 10 version choice | 1.1.1 would sort below the current 1.2.0-preview.1 identity | **Owner delegated the choice on 2026-11-19.** Decision: release **1.2.0-preview.2** through `release.manifest.json` + `bun run release:stamp` + the existing release workflow, only if every required check and the workflow's own gates are green and the full asset suite is produced; npm only via OIDC, desktop signing owner-blocked; otherwise nothing is published and Phase 10 records why |
 | R7: three CI-fix attempts per phase, then halt | Phase 3 halted on 2026-11-20 after three attempts, with every targeted failure fixed and one intermittent left (NEW-9) | **Owner (ahmadrrrtx) authorised one fourth Phase 3 attempt on 2026-11-20** (the NEW-9 PowerShell fix as proposed: telemetry and update check off, 15 s bound unchanged) and kept every other rule: Phases 4–11 have the normal three attempts each, one rerun per first-occurrence flake, a repeat is a defect |
 | R7 again: Phase 5 halted after three attempts | NEW-7 (the desktop shell aborts at startup) was root-caused on the third attempt; the fix was ready but would have been a fourth | **Owner (ahmadrrrtx) authorised one fourth Phase 5 attempt on 2026-11-20** (the NEW-7 fix as proposed) and again kept every other rule: Phases 6–11 have the normal three attempts each |
+| R7 a third time: Phase 10 halted after three attempts | NEW-15 (a repeat of the macOS launcher-test failure) was root-caused to a test-fixture race; the fix would be a fourth attempt | **Owner (ahmadrrrtx) authorised one fourth Phase 10 attempt on 2026-11-21**, all other rules kept |
 | Merging PR #215 and pushing a release tag | Both change shared state that is hard to undo; the brief lists the merge (Phase 8) and the release (Phase 10) | **Owner (ahmadrrrtx) approved on 2026-11-21:** merge PR #215 with a merge commit once Phase 7 is green (done: `23090ee`); in Phase 10, push tag `v1.2.0-preview.2` for a verified PRIVATE draft only; the SUPERSEDED note on v1.1.0 is applied only once 1.2.0-preview.2 is public |
 | The `v1.2.0-preview.2` tag run failed at its gates (NEW-12) | A tag always runs its own commit's workflow, so that tag can never pass; re-pointing it would rewrite a published ref | **Owner (ahmadrrrtx) decided on 2026-11-21:** withdraw `v1.2.0-preview.2` (`channels.withdrawnTags`, never reused, not deleted or moved, as with v1.1.0) and release **1.2.0-preview.3**, tag `v1.2.0-preview.3`, verified PRIVATE draft only |
 
@@ -98,7 +99,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 7 — security sweep (C3–C8, lock-ins, C16) | `dba65dc` `c3a6e09` `dcf954d` | head `d1f7f6d`: CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288) ✓ · Cross-Platform [44892794304](https://github.com/ahmadrrrtx/xr/actions/runs/44892794304) ✓ · Desktop App [44892794282](https://github.com/ahmadrrrtx/xr/actions/runs/44892794282) ✓ · Clean-Machine Journey [44892794346](https://github.com/ahmadrrrtx/xr/actions/runs/44892794346) ✓ · npm Pack Smoke [44892794255](https://github.com/ahmadrrrtx/xr/actions/runs/44892794255) ✓ · Supply Chain [44892794294](https://github.com/ahmadrrrtx/xr/actions/runs/44892794294) ✓ · Channel Install [44892794245](https://github.com/ahmadrrrtx/xr/actions/runs/44892794245) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
 | 8 — CI: actionlint, required-check names, merge, 3 green `main` runs | merges `23090ee` (PR #215), `4ea49e2` (PR #216), `1397292` (PR #217); NEW-3 fix `8d1b98b` | `main` run 1 `23090ee`: CI [44898171204](https://github.com/ahmadrrrtx/xr/actions/runs/44898171204) ✓ · Cross-Platform [44898171045](https://github.com/ahmadrrrtx/xr/actions/runs/44898171045) ✓ · Desktop App [44898171222](https://github.com/ahmadrrrtx/xr/actions/runs/44898171222) ✓ · Clean-Machine Journey [44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078) ✓ · npm Pack Smoke [44898171035](https://github.com/ahmadrrrtx/xr/actions/runs/44898171035) ✓ · Supply Chain [44898171079](https://github.com/ahmadrrrtx/xr/actions/runs/44898171079) ✓ · Channel Install [44898171046](https://github.com/ahmadrrrtx/xr/actions/runs/44898171046) ✓ — run 2 `4ea49e2`: CI [44902873796](https://github.com/ahmadrrrtx/xr/actions/runs/44902873796) ✓ · Cross-Platform [44902873864](https://github.com/ahmadrrrtx/xr/actions/runs/44902873864) ✓ · Desktop App [44902873729](https://github.com/ahmadrrrtx/xr/actions/runs/44902873729) ✓ · Clean-Machine Journey [44902873728](https://github.com/ahmadrrrtx/xr/actions/runs/44902873728) ✓ · npm Pack Smoke [44902873760](https://github.com/ahmadrrrtx/xr/actions/runs/44902873760) ✓ · Supply Chain [44902873925](https://github.com/ahmadrrrtx/xr/actions/runs/44902873925) ✓ · Channel Install [44902873752](https://github.com/ahmadrrrtx/xr/actions/runs/44902873752) ✓ — run 3 `1397292`: CI [44906486932](https://github.com/ahmadrrrtx/xr/actions/runs/44906486932) ✓ · Cross-Platform [44906486922](https://github.com/ahmadrrrtx/xr/actions/runs/44906486922) ✓ · Desktop App [44906486914](https://github.com/ahmadrrrtx/xr/actions/runs/44906486914) ✓ · Clean-Machine Journey [44906486939](https://github.com/ahmadrrrtx/xr/actions/runs/44906486939) ✓ · npm Pack Smoke [44906487005](https://github.com/ahmadrrrtx/xr/actions/runs/44906487005) ✓ · Supply Chain [44906486940](https://github.com/ahmadrrrtx/xr/actions/runs/44906486940) ✓ · Channel Install [44906486963](https://github.com/ahmadrrrtx/xr/actions/runs/44906486963) ✓ | **done**: 3 consecutive green `main` runs (all six required checks each); 1 of 3 CI-fix attempts used |
 | 9 — docs: CHANGELOG section, launch-gate evidence | `67f0315` `9337a09` | head `6a53e67` (PR #218): CI [44909028062](https://github.com/ahmadrrrtx/xr/actions/runs/44909028062) ✓ · Cross-Platform [44909028066](https://github.com/ahmadrrrtx/xr/actions/runs/44909028066) ✓ · Desktop App [44909028071](https://github.com/ahmadrrrtx/xr/actions/runs/44909028071) ✓ · Clean-Machine Journey [44909028048](https://github.com/ahmadrrrtx/xr/actions/runs/44909028048) ✓ · npm Pack Smoke [44909028033](https://github.com/ahmadrrrtx/xr/actions/runs/44909028033) ✓ · Supply Chain [44909028075](https://github.com/ahmadrrrtx/xr/actions/runs/44909028075) ✓ · Channel Install [44909028023](https://github.com/ahmadrrrtx/xr/actions/runs/44909028023) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design); merged as `5b1ca0a` |
-| 10 — release (B16, C1): 1.2.0-preview.2 withdrawn → 1.2.0-preview.3 | `821fcde` `ba7e6a7` `a63a0c4`; NEW-12 `aac7944`; NEW-13 `bf261ef`; withdrawal `a19e6cf`; Preview 3 `62e7a14` `76e6049` `b7968d2` | PR #219 head `5e360c7`: CI [44911981493](https://github.com/ahmadrrrtx/xr/actions/runs/44911981493) ✓ · Cross-Platform [44911981497](https://github.com/ahmadrrrtx/xr/actions/runs/44911981497) ✓ · Desktop App [44911981509](https://github.com/ahmadrrrtx/xr/actions/runs/44911981509) ✓ · Clean-Machine Journey [44911981574](https://github.com/ahmadrrrtx/xr/actions/runs/44911981574) ✓ · npm Pack Smoke [44911981533](https://github.com/ahmadrrrtx/xr/actions/runs/44911981533) ✓ · Supply Chain [44911981594](https://github.com/ahmadrrrtx/xr/actions/runs/44911981594) ✓ · Channel Install [44911981607](https://github.com/ahmadrrrtx/xr/actions/runs/44911981607) ✓ — `main` `08a04cd` run 5 ✓ — tag `v1.2.0-preview.2`: Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963) ✗ (NEW-12, nothing published) | in-progress (CI-fix attempt 2 of 3) |
+| 10 — release (B16, C1): 1.2.0-preview.2 withdrawn → 1.2.0-preview.3 | `821fcde` `ba7e6a7` `a63a0c4`; NEW-12 `aac7944`; NEW-13 `bf261ef`; withdrawal `a19e6cf`; Preview 3 `62e7a14` `76e6049` `b7968d2`; NEW-14 `275be64`; NEW-15 `0ca9015` | PR #219 head `5e360c7`: CI [44911981493](https://github.com/ahmadrrrtx/xr/actions/runs/44911981493) ✓ · Cross-Platform [44911981497](https://github.com/ahmadrrrtx/xr/actions/runs/44911981497) ✓ · Desktop App [44911981509](https://github.com/ahmadrrrtx/xr/actions/runs/44911981509) ✓ · Clean-Machine Journey [44911981574](https://github.com/ahmadrrrtx/xr/actions/runs/44911981574) ✓ · npm Pack Smoke [44911981533](https://github.com/ahmadrrrtx/xr/actions/runs/44911981533) ✓ · Supply Chain [44911981594](https://github.com/ahmadrrrtx/xr/actions/runs/44911981594) ✓ · Channel Install [44911981607](https://github.com/ahmadrrrtx/xr/actions/runs/44911981607) ✓ — `main` `08a04cd` run 5 ✓ — tag `v1.2.0-preview.2`: Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963) ✗ (NEW-12, nothing published) | in-progress (CI-fix attempt 4, owner-authorised) |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -1177,3 +1178,94 @@ The version follows the owner's delegation (adaptations table). The release goes
 - **Next:** this PR green and its `main` run green, then tag `v1.2.0-preview.3` on that merge commit, then
   `release.yml`, then a verified private draft. The desktop workflow's tag preflight will stop again without signing
   secrets (OWNER-BLOCKED, XR-LAUNCH-008); the release does not depend on it.
+
+### Phase 10 — PR #221 green, merged as `99e50c2`; NEW-14 found before tagging; CI-fix attempt 3 of 3
+
+- PR #221 on `6307299`: all six required checks green (CI [44919373259](https://github.com/ahmadrrrtx/xr/actions/runs/44919373259), Cross-Platform [44919373260](https://github.com/ahmadrrrtx/xr/actions/runs/44919373260), Desktop App [44919373241](https://github.com/ahmadrrrtx/xr/actions/runs/44919373241), Clean-Machine Journey [44919373246](https://github.com/ahmadrrrtx/xr/actions/runs/44919373246), npm Pack Smoke [44919373281](https://github.com/ahmadrrrtx/xr/actions/runs/44919373281), Supply Chain [44919373258](https://github.com/ahmadrrrtx/xr/actions/runs/44919373258), Channel Install [44919373240](https://github.com/ahmadrrrtx/xr/actions/runs/44919373240);
+  `gh pr checks 221`: 83 pass, 1 skipped by design). It was merged on 2026-11-21 at 16:01:04 UTC, pinned to its head:
+  `99e50c2`. GitHub marked PR #220 as merged two seconds later, because its commits reached `main` through #221.
+- `main` run 6 on `99e50c2` was in progress when this was written (CI [44922229442](https://github.com/ahmadrrrtx/xr/actions/runs/44922229442), Cross-Platform [44922229495](https://github.com/ahmadrrrtx/xr/actions/runs/44922229495), Desktop App [44922229418](https://github.com/ahmadrrrtx/xr/actions/runs/44922229418), Clean-Machine Journey [44922229424](https://github.com/ahmadrrrtx/xr/actions/runs/44922229424), npm Pack Smoke [44922229455](https://github.com/ahmadrrrtx/xr/actions/runs/44922229455), Supply Chain [44922229490](https://github.com/ahmadrrrtx/xr/actions/runs/44922229490), Channel Install [44922229444](https://github.com/ahmadrrrtx/xr/actions/runs/44922229444)).
+  Channel Live [44922229486](https://github.com/ahmadrrrtx/xr/actions/runs/44922229486) failed again with NEW-11 (non-gating).
+- **NEW-14 (pre-existing; found by analysis before tagging):** `release.yml` compiled `windows-x64,windows-arm64` in
+  its `windows-latest` build entry.
+  - The repository had measured that Bun cannot extract its aarch64 Windows baseline on windows-x64 runners: Channel
+    Install run [39549149344](https://github.com/ahmadrrrtx/xr/actions/runs/39549149344) failed in "Build the canonical binary set this lane validates" on 2026-10-21.
+    Commit `19bc129f` ("bun aarch64 baseline is broken on windows-x64 runners") moved that lane's build to macOS.
+  - `release.yml` gained the arm64 target the same day (`8e677d64`) and no tag run has executed it since (v1.1.0
+    predates it; the `v1.2.0-preview.2` builds were skipped).
+  - That measurement was on Bun 1.3.14 and the pin is now 1.4.2, so the failure is likely rather than certain. A
+    failed tag costs a version, so the evidence-backed path is taken before tagging.
+- **Fix** `275be64`: the `windows` entry builds `windows-x64` only. A `windows-arm64` entry cross-compiles on
+  `macos-latest`, the host Channel Install has proven on every PR of this pass (its macOS lane builds all six targets
+  with Bun 1.4.2), and packages the arm64 portable zip there with `zip`. The `windows` entry keeps its PowerShell zip
+  for x64. `assemble` collects `binaries-*` and still asserts all eight binaries and zips.
+- **Regression tests** (`test/release/release-workflow.test.ts`): no Windows runner compiles `windows-arm64`, one
+  macOS entry does, and every target is built exactly once; the arm64 zip is packaged where its binary is built, and
+  `assemble` still demands both zips. **R2:** against the old `release.yml`, both fail; with the fix, both pass.
+  `test/release` 325/0; `ci:policy`, claim-lint and `ci-capability-gate` clean; the workflow parses (`Bun.YAML`).
+- **R7:** Phase 10 CI-fix attempt **3 of 3**. If the `v1.2.0-preview.3` tag run fails, the phase halts with a report.
+
+## HALT — Phase 10, under R7 (2026-11-21)
+
+- **Where Phase 10 stands:** all three CI-fix attempts are used.
+  1. NEW-12 `aac7944` (release gates: Linux isolation).
+  2. NEW-13 `bf261ef`, with the withdrawal of `v1.2.0-preview.2` and the 1.2.0-preview.3 preparation (PR #221: green,
+     merged as `99e50c2`).
+  3. NEW-14 `275be64` (windows-arm64 cross-compiled on macOS), PR #222.
+- **Nothing is published, and `v1.2.0-preview.3` is not tagged,** so that version is not burned.
+- **PR #222 at `f58efd5`: Cross-Platform red** ([44922590861](https://github.com/ahmadrrrtx/xr/actions/runs/44922590861)), macOS full parity only. Linux and Windows parity
+  passed. The PR changes only `release.yml`, which PR CI does not execute, and its static test. Two tests failed:
+  - `test/cli/npm-runtime-launcher.test.ts` "a termination signal sent to the launcher is forwarded to its child", at
+    line 241: the child's signal file never appeared. **This is the same test that failed on `9a5f011` in Phase 5**,
+    where it got its one rerun as a first-occurrence flake. A repeat is a defect: **NEW-15**.
+  - `test/providers/stream-settlement.test.ts:85`, the disconnect fixture's upstream error. It is a first occurrence
+    (never seen in this log), so R7 allows it one rerun.
+- **NEW-15, root cause, reproduced locally.** The test's fake runtime writes its PID file, which is the test's "ready"
+  signal, before it installs its `TERM` trap (`echo $$ > pid` then `trap … TERM`). The test sends SIGTERM as soon as the
+  PID file exists. If the launcher forwards it before the `trap` line has run, the shell dies by default and never
+  writes the signal file. With that window widened to 0.5 s in a temporary copy of the test (since deleted), the
+  current order failed 3 of 3 runs and the trap-first order passed 3 of 3. The launcher's forwarding is not at fault.
+  The SIGINT sibling test already installs its handler before writing its PID file.
+- **Candidate fix (not pushed):** install the trap before writing the PID file. The assertion and the single 4 s
+  deadline stay unchanged (R1). The regression evidence is the widened-window reproduction above.
+- `main` run 6 on `99e50c2` passed its macOS parity lane, including this test; it is intermittent. That run's Desktop
+  App was still running when this was written.
+- **Owner decision needed:** authorise one fourth Phase 10 attempt, or stop Phase 10 here.
+  - A fourth attempt would push the NEW-15 fixture fix on top of PR #222, merge once all six checks are green, then tag
+    `v1.2.0-preview.3` once that merge's `main` run is green.
+  - Stopping means no tag: the release-pipeline fixes stay merged or open, and the report records Phase 10 as halted.
+  This docs-only push is the one rerun for the stream-settlement first occurrence.
+
+## RESUMED — owner decision (2026-11-21); Phase 10 CI-fix attempt 4 (owner-authorised)
+
+- The owner authorised one fourth Phase 10 attempt (adaptations table), with all other rules kept.
+- **Branch move:** Arena closed `arena/09a66852-xr` after PR #221 merged from it. This continues on
+  `arena/299a6b9b-xr`, from `main` at `99e50c2`. PR #222's commits (`275be64` NEW-14, `f58efd5`, `5f05476`) were
+  merged in unchanged (`242b58f`). GitHub closes #222 as merged when they reach `main`.
+- **`main` run 6 on `99e50c2`: all six required checks green** (CI [44922229442](https://github.com/ahmadrrrtx/xr/actions/runs/44922229442), Cross-Platform [44922229495](https://github.com/ahmadrrrtx/xr/actions/runs/44922229495), Desktop App [44922229418](https://github.com/ahmadrrrtx/xr/actions/runs/44922229418), Clean-Machine Journey [44922229424](https://github.com/ahmadrrrtx/xr/actions/runs/44922229424), npm Pack Smoke [44922229455](https://github.com/ahmadrrrtx/xr/actions/runs/44922229455), Supply Chain [44922229490](https://github.com/ahmadrrrtx/xr/actions/runs/44922229490), Channel Install [44922229444](https://github.com/ahmadrrrtx/xr/actions/runs/44922229444)).
+  Non-gating: Channel Live failed (NEW-11), and the Real-Device Matrix failed as it already did on `main` before
+  this pass.
+- **PR #222 rerun on `5f05476`** (CI [44923995479](https://github.com/ahmadrrrtx/xr/actions/runs/44923995479), Cross-Platform [44923995612](https://github.com/ahmadrrrtx/xr/actions/runs/44923995612), Clean-Machine Journey [44923995462](https://github.com/ahmadrrrtx/xr/actions/runs/44923995462), npm Pack Smoke [44923995447](https://github.com/ahmadrrrtx/xr/actions/runs/44923995447), Supply Chain [44923995492](https://github.com/ahmadrrrtx/xr/actions/runs/44923995492), Channel Install [44923995650](https://github.com/ahmadrrrtx/xr/actions/runs/44923995650)): Cross-Platform green
+  on all three operating systems.
+  - The stream-settlement first occurrence did not repeat, so it stays a logged first-occurrence flake.
+  - The launcher test passed too. NEW-15 is still fixed: it is a repeat with a reproduced cause, and a pass on a
+    rerun does not change that.
+- **NEW-15 fix** `0ca9015` (`test/cli/npm-runtime-launcher.test.ts`):
+  - The SIGTERM test's fake runtime now comes from `termReadyChild()`, which installs the `TERM` trap first and only
+    then writes the PID file the test waits for.
+  - A lock-in test pins that order. The assertion and the single 4 s deadline are unchanged (R1).
+  - **R2:** with the window between the readiness write and the trap widened to 0.5 s in temporary copies (since
+    deleted), the old order failed 3 of 3 runs and `termReadyChild()` passed 3 of 3.
+  - `test/cli` 263/0, typecheck 0, claim-lint ✓.
+- **CHANGELOG** `80cb1ba`: the 1.2.0-preview.3 section was regenerated so the release notes include NEW-14 and NEW-15
+  (405 commits since `v1.1.0`; every cited hash resolves).
+- **Owner actions the owner asked this session to carry out (2026-11-21):**
+  - **Ruleset:** `PUT /repos/ahmadrrrtx/xr/rulesets/19119579` was attempted. It kept every rule and setting and added
+    "Desktop gate (bundles + latest.json + journey)" and "Clean-Machine Journey gate". GitHub refused it with **HTTP
+    403 "Resource not accessible by integration"**: this session's GitHub app token has no repository-administration
+    permission. A re-read showed the ruleset unchanged (4 required checks). It stays an owner action, in the web UI.
+  - **`npm deprecate` (NEW-11):** not run. There is no npm credential in this sandbox (`npm whoami` → `ENEEDAUTH`).
+    The five commands need the package owner's own npm login, with a one-time code if 2FA is on; credentials are never
+    requested in chat.
+- **Next:** this PR green, then merge, then a green `main` run, then tag `v1.2.0-preview.3` on that merge commit,
+  then `release.yml`, then a verified private draft.

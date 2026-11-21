@@ -105,7 +105,12 @@ jobs:
         include:
           - { name: linux-x64, os: ubuntu-24.04, targets: "linux-x64,linux-arm64", smoke: "linux-x64" }
           - { name: darwin, os: macos-latest, targets: "darwin-arm64,darwin-x64", smoke: "darwin-arm64" }
-          - { name: windows, os: windows-latest, targets: "windows-x64,windows-arm64", smoke: "windows-x64" }
+          - { name: windows, os: windows-latest, targets: "windows-x64", smoke: "windows-x64" }
+          # NEW-14: Bun cannot extract its aarch64 Windows baseline on windows-x64
+          # runners (channel-install run 39549149344; commit 19bc129f moved that
+          # lane's build to macOS). windows-arm64 is cross-compiled on the same
+          # proven host here; its native run is the windows-11-arm journeys.
+          - { name: windows-arm64, os: macos-latest, targets: "windows-arm64", smoke: "" }
     steps:
       - name: Checkout tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -124,9 +129,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/zip | Out-Null
           Copy-Item dist/xr-windows-x64.exe dist/zip/xr.exe
           Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-x64.zip -Force
-          Remove-Item dist/zip/xr.exe
-          Copy-Item dist/xr-windows-arm64.exe dist/zip/xr.exe
-          Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-arm64.zip -Force
+      - name: Package windows-arm64 as portable zip (cross-compiled on macOS)
+        if: matrix.name == 'windows-arm64'
+        run: |
+          mkdir -p dist/zip && cp dist/xr-windows-arm64.exe dist/zip/xr.exe
+          (cd dist/zip && zip -q ../xr-windows-arm64.zip xr.exe)
+          rm dist/zip/xr.exe
+          test -f dist/xr-windows-arm64.zip
       - name: Upload canonical binaries
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
