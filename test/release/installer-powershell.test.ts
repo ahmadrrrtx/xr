@@ -149,6 +149,27 @@ describe("install.ps1 — security posture", () => {
   });
 });
 
+// ── NEW-3: the downloaded binary is moved while Windows may still hold it ──
+describe("install.ps1 — replacing a binary that Windows still holds (NEW-3), static", () => {
+  const fn = (name: string) => new RegExp(`function ${name} \\{([\\s\\S]*?)\\n\\}`).exec(ps1Code)?.[1] ?? "";
+
+  test("both moves of the downloaded binary go through the bounded retry, never a bare Move-Item", () => {
+    const body = fn("Install-XrBinary");
+    expect(body).toContain("Get-XrExpectedSha");
+    expect(body).not.toMatch(/\bMove-Item\b/);
+    expect(body).toContain("Move-XrItemWithRetry -Path $staged -Destination $partial");
+    expect(body).toContain("Move-XrItemWithRetry -Path $partial -Destination (Join-Path $distDir $name)");
+  });
+
+  test("only a sharing or lock violation is retried, within a bounded budget, then the original error is rethrown", () => {
+    const helper = fn("Move-XrItemWithRetry");
+    expect(helper).toContain("[int]$Attempts = 30, [int]$DelayMs = 500");
+    expect(helper).toContain("[System.IO.IOException]");
+    expect(helper).toContain("$code -ne 32 -and $code -ne 33");
+    expect(helper).toMatch(/if \(\$attempt -ge \$Attempts [^\n]*\) \{ throw \}/);
+  });
+});
+
 const describeShell = shell ? describe : describe.skip;
 
 describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
@@ -279,6 +300,21 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     expect(out).not.toContain("does not belong to the set");
     expect(out).not.toContain("ValidationMetadataException");
   }, PS_SPAWN_TEST_TIMEOUT_MS);
+
+  // NEW-3: on Windows the controls hold the new binary the way a scanner or an exiting process can (readers allowed,
+  // delete and rename refused). A plain Move-Item fails under that hold with the CI journey's sharing violation (the
+  // negative control, i.e. the code before the fix); the retry waits it out, and a hold longer than the budget ends
+  // in the original sharing violation with the new binary kept.
+  test("a binary Windows still holds is replaced after a bounded retry; other errors fail at once (NEW-3)", () => {
+    const res = spawnSync(shell!, ["-NoProfile", "-File", join(ROOT, "test", "release", "installer-move-controls.ps1")], {
+      encoding: "utf8",
+      timeout: 120_000,
+      cwd: ROOT,
+      env: { ...process.env, POWERSHELL_TELEMETRY_OPTOUT: "1", POWERSHELL_UPDATECHECK: "Off" },
+    });
+    expect({ status: res.status, stderr: res.stderr }).toEqual({ status: 0, stderr: "" });
+    expect(res.stdout).toContain(`PowerShell install move controls: ${process.platform === "win32" ? 6 : 2} PASS`);
+  }, PS_SPAWN_TEST_TIMEOUT_MS * 4);
 });
 
 // ── XR-LAUNCH-025: install dir vs data home, profile validation, Bun pin ──

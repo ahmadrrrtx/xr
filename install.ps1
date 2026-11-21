@@ -255,6 +255,27 @@ function Get-XrReleaseSums {
 # Returns $true when the verified binary is installed; $false when this
 # release has no usable binary for the platform (the caller then installs the
 # verified source archive). A checksum mismatch is fatal, never a fallback.
+# NEW-3: right after a binary was written or run, Windows can still hold it for a
+# moment (the exited image is being torn down, or real-time antivirus is reading
+# the new file), and the move fails with a sharing violation; the windows-latest
+# CLI journey's "installer N+1" step failed exactly so. Only that error and the
+# lock violation are retried, for a bounded time. Anything else, or a lock that
+# outlives the budget, still stops the install with the original error.
+function Move-XrItemWithRetry {
+  param([string]$Path, [string]$Destination, [int]$Attempts = 30, [int]$DelayMs = 500)
+  for ($attempt = 1; ; $attempt++) {
+    try { Move-Item -LiteralPath $Path -Destination $Destination -Force -ErrorAction Stop; return }
+    catch {
+      $e = $_.Exception
+      while ($null -ne $e.InnerException -and -not ($e -is [System.IO.IOException])) { $e = $e.InnerException }
+      $code = $e.HResult -band 0xFFFF
+      if ($attempt -ge $Attempts -or -not ($e -is [System.IO.IOException]) -or ($code -ne 32 -and $code -ne 33)) { throw }
+      if ($attempt -eq 1) { Write-XrWarn "$(Split-Path -Leaf $Path) is in use by another process; retrying for up to $([int]($Attempts * $DelayMs / 1000)) s" }
+      Start-Sleep -Milliseconds $DelayMs
+    }
+  }
+}
+
 function Install-XrBinary {
   param([string]$TargetDirectory, [string]$ReleaseVersion, [string]$Stage, [string]$SumsPath)
   $name = Get-XrBinaryName
@@ -284,7 +305,7 @@ function Install-XrBinary {
   # only executes a file whose extension is in PATHEXT, so a '.exe.partial'
   # candidate could never pass the run check below.
   $partial = Join-Path $distDir ".partial-$name"
-  Move-Item -LiteralPath $staged -Destination $partial -Force
+  Move-XrItemWithRetry -Path $staged -Destination $partial
   $ran = $false
   try { & $partial --version 2>$null | Out-Null; $ran = ($LASTEXITCODE -eq 0) } catch { $ran = $false }
   if (-not $ran) {
@@ -294,7 +315,7 @@ function Install-XrBinary {
     Write-XrWarn 'Binary failed to run on this system.'
     return $false
   }
-  Move-Item -LiteralPath $partial -Destination (Join-Path $distDir $name) -Force
+  Move-XrItemWithRetry -Path $partial -Destination (Join-Path $distDir $name)
   Write-XrInstallMarker -TargetDirectory $TargetDirectory -ReleaseVersion $ReleaseVersion -Method 'binary'
   Write-XrOk "Compiled binary installed and verified ($name, v$ReleaseVersion)"
   return $true
