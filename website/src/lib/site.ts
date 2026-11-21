@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "1.2.0-preview.2",
-  codename: "Preview 2",
-  displayVersion: "1.2.0-preview.2 (Preview 2)",
+  version: "1.2.0-preview.3",
+  codename: "Preview 3",
+  displayVersion: "1.2.0-preview.3 (Preview 3)",
   /** Version every install channel serves (release.manifest.json channels.publicVersion). */
   publicVersion: "1.0.0",
   /** Release label (release.manifest.json identity.stability; decision D2). */
