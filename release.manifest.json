@@ -36,6 +36,10 @@
       {
         "tag": "v1.2.0-preview.2",
         "reason": "Release run 44917320963 failed at its gates job (Behavioral security + deterministic agent smoke: the runner was never given real Linux isolation, NEW-12), so nothing was built, signed or published: no GitHub release or draft, no npm version, no Docker image. The desktop tag run 44917320668 stopped at its signing preflight (no signing secrets). Superseded by 1.2.0-preview.3; see docs/release/1.2.0-preview.2/WITHDRAWN.md."
+      },
+      {
+        "tag": "v1.2.0-preview.3",
+        "reason": "Release run 44931782266 failed at its verify-release job: the slsa-provenance-subject check read only a flat DSSE envelope, while slsa-github-generator v2.1.0 writes a Sigstore bundle (NEW-17). The draft and publishing jobs were skipped, so nothing was published: no GitHub release or draft, no npm version, no Docker image. The desktop tag run 44931781798 stopped at its signing preflight (no signing secrets). Superseded by 1.2.0-preview.4; see docs/release/1.2.0-preview.3/WITHDRAWN.md."
       }
     ]
   },
