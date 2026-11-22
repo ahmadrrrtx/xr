@@ -23,8 +23,10 @@ import {
   sriHash,
 } from "../../scripts/sbom";
 import {
+  identityIsPreview,
   signingPlan,
   signingPreflight,
+  UNSIGNED_PREVIEW_INSTALLERS,
 } from "../../scripts/desktop-signing-plan";
 import {
   assertDraftOnly,
@@ -180,7 +182,7 @@ test("valid local crypto cannot hide requested missing files or substitute for s
     rmSync(dir, { recursive: true, force: true });
   }
 });
-test("all tag candidates require actual OS-signing prerequisites, not just a preview label", () => {
+test("stable tag candidates require actual OS-signing prerequisites (no prerelease identity ⇒ stable rules)", () => {
   const base = {
     tag: true,
     pubkeyCommitted: false,
@@ -193,6 +195,61 @@ test("all tag candidates require actual OS-signing prerequisites, not just a pre
   for (const os of ["windows", "macos"] as const)
     expect(signingPlan({ ...base, os }).error).toBeDefined();
   expect(signingPreflight({ ...base, tag: false })).toEqual([]);
+  expect(signingPreflight({ ...base, preview: false }).length).toBe(3);
+  for (const os of ["windows", "macos"] as const)
+    expect(signingPlan({ ...base, os, preview: false }).error).toMatch(/^(windows|macos): stable tags require/);
+});
+// Owner decision 2026-11-21 (no budget for certificates): PREVIEW tags ship unsigned desktop installers.
+test("a PREVIEW tag ships unsigned installers by owner decision; nothing claims a signature", () => {
+  const base = {
+    tag: true,
+    preview: true,
+    pubkeyCommitted: false,
+    hasUpdaterKey: false,
+    hasAppleCert: false,
+    hasAppleNotary: false,
+    hasWindowsCert: false,
+  };
+  expect(UNSIGNED_PREVIEW_INSTALLERS).toBe(true);
+  expect(signingPreflight(base)).toEqual([]);
+  for (const os of ["windows", "macos", "linux"] as const) {
+    const plan = signingPlan({ ...base, os });
+    expect(plan.error).toBeUndefined();
+    expect(plan.signedOs).toBe(false);
+    expect(plan.notarized).toBe(false);
+    expect(plan.adhocSigned).toBe(os === "macos");
+    if (os !== "linux") expect(plan.notices.join(" ")).toContain("PREVIEW tag shipping without OS signing");
+  }
+});
+test("a PREVIEW tag still refuses half-provisioned signing material and a missing updater key", () => {
+  const base = {
+    tag: true,
+    preview: true,
+    pubkeyCommitted: false,
+    hasUpdaterKey: false,
+    hasAppleCert: false,
+    hasAppleNotary: false,
+    hasWindowsCert: false,
+  };
+  expect(signingPreflight({ ...base, hasAppleCert: true })).toEqual([
+    "APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID (the Apple certificate is set, so notarization must be too)",
+  ]);
+  expect(signingPlan({ ...base, os: "macos", hasAppleCert: true }).error).toContain("notarized");
+  expect(signingPlan({ ...base, os: "windows", hasWindowsCert: true }).error).toContain("thumbprint");
+  expect(signingPreflight({ ...base, pubkeyCommitted: true })).toEqual(["TAURI_UPDATER_KEY"]);
+  expect(signingPlan({ ...base, os: "linux", pubkeyCommitted: true }).error).toContain("TAURI_UPDATER_KEY");
+});
+test("the preview decision reads the committed release identity: prerelease versions only", () => {
+  const id = (version: string) => JSON.stringify({ identity: { version } });
+  expect(identityIsPreview(id("1.2.0-preview.4"))).toBe(true);
+  expect(identityIsPreview(id("2.0.0-rc.1"))).toBe(true);
+  expect(identityIsPreview(id("1.2.0"))).toBe(false);
+  expect(identityIsPreview(id("1.2.0+build.7"))).toBe(false);
+  expect(identityIsPreview(id("v1.2.0-preview.4"))).toBe(false);
+  expect(identityIsPreview(JSON.stringify({}))).toBe(false);
+  expect(identityIsPreview(readFileSync(join(import.meta.dir, "..", "..", "release.manifest.json"), "utf8"))).toBe(
+    true,
+  );
 });
 test("release preparation never replaces a published release", async () => {
   await expect(
