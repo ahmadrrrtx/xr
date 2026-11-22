@@ -1225,7 +1225,8 @@ The version follows the owner's delegation (adaptations table). The release goes
     line 241: the child's signal file never appeared. **This is the same test that failed on `9a5f011` in Phase 5**,
     where it got its one rerun as a first-occurrence flake. A repeat is a defect: **NEW-15**.
   - `test/providers/stream-settlement.test.ts:85`, the disconnect fixture's upstream error. It is a first occurrence
-    (never seen in this log), so R7 allows it one rerun.
+    (never seen in this log), so R7 allows it one rerun. *(Corrected 2026-11-22: this was not a failing test. Bun
+    prints the fixture's expected error as an annotation on every run; see "Phase 11 CI on `5ad10c2`".)*
 - **NEW-15, root cause, reproduced locally.** The test's fake runtime writes its PID file, which is the test's "ready"
   signal, before it installs its `TERM` trap (`echo $$ > pid` then `trap … TERM`). The test sends SIGTERM as soon as the
   PID file exists. If the launcher forwards it before the `trap` line has run, the shell dies by default and never
@@ -1253,7 +1254,8 @@ The version follows the owner's delegation (adaptations table). The release goes
   this pass.
 - **PR #222 rerun on `5f05476`** (CI [44923995479](https://github.com/ahmadrrrtx/xr/actions/runs/44923995479), Cross-Platform [44923995612](https://github.com/ahmadrrrtx/xr/actions/runs/44923995612), Clean-Machine Journey [44923995462](https://github.com/ahmadrrrtx/xr/actions/runs/44923995462), npm Pack Smoke [44923995447](https://github.com/ahmadrrrtx/xr/actions/runs/44923995447), Supply Chain [44923995492](https://github.com/ahmadrrrtx/xr/actions/runs/44923995492), Channel Install [44923995650](https://github.com/ahmadrrrtx/xr/actions/runs/44923995650)): Cross-Platform green
   on all three operating systems.
-  - The stream-settlement first occurrence did not repeat, so it stays a logged first-occurrence flake.
+  - The stream-settlement first occurrence did not repeat, so it stays a logged first-occurrence flake. *(Corrected
+    2026-11-22: it was never a failure; see "Phase 11 CI on `5ad10c2`".)*
   - The launcher test passed too. NEW-15 is still fixed: it is a repeat with a reproduced cause, and a pass on a
     rerun does not change that.
 - **NEW-15 fix** `0ca9015` (`test/cli/npm-runtime-launcher.test.ts`):
@@ -1480,3 +1482,26 @@ The version follows the owner's delegation (adaptations table). The release goes
     also what publishes to npm through OIDC.
   - The SUPERSEDED note on v1.1.0, which waits until a preview is public.
 - **Phase 10 is done.** Phase 11 (`HARDENING_REPORT.md`) follows.
+
+### Phase 11 CI on `5ad10c2` (PR #226) — one first-occurrence macOS timing failure (rerun); a misread annotation corrected
+
+- PR #226 changes only `HARDENING_LOG.md`, `HARDENING_REPORT.md` and the evidence text of two launch gates.
+- Green: CI [45080402664](https://github.com/ahmadrrrtx/xr/actions/runs/45080402664), Supply Chain [45080402758](https://github.com/ahmadrrrtx/xr/actions/runs/45080402758), npm Pack Smoke [45080402599](https://github.com/ahmadrrrtx/xr/actions/runs/45080402599) and Clean-Machine Journey [45080402566](https://github.com/ahmadrrrtx/xr/actions/runs/45080402566).
+- **Red: Cross-Platform [45080402628](https://github.com/ahmadrrrtx/xr/actions/runs/45080402628)**, macOS full parity only. Its one failed
+  segment is `test/perf/`: "TtlCache primitive › stale-while-revalidate serves stale and refreshes once in the
+  background" (`test/perf/runtime-detection.test.ts:353`, `isFresh` false).
+  - The test gives a 50 ms TTL and then waits a fixed 30 ms after the background refresh starts. A timer more than
+    about 20 ms late on a busy runner lets the refreshed entry age past its TTL.
+  - The test is unchanged since 2026-10-22 and is unrelated to this docs-only change. It has never failed before in
+    this log, so it is a **first occurrence**, and R7 allows it one rerun: this docs-only push. A repeat would be a
+    defect.
+- **Correction: the stream-settlement annotation is not a failure.**
+  - The same run also carries an annotation at `test/providers/stream-settlement.test.ts:85` ("error: fixture upstream
+    disconnect"), as PR #222's run did. In neither run did the `test/providers/` segment fail. The parity runner names
+    every failed segment: PR #222 had only `test/cli/` (NEW-15), and this run has only `test/perf/`.
+  - Locally, `GITHUB_ACTIONS=true bun test test/providers/stream-settlement.test.ts` passes 4 of 4 and still prints
+    `::error file=test/providers/stream-settlement.test.ts,line=85,…`. Bun prints the disconnect fixture's expected
+    upstream error, with that annotation, on every run.
+  - So the "stream-settlement first occurrence" recorded for PR #222 was a misread annotation, not a failing test.
+    The two earlier entries are marked as corrected. No defect, no attempt used.
+- The Desktop App run on `5ad10c2` was still running when this push superseded it.
