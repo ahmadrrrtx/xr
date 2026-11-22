@@ -112,9 +112,11 @@ export function provenanceMatches(
       .map((l) => JSON.parse(l));
   }
   return records.some((record) => {
+    // slsa-github-generator v2 writes a Sigstore bundle: the DSSE envelope sits under `dsseEnvelope` (NEW-17).
+    const envelope = record?.dsseEnvelope ?? record;
     const statement =
-      record.payload !== undefined
-        ? JSON.parse(Buffer.from(record.payload, "base64").toString("utf8"))
+      envelope?.payload !== undefined
+        ? JSON.parse(Buffer.from(envelope.payload, "base64").toString("utf8"))
         : record;
     return (
       Array.isArray(statement?.subject) &&
@@ -126,6 +128,13 @@ export function provenanceMatches(
       )
     );
   });
+}
+/** GitHub Actions annotations for the failed checks: the per-check lines only reach the job log, so a CI failure
+ * must also name its check where the annotations API shows it (NEW-17 was diagnosed blind). */
+export function failureAnnotations(report: VerificationReport): string[] {
+  return report.checks
+    .filter((c) => !c.ok)
+    .map((c) => `::error title=verify-release::${c.name}${c.detail ? ` — ${c.detail}` : ""}`);
 }
 export interface VerificationInput {
   artifact: string;
@@ -404,5 +413,6 @@ if (import.meta.main) {
       );
     console.log(report.ok ? "VERIFIED REQUESTED FACETS" : "NOT VERIFIED");
   }
+  if (process.env.GITHUB_ACTIONS === "true") for (const line of failureAnnotations(report)) console.log(line);
   process.exitCode = report.ok ? 0 : 1;
 }

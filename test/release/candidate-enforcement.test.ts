@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   parseSums,
+  failureAnnotations,
   provenanceMatches,
   validateSbom,
   verifyRelease,
@@ -96,6 +97,35 @@ test("DSSE subject matching is name+digest only, never authentication", () => {
   expect(provenanceMatches(dsse, "xr.tgz", digest)).toBe(true);
   expect(provenanceMatches(dsse, "other.tgz", digest)).toBe(false);
   expect(provenanceMatches(dsse, "xr.tgz", "bb".repeat(32))).toBe(false);
+});
+// NEW-17: slsa-github-generator v2.1.0 writes the provenance as a Sigstore bundle, with the DSSE envelope one level
+// down. The v1.2.0-preview.3 tag run: slsa-verifier authenticated the subject, while this check found none.
+test("a Sigstore bundle (slsa-github-generator v2) is read through its DSSE envelope (NEW-17)", () => {
+  const digest = "aa".repeat(32),
+    statement = { subject: [{ name: "rrrtx-xr-1.2.0-preview.4.tgz", digest: { sha256: digest } }] };
+  const bundle = JSON.stringify({
+    mediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+    verificationMaterial: {},
+    dsseEnvelope: {
+      payloadType: "application/vnd.in-toto+json",
+      payload: Buffer.from(JSON.stringify(statement)).toString("base64"),
+      signatures: [],
+    },
+  });
+  expect(provenanceMatches(bundle, "dist/rrrtx-xr-1.2.0-preview.4.tgz", digest)).toBe(true);
+  expect(provenanceMatches(bundle, "other.tgz", digest)).toBe(false);
+  expect(provenanceMatches(bundle, "rrrtx-xr-1.2.0-preview.4.tgz", "bb".repeat(32))).toBe(false);
+});
+test("in GitHub Actions every failed check becomes an annotation that names it (NEW-17)", () => {
+  expect(
+    failureAnnotations({
+      ok: false,
+      checks: [
+        { name: "slsa-provenance-subject", ok: false, detail: "subject name/digest only; NOT builder authentication" },
+        { name: "artifact-sha256", ok: true },
+      ],
+    }),
+  ).toEqual(["::error title=verify-release::slsa-provenance-subject — subject name/digest only; NOT builder authentication"]);
 });
 test("valid local crypto cannot hide requested missing files or substitute for strict release evidence", async () => {
   const dir = mkdtempSync(join(tmpdir(), "xr-candidate-verify-"));
