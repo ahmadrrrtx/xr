@@ -21,6 +21,7 @@ const pub = readFileSync(join(FIX, "tauri-test.pub"), "utf8");
 const sig = readFileSync(join(FIX, "payload.bin.sig"), "utf8");
 const payload = readFileSync(join(FIX, "payload.bin"));
 
+const ADHOC_CONFIG = { bundle: { macOS: { signingIdentity: "-", hardenedRuntime: false } } };
 const base: PlanInput = { os: "linux", tag: false, pubkeyCommitted: false, hasUpdaterKey: false, hasAppleCert: false, hasAppleNotary: false, hasWindowsCert: false };
 
 describe("signing plan — missing secrets give an honest unsigned build", () => {
@@ -28,7 +29,9 @@ describe("signing plan — missing secrets give an honest unsigned build", () =>
     for (const os of ["linux", "macos", "windows"] as const) {
       const p = signingPlan({ ...base, os });
       expect(p.error).toBeUndefined();
-      expect(p.config).toEqual({});
+      // macOS without a Developer ID is ad-hoc sealed (owner decision 2026-11-21); the other platforms get no config.
+      expect(p.config).toEqual(os === "macos" ? ADHOC_CONFIG : {});
+      expect(p.adhocSigned).toBe(os === "macos");
       expect(p.signedOs).toBe(false);
       expect(p.updaterArtifacts).toBe(false);
       if (os !== "linux") expect(p.notices.join(" ")).toContain("UNSIGNED");
@@ -62,6 +65,31 @@ describe("signing plan — missing secrets give an honest unsigned build", () =>
     const ok = signingPlan({ ...base, os: "macos", hasAppleCert: true, hasAppleNotary: true, tag: true });
     expect(ok.error).toBeUndefined();
     expect(ok.notarized).toBe(true);
+  });
+
+  test("macos without a Developer ID: ad-hoc seal, no hardened runtime, never reported as signed or notarized", () => {
+    for (const tag of [false, true]) {
+      const p = signingPlan({ ...base, os: "macos", tag, preview: true });
+      expect(p.config).toEqual(ADHOC_CONFIG);
+      expect(p.adhocSigned).toBe(true);
+      expect(p.signedOs).toBe(false);
+      expect(p.notarized).toBe(false);
+      expect(p.notices.join(" ")).toContain("AD-HOC sealed");
+      expect(p.notices.join(" ")).toContain("Open Anyway");
+    }
+    // A provisioned Developer ID replaces the ad-hoc seal; it is never combined with it.
+    const dev = signingPlan({ ...base, os: "macos", hasAppleCert: true, hasAppleNotary: true, tag: true });
+    expect(dev.adhocSigned).toBe(false);
+    expect(dev.config).toEqual({});
+  });
+
+  test("the workflow checks the ad-hoc seal on the .app and inside the .dmg", () => {
+    const wf = readFileSync(join(import.meta.dir, "..", "..", ".github", "workflows", "desktop-app.yml"), "utf8");
+    const step = wf.slice(wf.indexOf("Verify macOS ad-hoc seal"));
+    expect(wf).toContain("env.XR_ADHOC_SIGNED == '1'");
+    expect(step).toContain("codesign --verify --deep --strict");
+    expect(step).toContain("Signature=adhoc");
+    expect(step).toContain("hdiutil attach -nobrowse -readonly");
   });
 
   test("the workflow wires the plan, the OS verifiers and the manifest verifier", () => {

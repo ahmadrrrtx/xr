@@ -21,6 +21,11 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | R7 a third time: Phase 10 halted after three attempts | NEW-15 (a repeat of the macOS launcher-test failure) was root-caused to a test-fixture race; the fix would be a fourth attempt | **Owner (ahmadrrrtx) authorised one fourth Phase 10 attempt on 2026-11-21**, all other rules kept |
 | Merging PR #215 and pushing a release tag | Both change shared state that is hard to undo; the brief lists the merge (Phase 8) and the release (Phase 10) | **Owner (ahmadrrrtx) approved on 2026-11-21:** merge PR #215 with a merge commit once Phase 7 is green (done: `23090ee`); in Phase 10, push tag `v1.2.0-preview.2` for a verified PRIVATE draft only; the SUPERSEDED note on v1.1.0 is applied only once 1.2.0-preview.2 is public |
 | The `v1.2.0-preview.2` tag run failed at its gates (NEW-12) | A tag always runs its own commit's workflow, so that tag can never pass; re-pointing it would rewrite a published ref | **Owner (ahmadrrrtx) decided on 2026-11-21:** withdraw `v1.2.0-preview.2` (`channels.withdrawnTags`, never reused, not deleted or moved, as with v1.1.0) and release **1.2.0-preview.3**, tag `v1.2.0-preview.3`, verified PRIVATE draft only |
+| Ruleset with all six required checks | The ruleset `PUT` returned 403: this session's GitHub app token has no repository-administration permission | **Owner (ahmadrrrtx) added "Desktop gate (bundles + latest.json + journey)" and "Clean-Machine Journey gate" in the web UI on 2026-11-21.** Re-read through the API on 2026-11-22: ruleset 19119579 enforces all six required checks |
+| `npm deprecate` for the five retired 3.x versions (NEW-11) | Needs the package owner's npm login; this sandbox has no npm credential | **Owner (ahmadrrrtx) decided on 2026-11-21 to leave it** (his npm login kept looping). NEW-11 stays OWNER-BLOCKED, so Channel Live stays red for that reason |
+| Every desktop tag needs OS signing (project policy since `7f89e598`, 2026-10-27) | The owner has no budget for certificates: Apple Developer Program US$99 a year; Azure Artifact Signing admits individuals only in the USA and Canada; HSM-bound commercial certificates cost about US$100–300+ a year (NEW-16) | **Owner (ahmadrrrtx) decided on 2026-11-21: build the installers without signing keys** ("research free ways and create installers"). Preview tags now ship unsigned Windows installers and an ad-hoc sealed macOS app (`187b0d1`). Stable tags still require signing, and half-provisioned material still fails. This is an owner-directed policy change, not a gate the agent weakened. A free route for later is in `docs/release/DESKTOP_SIGNING.md` (SignPath Foundation) |
+| R7 a fourth time: Phase 10 halted after its owner-authorised fourth attempt | The `v1.2.0-preview.3` tag run failed only at verify-release (NEW-17) | **Owner (ahmadrrrtx) authorised a fifth Phase 10 attempt on 2026-11-21**, after reading the failing check in the job log (`✗ slsa-provenance-subject`, `✓ slsa-builder-authentication`). All other rules kept |
+| R7 a fifth time: Phase 10 halted after its owner-authorised fifth attempt | PR #225 had 5 of 6 required checks green; Supply Chain failed on RUSTSEC-2026-0592, an advisory published that day against the locked `url 2.5.8` (NEW-18) | **Owner (ahmadrrrtx) authorised a sixth Phase 10 attempt on 2026-11-22** (push the `url 2.5.9` fix, then merge, tag and the private draft). All other rules kept |
 
 ## Phase 0 — NOTES (exact commands)
 
@@ -99,7 +104,7 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 7 — security sweep (C3–C8, lock-ins, C16) | `dba65dc` `c3a6e09` `dcf954d` | head `d1f7f6d`: CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288) ✓ · Cross-Platform [44892794304](https://github.com/ahmadrrrtx/xr/actions/runs/44892794304) ✓ · Desktop App [44892794282](https://github.com/ahmadrrrtx/xr/actions/runs/44892794282) ✓ · Clean-Machine Journey [44892794346](https://github.com/ahmadrrrtx/xr/actions/runs/44892794346) ✓ · npm Pack Smoke [44892794255](https://github.com/ahmadrrrtx/xr/actions/runs/44892794255) ✓ · Supply Chain [44892794294](https://github.com/ahmadrrrtx/xr/actions/runs/44892794294) ✓ · Channel Install [44892794245](https://github.com/ahmadrrrtx/xr/actions/runs/44892794245) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
 | 8 — CI: actionlint, required-check names, merge, 3 green `main` runs | merges `23090ee` (PR #215), `4ea49e2` (PR #216), `1397292` (PR #217); NEW-3 fix `8d1b98b` | `main` run 1 `23090ee`: CI [44898171204](https://github.com/ahmadrrrtx/xr/actions/runs/44898171204) ✓ · Cross-Platform [44898171045](https://github.com/ahmadrrrtx/xr/actions/runs/44898171045) ✓ · Desktop App [44898171222](https://github.com/ahmadrrrtx/xr/actions/runs/44898171222) ✓ · Clean-Machine Journey [44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078) ✓ · npm Pack Smoke [44898171035](https://github.com/ahmadrrrtx/xr/actions/runs/44898171035) ✓ · Supply Chain [44898171079](https://github.com/ahmadrrrtx/xr/actions/runs/44898171079) ✓ · Channel Install [44898171046](https://github.com/ahmadrrrtx/xr/actions/runs/44898171046) ✓ — run 2 `4ea49e2`: CI [44902873796](https://github.com/ahmadrrrtx/xr/actions/runs/44902873796) ✓ · Cross-Platform [44902873864](https://github.com/ahmadrrrtx/xr/actions/runs/44902873864) ✓ · Desktop App [44902873729](https://github.com/ahmadrrrtx/xr/actions/runs/44902873729) ✓ · Clean-Machine Journey [44902873728](https://github.com/ahmadrrrtx/xr/actions/runs/44902873728) ✓ · npm Pack Smoke [44902873760](https://github.com/ahmadrrrtx/xr/actions/runs/44902873760) ✓ · Supply Chain [44902873925](https://github.com/ahmadrrrtx/xr/actions/runs/44902873925) ✓ · Channel Install [44902873752](https://github.com/ahmadrrrtx/xr/actions/runs/44902873752) ✓ — run 3 `1397292`: CI [44906486932](https://github.com/ahmadrrrtx/xr/actions/runs/44906486932) ✓ · Cross-Platform [44906486922](https://github.com/ahmadrrrtx/xr/actions/runs/44906486922) ✓ · Desktop App [44906486914](https://github.com/ahmadrrrtx/xr/actions/runs/44906486914) ✓ · Clean-Machine Journey [44906486939](https://github.com/ahmadrrrtx/xr/actions/runs/44906486939) ✓ · npm Pack Smoke [44906487005](https://github.com/ahmadrrrtx/xr/actions/runs/44906487005) ✓ · Supply Chain [44906486940](https://github.com/ahmadrrrtx/xr/actions/runs/44906486940) ✓ · Channel Install [44906486963](https://github.com/ahmadrrrtx/xr/actions/runs/44906486963) ✓ | **done**: 3 consecutive green `main` runs (all six required checks each); 1 of 3 CI-fix attempts used |
 | 9 — docs: CHANGELOG section, launch-gate evidence | `67f0315` `9337a09` | head `6a53e67` (PR #218): CI [44909028062](https://github.com/ahmadrrrtx/xr/actions/runs/44909028062) ✓ · Cross-Platform [44909028066](https://github.com/ahmadrrrtx/xr/actions/runs/44909028066) ✓ · Desktop App [44909028071](https://github.com/ahmadrrrtx/xr/actions/runs/44909028071) ✓ · Clean-Machine Journey [44909028048](https://github.com/ahmadrrrtx/xr/actions/runs/44909028048) ✓ · npm Pack Smoke [44909028033](https://github.com/ahmadrrrtx/xr/actions/runs/44909028033) ✓ · Supply Chain [44909028075](https://github.com/ahmadrrrtx/xr/actions/runs/44909028075) ✓ · Channel Install [44909028023](https://github.com/ahmadrrrtx/xr/actions/runs/44909028023) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design); merged as `5b1ca0a` |
-| 10 — release (B16, C1): 1.2.0-preview.2 withdrawn → 1.2.0-preview.3 | `821fcde` `ba7e6a7` `a63a0c4`; NEW-12 `aac7944`; NEW-13 `bf261ef`; withdrawal `a19e6cf`; Preview 3 `62e7a14` `76e6049` `b7968d2`; NEW-14 `275be64`; NEW-15 `0ca9015` | PR #219 head `5e360c7`: CI [44911981493](https://github.com/ahmadrrrtx/xr/actions/runs/44911981493) ✓ · Cross-Platform [44911981497](https://github.com/ahmadrrrtx/xr/actions/runs/44911981497) ✓ · Desktop App [44911981509](https://github.com/ahmadrrrtx/xr/actions/runs/44911981509) ✓ · Clean-Machine Journey [44911981574](https://github.com/ahmadrrrtx/xr/actions/runs/44911981574) ✓ · npm Pack Smoke [44911981533](https://github.com/ahmadrrrtx/xr/actions/runs/44911981533) ✓ · Supply Chain [44911981594](https://github.com/ahmadrrrtx/xr/actions/runs/44911981594) ✓ · Channel Install [44911981607](https://github.com/ahmadrrrtx/xr/actions/runs/44911981607) ✓ — `main` `08a04cd` run 5 ✓ — tag `v1.2.0-preview.2`: Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963) ✗ (NEW-12, nothing published) | in-progress (CI-fix attempt 4, owner-authorised) |
+| 10 — release (B16, C1): 1.2.0-preview.2 and 1.2.0-preview.3 withdrawn → 1.2.0-preview.4 | `821fcde` `ba7e6a7` `a63a0c4`; NEW-12 `aac7944`; NEW-13 `bf261ef`; withdrawal `a19e6cf`; Preview 3 `62e7a14` `76e6049` `b7968d2`; NEW-14 `275be64`; NEW-15 `0ca9015`; NEW-17 `0f0d378`; unsigned preview installers `187b0d1`; withdrawal `55f6a2b`; Preview 4 `4dd8ed3` `e1db8e6` `54076e6` | PR #219 head `5e360c7`: CI [44911981493](https://github.com/ahmadrrrtx/xr/actions/runs/44911981493) ✓ · Cross-Platform [44911981497](https://github.com/ahmadrrrtx/xr/actions/runs/44911981497) ✓ · Desktop App [44911981509](https://github.com/ahmadrrrtx/xr/actions/runs/44911981509) ✓ · Clean-Machine Journey [44911981574](https://github.com/ahmadrrrtx/xr/actions/runs/44911981574) ✓ · npm Pack Smoke [44911981533](https://github.com/ahmadrrrtx/xr/actions/runs/44911981533) ✓ · Supply Chain [44911981594](https://github.com/ahmadrrrtx/xr/actions/runs/44911981594) ✓ · Channel Install [44911981607](https://github.com/ahmadrrrtx/xr/actions/runs/44911981607) ✓ — `main` `08a04cd` run 5 ✓ — tag `v1.2.0-preview.2`: Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963) ✗ (NEW-12, nothing published) — `main` `b46173a` run 7 ✓ — tag `v1.2.0-preview.3`: Release [44931782266](https://github.com/ahmadrrrtx/xr/actions/runs/44931782266) ✗ (NEW-17, nothing published) — PR #225 `d2aeab7`: 5 of 6 ✓, Supply Chain [45066085322](https://github.com/ahmadrrrtx/xr/actions/runs/45066085322) ✗ (NEW-18) | in-progress (CI-fix attempt 6, owner-authorised; NEW-18 fix `367288e`) |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -1269,3 +1274,152 @@ The version follows the owner's delegation (adaptations table). The release goes
     requested in chat.
 - **Next:** this PR green, then merge, then a green `main` run, then tag `v1.2.0-preview.3` on that merge commit,
   then `release.yml`, then a verified private draft.
+
+## HALT — Phase 10 again, under R7 (2026-11-21): the owner-authorised fourth attempt is used
+
+- PR #223 (attempt 4) passed all six required checks on `e3937a1`. It was merged on 2026-11-21 at 17:12:53 UTC as
+  `b46173a`, and GitHub marked PR #222 as merged. `main` run 7 on `b46173a` passed all six required checks.
+- Tag `v1.2.0-preview.3` was pushed on `b46173a`, with the owner's approval. **Release [44931782266](https://github.com/ahmadrrrtx/xr/actions/runs/44931782266): failure.**
+  - **Passed:** Release gates, now with real Linux isolation (NEW-12 holds); the four builds, with windows-arm64 on
+    macOS (NEW-14 holds); Assemble; cosign keyless signing, including its fail-closed re-verification of
+    `SHA256SUMS`; the SLSA provenance generator; every tag CLI and Docker journey; and the whole tag supply chain.
+  - **Failed:** "Verify signed artifacts (verify-release.ts)", step "verify-release.ts against the signed npm tarball
+    + SBOM + sums" (exit 1). The script prints its per-check ✓/✗ lines only to the job log, which this sandbox
+    cannot download (blob storage), and the step raises no annotation naming the check. So the draft job was
+    skipped. **No release or draft exists for the tag; nothing was published.**
+  - The desktop tag run [44931781798](https://github.com/ahmadrrrtx/xr/actions/runs/44931781798) stopped at its signing preflight, by design (OWNER-BLOCKED).
+- **NEW-17 (pre-existing; blocks Phase 10):** `verify-release.ts` fails on the first tag run that reached it, and
+  without the log the failing check is unknown. What this sandbox could narrow down:
+  - The release SBOM, generated exactly as Assemble does, validates (`validateSbom`: CycloneDX 1.5, root
+    `1.2.0-preview.3`, 1,202 components, no missing or malformed hashes, no dangling references).
+  - `SHA256SUMS` covers all of `dist/`, and the signed bundle carries all of `dist/`, so the strict inventory should
+    hold.
+  - The SLSA generator is referenced by tag (`v2.1.0`), as `slsa-verifier` requires.
+  - Still open, needing the artifacts or the log: cosign verification of the tarball and SBOM against the exact tag
+    identity (the sign job re-verified only `SHA256SUMS`, with an identity regexp), `slsa-verifier`'s builder and
+    source-tag check, and the provenance-subject check.
+- **NEW-16 (owner action, found while writing the signing guide):** the desktop tag build takes Windows signing
+  material as `WINDOWS_CERTIFICATE`, a base64 `.pfx`. Since 1 June 2023 public CAs issue code-signing keys only on
+  hardware tokens or cloud HSMs, never as a downloadable `.pfx`. A new certificate therefore cannot be supplied
+  this way. Once the owner picks a provider, the step has to use that provider's signing tool (for example SSL.com
+  eSigner, DigiCert KeyLocker or Certum). Microsoft's Artifact Signing admits individuals only in the US and Canada.
+- **R7:** four attempts are used, the fourth owner-authorised. **Halted.**
+- **`v1.2.0-preview.3`:** under the repository's rule and the owner's preview.2 decision, a tag whose release run
+  failed is withdrawn and never reused. That entry lands with the next attempt.
+- **Owner decision needed:**
+  1. The ✗ lines of that step, read in the browser from the job log; they name the failing check without spending a
+     tag on diagnostics.
+  2. Either a fifth attempt (fix NEW-17, make a failing check raise an annotation, withdraw preview.3, release
+     1.2.0-preview.4) or stopping Phase 10 here with nothing published.
+
+## RESUMED — owner decision (2026-11-21); Phase 10 CI-fix attempt 5 (owner-authorised)
+
+- The owner read the failing step's job log and pasted its lines: `✗ slsa-provenance-subject`,
+  `✓ slsa-builder-authentication`, "NOT VERIFIED". He authorised a fifth attempt with all other rules kept, chose
+  unsigned installers, and set up the two missing ruleset checks himself (adaptations table).
+- **Branch move:** Arena closed `arena/299a6b9b-xr` after PR #223 merged from it. This continues on
+  `arena/9e4d45cf-xr`, from `main` at `b46173a`. PR #224's commit (`063bb74`, the attempt-4 HALT record) was merged
+  in unchanged (`da18130`). GitHub closes #224 as merged when it reaches `main`.
+- **`main` run 7 on `b46173a`: all six required checks green** (CI [44928813072](https://github.com/ahmadrrrtx/xr/actions/runs/44928813072), Cross-Platform [44928813134](https://github.com/ahmadrrrtx/xr/actions/runs/44928813134), Desktop App [44928813085](https://github.com/ahmadrrrtx/xr/actions/runs/44928813085), Clean-Machine Journey [44928813130](https://github.com/ahmadrrrtx/xr/actions/runs/44928813130), npm Pack Smoke [44928813040](https://github.com/ahmadrrrtx/xr/actions/runs/44928813040), Supply Chain [44928813047](https://github.com/ahmadrrrtx/xr/actions/runs/44928813047), Channel Install [44928813039](https://github.com/ahmadrrrtx/xr/actions/runs/44928813039)).
+  That makes 7 consecutive green `main` runs; gate 012 needs 10.
+- **Ruleset 19119579**, re-read through the API: it now enforces all six required checks.
+- **NEW-17, cause:** slsa-github-generator v2.1.0 signs the provenance with the Sigstore bundle signer, so its
+  `.intoto.jsonl` line is a whole Sigstore bundle with the DSSE envelope under `dsseEnvelope`. `provenanceMatches()`
+  in `scripts/verify-release.ts` read only a flat DSSE record (`record.payload`) or a bare statement, so it found
+  no subject. `slsa-verifier` had authenticated the same file.
+- **NEW-17, fix** `0f0d378`: `provenanceMatches()` reads the statement through `record.dsseEnvelope` when present;
+  the flat-envelope and bare-statement cases are unchanged, and matching is still name + digest only. Under
+  `GITHUB_ACTIONS`, every failed check also prints an `::error::` annotation that names it
+  (`failureAnnotations()`), so the next failure is readable through the annotations API.
+  - **R2:** on a bundle-shaped record the old function returned `false` and the new one `true`; a flat envelope
+    returns `true` in both. Two tests in `test/release/candidate-enforcement.test.ts`, next to "DSSE subject
+    matching is name+digest only, never authentication".
+- **Unsigned preview installers** `187b0d1` (owner decision; `scripts/desktop-signing-plan.ts`,
+  `.github/workflows/desktop-app.yml`, `docs/release/DESKTOP_SIGNING.md`):
+  - A preview tag (prerelease identity, read from `release.manifest.json`; `release.yml` already requires the tag
+    to equal it) passes the signing preflight with no material and prints a notice saying the installers ship
+    unsigned. Stable tags still need Developer ID + notarization and Authenticode. An Apple certificate without
+    notarization, a Windows certificate without a valid thumbprint and a committed updater key without its private
+    key still fail on previews.
+  - Without a Developer ID, every macOS build (PRs included, so CI exercises the path before any tag) is ad-hoc
+    sealed: `signingIdentity: "-"`, hardened runtime off. Never reported as signed or notarized
+    (`XR_SIGNED_OS=0`, new `XR_ADHOC_SIGNED=1`). Unsealed downloads read as "damaged" on Apple Silicon, with no way
+    to open them.
+  - A new bundle step checks the seal on the `.app` and on the copy inside every `.dmg`
+    (`codesign --verify --deep --strict`, `Signature=adhoc`). Shellcheck 0.11.0, the version CI pins, finds nothing
+    in it. actionlint itself could not run here (its release download is unreachable).
+  - **Tests:** 5 new ones (preview tags pass without material; half-provisioned material still fails on previews;
+    the identity check; the ad-hoc plan; the workflow wiring). Two existing tests changed with the policy, both
+    still exact: "no secrets anywhere" now expects the ad-hoc config for macOS instead of `{}`, and "all tag
+    candidates require actual OS-signing prerequisites, not just a preview label" is renamed "stable tag candidates
+    require…", with its assertions kept and two added. **R2:** the old planner fails the new tests.
+  - **Tag-only paths re-read before tagging:**
+    - The updater is not provisioned (empty pubkey), so a tag skips `latest.json` the same way PRs do.
+    - The `xr-updater-sigs-` artifact prefix is accepted by `desktop-release-assets.ts`, which de-duplicates
+      identical bytes.
+    - The `desktop-signing` environment does not exist yet. GitHub creates it on first use, with no reviewers.
+    - `release-assets-check` fails only on missing assets, so the desktop files on the shared draft cannot break it.
+    - softprops adopts an existing draft in either order, keeping its body and draft state.
+  - **Research (2026-11-22):** SignPath Foundation signs Windows files free for OSI-licensed projects (MIT
+    qualifies). The certificate is issued to "SignPath Foundation", every release needs a manual approval, and the
+    project needs "a certain verifiable reputation"; apply after Preview 4 has some public use. macOS has no free
+    notarization path. Linux needs no OS signing.
+- **NEW-16:** moot for previews under the owner's decision. It still applies the day a stable tag is signed.
+- **Withdrawal** `55f6a2b`: `v1.2.0-preview.3` in `channels.withdrawnTags`, plus
+  `docs/release/1.2.0-preview.3/WITHDRAWN.md`. The tag is not deleted or moved.
+- **Preview 4:** known limitations `4dd8ed3`, with the unsigned-installer steps; identity bump `e1db8e6`
+  (`release:stamp`: 10 surfaces; `channel:sync`; `api:schema:generate`; `size-gate --stamp-docs`: already in
+  sync); CHANGELOG `54076e6` (413 commits since `v1.1.0`; all 413 cited hashes resolve).
+- **Local verification:** typecheck, `release:check`, `channel:check`, claim-lint, `changelog:check`,
+  `api:schema:check`, `client:check`, `api:compat`, `ownership:check`, `platform:parity:check`, `size-gate`,
+  `ci:policy`, `ci-capability-gate`, `hot-path-lint` all pass. `boundaries` reports only the pre-existing
+  `no-orphans` warning. Test batches: release 332 (17 skipped), update 38, phase0 217, core 121, journey 26,
+  supply-chain 60, cli 263, daemon 379, desktop 709, all with 0 failures.
+- **Next:** this PR green, then merge, then a green `main` run, then tag `v1.2.0-preview.4` on that merge commit,
+  then watch the Release and Desktop tag runs, then verify the private draft.
+
+## HALT — Phase 10, under R7 (2026-11-22): the owner-authorised fifth attempt hit a new advisory
+
+- **PR #225 (attempt 5) on `d2aeab7`:** CI [45066085271](https://github.com/ahmadrrrtx/xr/actions/runs/45066085271) ✓, Cross-Platform [45066085272](https://github.com/ahmadrrrtx/xr/actions/runs/45066085272) ✓, Desktop App [45066085266](https://github.com/ahmadrrrtx/xr/actions/runs/45066085266) ✓, Clean-Machine Journey [45066085237](https://github.com/ahmadrrrtx/xr/actions/runs/45066085237) ✓, npm Pack Smoke [45066085308](https://github.com/ahmadrrrtx/xr/actions/runs/45066085308) ✓, Channel Install [45066085341](https://github.com/ahmadrrrtx/xr/actions/runs/45066085341) ✓, **Supply Chain [45066085322](https://github.com/ahmadrrrtx/xr/actions/runs/45066085322) ✗**.
+- **The unsigned-preview path ran on this PR:**
+  - The ad-hoc seal check passed on both macOS legs (arm64 and x64), on the `.app` and inside the `.dmg`.
+  - The Developer ID and Authenticode verifiers were skipped, because nothing is provisioned.
+  - All seven desktop journeys passed with the sealed app: macOS 15, macOS 26, macOS 15 Intel, Linux ×2,
+    Windows x64 and Windows arm64.
+- **NEW-18 (new, external; blocks Phase 10):** Supply Chain failed in "OSV scanner (locked deps, checksum-pinned
+  binary)".
+  - The job log is unreachable here, and the code-scanning API returns 403 for this token. The finding was located
+    through the advisory sources instead.
+  - RustSec added **RUSTSEC-2026-0592** (alias GHSA-hrj5-67jp-wqp9) on 2026-11-22 at 09:43 UTC. In `url` ≤ 2.5.8,
+    `Url::origin()` recursed once per nested `blob:` prefix, so one crafted URL overflowed the stack and aborted the
+    process. It is fixed in 2.5.9.
+  - `desktop/src-tauri/Cargo.lock` locked `url 2.5.8`. `main`'s last green Supply Chain run
+    ([44928813047](https://github.com/ahmadrrrtx/xr/actions/runs/44928813047), `b46173a`) predates the advisory,
+    so any run now fails the same way.
+  - Nothing else matches. No other advisory published or updated since 2026-11-20 touches a package in any of the
+    12 lockfiles. The sources checked: GitHub reviewed, unreviewed and malware advisories for npm and Rust, and
+    RustSec commits. Root `bun audit` is clean, and no osv-scanner ignore has expired (the earliest runs to
+    2026-11-30).
+- **Fix, ready but not pushed** `367288e`:
+  - The lock takes `url 2.5.9` and `form_urlencoded 1.2.3`. 2.5.9 requires `^1.2.3`, and 1.2.3 requires
+    `percent-encoding ^2.3.2`, which is already locked.
+  - Versions and checksums come from the crates.io index, read from GitHub because crates.io is unreachable here.
+    The feature maps are unchanged.
+  - Test: `test/supply-chain/url-advisory.test.ts`, in the repository's per-advisory pattern. **R2:** the old lock
+    fails 2 of 2, the new lock passes 2 of 2.
+  - Local results: supply-chain 62, release 332 (17 skipped), desktop 709; typecheck, platform parity (578 files)
+    and ownership pass.
+  - Not verifiable here: `cargo --locked` against the new lock. R6 rules out a local Rust build; CI's cargo steps
+    check it.
+- **R7:** five attempts are used, the fourth and fifth owner-authorised. Pushing `367288e` would be a sixth.
+  **Halted**; nothing has been pushed after `d2aeab7`.
+- **Owner decision needed:** a sixth attempt (push `367288e` to PR #225, then merge, a green `main` run, and tag
+  `v1.2.0-preview.4`), or stop Phase 10 here with nothing published.
+
+## RESUMED — owner decision (2026-11-22); Phase 10 CI-fix attempt 6 (owner-authorised)
+
+- The owner authorised a sixth attempt (adaptations table), with all other rules kept.
+- One push to PR #225 carries the NEW-18 fix `367288e`, the HALT record and this section.
+- **Next:** all six required checks green on the new head, then merge with a merge commit, then a green `main` run
+  on the merge commit, then the annotated tag `v1.2.0-preview.4` on it, then the Release and Desktop tag runs,
+  then verification of the private draft (asset completeness, `SHA256SUMS`, cosign bundles).

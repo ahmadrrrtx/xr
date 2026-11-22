@@ -1,18 +1,31 @@
 # Desktop signing, notarization and updates — owner runbook
 
-Current candidate: **1.1.1-rc.1 / developer-preview**, 2026-10-27.
-**No production signing material or native-platform signing result was supplied
-in this workspace. Public preview/stable publication is NOT READY.**
+Current candidate: **1.2.0-preview.4 / public beta**, 2026-11-21.
+**No OS signing material exists for this project.** By owner decision
+(2026-11-21) preview tags ship **unsigned** desktop installers; a stable tag
+still requires the owner's signing material and is NOT READY.
 
 # # Enforced policy (supersedes historical unsigned-tag behavior)
 
 * Ordinary development/PR builds may be clearly **UNSIGNED development**
   artifacts. Raw Apple/Windows/updater private signing values are tag-only
   environment inputs, not PR values. Presence flags are not signatures.
-* **Every desktop tag candidate**, including preview tags, requires valid
+* **Stable desktop tags** (a version without a pre-release suffix) require valid
   macOS Developer ID + notarization and Windows Authenticode prerequisites.
   Missing owner material blocks early, before expensive native builds. Removing
-  a certificate is not a way to publish an unsigned tag.
+  a certificate is not a way to publish an unsigned stable tag.
+* **Preview tags** (`x.y.z-…`, read from the committed release identity) may
+  ship **unsigned** installers. Owner decision, 2026-11-21: there is no budget
+  for certificates. The switch is `UNSIGNED_PREVIEW_INSTALLERS` in
+  `scripts/desktop-signing-plan.ts`. Windows installers carry no Authenticode
+  signature. The macOS app is **ad-hoc sealed** (`signingIdentity: "-"`,
+  hardened runtime off) and never notarized; the bundle job checks the seal with
+  `codesign --verify --deep --strict` on the `.app` and inside every `.dmg`.
+  Integrity comes from the cosign-signed `DESKTOP-SHA256SUMS` and the GitHub
+  build-provenance attestation, not from an OS signature. Half-provisioned
+  material still fails a preview tag: an Apple certificate without the
+  notarization secrets, a Windows certificate without a valid thumbprint, or a
+  committed updater public key without its private key.
 * A tag with a committed updater public key also requires its private signing
   key. Missing/wrong signatures fail. If no updater is provisioned, updating
   remains explicitly disabled; no fake working updater/feed is published.
@@ -28,6 +41,59 @@ in this workspace. Public preview/stable publication is NOT READY.**
 * Repo environments must be configured by the owner: `desktop-signing`,
   `release-promotion`, `npm-publish`, `release-channels`. Merely naming them in
   YAML is NOT proof that required reviewers/tag restrictions exist.
+
+# # Installing an unsigned preview (users)
+
+Check the download first. The checksum list is signed, the installer is not:
+
+```bash
+shasum -a 256 -c DESKTOP-SHA256SUMS --ignore-missing     # macOS / Linux
+cosign verify-blob --bundle DESKTOP-SHA256SUMS.bundle \
+  --certificate-identity "https://github.com/ahmadrrrtx/xr/.github/workflows/desktop-app.yml@refs/tags/<tag>" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com DESKTOP-SHA256SUMS
+```
+
+On Windows, `Get-FileHash <file> -Algorithm SHA256` prints the hash to compare.
+
+* **Windows** — SmartScreen shows "Windows protected your PC". Click
+  **More info**, then **Run anyway**. The publisher reads "Unknown publisher".
+* **macOS 15 (Sequoia) and later** — open the app once; macOS refuses it. Then
+  open **System Settings → Privacy & Security**, scroll to the message about
+  XR, click **Open Anyway** and confirm with your password. You do this once
+  per installed version.
+* **macOS 14 and earlier** — Control-click (right-click) XR in Applications,
+  choose **Open**, then **Open** again.
+* **Terminal alternative (macOS)**, only after the checksum matched:
+  `xattr -dr com.apple.quarantine /Applications/XR.app`
+* **Linux** — packages are never OS-signed; the checksum and the cosign
+  signature are the check. Install the `.deb` or `.rpm`, or make the
+  `.AppImage` executable (`chmod +x`).
+
+# # Free signing options (owner, researched 2026-11-21)
+
+* **Windows — SignPath Foundation** (signpath.org): free code signing for
+  open-source projects. The repository's MIT licence is OSI-approved. The
+  certificate is issued to "SignPath Foundation", so that is the publisher
+  Windows shows. The key stays in SignPath's HSM, and signing runs from GitHub
+  Actions (`signpath/github-action-submit-signing-request`), with a manual
+  approval for every release. The terms require: the software already released
+  in the form to be signed, its functionality described on the download page,
+  MFA for every team member, a code-signing-policy section with the attribution
+  line, a privacy statement, and "a certain verifiable reputation". Projects
+  with little public visibility have been refused, so apply after Preview 4 has
+  been public for a while (stars, downloads, mentions). Signed binaries still
+  build SmartScreen reputation over time.
+* **Windows — Azure Artifact Signing** (formerly Trusted Signing): US$9.99 a
+  month, and individuals qualify only in the USA and Canada.
+* **Windows — commercial certificates**: since June 2023 the private key must
+  live in a hardware or cloud HSM, so no downloadable `.pfx` is issued any more.
+  The cloud services cost roughly US$100–300+ a year, and this workflow's
+  `.pfx` import cannot use them as written (NEW-16 in `HARDENING_LOG.md`).
+* **macOS**: there is no free way to notarize. A Developer ID certificate and
+  notarization need the Apple Developer Program (US$99 a year). Ad-hoc sealing,
+  which previews use, is free; it only turns "damaged" into "unidentified
+  developer".
+* **Linux**: nothing to buy; checksums plus cosign.
 
 # # Owner secrets — configure directly in GitHub, never in chat or source
 
@@ -50,7 +116,8 @@ No owner key/certificate was generated, inspected, committed or handled by this
 agent. Treat runner/dependency code allowed to sign as trusted code; enforce
 protected refs/reviewers and short-lived/minimal account privileges.
 
-Presence-only blocker (expected exit1 with this workspace's absent material):
+Presence-only blocker. With a preview identity and no material it exits 0 and
+prints the unsigned-preview notice; with a stable identity it exits 1:
 
 ```bash
 bun scripts/desktop-signing-plan.ts --preflight --tag true

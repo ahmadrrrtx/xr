@@ -29,7 +29,9 @@
 #
 # Signing (XR-LAUNCH-008, decision D5): wired but gated on owner secrets
 # (TAURI_UPDATER_KEY[_PASSWORD], APPLE_*, WINDOWS_CERTIFICATE[_PASSWORD]).
-# Without them development builds are UNSIGNED; ALL tag candidates fail early.
+# Without them development builds are UNSIGNED (macOS ad-hoc sealed). STABLE
+# tag candidates fail early; PREVIEW tags ship unsigned installers by owner
+# decision (2026-11-21, UNSIGNED_PREVIEW_INSTALLERS in desktop-signing-plan.ts).
 # Publication is private draft preparation only until explicit owner promotion; see
 # docs/release/DESKTOP_SIGNING.md. No key material is ever in the repo.
 # =============================================================================
@@ -364,6 +366,36 @@ jobs:
             spctl --assess --type execute --verbose=4 "$app"
             for dmg in desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg/*.dmg; do xcrun stapler validate "$dmg"; done
           fi
+      # Owner decision 2026-11-21 (no signing budget): without a Developer ID the
+      # bundle is AD-HOC sealed, so a download reads "unidentified developer"
+      # (allowed once in Privacy & Security) instead of "damaged". The seal is
+      # checked on the .app and on the copy users get inside each .dmg.
+      # Gatekeeper rejects ad-hoc by design, so there is no spctl here.
+      - name: Verify macOS ad-hoc seal (codesign on the .app and inside the .dmg)
+        if: runner.os == 'macOS' && env.XR_ADHOC_SIGNED == '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          app="$(find desktop/src-tauri/${{ matrix.targetDir }}/bundle/macos -maxdepth 1 -name '*.app' | head -1)"
+          [ -n "$app" ] || { echo "::error::no .app bundle produced"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$app"
+          info="$(codesign -dv "$app" 2>&1)"
+          printf '%s\n' "$info" | grep -E '^(Identifier|CodeDirectory|Signature)'
+          grep -qx 'Signature=adhoc' <<<"$info" || { echo "::error::expected an ad-hoc signature"; exit 1; }
+          dmgs=(desktop/src-tauri/${{ matrix.targetDir }}/bundle/dmg/*.dmg)
+          [ "${#dmgs[@]}" -gt 0 ] || { echo "::error::no .dmg produced"; exit 1; }
+          for dmg in "${dmgs[@]}"; do
+            mnt="$(mktemp -d)"
+            hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+            inner="$(find "$mnt" -maxdepth 1 -name '*.app' | head -1)"
+            rc=0
+            if [ -z "$inner" ]; then echo "::error::no .app inside $dmg"; rc=1
+            elif ! codesign --verify --deep --strict --verbose=2 "$inner"; then echo "::error::ad-hoc seal invalid inside $dmg"; rc=1
+            fi
+            hdiutil detach "$mnt" >/dev/null || hdiutil detach -force "$mnt" >/dev/null
+            [ "$rc" = 0 ] || exit 1
+          done
       - name: Verify Windows Authenticode (signtool verify /pa)
         if: runner.os == 'Windows' && env.XR_SIGNED_OS == '1'
         shell: pwsh
