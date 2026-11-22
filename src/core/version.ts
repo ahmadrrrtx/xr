@@ -12,12 +12,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "1.2.0-preview.3",
-  codename: "Preview 3",
+  version: "1.2.0-preview.4",
+  codename: "Preview 4",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR Preview 3 (1.2.0-preview.3) — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.",
+  description: "XR Preview 4 (1.2.0-preview.4) — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;
