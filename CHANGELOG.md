@@ -25,6 +25,7 @@
 
 ### Fixes
 
+- **deps:** desktop lock takes url 2.5.9 and form_urlencoded 1.2.3 (RUSTSEC-2026-0592, NEW-18) (367288e)
 - **release:** verify-release reads the provenance subject through a Sigstore bundle's DSSE envelope (NEW-17) (0f0d378)
 - **ci:** cross-compile windows-arm64 on macOS in the release build, as channel-install does (NEW-14) (275be64)
 - **release:** the asset-completeness gate finds the private draft a tag push prepares (NEW-13) (bf261ef)
@@ -195,6 +196,10 @@
 
 ### Documentation
 
+- **hardening:** owner authorised Phase 10 attempt 6 (NEW-18 fix) (16dc54e)
+- **hardening:** HALT — Phase 10 attempt 5 used: new advisory RUSTSEC-2026-0592 in url 2.5.8 (NEW-18), fix ready (061e717)
+- **hardening:** Phase 10 attempt 5 — NEW-17 fix, unsigned preview installers (owner decision), preview.3 withdrawn, Preview 4 prepared (d2aeab7)
+- **changelog:** generate the 1.2.0-preview.4 section from conventional commits since v1.1.0 (54076e6)
 - **release:** Preview 4 known limitations (1.2.0-preview.4), with unsigned-installer instructions (4dd8ed3)
 - **hardening:** HALT — Phase 10 attempt 4 used: preview.3 tag failed at verify-release (NEW-17); NEW-16 recorded (063bb74)
 - **hardening:** Phase 10 attempt 4 (owner-authorised) — NEW-15 fixed; ruleset and npm owner actions attempted, blocked (e3937a1)
