@@ -104,7 +104,8 @@ lock-in test added where missing), `owner-blocked`, `out-of-scope-feature`, `ope
 | 7 — security sweep (C3–C8, lock-ins, C16) | `dba65dc` `c3a6e09` `dcf954d` | head `d1f7f6d`: CI [44892794288](https://github.com/ahmadrrrtx/xr/actions/runs/44892794288) ✓ · Cross-Platform [44892794304](https://github.com/ahmadrrrtx/xr/actions/runs/44892794304) ✓ · Desktop App [44892794282](https://github.com/ahmadrrrtx/xr/actions/runs/44892794282) ✓ · Clean-Machine Journey [44892794346](https://github.com/ahmadrrrtx/xr/actions/runs/44892794346) ✓ · npm Pack Smoke [44892794255](https://github.com/ahmadrrrtx/xr/actions/runs/44892794255) ✓ · Supply Chain [44892794294](https://github.com/ahmadrrrtx/xr/actions/runs/44892794294) ✓ · Channel Install [44892794245](https://github.com/ahmadrrrtx/xr/actions/runs/44892794245) ✓ | **done**: all 6 required checks pass on one head (85 pass, 1 skipped by design) |
 | 8 — CI: actionlint, required-check names, merge, 3 green `main` runs | merges `23090ee` (PR #215), `4ea49e2` (PR #216), `1397292` (PR #217); NEW-3 fix `8d1b98b` | `main` run 1 `23090ee`: CI [44898171204](https://github.com/ahmadrrrtx/xr/actions/runs/44898171204) ✓ · Cross-Platform [44898171045](https://github.com/ahmadrrrtx/xr/actions/runs/44898171045) ✓ · Desktop App [44898171222](https://github.com/ahmadrrrtx/xr/actions/runs/44898171222) ✓ · Clean-Machine Journey [44898171078](https://github.com/ahmadrrrtx/xr/actions/runs/44898171078) ✓ · npm Pack Smoke [44898171035](https://github.com/ahmadrrrtx/xr/actions/runs/44898171035) ✓ · Supply Chain [44898171079](https://github.com/ahmadrrrtx/xr/actions/runs/44898171079) ✓ · Channel Install [44898171046](https://github.com/ahmadrrrtx/xr/actions/runs/44898171046) ✓ — run 2 `4ea49e2`: CI [44902873796](https://github.com/ahmadrrrtx/xr/actions/runs/44902873796) ✓ · Cross-Platform [44902873864](https://github.com/ahmadrrrtx/xr/actions/runs/44902873864) ✓ · Desktop App [44902873729](https://github.com/ahmadrrrtx/xr/actions/runs/44902873729) ✓ · Clean-Machine Journey [44902873728](https://github.com/ahmadrrrtx/xr/actions/runs/44902873728) ✓ · npm Pack Smoke [44902873760](https://github.com/ahmadrrrtx/xr/actions/runs/44902873760) ✓ · Supply Chain [44902873925](https://github.com/ahmadrrrtx/xr/actions/runs/44902873925) ✓ · Channel Install [44902873752](https://github.com/ahmadrrrtx/xr/actions/runs/44902873752) ✓ — run 3 `1397292`: CI [44906486932](https://github.com/ahmadrrrtx/xr/actions/runs/44906486932) ✓ · Cross-Platform [44906486922](https://github.com/ahmadrrrtx/xr/actions/runs/44906486922) ✓ · Desktop App [44906486914](https://github.com/ahmadrrrtx/xr/actions/runs/44906486914) ✓ · Clean-Machine Journey [44906486939](https://github.com/ahmadrrrtx/xr/actions/runs/44906486939) ✓ · npm Pack Smoke [44906487005](https://github.com/ahmadrrrtx/xr/actions/runs/44906487005) ✓ · Supply Chain [44906486940](https://github.com/ahmadrrrtx/xr/actions/runs/44906486940) ✓ · Channel Install [44906486963](https://github.com/ahmadrrrtx/xr/actions/runs/44906486963) ✓ | **done**: 3 consecutive green `main` runs (all six required checks each); 1 of 3 CI-fix attempts used |
 | 9 — docs: CHANGELOG section, launch-gate evidence | `67f0315` `9337a09` | head `6a53e67` (PR #218): CI [44909028062](https://github.com/ahmadrrrtx/xr/actions/runs/44909028062) ✓ · Cross-Platform [44909028066](https://github.com/ahmadrrrtx/xr/actions/runs/44909028066) ✓ · Desktop App [44909028071](https://github.com/ahmadrrrtx/xr/actions/runs/44909028071) ✓ · Clean-Machine Journey [44909028048](https://github.com/ahmadrrrtx/xr/actions/runs/44909028048) ✓ · npm Pack Smoke [44909028033](https://github.com/ahmadrrrtx/xr/actions/runs/44909028033) ✓ · Supply Chain [44909028075](https://github.com/ahmadrrrtx/xr/actions/runs/44909028075) ✓ · Channel Install [44909028023](https://github.com/ahmadrrrtx/xr/actions/runs/44909028023) ✓ | **done**: all 6 required checks pass on one head (82 pass, 1 skipped by design); merged as `5b1ca0a` |
-| 10 — release (B16, C1): 1.2.0-preview.2 and 1.2.0-preview.3 withdrawn → 1.2.0-preview.4 | `821fcde` `ba7e6a7` `a63a0c4`; NEW-12 `aac7944`; NEW-13 `bf261ef`; withdrawal `a19e6cf`; Preview 3 `62e7a14` `76e6049` `b7968d2`; NEW-14 `275be64`; NEW-15 `0ca9015`; NEW-17 `0f0d378`; unsigned preview installers `187b0d1`; withdrawal `55f6a2b`; Preview 4 `4dd8ed3` `e1db8e6` `54076e6` | PR #219 head `5e360c7`: CI [44911981493](https://github.com/ahmadrrrtx/xr/actions/runs/44911981493) ✓ · Cross-Platform [44911981497](https://github.com/ahmadrrrtx/xr/actions/runs/44911981497) ✓ · Desktop App [44911981509](https://github.com/ahmadrrrtx/xr/actions/runs/44911981509) ✓ · Clean-Machine Journey [44911981574](https://github.com/ahmadrrrtx/xr/actions/runs/44911981574) ✓ · npm Pack Smoke [44911981533](https://github.com/ahmadrrrtx/xr/actions/runs/44911981533) ✓ · Supply Chain [44911981594](https://github.com/ahmadrrrtx/xr/actions/runs/44911981594) ✓ · Channel Install [44911981607](https://github.com/ahmadrrrtx/xr/actions/runs/44911981607) ✓ — `main` `08a04cd` run 5 ✓ — tag `v1.2.0-preview.2`: Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963) ✗ (NEW-12, nothing published) — `main` `b46173a` run 7 ✓ — tag `v1.2.0-preview.3`: Release [44931782266](https://github.com/ahmadrrrtx/xr/actions/runs/44931782266) ✗ (NEW-17, nothing published) — PR #225 `d2aeab7`: 5 of 6 ✓, Supply Chain [45066085322](https://github.com/ahmadrrrtx/xr/actions/runs/45066085322) ✗ (NEW-18) | in-progress (CI-fix attempt 6, owner-authorised; NEW-18 fix `367288e`) |
+| 10 — release (B16, C1): 1.2.0-preview.2 and 1.2.0-preview.3 withdrawn → 1.2.0-preview.4 | `821fcde` `ba7e6a7` `a63a0c4`; NEW-12 `aac7944`; NEW-13 `bf261ef`; withdrawal `a19e6cf`; Preview 3 `62e7a14` `76e6049` `b7968d2`; NEW-14 `275be64`; NEW-15 `0ca9015`; NEW-17 `0f0d378`; unsigned preview installers `187b0d1`; withdrawal `55f6a2b`; Preview 4 `4dd8ed3` `e1db8e6` `54076e6` | PR #219 head `5e360c7`: CI [44911981493](https://github.com/ahmadrrrtx/xr/actions/runs/44911981493) ✓ · Cross-Platform [44911981497](https://github.com/ahmadrrrtx/xr/actions/runs/44911981497) ✓ · Desktop App [44911981509](https://github.com/ahmadrrrtx/xr/actions/runs/44911981509) ✓ · Clean-Machine Journey [44911981574](https://github.com/ahmadrrrtx/xr/actions/runs/44911981574) ✓ · npm Pack Smoke [44911981533](https://github.com/ahmadrrrtx/xr/actions/runs/44911981533) ✓ · Supply Chain [44911981594](https://github.com/ahmadrrrtx/xr/actions/runs/44911981594) ✓ · Channel Install [44911981607](https://github.com/ahmadrrrtx/xr/actions/runs/44911981607) ✓ — `main` `08a04cd` run 5 ✓ — tag `v1.2.0-preview.2`: Release [44917320963](https://github.com/ahmadrrrtx/xr/actions/runs/44917320963) ✗ (NEW-12, nothing published) — `main` `b46173a` run 7 ✓ — tag `v1.2.0-preview.3`: Release [44931782266](https://github.com/ahmadrrrtx/xr/actions/runs/44931782266) ✗ (NEW-17, nothing published) — PR #225 `d2aeab7`: 5 of 6 ✓, Supply Chain [45066085322](https://github.com/ahmadrrrtx/xr/actions/runs/45066085322) ✗ (NEW-18) — PR #225 `ddc93a2`: all six ✓ — `main` `f2569d0` run 8 ✓ — tag `v1.2.0-preview.4`: Release [45076830475](https://github.com/ahmadrrrtx/xr/actions/runs/45076830475) ✓ · Desktop App [45076830152](https://github.com/ahmadrrrtx/xr/actions/runs/45076830152) ✓ | **done**: verified PRIVATE draft (33 assets); public promotion is the owner's |
+| 11 — final report | `HARDENING_REPORT.md` (rebuilt from this log) | the required checks of its own PR | written |
 
 ## Phase 1 — voice crash chain (B1, B15, B19, B20) · commit `6fe87e8`
 
@@ -1423,3 +1424,59 @@ The version follows the owner's delegation (adaptations table). The release goes
 - **Next:** all six required checks green on the new head, then merge with a merge commit, then a green `main` run
   on the merge commit, then the annotated tag `v1.2.0-preview.4` on it, then the Release and Desktop tag runs,
   then verification of the private draft (asset completeness, `SHA256SUMS`, cosign bundles).
+
+## Phase 10 — done (2026-11-22): `v1.2.0-preview.4` is a verified PRIVATE draft
+
+- **PR #225 (attempt 6) on `ddc93a2`: all six required checks green** (CI [45069083092](https://github.com/ahmadrrrtx/xr/actions/runs/45069083092), Cross-Platform [45069083111](https://github.com/ahmadrrrtx/xr/actions/runs/45069083111), Desktop App [45069083070](https://github.com/ahmadrrrtx/xr/actions/runs/45069083070), Clean-Machine Journey [45069083047](https://github.com/ahmadrrrtx/xr/actions/runs/45069083047), npm Pack Smoke [45069083061](https://github.com/ahmadrrrtx/xr/actions/runs/45069083061), Supply Chain [45069083159](https://github.com/ahmadrrrtx/xr/actions/runs/45069083159), Channel Install [45069083142](https://github.com/ahmadrrrtx/xr/actions/runs/45069083142)).
+  `gh pr checks 225`: 83 pass, 1 skipped by design.
+  - **NEW-18 held:** Supply Chain is green.
+  - `cargo check --locked` and clippy on the Linux reference job, and `cargo test` on Windows, accepted the
+    hand-edited lock; both crate checksums were verified on download.
+- **Merge:** PR #225 was merged at 21:28:44 UTC as `f2569d0`, a merge commit, with `--match-head-commit`. GitHub
+  marked PR #224 as merged.
+- **`main` run 8 on `f2569d0`: all six required checks green** (CI [45072315339](https://github.com/ahmadrrrtx/xr/actions/runs/45072315339), Cross-Platform [45072315283](https://github.com/ahmadrrrtx/xr/actions/runs/45072315283), Desktop App [45072315286](https://github.com/ahmadrrrtx/xr/actions/runs/45072315286), Clean-Machine Journey [45072315328](https://github.com/ahmadrrrtx/xr/actions/runs/45072315328), npm Pack Smoke [45072315280](https://github.com/ahmadrrrtx/xr/actions/runs/45072315280), Supply Chain [45072315278](https://github.com/ahmadrrrtx/xr/actions/runs/45072315278), Channel Install [45072315324](https://github.com/ahmadrrrtx/xr/actions/runs/45072315324)).
+  - Non-gating: Channel Live failed (NEW-11); the Real-Device Matrix failed, as it already did on `main` before
+    this pass.
+  - That makes **8 consecutive green `main` runs**; gate 012 needs 10.
+- **Tag `v1.2.0-preview.4`:** annotated (`7e883be`), on `f2569d0`, pushed at 22:16 UTC with the owner's
+  authorisation.
+- **Release [45076830475](https://github.com/ahmadrrrtx/xr/actions/runs/45076830475): success.** 39 jobs passed.
+  The 6 skipped jobs are the owner-only promotion path: exact-tag native desktop evidence, npm publish, public
+  promotion, Docker publish, consumer smoke, and SLSA `upload-assets`. The 39 that passed:
+  - the gates;
+  - the four builds, windows-arm64 on macOS included (NEW-14 holds);
+  - Assemble;
+  - cosign keyless signing of the checksums, npm tarball and SBOM, with the fail-closed re-verification;
+  - SLSA level-3 provenance;
+  - **"Verify signed artifacts (verify-release.ts)": NEW-17 is fixed on a real tag run**;
+  - the draft job, including its asset-completeness gate (L-010). **NEW-13 is verified: the gate found the draft;**
+  - every tag CLI and Docker journey, and the whole tag supply chain.
+- **Desktop App [45076830152](https://github.com/ahmadrrrtx/xr/actions/runs/45076830152): success.** 20 of 20 jobs passed:
+  - The signing preflight passed for a preview tag, on the unsigned path chosen by the owner.
+  - All five bundles were built. The ad-hoc seal check passed on both macOS legs.
+  - All seven desktop journeys passed. `latest.json` was skipped, because the updater is not provisioned.
+  - "Verified desktop assets — PRIVATE draft only" passed:
+    - cosign signing and independent verification of `DESKTOP-SHA256SUMS` and the desktop SBOM, against the exact
+      tag workflow identity;
+    - a build-provenance attestation, verified for the exact workflow, ref and commit;
+    - the installers attached to the same draft.
+- **The draft:** release 454793101, "XR v1.2.0-preview.4", `draft: true`, `prerelease: true`, **33 assets**:
+  - CLI: binaries for linux x64/arm64, darwin arm64/x64 and windows x64/arm64 (Windows also as zips); the `.deb`; the npm
+    tarball; the source archive; the CHANGELOG; `SHA256SUMS`; the SBOM; the cosign bundles; the SLSA
+    `multiple.intoto.jsonl`.
+  - Desktop: the Windows x64 setup and MSI; the Windows arm64 setup; the macOS arm64 and x64 DMGs and `.app.tar.gz`;
+    the Linux `.deb`, `.rpm` and `.AppImage`; `DESKTOP-SHA256SUMS` with its bundle; the desktop SBOM with its bundle;
+    `desktop-provenance.sigstore.json`.
+  - Checked from this sandbox: `bun run scripts/release-assets-check.ts --tag v1.2.0-preview.4` → **PASS** (33
+    assets live, canonical set of 17 complete).
+- **Not verified from this sandbox:** release-asset downloads redirect to `release-assets.githubusercontent.com`,
+  which is unreachable here. So `SHA256SUMS`, `DESKTOP-SHA256SUMS` and the cosign bundles were not re-downloaded and
+  re-checked locally; the CI verification above is the evidence. GitHub records each asset's digest, for example
+  `SHA256SUMS` `sha256:a0422b86…` and `DESKTOP-SHA256SUMS` `sha256:113cfd7f…`.
+- **Status updates:** NEW-13 fixed, NEW-17 fixed, NEW-18 fixed. B16 (with C1) fixed: a complete, signed and verified
+  release exists as a private draft.
+- **Owner-only, not done:**
+  - Promotion (Actions → Release → Run workflow with `publish=true`). It returns 403 for this session, and it is
+    also what publishes to npm through OIDC.
+  - The SUPERSEDED note on v1.1.0, which waits until a preview is public.
+- **Phase 10 is done.** Phase 11 (`HARDENING_REPORT.md`) follows.
