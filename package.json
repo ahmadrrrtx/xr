@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "1.2.0-preview.4",
-  "description": "XR Preview 4 (1.2.0-preview.4) — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.",
+  "version": "1.2.0-preview.5",
+  "description": "XR Preview 5 (1.2.0-preview.5) — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr"
