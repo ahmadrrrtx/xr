@@ -40,6 +40,10 @@
       {
         "tag": "v1.2.0-preview.3",
         "reason": "Release run 44931782266 failed at its verify-release job: the slsa-provenance-subject check read only a flat DSSE envelope, while slsa-github-generator v2.1.0 writes a Sigstore bundle (NEW-17). The draft and publishing jobs were skipped, so nothing was published: no GitHub release or draft, no npm version, no Docker image. The desktop tag run 44931781798 stopped at its signing preflight (no signing secrets). Superseded by 1.2.0-preview.4; see docs/release/1.2.0-preview.3/WITHDRAWN.md."
+      },
+      {
+        "tag": "v1.2.0-preview.4",
+        "reason": "Its tag run 45076830475 prepared a verified private draft (release 454793101), but the owner's promotion run 45402937080 (workflow_dispatch, publish=true) failed twice at the supply-chain gate: RUSTSEC-2026-0594 (GHSA-8wcq-xq25-7fhm, published 2026-11-23) affects cookie 0.18.2 in desktop/src-tauri/Cargo.lock (NEW-19). The draft, promotion, npm, Docker and consumer-smoke jobs were skipped, so nothing was published: the draft stays private, with no npm version and no Docker image. Superseded by 1.2.0-preview.5; see docs/release/1.2.0-preview.4/WITHDRAWN.md."
       }
     ]
   },
