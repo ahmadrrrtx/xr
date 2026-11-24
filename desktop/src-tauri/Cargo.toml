@@ -1,6 +1,6 @@
 [package]
 name = "xr-desktop"
-version = "1.2.0-preview.4"
+version = "1.2.0-preview.5"
 description = "XR Desktop — Tauri v2 shell for the XR agent (the AI agent you can actually trust)"
 authors = ["Muhammad Ahmad (@ahmadrrrtx)"]
 license = "MIT"

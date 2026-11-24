@@ -6170,7 +6170,7 @@ checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
 name = "xr-desktop"
-version = "1.2.0-preview.4"
+version = "1.2.0-preview.5"
 dependencies = [
  "gio",
  "keyring",
