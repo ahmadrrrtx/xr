@@ -1505,3 +1505,80 @@ The version follows the owner's delegation (adaptations table). The release goes
   - So the "stream-settlement first occurrence" recorded for PR #222 was a misread annotation, not a failing test.
     The two earlier entries are marked as corrected. No defect, no attempt used.
 - The Desktop App run on `5ad10c2` was still running when this push superseded it.
+
+## After Phase 11 (2026-11-24): the owner's promotion of `v1.2.0-preview.4` failed on a new advisory (NEW-19) → withdraw, 1.2.0-preview.5
+
+- **`main` push run 9 on `1a02f01` (the PR #226 merge): all six required checks green** (CI [45084978878](https://github.com/ahmadrrrtx/xr/actions/runs/45084978878), Cross-Platform [45084978893](https://github.com/ahmadrrrtx/xr/actions/runs/45084978893), Desktop App [45084978890](https://github.com/ahmadrrrtx/xr/actions/runs/45084978890), Clean-Machine Journey [45084978872](https://github.com/ahmadrrrtx/xr/actions/runs/45084978872), npm Pack Smoke [45084978916](https://github.com/ahmadrrrtx/xr/actions/runs/45084978916), Supply Chain [45084978864](https://github.com/ahmadrrrtx/xr/actions/runs/45084978864); Channel Install [45084978902](https://github.com/ahmadrrrtx/xr/actions/runs/45084978902) too).
+  - Caveat: the **scheduled** Supply Chain runs on the same commit then failed, on 2026-11-23
+    ([45180447384](https://github.com/ahmadrrrtx/xr/actions/runs/45180447384)) and 2026-11-24
+    ([45408132474](https://github.com/ahmadrrrtx/xr/actions/runs/45408132474)), both at the OSV scan only (NEW-19).
+    Gate 012 stays in-progress.
+- **The owner's promotion run:** the release workflow dispatched on `v1.2.0-preview.4` with `publish=true`,
+  [45402937080](https://github.com/ahmadrrrtx/xr/actions/runs/45402937080), attempts 1 (13:23 UTC) and 2 (13:30 UTC).
+  - Each attempt: 37 jobs passed, 2 failed, 6 skipped. Passed include the gates, every build leg, assembly, cosign
+    signing, SLSA provenance, verify-release, the journeys and the exact-tag native desktop evidence.
+  - Failed: "Supply chain (tag) / Vulnerability scan (osv-scanner + bun audit)" at its step "OSV scanner (locked
+    deps, checksum-pinned binary)" (jobs 138475988248 and 138480252806), and "Supply chain (tag) / Supply Chain
+    gate" (138476631415 and 138480704399), which requires it.
+  - Skipped as a result: GitHub Release (signed assets), the owner-authorized promotion, Publish npm, Publish Docker
+    and Consumer smoke. SLSA `upload-assets` is skipped by design.
+  - **Nothing was published.** Draft 454793101 is still a private draft with its 33 assets. npm carries only
+    `latest` 1.0.0 and `beta` 1.0.0-beta.1.
+- **NEW-19 (new, external; blocks promotion):**
+  - RustSec added **RUSTSEC-2026-0594** (alias GHSA-8wcq-xq25-7fhm) on 2026-11-23 at 09:32 UTC, the day after the
+    preview.4 draft was built. `cookie`'s `PrivateJar::add` and `add_original` drew AES-GCM nonces from a
+    thread-local RNG that can repeat after `fork()` (Unix only). Affected: >=0.11.3,<0.12.0 and >=0.14.0,<0.18.3.
+    Fixed in 0.18.3.
+  - `desktop/src-tauri/Cargo.lock` locked `cookie 0.18.2`, required (`^0.18`) by tauri, tauri-runtime, wry and
+    cookie_store.
+  - XR uses no private cookie jar, so the practical impact is likely nil. The gate fails regardless and is right to.
+    No ignore was added (R1).
+  - The other RustSec advisories added since 2026-11-22 (pqcrypto-dilithium, parquet, etherparse, hugepage-rs) and
+    the OSSF malicious-packages feed for the same window match nothing in the 12 lockfiles. GitHub's reviewed,
+    unreviewed and malware advisories for npm and Rust updated 2026-11-22..24 (246) match nothing either.
+- **Why a new tag:** a dispatch on a tag runs that tag's own workflow and tree. Without moving the tag, which the
+  release policy forbids, `v1.2.0-preview.4` can never pass this gate again.
+- **Fix** `e34fd0e`:
+  - The lock takes `cookie 0.18.3`. Version and checksum come from the crates.io index, read through GitHub. Its
+    features and dependencies are identical to 0.18.2, so no other lock entry changes.
+  - Test: `test/supply-chain/cookie-advisory.test.ts`, in the per-advisory pattern. **R2:** the old lock fails 1 of
+    2 (the advisory-range self-check passes either way), the new lock passes 2 of 2.
+  - Local: supply-chain 64, release 332 (17 skipped), desktop 709; typecheck, platform parity (579 files) and
+    ownership pass. Not verifiable here: `cargo --locked` (R6); CI's cargo steps check it.
+- **Release commits:** withdrawal `e783633f` (`channels.withdrawnTags` + `docs/release/1.2.0-preview.4/WITHDRAWN.md`;
+  tag and draft untouched), Preview 5 page `b8ba38a2`, bump `88368387` (the same 13 stamped surfaces as Preview 4's
+  bump). The changelog is regenerated last.
+  - The Preview 5 page corrects one sentence carried over from Preview 4. Promotion does publish npm (dist-tag
+    `beta`) and GHCR (`:<version>` and `:beta`). Neither moves a `latest` tag (`flavor: latest=false`, and
+    `publish-channels.yml` is a separate manual dispatch for X.Y.Z versions).
+- **Publish-path review**, for the jobs a promotion runs that no tag has yet reached in this tree:
+  - `release` on a dispatch: softprops v3.0.3 finds the existing draft through its release-list fallback (the
+    tags endpoint returns 404 for drafts) and overwrites same-named assets. `release-ci-evidence --draft-only`
+    allows a draft and refuses a published release.
+  - `promote`: `release-manifest --check`, then `gh release edit <tag> --draft=false`; gh resolves a draft by its
+    tag. GitHub creates the `release-promotion` environment on first use.
+  - `publish-npm`: npm 12.2.1 (engines `^22.22.2`; Node 22.22.2 is in actions/node-versions) always attempts the
+    OIDC exchange when `id-token: write` is granted. It sets the exchanged token on the CLI config layer, which
+    outranks setup-node's `.npmrc` placeholder. The tarball's `repository.url` matches the repository, as
+    provenance requires. What remains is owner configuration: the npmjs.com Trusted Publisher must name
+    `ahmadrrrtx/xr`, workflow `release.yml`, and environment `npm-publish` (or none).
+  - `publish-docker`: the Dockerfile builds and passes the container smoke and trivy in every Supply Chain run
+    (amd64). The arm64 leg (QEMU) and the GHCR push and cosign signing first run at promotion.
+  - `consumer-smoke`: one `npm install` right after publishing, with no retry. Registry propagation delay is a
+    residual risk; at v1.0.0 it passed 4 s after the publish.
+- **Logged, not fixed (non-blocking, R10):**
+  - **NEW-20:** the CLI `.deb` (`scripts/build-deb.ts`, `Package: xr`) and the desktop `.deb` share the Debian package
+    name `xr`. tauri-bundler 2.12.0 derives it from `productName` "XR" (`heck::AsKebabCase`, read from the source,
+    not from the artifact). Installing one replaces the other, while their files do not overlap (`/usr/bin/xr`
+    versus `/usr/bin/xr-desktop` and `xr-engine`). The Preview 5 page documents the workaround: desktop package
+    plus standalone CLI binary. Renaming a package changes a public install identity, so it is the owner's call.
+  - **Expiring ignore:** `GHSA-m665-v7pm-7grj` (zip 4.6.1, CRITICAL) is ignored only until **2026-11-30** in
+    `desktop/src-tauri/osv-scanner.toml`. From then on, every OSV run fails, including a promotion run. A fix
+    path now exists: `tauri-plugin-updater` 2.14.1 requires `zip ^9`, which retires all six zip ignores. That is
+    a plugin and lock migration for CI to build (R6), due at the re-argument. **A Preview 5 promotion must run
+    before 2026-11-30 00:00 UTC.**
+- **R7:** this is a new owner request, so CI-fix attempts count from 0 of 3. The pushed head carries the fix, the
+  release commits and this section.
+- **Owner decision requested before the merge:** withdraw `v1.2.0-preview.4` and release 1.2.0-preview.5. The
+  standing rule covers failed tags, but preview.4's tag run had passed, so the owner is asked.
+- **Status:** NEW-19 fixed-unverified (`e34fd0e`; CI pending). NEW-20 open (owner). No launch gate changes.
