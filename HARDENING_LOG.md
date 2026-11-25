@@ -1662,3 +1662,50 @@ The version follows the owner's delegation (adaptations table). The release goes
   fixed-unverified (`777a99a`; CI pending). NEW-23 open. No launch gate changes.
 - **Deadline:** the zip ignore (`GHSA-m665-v7pm-7grj`) lapses on 2026-11-30 00:00 UTC. A tag that ships these fixes
   (and npm) must be promoted before then, or carry the zip-9 migration.
+- **The owner approved Preview 6 (2026-11-25)** and asked for the expiring security exception to be researched and
+  fixed rather than carried ("make it according to that security change research and do").
+- **NEW-24 (new; would have failed the Supply Chain gate from 2026-11-30):** the desktop shell locked zip 4.6.1,
+  under six time-limited OSV ignores.
+
+  | Advisory | Severity | Affected | Fixed | Ignore expiry |
+  |---|---|---|---|---|
+  | GHSA-m665-v7pm-7grj ("Zip Cloaking", CVE-2026-115905) | critical | <= 9.0.4 | 9.0.5 | 2026-11-30 |
+  | RUSTSEC-2026-0367 / 0368 / 0369 | (0369: CVSS 9.1) | < 9.0.0 | 9.0.0 | 2027-02-15 |
+  | GHSA-q7v9-x93c-xqv3 | high | >= 1.3.0, < 9.0.0 | 9.0.0 | 2027-02-28 |
+  | GHSA-8hxf-qr8p-62x4 | medium | >= 0.6.0, < 9.0.0 | 9.0.0 | 2027-02-28 |
+
+  - Two crates pulled zip: the shell itself (`zip "4"`, export/import in `data_safety.rs`), and tauri-plugin-updater's
+    default `zip` feature, which required `zip ^4` through 2.14.0.
+  - Updater 2.14.1 moved to `zip ^9`, but it needs tauri-plugin >= 2.7.1, which needs tauri-utils >= 2.10.1. The
+    shell patches tauri-utils from a SHA-256-verified crates.io 2.10.0 archive (`vendor/tauri-utils/XR-PATCH.md`), and
+    crates.io archives cannot be fetched from this sandbox. So the updater upgrade was set aside.
+  - **The updater's `zip` feature is dead weight for XR.** In updater 2.13.1 it gates exactly two code paths:
+    unpacking `*.zip`-wrapped Windows installers and `*.AppImage.tar.gz` (both the Tauri v1 artifact shapes). macOS
+    `.app.tar.gz` handling does not depend on it. XR publishes v2 artifacts, where the installer is the signed payload
+    (`applyUpdaterConfig` sets `createUpdaterArtifacts = true`; `scripts/make-updater-manifest.ts`).
+  - **Fix** `37ced76`:
+    - `Cargo.toml`: `zip = "9.0.5"` (deflate only, as before), and the updater with `default-features = false` plus
+      its two other defaults, `rustls-tls` and `system-proxy`.
+    - `Cargo.lock` (602 packages before and after): zip 9.8.2, constant_time_eq 0.6.2 and typed-path 0.13.0 enter;
+      getrandom 0.4.3 gains `js-sys` and `wasm-bindgen` (zip 9 enables its `wasm_js` feature on wasm32); arbitrary and
+      derive_arbitrary leave.
+    - The lock was written by a script that reproduces Cargo's serialization, proven by re-serializing the old lock
+      byte for byte. Every new edge was checked against the crates.io index entry (GitHub copy) and its version
+      requirement. For new edges it follows Cargo's own rule (`src/workspace/registry.rs`, "second hit": the first
+      matching locked version), hence `windows-sys 0.60.2` for zip. CI's `cargo check / clippy / test --locked` is the
+      arbiter.
+    - `data_safety.rs`: zip 9's `name()` returns a `Result`. The import now also opts into
+      `enforce_header_consistency(true)` on every entry (zip 9 has it off by default). A cloaked archive is refused:
+      local name != central name, or a duplicate name, method or flag. Legitimate archives (any tool, including
+      streamed ones with data descriptors) carry identical headers.
+    - `osv-scanner.toml`: all six zip ignores were removed, since osv-scanner fails on unused ignores.
+  - Tests:
+    - `test/supply-chain/zip-advisories.test.ts`. **R2:** the old tree fails 5 of 7 (the bound check and the v2-payload
+      invariant pass either way), the new tree passes 7 of 7.
+    - The Rust test `a_cloaked_archive_whose_local_header_names_another_file_is_refused` builds a real archive and
+      patches its local name. Old code imported it; new code fails with "header inconsistency". It runs only in CI
+      (R6).
+  - Local: supply-chain 71, desktop 714, release 335 (17 skipped), security 452 (1 skipped), daemon 379, phase0 217,
+    update 38; ownership, platform parity (582 files). The combined SBOM lists zip 9.8.2 and no arbitrary.
+- **Status (updated):** NEW-24 fixed-unverified (`37ced76`; CI pending). With it merged, the 2026-11-30 deadline no
+  longer applies: the desktop lock carries no zip advisory and no zip ignore.
