@@ -24,60 +24,10 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { copyEngineDiagnostics } from '@/engine/diagnostics';
-import {
-  ENGINE_BOOT_DEADLINE_MS,
-  useEngineStore,
-  type EngineFailureReason,
-  type EngineStatus,
-} from '@/stores/engineStore';
+import { isTauri } from '@/lib/tauri';
+import { ENGINE_BOOT_DEADLINE_MS, useEngineStore } from '@/stores/engineStore';
 
-function bannerCopy(
-  status: EngineStatus,
-  reason: EngineFailureReason | null,
-  lastError: string | null,
-): { title: string; detail: string } {
-  if (status === 'degraded') {
-    return {
-      title: 'Engine connected — contract unverified.',
-      detail:
-        lastError ??
-        'This engine does not report a contract version, so the desktop cannot verify it matches. Restart with the bundled engine, or run `xr serve` from a current install.',
-    };
-  }
-  if (status === 'failed') {
-    switch (reason) {
-      case 'unauthorized':
-        return {
-          title: 'Engine rejected the session.',
-          detail: 'Restart the engine to issue a new token and re-pair.',
-        };
-      case 'incompatible':
-        return {
-          title: 'Engine version is incompatible.',
-          detail: lastError ?? 'Update the engine or the desktop app so their contracts match.',
-        };
-      case 'crashed':
-        return {
-          title: 'Engine crashed.',
-          detail: lastError ?? 'The engine process failed to start. Its last output is in Diagnostics.',
-        };
-      case 'timeout':
-        return {
-          title: 'Engine did not answer in time.',
-          detail: `No answer within ${Math.round(ENGINE_BOOT_DEADLINE_MS / 1000)} s. Its last output is in Diagnostics.`,
-        };
-      default:
-        return {
-          title: 'Engine unreachable.',
-          detail: lastError ?? 'Chat, tools and runs need the XR engine.',
-        };
-    }
-  }
-  return {
-    title: 'Engine not running.',
-    detail: `Chat, tools and runs need the XR engine.${lastError ? ` ${lastError}` : ''}`,
-  };
-}
+import { bannerCopy, canStartEngine } from './engineBanner';
 
 export function EngineDownBanner() {
   const status = useEngineStore((s) => s.status);
@@ -100,8 +50,9 @@ export function EngineDownBanner() {
     status === 'degraded' ||
     status === 'failed' ||
     (status === 'disconnected' && failures >= 2);
-  const canStart = import.meta.env.DEV || endpoint?.via === 'sidecar';
-  const copy = bannerCopy(status, failureReason, lastError);
+  // NEW-22: the packaged app can always ask its shell for a sidecar — never only after a pairing.
+  const canStart = canStartEngine({ dev: import.meta.env.DEV, tauri: isTauri() });
+  const copy = bannerCopy(status, failureReason, lastError, ENGINE_BOOT_DEADLINE_MS);
 
   const retry = async (): Promise<void> => {
     setRetrying(true);

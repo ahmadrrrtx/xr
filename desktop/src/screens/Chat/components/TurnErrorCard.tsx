@@ -14,8 +14,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { canStartEngine } from '@/components/engine/engineBanner';
 import type { TurnError } from '@/lib/chat-db';
 import { openUrl } from '@/lib/settingsApi';
+import { isTauri } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 import { useEngineStore } from '@/stores/engineStore';
 
@@ -75,7 +77,8 @@ export function TurnErrorCard({
   const c = copyFor(error);
   const Icon = c.icon;
   const tone = c.tone === 'danger' ? 'var(--danger)' : 'var(--warning)';
-  const canStart = import.meta.env.DEV || endpoint?.via === 'sidecar';
+  // NEW-22: offered whenever the shell can spawn its sidecar, not only after one was paired.
+  const canStart = canStartEngine({ dev: import.meta.env.DEV, tauri: isTauri() });
   const showRetry = !!onRetry && error.kind !== 'no_provider' && error.kind !== 'auth' && (error.kind !== 'model' || error.retryable !== false);
 
   const retry = (): void => {
