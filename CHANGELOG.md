@@ -25,6 +25,7 @@
 
 ### Fixes
 
+- **deps:** desktop locks zip 9.8.2 and builds the updater without its zip feature; all six zip 4.6.1 advisories retired (NEW-24) (37ced76)
 - **desktop:** offer Start engine whenever the engine is down; a deliberate skip no longer reads "Engine crashed" (NEW-22) (777a99a)
 - **release:** install npm 12.2.1 into its own prefix, never in place — npm 10.9.7 breaks itself mid-upgrade (NEW-21) (a51e049)
 - **deps:** desktop lock takes cookie 0.18.3 (RUSTSEC-2026-0594, NEW-19) (e34fd0e)
@@ -199,6 +200,9 @@
 
 ### Documentation
 
+- **release:** Preview 6 page names the zip 9.8.2 fix (NEW-24) (b0c9ae6)
+- **hardening:** log NEW-24 — the zip 4.6.1 advisories, why the updater feature (not the updater upgrade), and the lock method (a750347)
+- **changelog:** generate the 1.2.0-preview.6 section from conventional commits since v1.1.0 (3285c96)
 - **release:** Preview 6 known limitations (1.2.0-preview.6), with the npm and engine-start fixes and quitting from the tray (e2ce034)
 - **hardening:** log the Preview 5 cycle and promotion, NEW-21 (npm), NEW-22 (engine start), NEW-23 and the SUPERSEDED note (2a6e79c)
 - **changelog:** generate the 1.2.0-preview.5 section from conventional commits since v1.1.0 (50e30bd)
