@@ -4,8 +4,10 @@ Version `1.2.0-preview.6` · public beta · called **XR Preview 6** everywhere a
 
 Preview 6 continues the `1.2.0-preview` line; the [Preview 1 page](../1.2.0-preview.1/known-limitations.md)
 explains why that line is not 0.x. Preview 5 was published as a GitHub pre-release and a Docker image, but its npm
-step failed, so npm never carried it (NEW-21). Preview 6 is Preview 5 plus two fixes: that npm step, and starting the
-desktop engine from the app when it is down (NEW-22). Like Previews 4 and 5, it is a stabilization release. It fixes
+step failed, so npm never carried it (NEW-21). Preview 6 is Preview 5 plus three fixes: that npm step;
+starting the desktop engine from the app when it is down (NEW-22); and the desktop app's zip library, which moves from
+4.6.1 to 9.8.2 to clear six published advisories, with archive imports now refusing entries whose two headers disagree
+(NEW-24). Like Previews 4 and 5, it is a stabilization release. It fixes
 the defects and security findings of the external audit (B1–B20, C1–C18), each with a regression test, and adds no
 features. The evidence ledger, item by item, is [`HARDENING_LOG.md`](../../../HARDENING_LOG.md).
 
