@@ -1582,3 +1582,130 @@ The version follows the owner's delegation (adaptations table). The release goes
 - **Owner decision requested before the merge:** withdraw `v1.2.0-preview.4` and release 1.2.0-preview.5. The
   standing rule covers failed tags, but preview.4's tag run had passed, so the owner is asked.
 - **Status:** NEW-19 fixed-unverified (`e34fd0e`; CI pending). NEW-20 open (owner). No launch gate changes.
+
+## After Phase 11 (2026-11-24/25): Preview 5 promoted (GitHub release + Docker); npm failed (NEW-21); the owner's desktop engine (NEW-22, NEW-23)
+
+- **PR #227 on `50e30bd5`: all six required checks green** (CI [45454851262](https://github.com/ahmadrrrtx/xr/actions/runs/45454851262), Cross-Platform [45454850920](https://github.com/ahmadrrrtx/xr/actions/runs/45454850920), Supply Chain [45454851131](https://github.com/ahmadrrrtx/xr/actions/runs/45454851131), npm Pack Smoke [45454851161](https://github.com/ahmadrrrtx/xr/actions/runs/45454851161), Desktop App [45454850944](https://github.com/ahmadrrrtx/xr/actions/runs/45454850944), Clean-Machine Journey [45454851341](https://github.com/ahmadrrrtx/xr/actions/runs/45454851341); Channel Install [45454851050](https://github.com/ahmadrrrtx/xr/actions/runs/45454851050) too).
+  - `gh pr checks 227`: 82 pass, 1 skipped by design. Desktop App's `cargo check --locked` + clippy and Windows
+    `cargo test` accepted the hand-edited lock.
+  - The owner approved withdrawing preview.4 and releasing preview.5 before the merge.
+- **Merge:** PR #227 was merged at 18:44:12 UTC as `d0139cb`, a merge commit, with `--match-head-commit`.
+- **`main` run 10 on `d0139cb`: all six required checks green** (CI [45462723590](https://github.com/ahmadrrrtx/xr/actions/runs/45462723590), Cross-Platform [45462723534](https://github.com/ahmadrrrtx/xr/actions/runs/45462723534), Supply Chain [45462723658](https://github.com/ahmadrrrtx/xr/actions/runs/45462723658), npm Pack Smoke [45462723212](https://github.com/ahmadrrrtx/xr/actions/runs/45462723212), Desktop App [45462723478](https://github.com/ahmadrrrtx/xr/actions/runs/45462723478), Clean-Machine Journey [45462723525](https://github.com/ahmadrrrtx/xr/actions/runs/45462723525); Channel Install [45462723396](https://github.com/ahmadrrrtx/xr/actions/runs/45462723396)).
+  Channel Live failed (NEW-11, non-gating).
+- **Tag `v1.2.0-preview.5`** (annotated, object `0b06250`, on `d0139cb`):
+  - Release run [45473753445](https://github.com/ahmadrrrtx/xr/actions/runs/45473753445): 39 jobs passed, 6 owner-only skipped.
+  - Desktop run [45473752488](https://github.com/ahmadrrrtx/xr/actions/runs/45473752488): 20 of 20. Its Linux
+    journeys installed the `.deb` on Ubuntu 22.04 and 24.04 with a fresh home, and the WebDriver smoke saw the
+    engine sidecar healthy and paired.
+  - Draft 457265186: 33 assets, the same name set as preview.4. `release-assets-check` PASS (the 17 canonical assets).
+    `release-ci-evidence --tag v1.2.0-preview.5 --sha d0139cb…` resolved the exact-tag native evidence.
+- **NEW-19 fixed:** OSV passed on PR #227, on `main` run 10, in the tag run and in the promotion run.
+- **The owner's promotion run** [45482534667](https://github.com/ahmadrrrtx/xr/actions/runs/45482534667)
+  (workflow_dispatch, `publish=true`, 2026-11-24 20:36 UTC; an earlier dispatch, 45482189434, was cancelled at 20:34):
+  - Passed: the Supply Chain gate, the exact-tag native evidence, the GitHub Release job, the promotion and Publish
+    Docker (GHCR + cosign). **The GitHub release is public**, a pre-release since 20:49:19 UTC with 33 assets.
+  - **Failed: Publish npm**, at step 6, "Ensure npm supports trusted publishing" (job 138767063851, 2 s). Consumer
+    smoke was skipped as a result. npm still carries `latest` 1.0.0 and `beta` 1.0.0-beta.1.
+- **NEW-21 (new; blocks npm publishing):** Node 22.22.2 bundles npm 10.9.7 (`deps/npm` at `v22.22.2`), and
+  `npm install -g npm@12.2.1` with that npm replaces its own modules while running.
+  - Reproduced here from a clean npm 10.9.7: `MODULE_NOT_FOUND: Cannot find module 'promise-retry'`, exit 1. npm
+    10.9.8 (Node 22.22.3) survives the same upgrade. setup-node's literal `${NODE_AUTH_TOKEN}` is not the cause:
+    the same install with that `.npmrc` succeeds into a separate prefix.
+  - `publish-channels.yml` had the same in-place upgrade.
+  - The job only runs on an owner dispatch, so no pull request ever exercised the step.
+  - The tag's workflow is frozen, so **npm can never be published from `v1.2.0-preview.5`**. Re-running that job
+    fails the same way, and npm needs a new tag.
+  - **Fix** `a51e049`: both workflows install npm 12.2.1 with `--global --prefix "$RUNNER_TEMP/npm"`, check the
+    version, and add that bin directory to `$GITHUB_PATH`. The publish step refuses to run unless `npm --version`
+    is 12.2.1. Verified here from npm 10.9.7: the install succeeds, the guard passes, and the runner's npm is left
+    intact.
+  - Test: `test/release/npm-toolchain.test.ts`. **R2:** the old workflows fail 2 of 3 (the non-vacuity check passes
+    either way), the new ones pass 3 of 3.
+  - The Preview 5 page says promotion publishes npm `beta`; for Preview 5 it did not.
+- **The owner's desktop (2026-11-25):** Linux Mint 22 (Ubuntu 24.04 base, judging by the apt triggers). He downloaded
+  the `.deb` from the public release, the checksum matched, and `apt` installed `xr 1.2.0-preview.5`.
+  - The app opened with the banner "Engine crashed. recovery: starting without the local engine", and only Retry,
+    Copy diagnostics and Diagnostics.
+  - That detail is `engine::skip_spawn`'s note, which only the launch-time check in `lib.rs` sets: `settings.json`
+    held `xr.engine.withoutLocal = true`. The engine was **not started**; it did not crash.
+  - The flag must predate Preview 5: his chat list holds three chats from Thursday 2026-11-19. Builds before
+    XR-REL-04 kept the flag forever. This build consumes it on the launch that honours it, so the next real launch
+    spawns the engine.
+  - Closing the window only hides XR to the tray, and the single-instance plugin returns the same session. So the
+    skip lasts until XR is quit from the tray, or until Settings → Diagnostics → Restart (`engine_restart`, which
+    also clears the flag).
+  - Not yet known: whether the engine itself starts on his machine. The CI journeys above show it does on Ubuntu
+    24.04 with a fresh home.
+- **NEW-22 (new; blocked the owner):** in the packaged app, nothing in view could start an engine that was down.
+  - Start/Restart in the banner and in the chat's turn-error card required `endpoint.via === 'sidecar'`, which only
+    a live, paired sidecar has. "Retry" only probes again.
+  - A deliberate skip was also labelled "Engine crashed.".
+  - **Fix** `777a99a`: the decisions move to `desktop/src/components/engine/engineBanner.ts`. Start is offered
+    whenever the shell can spawn a sidecar (`dev || isTauri()`), and a skip reads "Engine not started." with what to
+    do. The three generated capability descriptions changed only their module counts; no window gained or lost a
+    command.
+  - Test: `test/desktop/engine-banner-start.test.ts`. It pins the skip reason to the Rust literal. **R2:** the old
+    tree fails, the new tree passes 5 of 5.
+  - Local: desktop 714, release 335 (17 skipped); typecheck, ESLint, ownership, platform parity (581 files),
+    `desktop:sink-lint` and size-gate pass.
+- **NEW-23 (logged, not fixed; Rust, owner's call):** the shell installs no SIGTERM handler, and only a clean
+  `RunEvent::Exit` clears `crash-dirty.json`.
+  - A logout or shutdown with XR in the tray is therefore probably counted as an interruption. After two in a row,
+    the recovery screen recommends "Start without the engine" as "the safer way in". This is a plausible origin of
+    the owner's flag, unconfirmed until his `~/.xr-desktop/logs/shell.log` is read.
+  - The likely fix is a SIGTERM handler that requests a clean exit. A Rust change, it needs CI to build it (R6).
+- **v1.1.0 SUPERSEDED note applied** (owner decision of 2026-11-21: once a preview is public). The empty release body
+  of v1.1.0 now names Preview 5 as the current pre-release and the installers' 1.0.0. Nothing was deleted, and its
+  flags are unchanged.
+- **R7:** this owner request counts CI-fix attempts from 0 of 3.
+- **Status:** NEW-19 fixed. NEW-21 fixed-unverified (`a51e049`; proven only by the next promotion run). NEW-22
+  fixed-unverified (`777a99a`; CI pending). NEW-23 open. No launch gate changes.
+- **Deadline:** the zip ignore (`GHSA-m665-v7pm-7grj`) lapses on 2026-11-30 00:00 UTC. A tag that ships these fixes
+  (and npm) must be promoted before then, or carry the zip-9 migration.
+- **The owner approved Preview 6 (2026-11-25)** and asked for the expiring security exception to be researched and
+  fixed rather than carried ("make it according to that security change research and do").
+- **NEW-24 (new; would have failed the Supply Chain gate from 2026-11-30):** the desktop shell locked zip 4.6.1,
+  under six time-limited OSV ignores.
+
+  | Advisory | Severity | Affected | Fixed | Ignore expiry |
+  |---|---|---|---|---|
+  | GHSA-m665-v7pm-7grj ("Zip Cloaking", CVE-2026-115905) | critical | <= 9.0.4 | 9.0.5 | 2026-11-30 |
+  | RUSTSEC-2026-0367 / 0368 / 0369 | (0369: CVSS 9.1) | < 9.0.0 | 9.0.0 | 2027-02-15 |
+  | GHSA-q7v9-x93c-xqv3 | high | >= 1.3.0, < 9.0.0 | 9.0.0 | 2027-02-28 |
+  | GHSA-8hxf-qr8p-62x4 | medium | >= 0.6.0, < 9.0.0 | 9.0.0 | 2027-02-28 |
+
+  - Two crates pulled zip: the shell itself (`zip "4"`, export/import in `data_safety.rs`), and tauri-plugin-updater's
+    default `zip` feature, which required `zip ^4` through 2.14.0.
+  - Updater 2.14.1 moved to `zip ^9`, but it needs tauri-plugin >= 2.7.1, which needs tauri-utils >= 2.10.1. The
+    shell patches tauri-utils from a SHA-256-verified crates.io 2.10.0 archive (`vendor/tauri-utils/XR-PATCH.md`), and
+    crates.io archives cannot be fetched from this sandbox. So the updater upgrade was set aside.
+  - **The updater's `zip` feature is dead weight for XR.** In updater 2.13.1 it gates exactly two code paths:
+    unpacking `*.zip`-wrapped Windows installers and `*.AppImage.tar.gz` (both the Tauri v1 artifact shapes). macOS
+    `.app.tar.gz` handling does not depend on it. XR publishes v2 artifacts, where the installer is the signed payload
+    (`applyUpdaterConfig` sets `createUpdaterArtifacts = true`; `scripts/make-updater-manifest.ts`).
+  - **Fix** `37ced76`:
+    - `Cargo.toml`: `zip = "9.0.5"` (deflate only, as before), and the updater with `default-features = false` plus
+      its two other defaults, `rustls-tls` and `system-proxy`.
+    - `Cargo.lock` (602 packages before and after): zip 9.8.2, constant_time_eq 0.6.2 and typed-path 0.13.0 enter;
+      getrandom 0.4.3 gains `js-sys` and `wasm-bindgen` (zip 9 enables its `wasm_js` feature on wasm32); arbitrary and
+      derive_arbitrary leave.
+    - The lock was written by a script that reproduces Cargo's serialization, proven by re-serializing the old lock
+      byte for byte. Every new edge was checked against the crates.io index entry (GitHub copy) and its version
+      requirement. For new edges it follows Cargo's own rule (`src/workspace/registry.rs`, "second hit": the first
+      matching locked version), hence `windows-sys 0.60.2` for zip. CI's `cargo check / clippy / test --locked` is the
+      arbiter.
+    - `data_safety.rs`: zip 9's `name()` returns a `Result`. The import now also opts into
+      `enforce_header_consistency(true)` on every entry (zip 9 has it off by default). A cloaked archive is refused:
+      local name != central name, or a duplicate name, method or flag. Legitimate archives (any tool, including
+      streamed ones with data descriptors) carry identical headers.
+    - `osv-scanner.toml`: all six zip ignores were removed, since osv-scanner fails on unused ignores.
+  - Tests:
+    - `test/supply-chain/zip-advisories.test.ts`. **R2:** the old tree fails 5 of 7 (the bound check and the v2-payload
+      invariant pass either way), the new tree passes 7 of 7.
+    - The Rust test `a_cloaked_archive_whose_local_header_names_another_file_is_refused` builds a real archive and
+      patches its local name. Old code imported it; new code fails with "header inconsistency". It runs only in CI
+      (R6).
+  - Local: supply-chain 71, desktop 714, release 335 (17 skipped), security 452 (1 skipped), daemon 379, phase0 217,
+    update 38; ownership, platform parity (582 files). The combined SBOM lists zip 9.8.2 and no arbitrary.
+- **Status (updated):** NEW-24 fixed-unverified (`37ced76`; CI pending). With it merged, the 2026-11-30 deadline no
+  longer applies: the desktop lock carries no zip advisory and no zip ignore.

@@ -323,10 +323,17 @@ fn stage_into(zip_path: &Path, staging: &Path) -> Result<usize, String> {
     let mut files = 0usize;
     let mut has_db = false;
     for i in 0..archive.len() {
+        // GHSA-m665-v7pm-7grj ("Zip Cloaking"): refuse an entry whose local header
+        // disagrees with the central directory (name, method, flags) or whose name
+        // is duplicated, so the name validated below is the only name in the file.
+        let strict = zip::ZipReadOptions::new().enforce_header_consistency(true);
         let mut entry = archive
-            .by_index(i)
+            .by_index_with_options(i, strict)
             .map_err(|e| format!("damaged archive entry #{i}: {e}"))?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|e| format!("damaged archive entry #{i}: {e}"))?
+            .into_owned();
         let rel = safe_relative(&name)
             .ok_or_else(|| format!("refused archive entry outside the data folder: {name}"))?;
         let top = rel
@@ -773,6 +780,34 @@ mod tests {
         assert!(!data.join(PENDING_DIR).exists());
         assert_eq!(apply_pending_import(&data).unwrap(), None);
         assert_eq!(count(&live), 1);
+    }
+
+    #[test]
+    fn a_cloaked_archive_whose_local_header_names_another_file_is_refused() {
+        // GHSA-m665-v7pm-7grj ("Zip Cloaking"): the central directory says one
+        // name, the local header another. zip 4.x read only the central name and
+        // imported the entry; the import now refuses the archive outright.
+        let data = tmp("cloaked");
+        let z = tmp("cloak").join("cloaked.zip");
+        {
+            let mut zw = zip::ZipWriter::new(fs::File::create(&z).unwrap());
+            zw.start_file("notes.txt", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            std::io::Write::write_all(&mut zw, b"hello").unwrap();
+            zw.finish().unwrap();
+        }
+        let mut bytes = fs::read(&z).unwrap();
+        // The first local header starts at offset 0 and its name follows the
+        // 30-byte fixed part. Same length, so every offset stays valid.
+        assert_eq!(&bytes[0..4], b"PK\x03\x04");
+        assert_eq!(&bytes[30..39], b"notes.txt");
+        bytes[30..39].copy_from_slice(b"evil1.txt");
+        fs::write(&z, &bytes).unwrap();
+
+        let err = stage_import(&z, &data).unwrap_err();
+        assert!(err.contains("damaged archive entry #0"), "{err}");
+        assert!(err.contains("header inconsistency"), "{err}");
+        assert!(!data.join(PENDING_DIR).exists());
     }
 
     #[test]

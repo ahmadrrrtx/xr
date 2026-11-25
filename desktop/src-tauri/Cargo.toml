@@ -1,6 +1,6 @@
 [package]
 name = "xr-desktop"
-version = "1.2.0-preview.5"
+version = "1.2.0-preview.6"
 description = "XR Desktop — Tauri v2 shell for the XR agent (the AI agent you can actually trust)"
 authors = ["Muhammad Ahmad (@ahmadrrrtx)"]
 license = "MIT"
@@ -43,7 +43,13 @@ tauri-plugin-shell = "2"
 # (Windows/Linux launch a new one per link) to the running instance.
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-store = "2"
-tauri-plugin-updater = "2"
+# The updater's default `zip` feature only unpacks Tauri v1-style wrapped
+# payloads (`*.nsis.zip` / `*.msi.zip` on Windows, `*.AppImage.tar.gz` on Linux).
+# XR publishes Tauri v2 updater artifacts (the installer itself is the signed
+# payload; see scripts/make-updater-manifest.ts), so that code path is dead
+# weight, and through 2.14.0 it pinned zip ^4, which carries GHSA-m665-v7pm-7grj
+# and five sibling advisories. Keep the other two defaults exactly.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 
 # Phase 3 — hardware detection (sysinfo) + localhost Ollama HTTP probes
 # (ureq, blocking, rustls — deliberately not reqwest/tokio). ureq 3 line:
@@ -65,7 +71,10 @@ uuid = { version = "1", features = ["v4"] }
 # Phase 8 — Settings: OS keychain for provider API keys (never plaintext in
 # the JSON store) + zip for data export/import.
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
-zip = { version = "4", default-features = false, features = ["deflate"] }
+# 9.0.5 is the first release clear of every published zip advisory
+# (GHSA-m665-v7pm-7grj "Zip Cloaking", RUSTSEC-2026-0367/0368/0369,
+# GHSA-8hxf-qr8p-62x4, GHSA-q7v9-x93c-xqv3).
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 
 # Phase 12 — XR Shield audit chain (SHA-256 over a canonical JSON array;
 # byte-identical to the webview's WebCrypto fallback). Ed25519 is planned.

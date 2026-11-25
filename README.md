@@ -27,12 +27,12 @@ gate, your approval, estimated-spend admission checks, and a hash-chained log yo
 <!-- XR:RELEASE-IDENTITY:BEGIN -->
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
-**Version:** `1.2.0-preview.5 (Preview 5)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+**Version:** `1.2.0-preview.6 (Preview 6)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
 > **Status: Public beta.** @rrrtx/xr is labelled beta until every launch gate in
 > [docs/release/launch-gates.json](docs/release/launch-gates.json) is green (decision D2; enforced by
 > `bun run claim-lint`). Install and use it, but check the [support matrix](docs/release/SUPPORT_MATRIX.md)
-> and the [known-limitations register](docs/release/1.2.0-preview.5/known-limitations.md) before relying on it
+> and the [known-limitations register](docs/release/1.2.0-preview.6/known-limitations.md) before relying on it
 > for anything critical. The npm package and source installs need [Bun](https://bun.sh) ≥ 1.3 on `PATH`;
 > the installer binaries do not. Desktop app builds are not code-signed yet. On macOS and Windows the
 > agent's shell commands require a wired isolated backend and are refused otherwise. Windows AppContainer
@@ -44,11 +44,11 @@ gate, your approval, estimated-spend admission checks, and a hash-chained log yo
 > is stamped from that one file, and CI fails the build if any of them drift
 > (Constitution Article XXII.1).
 
-XR Preview 5 (1.2.0-preview.5) — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.
+XR Preview 6 (1.2.0-preview.6) — a local-first, provider-neutral AI agent runtime. BYOK, budget-governed, tamper-evident audit, plugin/MCP extensibility.
 
 **Bundled skills:** 65 (counted from `skills/` at release time.)
 
-> **Install channels currently serve `1.0.0`.** `1.2.0-preview.5` is the in-development line on
+> **Install channels currently serve `1.0.0`.** `1.2.0-preview.6` is the in-development line on
 > `main`: it is not published to npm, Homebrew, WinGet, Scoop or Docker, and the installers below
 > install `1.0.0`. See [docs/release/CHANNELS.md](docs/release/CHANNELS.md#public-version).
 <!-- XR:RELEASE-IDENTITY:END -->
