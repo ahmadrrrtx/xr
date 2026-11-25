@@ -278,7 +278,10 @@ jobs:
           bun -e 'const m=require("./release.manifest.json"),v=process.env.V;if(m.channels.publicVersion!==v||m.identity.version!==v||m.identity.stability!=="stable")throw new Error("owner must first verify candidate and explicitly select matching stable publicVersion authority")'
           sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/v$V" --jq .sha)"
           bun scripts/release-ci-evidence.ts --tag "v$V" --sha "$sha"
-          npm install -g npm@12.2.1
+          # NEW-21: a separate prefix, never an in-place upgrade (npm 10.9.7 breaks itself).
+          npm install --global --prefix "$RUNNER_TEMP/npm" npm@12.2.1
+          [ "$("$RUNNER_TEMP/npm/bin/npm" --version)" = "12.2.1" ]
+          echo "$RUNNER_TEMP/npm/bin" >> "$GITHUB_PATH"
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Authenticate the exact npm bytes and image digest before default changes
         env:

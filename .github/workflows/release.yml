@@ -464,10 +464,15 @@ jobs:
         with:
           node-version: "22.22.2"
           registry-url: "https://registry.npmjs.org"
+      # NEW-21: never upgrade npm in place. Node 22.22.2 bundles npm 10.9.7,
+      # whose `npm install -g npm@12.2.1` replaces its own modules mid-run and
+      # dies with MODULE_NOT_FOUND (promise-retry): the v1.2.0-preview.5
+      # promotion failed here. A separate prefix leaves the running npm intact.
       - name: Ensure npm supports trusted publishing
         run: |
-          npm install -g npm@12.2.1
-          npm --version
+          npm install --global --prefix "$RUNNER_TEMP/npm" npm@12.2.1
+          [ "$("$RUNNER_TEMP/npm/bin/npm" --version)" = "12.2.1" ]
+          echo "$RUNNER_TEMP/npm/bin" >> "$GITHUB_PATH"
       - name: Verify the same committed identity before npm publication
         run: bun run release:check
       - name: Download the exact signed npm payload
@@ -477,6 +482,7 @@ jobs:
           path: audited
       - name: Publish with provenance (prerelease → beta dist-tag)
         run: |
+          [ "$(npm --version)" = "12.2.1" ] || { echo "::error::npm 12.2.1 is not first on PATH (got $(npm --version))"; exit 1; }
           mapfile -t packs < <(find audited -type f -name 'rrrtx-xr-*.tgz')
           [ "${#packs[@]}" -eq 1 ] || { echo "::error::exactly one audited npm payload required"; exit 1; }
           if [ "${{ needs.assemble.outputs.prerelease }}" = "true" ]; then
