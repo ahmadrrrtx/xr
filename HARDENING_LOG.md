@@ -1709,3 +1709,57 @@ The version follows the owner's delegation (adaptations table). The release goes
     update 38; ownership, platform parity (582 files). The combined SBOM lists zip 9.8.2 and no arbitrary.
 - **Status (updated):** NEW-24 fixed-unverified (`37ced76`; CI pending). With it merged, the 2026-11-30 deadline no
   longer applies: the desktop lock carries no zip advisory and no zip ignore.
+
+## After Phase 11 (2026-11-25/26): Preview 6 merged, `main` run 11 green, verified draft; the owner's promotion stopped on a GitHub runner that never started
+
+- **PR #228 on `90e24256`: all six required checks green** (CI [45593094704](https://github.com/ahmadrrrtx/xr/actions/runs/45593094704), Cross-Platform [45593094482](https://github.com/ahmadrrrtx/xr/actions/runs/45593094482), Supply Chain [45593094531](https://github.com/ahmadrrrtx/xr/actions/runs/45593094531), npm Pack Smoke [45593094536](https://github.com/ahmadrrrtx/xr/actions/runs/45593094536), Desktop App [45593094792](https://github.com/ahmadrrrtx/xr/actions/runs/45593094792), Clean-Machine Journey [45593094408](https://github.com/ahmadrrrtx/xr/actions/runs/45593094408); Channel Install [45593094582](https://github.com/ahmadrrrtx/xr/actions/runs/45593094582) too).
+  - `gh pr checks 228`: 83 pass, 1 skipped by design. The first push, `3285c96b`, was green as well (Desktop App
+    [45587501290](https://github.com/ahmadrrrtx/xr/actions/runs/45587501290)).
+  - Desktop App's Linux `cargo check` / clippy / `cargo test --locked` and the Windows `cargo test` accepted the
+    script-written lock (NEW-24) and ran the cloaked-archive test. OSV passed with no zip ignore left.
+- **Merge:** PR #228 was merged at 10:53:39 UTC as `f983809`, a merge commit, with `--match-head-commit` (owner
+  approval of 2026-11-25).
+- **`main` run 11 on `f983809`: all six required checks green** (CI [45599298968](https://github.com/ahmadrrrtx/xr/actions/runs/45599298968), Cross-Platform [45599298783](https://github.com/ahmadrrrtx/xr/actions/runs/45599298783), Supply Chain [45599298788](https://github.com/ahmadrrrtx/xr/actions/runs/45599298788), npm Pack Smoke [45599298748](https://github.com/ahmadrrrtx/xr/actions/runs/45599298748), Desktop App [45599298810](https://github.com/ahmadrrrtx/xr/actions/runs/45599298810), Clean-Machine Journey [45599298929](https://github.com/ahmadrrrtx/xr/actions/runs/45599298929); Channel Install [45599298851](https://github.com/ahmadrrrtx/xr/actions/runs/45599298851)).
+  Channel Live failed (NEW-11, non-gating).
+- **Scheduled Supply Chain on `f983809`** [45620391429](https://github.com/ahmadrrrtx/xr/actions/runs/45620391429) (2026-11-25 13:07 UTC): green, the first scheduled scan
+  without the zip ignores.
+- **Tag `v1.2.0-preview.6`** (annotated, object `ef5bb0a`, on `f983809`):
+  - Release run [45607361240](https://github.com/ahmadrrrtx/xr/actions/runs/45607361240): 39 jobs passed, 6 owner-only skipped (the same shape as preview.5).
+  - Desktop run [45607360432](https://github.com/ahmadrrrtx/xr/actions/runs/45607360432): 20 of 20, including the Linux `.deb` journeys on Ubuntu 22.04 and 24.04.
+  - Draft 458043038: 33 assets, the same name set as preview.5. `release-assets-check` PASS (the 17 canonical assets).
+    `release-ci-evidence --tag v1.2.0-preview.6 --sha f983809… --wait-seconds 0` resolved run 45607360432's desktop
+    gate.
+  - The desktop `.deb` (`linux-x64-XR_1.2.0-preview.6_amd64.deb`, 66,202,708 bytes) has the GitHub digest
+    `sha256:7a449152910fffa3abd2e170695756839c960a18eaca38b7826201c9282af7ad`.
+- **The owner's promotion run** [45617556223](https://github.com/ahmadrrrtx/xr/actions/runs/45617556223) (workflow_dispatch, `publish=true`, 2026-11-25 12:50 UTC):
+  - 37 jobs passed: the release gates, the four builds, Assemble, cosign, SLSA, verify-release, the Supply Chain gate
+    and the exact-tag native desktop evidence.
+  - In the Clean-machine journey, 17 of 18 legs passed. **"CLI journey — binary on macos-26" never started** (job
+    139216812651): no runner, no steps. GitHub's annotation reads "The job was not acquired by Runner of type hosted
+    even after multiple attempts", beside three notices: "Due to capacity constraints, jobs targeting macOS arm64
+    runners may experience longer queue times." It was cancelled at 13:05:49, 15 m 45 s after it was queued. The npm
+    leg on macos-26 in the same run got a runner and passed.
+  - The gate refused, correctly: `cli=abandoned docker=success` (job 139225689950). The GitHub Release job, the
+    promotion, Publish npm, Publish Docker and consumer smoke were therefore skipped. **Nothing was published.** Draft
+    458043038 is unchanged (33 assets, last written at 12:24 UTC by the tag run).
+  - The owner's `wget` of the release URLs then returned 404, as it must for a draft: a draft's assets live under
+    `untagged-…` until it is published.
+- **Diagnosis: hosted-runner capacity, not an XR defect.**
+  - It is the first occurrence. Across the last 40 Clean-Machine Journey runs and 20 Release runs (294 macOS jobs),
+    every other macOS leg that did not pass belonged to a superseded pull-request run or to the owner's cancelled
+    dispatch. None was an unacquired job.
+  - Nothing changes in code or workflows. Making macos-26 non-gating, or dropping it, would weaken a gate (R1). The
+    gate's refusal was right: no runner means no evidence.
+  - Under R7 this is the one allowed rerun. A second unacquired leg would be logged as a defect, and the macos-26
+    leg's place in the gate would go to the owner.
+- **The rerun is the owner's:** `POST …/actions/runs/45617556223/rerun-failed-jobs` returns 403 for the agent.
+  - "Re-run failed jobs" re-runs the abandoned leg, the gate and the five skipped dependents. The 37 passed jobs are
+    kept, with their outputs and artifacts.
+  - The run's `signed-bundle` artifact expires on 2026-11-28 at 12:55 UTC, its SLSA provenance on 2026-11-30. After
+    the first date, a fresh dispatch is needed instead.
+  - The desktop assets are not rewritten by a promotion (the GitHub Release job replaces only the CLI-side files), so
+    the `.deb` digest above is the one that goes public.
+- **R7:** no CI-fix attempt was used (0 of 3).
+- **Status:** NEW-22 and NEW-24 fixed (CI-verified on PR #228, `main` run 11 and both tag runs; NEW-22 still awaits
+  the owner's own desktop). NEW-21 fixed-unverified until a promotion publishes npm. NEW-23 open. No launch-gate
+  changes.
