@@ -18,7 +18,34 @@ and the run ends in its own state: `stopped: "unpriced"`, stream status `unprice
 `finishReason: "unpriced"`, and a task `fail` event carrying the refusal's own reason. Raising a
 budget cannot fix it. Declare a rate under
 `providerEngine.providerCapabilities.<provider>.models.<model>.cost` (`known`, `inPerMTok`,
-`outPerMTok`, `source`) or pick a priced or local model.
+`outPerMTok`, `source`) or pick a priced or local model. Hugging Face Inference Providers route each
+model through a provider with its own rate, so XR deliberately does not invent one router-wide price.
+Add an operator-verified rate for the exact routed model and provider using this config shape:
+
+```jsonc
+{
+  "providerEngine": {
+    "providerCapabilities": {
+      "huggingface": {
+        "models": {
+          "owner/model-id": {
+            "cost": {
+              "known": true,
+              "inPerMTok": "<provider-published USD per million input tokens>",
+              "outPerMTok": "<provider-published USD per million output tokens>",
+              "source": "<official pricing URL>"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+This JSONC shape uses placeholders rather than sample prices: replace them with numeric values and
+the official source for the exact routed model before saving it as JSON. The default Hugging Face
+model remains stopped as `unpriced` until a valid operator declaration exists.
 
 ## Stale price facts warn, they do not block
 

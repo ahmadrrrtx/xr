@@ -467,8 +467,10 @@ export const PRESETS: Record<string, ProviderPreset> = {
     tier: "enterprise",
     apiKeyEnv: undefined,
     authType: "aws",
-    defaultModel: "claude-3-sonnet",
+    defaultModel: "nova-micro",
     knownModels: [
+      "nova-micro",
+      "claude-3.5-sonnet",
       "claude-3-sonnet",
       "claude-3-opus",
       "claude-3-haiku",

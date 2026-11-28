@@ -12,7 +12,7 @@
  *   • NEW-1: warnings compare percentages with percentages.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PRESETS } from "../src/providers/presets.ts";
@@ -30,14 +30,27 @@ import { makeHandler } from "../src/daemon/server.ts";
 
 const KNOWN_UNPRICED: Record<string, string> = {
   huggingface: "the router bills each routed provider's own rate",
-  bedrock: "the default maps to a retired Claude id; current Claude needs inference profiles",
 };
 
 describe("B4 — every hosted preset default is priced, or refuses as unpriced", () => {
   const hosted = Object.values(PRESETS).filter((p) => p.kind === "hosted");
-  test("there are 16 hosted presets and only the documented two are unpriced", () => {
+  test("there are 16 hosted presets and only the documented Hugging Face router is unpriced", () => {
     expect(hosted.length).toBe(16);
     expect(hosted.filter((p) => !pricingAvailable(priceFor(p.id, p.defaultModel))).map((p) => p.id).sort()).toEqual(Object.keys(KNOWN_UNPRICED).sort());
+  });
+
+  test("Hugging Face router per-model rates have an explicit documented declaration path", () => {
+    const docs = readFileSync(new URL("../docs/budget-semantics.md", import.meta.url), "utf8").replace(/\s+/g, " ");
+    expect(docs).toContain("providerEngine.providerCapabilities.<provider>.models.<model>.cost");
+    expect(docs).toContain("Hugging Face Inference Providers route each model through a provider with its own rate");
+  });
+
+  test("Bedrock defaults to priced Nova Micro at the official Standard on-demand rate", () => {
+    expect(PRESETS.bedrock.defaultModel).toBe("nova-micro");
+    const price = priceFor("bedrock", PRESETS.bedrock.defaultModel);
+    expect(price).toMatchObject({ inPerMTok: 0.035, outPerMTok: 0.14, known: true });
+    expect(price.source).toBe("https://aws.amazon.com/bedrock/pricing/");
+    expect(modelFact("bedrock", PRESETS.bedrock.defaultModel)?.lifecycle).toBe("active");
   });
   for (const p of hosted) {
     test(`${p.id} · ${p.defaultModel}`, () => {
