@@ -213,4 +213,25 @@ The diagnostic enhancement was committed and pushed as `a5703fddc9baf1570f438ebc
 
 The Windows x64 npm clean-machine CLI journey passed at https://github.com/ahmadrrrtx/xr/actions/runs/46107648542/job/140863885572. Other CLI/npm install and desktop journeys, all Tauri bundles, security/supply-chain checks, typecheck, core, parity, and gates also passed on this SHA. `Real channel installs of the public version` remains `skipping` at https://github.com/ahmadrrrtx/xr/actions/runs/46107648526/job/140863886332; it is not green evidence and remains required for Phase 4.
 
-Phase 1.2 status: CI-green on `a5703fd`; one transient CI failure was followed by a passing rerun without code-behavior changes. No further Phase 1.2 fix attempt is needed unless the Windows npm status failure reproduces. Move only to the next ordered mission phase after recording this result in a pushed log commit and verifying that commit's required CI.
+Phase 1.2 status: CI-green on `a5703fd`; one transient CI failure was followed by a passing rerun without code-behavior changes. No further Phase 1.2 fix attempt is needed unless the Windows npm status failure reproduces. The evidence log was pushed as `2bbbef6`; its six aggregate gates are also green on the current head (`2bbbef66f0ce906268b7cb28ccaebc8e10d82471`), with only the public real-channel-install job skipped as documented.
+
+### Phase 1.3 — NEW-23 Unix desktop shutdown
+
+Phase 0 and Preview 6's limitations document identify that the desktop shell had no SIGTERM handler; only Tauri `RunEvent::Exit` stops the engine and clears `crash-dirty.json`, so OS logout/shutdown could be classified as an interruption. Implemented a Unix-only signal handler that performs only a lock-free atomic store, plus a normal-thread monitor that asks the Tauri app to exit with code 0. The existing `RunEvent::Exit` cleanup remains the single owner of sidecar stop, shell logging, and dirty-flag removal; forced SIGKILL still correctly remains an interruption. If handler installation itself fails, the shell warns and leaves the marker conservative rather than claiming a clean exit.
+
+Regression coverage:
+
+- Rust unit regression `sigterm_request_is_dispatched_once_to_the_clean_exit_path` verifies that a SIGTERM request is dispatched exactly once through the normal-thread exit action.
+- `test/desktop/new23-clean-shutdown.test.ts` checks signal-handler registration, monitor-to-`app.exit(0)` wiring, event-loop cleanup ordering, and that the async handler does not perform exit/logging work.
+
+Local verification (pinned Bun 1.4.2; no local Tauri/Rust build per instruction):
+
+```text
+bun test test/desktop -> 718 pass / 0 fail / 11,584 assertions (68 files)
+bun run typecheck -> exit 0 (root + desktop)
+bun run desktop:sink-lint -> 510 renderer files, 0 violations
+bun install --frozen-lockfile -> exit 0
+git diff --check -> exit 0
+```
+
+The Rust regression test and cross-platform compile are delegated to required CI; no local `cargo`/Tauri build was run. Commit/push and CI results for NEW-23 will be recorded before the next mission item.

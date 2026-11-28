@@ -441,8 +441,24 @@ pub fn run() {
             commands::updates::updates_clear_skip,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(move |app, event| {
+        .expect("error while building tauri application");
+
+    // NEW-23 — a Unix terminate/log-out request must take the normal Tauri
+    // Exit path, not let the OS kill the shell before it stops the sidecar and
+    // clears crash-dirty.json. Signal context only sets an atomic; this monitor
+    // asks the event loop to exit from an ordinary thread.
+    #[cfg(unix)]
+    if let Err(error) = unix::install_sigterm_handler() {
+        eprintln!("could not install SIGTERM handler; shutdown may be recorded as interrupted: {error}");
+    } else {
+        let shutdown = app.handle().clone();
+        unix::spawn_sigterm_monitor(move || {
+            crash::log_shell(&crash::xr_home(), "signal: SIGTERM received; requesting clean exit");
+            shutdown.exit(0);
+        });
+    }
+
+    app.run(move |app, event| {
             // Phase 14 — never orphan the engine: the sidecar dies with the
             // shell. SIGTERM first (Unix) so it runs its own stop path.
             if let tauri::RunEvent::Exit = event {
