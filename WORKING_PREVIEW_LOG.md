@@ -190,4 +190,16 @@ bun run desktop:sink-lint -> exit 0 (510 renderer files, 0 violations)
 git diff --check -> exit 0
 ```
 
-The dashboard formatter was also evaluated against an unpriced message; it returned a literal two-line actionable message and no budget wording. Phase 1.2 CI attempt count: 0 (not yet pushed at this log entry).
+The dashboard formatter was also evaluated against an unpriced message; it returned a literal two-line actionable message and no budget wording.
+
+Phase 1.2 CI on `1aa0abd126565cd74c71b508a8b9dc49de4717ea` completed with the required aggregate checks except the clean-machine journey: Quality Gate, Cross-Platform gate, Supply Chain gate, npm Pack Smoke, and Desktop gate passed. The `Clean-Machine Journey` aggregate failed because `CLI journey — npm on windows-latest` failed at its final post-update `xr status --json` assertion; the exact assertion was `after update, xr status --json exit 1`. The other CLI journey targets passed, including npm on Windows ARM64. The status output contained health-check JSON, but the assertion's 300-character tail omitted the `summary.requiredFailures` and failed-check details. Raw Actions log/artifact retrieval returned EOF from GitHub's signed artifact host, so root cause is not yet confirmed and must not be guessed.
+
+Diagnostic follow-up added `statusFailureDiagnostic()` to include required check IDs and each failed check's detail in the journey failure annotation; regression coverage asserts both fields are preserved. This is diagnostic only, not a behavior fix or CI pass. Local verification with pinned Bun 1.4.2 after `bun install --frozen-lockfile`:
+
+```text
+bun test test/journey/journey.test.ts -> 13 pass / 0 fail / 60 assertions
+bun run typecheck -> exit 0 (root + desktop)
+git diff --check -> exit 0
+```
+
+Next gate: commit and push this diagnostic enhancement, then inspect the next Windows npm journey failure's precise required check before deciding on any behavior change. Do not claim Phase 1.2 CI green while the Windows npm journey fails. The public real-channel-install job also remains skipped and is outstanding evidence. Phase 1.2 has one CI-failure investigation/diagnostic iteration; it is not a fix-attempt success.

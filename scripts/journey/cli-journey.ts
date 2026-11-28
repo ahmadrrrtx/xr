@@ -110,6 +110,23 @@ export async function gitState(): Promise<{ commit: string; dirty: boolean }> {
   return { commit, dirty };
 }
 export const tail = (s: string, n = 400) => s.replace(/\s+/g, " ").trim().slice(-n);
+
+/** Keep clean-machine status failures diagnosable in CI annotations. */
+export function statusFailureDiagnostic(exitCode: number, output: string): string {
+  type StatusReport = { summary?: { requiredFailures?: string[] }; checks?: Array<{ id?: string; state?: string; detail?: string }> };
+  let payload: StatusReport | undefined;
+  try { payload = JSON.parse(output.trim()) as StatusReport; } catch { /* retain raw output below */ }
+  const failed = (payload?.checks ?? [])
+    .filter((check) => check.state === "fail")
+    .map((check) => `${check.id ?? "unknown"}: ${check.detail ?? "no detail"}`);
+  const required = payload?.summary?.requiredFailures ?? [];
+  const facts = [
+    ...(required.length ? [`required=${required.join(",")}`] : []),
+    ...(failed.length ? [`failed checks=${failed.join("; ")}`] : []),
+  ];
+  return `after update, xr status --json exit ${exitCode}${facts.length ? ` (${facts.join(" | ")})` : ""}: ${tail(output, 300)}`;
+}
+
 export const sha256 = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
 
 /** Copy the checkout (tracked + untracked-not-ignored) to `dest` with `version` stamped. */
@@ -304,7 +321,7 @@ export async function runJourney(opts: { channel: "binary" | "npm"; evidenceClas
         const v = await sh([xr, "--version"], { env });
         need(v.out.includes(N1), `after update, xr --version: ${tail(v.out, 200)}`);
         const st = await sh([xr, "status", "--json"], { env });
-        need(st.status === 0, `after update, xr status --json exit ${st.status}: ${tail(st.out, 300)}`);
+        need(st.status === 0, statusFailureDiagnostic(st.status, st.out));
         return `${N} → ${N1}`;
       });
 
