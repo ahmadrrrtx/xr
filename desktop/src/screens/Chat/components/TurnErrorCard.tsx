@@ -27,7 +27,15 @@ function openExternal(url: string): void {
   void openUrl(url).catch(() => window.open(url, '_blank', 'noopener,noreferrer'));
 }
 
-function copyFor(e: TurnError): { icon: typeof Unplug; title: string; detail: string | null; tone: 'warning' | 'danger' } {
+export function copyFor(e: TurnError): { icon: typeof Unplug; title: string; detail: string | null; tone: 'warning' | 'danger' } {
+  if (e.code === 'unpriced') {
+    return {
+      icon: TriangleAlert,
+      title: 'This model has no known price.',
+      detail: `Pick a priced model or declare a sourced rate at providerEngine.providerCapabilities.<provider>.models.<model>.cost. ${e.message}`,
+      tone: 'warning',
+    };
+  }
   switch (e.kind) {
     case 'no_provider':
       return {

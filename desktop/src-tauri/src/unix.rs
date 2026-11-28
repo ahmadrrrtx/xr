@@ -31,6 +31,51 @@
 //! 2. There is a race between `fork` and `prctl`: if the parent dies in that
 //!    window the signal is never delivered. The child re-checks `getppid()`
 //!    after arming and refuses to exec if the parent is already gone.
+//! 3. **The shell's SIGTERM path is cooperative too.** The signal handler does
+//!    only an atomic store (async-signal-safe); a normal thread observes it and
+//!    asks Tauri to exit, which runs the same ordered sidecar and dirty-flag
+//!    cleanup as Quit XR. A forced SIGKILL remains an interruption by design.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static SIGTERM_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn record_sigterm(_signal: libc::c_int) {
+    // SAFETY: AtomicBool::store is lock-free and async-signal-safe. Do not call
+    // Tauri, format, log, allocate, or touch the filesystem from this handler.
+    SIGTERM_REQUESTED.store(true, Ordering::SeqCst);
+}
+
+/// Replace the platform's terminate-and-discard default with a deferred clean
+/// exit request. The event loop is not touched from signal context.
+pub fn install_sigterm_handler() -> std::io::Result<()> {
+    SIGTERM_REQUESTED.store(false, Ordering::SeqCst);
+    // SAFETY: the handler has the POSIX SIGTERM ABI and performs only one
+    // lock-free atomic store. The libc alias keeps the function-pointer cast
+    // portable across supported Unix targets.
+    let previous = unsafe { libc::signal(libc::SIGTERM, record_sigterm as libc::sighandler_t) };
+    if previous == libc::SIG_ERR {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+fn take_sigterm_request() -> bool {
+    SIGTERM_REQUESTED.swap(false, Ordering::SeqCst)
+}
+
+/// Poll outside signal context and invoke the supplied clean-exit action once.
+pub fn spawn_sigterm_monitor(on_signal: impl FnOnce() + Send + 'static) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        loop {
+            if take_sigterm_request() {
+                on_signal();
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    })
+}
 
 #[cfg(target_os = "linux")]
 pub fn arm_parent_death_signal(cmd: &mut std::process::Command) {
@@ -173,5 +218,19 @@ mod tests {
         assert!(!clean, "a child that ignores SIGTERM is reported as killed");
         assert!(started.elapsed() < Duration::from_secs(3), "escalation is bounded by the grace period");
         assert!(child.try_wait().map(|s| s.is_some()).unwrap_or(true), "the child is reaped");
+    }
+
+    /// NEW-23: SIGTERM is deferred out of signal context and results in one
+    /// normal-thread clean-exit request (Tauri Exit then owns the cleanup).
+    #[test]
+    fn sigterm_request_is_dispatched_once_to_the_clean_exit_path() {
+        SIGTERM_REQUESTED.store(false, Ordering::SeqCst);
+        let exited = std::sync::Arc::new(AtomicBool::new(false));
+        let exit_action = std::sync::Arc::clone(&exited);
+        record_sigterm(libc::SIGTERM);
+        let monitor = spawn_sigterm_monitor(move || exit_action.store(true, Ordering::SeqCst));
+        monitor.join().expect("monitor exits after dispatch");
+        assert!(exited.load(Ordering::SeqCst), "the clean-exit action ran");
+        assert!(!take_sigterm_request(), "one signal cannot dispatch twice");
     }
 }

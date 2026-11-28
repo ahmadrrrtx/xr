@@ -9,6 +9,7 @@ import { outputLimit, usagePair } from "./history.ts";
  * - Mistral AI (via Bedrock)
  * - AI21 (Jurassic via Bedrock)
  * - Cohere (via Bedrock)
+ * - Amazon Nova Micro via Bedrock's native messages-v1 InvokeModel API
  * - Amazon (Titan via Bedrock)
  * 
  * API Docs: https://docs.aws.amazon.com/bedrock/
@@ -22,6 +23,7 @@ import { guardedRequest } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 import { secretBrokerSync } from "../../security/secret-broker.ts";
+import { buildNovaInvokePayload, parseNovaInvokeResponse } from "./bedrock-nova.ts";
 
 interface BedrockOptions {
   model?: string;
@@ -58,6 +60,7 @@ export class BedrockProvider implements Provider {
     id: string;
     supportsTools?: boolean;
   }> = {
+    "nova-micro": { provider: "nova", id: "us.amazon.nova-micro-v1:0", supportsTools: true },
     "claude-3-sonnet": { provider: "anthropic", id: "anthropic.claude-3-sonnet-20240229-v1:0", supportsTools: true },
     "claude-3-opus": { provider: "anthropic", id: "anthropic.claude-3-opus-20240229-v1:0", supportsTools: true },
     "claude-3-haiku": { provider: "anthropic", id: "anthropic.claude-3-haiku-20240307-v1:0", supportsTools: true },
@@ -185,7 +188,10 @@ export class BedrockProvider implements Provider {
     let body: Record<string, unknown>;
     let endpoint: string;
 
-    if (bedrockModel?.provider === "anthropic" || modelId.includes("anthropic")) {
+    if (bedrockModel?.provider === "nova") {
+      body = buildNovaInvokePayload(messages, tools, options?.maxOutputTokens);
+      endpoint = `https://bedrock-runtime.${this.region}/model/${modelId}/invoke`;
+    } else if (bedrockModel?.provider === "anthropic" || modelId.includes("anthropic")) {
       body = this.buildAnthropicBody(messages, tools);
       endpoint = `https://bedrock-runtime.${this.region}/model/anthropic.${modelId.split(".")[1]}/invoke`;
     } else if (bedrockModel?.provider === "meta" || modelId.includes("meta")) {
@@ -200,7 +206,10 @@ export class BedrockProvider implements Provider {
       endpoint = `https://bedrock-runtime.${this.region}/model/${modelId}/invoke`;
     }
 
-    if ("max_gen_len" in body) body.max_gen_len = outputLimit(options?.maxOutputTokens); else body.max_tokens = outputLimit(options?.maxOutputTokens);
+    if (bedrockModel?.provider !== "nova") {
+      if ("max_gen_len" in body) body.max_gen_len = outputLimit(options?.maxOutputTokens);
+      else body.max_tokens = outputLimit(options?.maxOutputTokens);
+    }
     try {
       const signedHeaders = await this.signRequest();
       
@@ -224,7 +233,9 @@ export class BedrockProvider implements Provider {
       const json: any = await res.json();
       
       // Parse response based on model type
-      if (bedrockModel?.provider === "anthropic") {
+      if (bedrockModel?.provider === "nova") {
+        return parseNovaInvokeResponse(json);
+      } else if (bedrockModel?.provider === "anthropic") {
         return this.parseAnthropicResponse(json);
       } else if (bedrockModel?.provider === "meta") {
         return this.parseLlamaResponse(json);

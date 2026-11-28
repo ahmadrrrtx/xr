@@ -17,7 +17,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { INSTALLER_RC_BLOCK, binaryAsset, hostSlug, nextVersion } from "../../scripts/journey/cli-journey.ts";
+import { INSTALLER_RC_BLOCK, binaryAsset, hostSlug, nextVersion, statusFailureDiagnostic } from "../../scripts/journey/cli-journey.ts";
 import { FIXTURE_CONTENT, FIXTURE_FILE, startFixtureProvider, startFixtureServer, type Running } from "../../scripts/journey/fixtures.ts";
 import { endpointOverride, npmRegistry } from "../../src/update/npm-channel.ts";
 import { latestCompleteRelease } from "../../src/update/check.ts";
@@ -50,6 +50,18 @@ describe("journey helpers", () => {
     expect(nextVersion("1.1.0")).toBe("1.1.1-journey.1");
     expect(nextVersion("2.0.9-beta.3")).toBe("2.0.10-journey.1");
     expect(() => nextVersion("latest")).toThrow();
+  });
+
+  test("status failures retain required-check IDs and check details in CI output", () => {
+    const output = JSON.stringify({
+      summary: { requiredFailures: ["bun"] },
+      checks: [
+        { id: "bun", state: "fail", detail: "missing" },
+        { id: "network", state: "skip", detail: "not probed" },
+      ],
+    });
+    expect(statusFailureDiagnostic(1, output)).toContain("required=bun");
+    expect(statusFailureDiagnostic(1, output)).toContain("failed checks=bun: missing");
   });
 
   test("binary assets match the installer's names; unsupported hosts are de-scoped", () => {
