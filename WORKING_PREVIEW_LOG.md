@@ -202,4 +202,15 @@ bun run typecheck -> exit 0 (root + desktop)
 git diff --check -> exit 0
 ```
 
-Next gate: commit and push this diagnostic enhancement, then inspect the next Windows npm journey failure's precise required check before deciding on any behavior change. Do not claim Phase 1.2 CI green while the Windows npm journey fails. The public real-channel-install job also remains skipped and is outstanding evidence. Phase 1.2 has one CI-failure investigation/diagnostic iteration; it is not a fix-attempt success.
+The diagnostic enhancement was committed and pushed as `a5703fddc9baf1570f438ebc561f096facdd9bd2`. Its rerun passed the previously failing `CLI journey — npm on windows-latest` without any behavior change, so the first failure is currently **non-reproducible**; no underlying health-check failure was confirmed. All required checks on `a5703fd` passed, including:
+
+- Quality Gate: https://github.com/ahmadrrrtx/xr/actions/runs/46107648546/job/140865186997
+- Cross-Platform gate: https://github.com/ahmadrrrtx/xr/actions/runs/46107648475/job/140866747804
+- Supply Chain gate: https://github.com/ahmadrrrtx/xr/actions/runs/46107648544/job/140864082152
+- npm Pack Smoke gate: https://github.com/ahmadrrrtx/xr/actions/runs/46107648473/job/140864513960
+- Clean-Machine Journey gate: https://github.com/ahmadrrrtx/xr/actions/runs/46107648542/job/140864786356
+- Desktop gate (bundles + latest.json + journey): https://github.com/ahmadrrrtx/xr/actions/runs/46107648491/job/140871532552
+
+The Windows x64 npm clean-machine CLI journey passed at https://github.com/ahmadrrrtx/xr/actions/runs/46107648542/job/140863885572. Other CLI/npm install and desktop journeys, all Tauri bundles, security/supply-chain checks, typecheck, core, parity, and gates also passed on this SHA. `Real channel installs of the public version` remains `skipping` at https://github.com/ahmadrrrtx/xr/actions/runs/46107648526/job/140863886332; it is not green evidence and remains required for Phase 4.
+
+Phase 1.2 status: CI-green on `a5703fd`; one transient CI failure was followed by a passing rerun without code-behavior changes. No further Phase 1.2 fix attempt is needed unless the Windows npm status failure reproduces. Move only to the next ordered mission phase after recording this result in a pushed log commit and verifying that commit's required CI.
