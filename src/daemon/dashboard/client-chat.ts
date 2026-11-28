@@ -396,6 +396,14 @@ function stopChatGeneration(){ if(chatAbortController) chatAbortController.abort
   setChatRunStatus("cancelled", null);
   applyAvatarState(); const c=activeChat(); if(c){ const m=c.messages.find(x=>x.streaming); if(m){ m.streaming=false; m.content += '\\n\\n_Stopped by administrator._'; } saveChatState(); renderMessages(); } }
 
+function chatFailureText(code, message) {
+  const reason = String(message || "The model run failed.");
+  if (code === "unpriced" || /price unavailable|unpriced/i.test(reason))
+    return "This model has no known price. Pick a priced model or set a rate.\\n\\n" + reason;
+  if (code === "budget" || /budget/i.test(reason)) return "Budget limit reached: " + reason;
+  return "⚠ " + reason;
+}
+
 async function streamChat(text, assistantMsg) {
   // Phase 12 · Phase D — the fabricated "Call provider hot-path routing /
   // Streaming..." card is gone. It described work XR was not doing and hid the
@@ -408,12 +416,12 @@ async function streamChat(text, assistantMsg) {
   const history = activeChat().messages.filter(m=>!m.streaming).slice(-10).map(m=>({ role:m.role, content:m.content }));
   const res = await fetch(BASE + "/api/v1/chat", { method:"POST", headers:{ Authorization:"Bearer "+TOKEN, "Content-Type":"application/json" }, body:JSON.stringify({ message:text, history, mode: chatState.mode }), signal: chatAbortController.signal });
   if(!res.ok) { setChatRunStatus(null); throw new Error('API routing failed or token expired.'); }
-  const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply=""; let usage=null;
+  const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply=""; let usage=null; let streamError=null; let streamErrorCode=null;
   if(reader){
-    while(true){ const r=await reader.read(); if(r.done) break; const chunk=decoder.decode(r.value,{stream:true}); const lines=chunk.split("\\n"); for(const line of lines){ if(!line.startsWith('data: ')) continue; const data=line.slice(6).trim(); if(data==='[DONE]') continue; try{ const j=JSON.parse(data); if(j.error) throw new Error(j.error);
+    while(true){ const r=await reader.read(); if(r.done) break; const chunk=decoder.decode(r.value,{stream:true}); const lines=chunk.split("\\n"); for(const line of lines){ if(!line.startsWith('data: ')) continue; const data=line.slice(6).trim(); if(data==='[DONE]') continue; try{ const j=JSON.parse(data); if(j.type==='error'){ streamError=String(j.message||j.error||'generation failed'); streamErrorCode=j.code||null; reply=chatFailureText(streamErrorCode,streamError); } else if(j.error) throw new Error(j.error);
       // Phase 05 canonical streaming contract — consumed in full (Phase 12):
       if(j.type==='status'){
-        setChatRunStatus(j.status, j.status==='tool_running' ? j.message : null);
+        setChatRunStatus(j.status, ['tool_running','unpriced_stopped','budget_stopped'].includes(j.status) ? j.message : null);
         if(j.status==='provider_selection'||j.status==='provider_ready'){ renderRuntime(); }
         continue;
       }
@@ -435,8 +443,8 @@ async function streamChat(text, assistantMsg) {
         if(j.id) delete chatToolCards[j.id];
       }
       else if(j.type==='usage'){ usage = j.usage || usage; }
-      else if(j.type==='done'){ reply=j.fullText || j.finalMessage || reply; if(j.usage) usage=j.usage; }
-      else if(j.type==='error'){ throw new Error(j.message || j.error || 'generation failed'); }
+      else if(j.type==='done'){ if(j.stopped==='unpriced') reply=chatFailureText('unpriced',j.finalMessage||streamError||reply); else if(j.stopped==='budget') reply=(j.fullText||reply)+(j.fullText||reply?' — ':'')+chatFailureText('budget',j.finalMessage||streamError); else reply=j.fullText || j.finalMessage || reply; if(j.usage) usage=j.usage; }
+      else if(j.type==='error'){ streamError=String(j.message||j.error||'generation failed'); streamErrorCode=j.code||null; reply=chatFailureText(streamErrorCode,streamError); }
       else if(j.delta){ reply+=j.delta; }
       else if(j.text){ reply=j.text; } // legacy fullText replacement
     } catch(e){ if(data && data[0] !== '{') reply+=data; } assistantMsg.content=reply; renderMessages(); } }

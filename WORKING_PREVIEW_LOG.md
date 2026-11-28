@@ -156,3 +156,38 @@ exit 0
 ```
 
 A local test initially caught an empty Nova `end_turn` incorrectly being completed; the implementation was corrected before verification. No CI attempt has been made yet for this item. Commit/push and required CI evidence will be added before beginning the next Phase 1 item.
+
+CI for Phase 1.1 (`3518da4dd076a3f7df7e805288ef9c5caaa17e92`, PR #231) completed green before beginning the next fix. Required aggregate checks:
+
+- Quality Gate: https://github.com/ahmadrrrtx/xr/actions/runs/46101953717/job/140847206468
+- Cross-Platform gate: https://github.com/ahmadrrrtx/xr/actions/runs/46101953684/job/140849050743
+- Supply Chain gate: https://github.com/ahmadrrrtx/xr/actions/runs/46101953677/job/140846359942
+- npm Pack Smoke gate: https://github.com/ahmadrrrtx/xr/actions/runs/46101953678/job/140847170306
+- Desktop gate (bundles + latest.json + journey): https://github.com/ahmadrrrtx/xr/actions/runs/46101953760/job/140854842751
+- Clean-Machine Journey gate: https://github.com/ahmadrrrtx/xr/actions/runs/46101953671/job/140847108119
+
+All six are `pass`; CI run attempt count for NEW-2 remains 0 failed.
+
+### Phase 1.2 — unpriced UX in dashboard and desktop
+
+Inspection showed the CLI already had a true `unpriced` stop path and regression test (`test/cli/coder/routing-and-events.test.ts`, 23/0); the direct B4 test also covers the CLI's unpriced wording. Preview 6's daemon emits `unpriced_stopped` and its governor reason includes the rate path. The dashboard did **not** display canonical `type:error` JSON frames: it threw on them and its catch intentionally ignored JSON payloads, leaving an empty assistant response. Desktop preserved the engine's error detail but used the generic title "The model run failed.".
+
+Fixes:
+
+- The dashboard now renders `unpriced` as "This model has no known price. Pick a priced model or set a rate." plus the engine reason; it also retains budget stops as budget, and status details for unpriced/budget are announced instead of dropped.
+- The desktop error card gives `code: unpriced` its own warning title and points to the documented per-model rate declaration path. It does not tell users to raise their budget.
+- Added regression tests that execute the served dashboard's formatter and exercise the desktop card copy.
+
+Local verification:
+
+```text
+bun test test/daemon/unpriced-chat-ux.test.ts  -> 2 pass / 0 fail / 7 assertions
+bun test test/desktop/unpriced-chat-ux.test.ts -> 2 pass / 0 fail / 7 assertions
+bun test test/cli/coder/routing-and-events.test.ts -> 23 pass / 0 fail / 50 assertions
+bun test test/daemon/phase-c.test.ts -> 26 pass / 0 fail / 77 assertions (including served script syntax parse)
+bun run typecheck -> exit 0 (root + desktop TypeScript)
+bun run desktop:sink-lint -> exit 0 (510 renderer files, 0 violations)
+git diff --check -> exit 0
+```
+
+The dashboard formatter was also evaluated against an unpriced message; it returned a literal two-line actionable message and no budget wording. Phase 1.2 CI attempt count: 0 (not yet pushed at this log entry).
